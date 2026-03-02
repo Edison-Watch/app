@@ -1,7 +1,7 @@
 import { type InputHTMLAttributes, forwardRef, useId, useState } from "react";
 
 interface InputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, "type"> {
-  type?: "text" | "password" | "search";
+  type?: "text" | "password" | "search" | "email";
   label?: string;
   description?: string;
   error?: string;

@@ -2,7 +2,7 @@ import { useCallback, type KeyboardEvent } from "react";
 
 interface SwitchProps {
   checked: boolean;
-  onChange: (checked: boolean) => void;
+  onChange?: (checked: boolean) => void;
   label?: string;
   disabled?: boolean;
   loading?: boolean;
@@ -12,7 +12,7 @@ export default function Switch({ checked, onChange, label, disabled, loading }: 
   const isDisabled = disabled || loading;
 
   const handleClick = useCallback(() => {
-    if (!isDisabled) onChange(!checked);
+    if (!isDisabled) onChange?.(!checked);
   }, [isDisabled, checked, onChange]);
 
   const handleKeyDown = useCallback(
@@ -20,7 +20,7 @@ export default function Switch({ checked, onChange, label, disabled, loading }: 
       if (isDisabled) return;
       if (e.key === " " || e.key === "Enter") {
         e.preventDefault();
-        onChange(!checked);
+        onChange?.(!checked);
       }
     },
     [isDisabled, checked, onChange],
