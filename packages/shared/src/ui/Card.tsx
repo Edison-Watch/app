@@ -22,7 +22,7 @@ export default function Card({ header, footer, children, className = "" }: CardP
           {header}
         </div>
       )}
-      <div className="px-5 py-4">{children}</div>
+      <div className="px-5 pt-4 pb-5">{children}</div>
       {footer && (
         <div className="px-5 py-3 border-t border-[var(--border)] bg-[var(--bg-base)]/50">
           {footer}
