@@ -6,9 +6,11 @@ interface SlideOverProps {
   title?: string;
   children: ReactNode;
   footer?: ReactNode;
+  /** Use a wider panel (e.g. for two-column layouts) */
+  wide?: boolean;
 }
 
-export default function SlideOver({ open, onClose, title, children, footer }: SlideOverProps) {
+export default function SlideOver({ open, onClose, title, children, footer, wide }: SlideOverProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
 
@@ -72,7 +74,7 @@ export default function SlideOver({ open, onClose, title, children, footer }: Sl
       {/* Panel */}
       <div
         ref={panelRef}
-        className="relative z-10 w-full max-w-[480px] bg-[var(--bg-raised)] border-l border-[var(--border)] shadow-2xl flex flex-col animate-in slide-in-from-right"
+        className={`relative z-10 w-full ${wide ? "max-w-[900px]" : "max-w-[480px]"} bg-[var(--bg-raised)] border-l border-[var(--border)] shadow-2xl flex flex-col animate-in slide-in-from-right`}
       >
         {/* Header */}
         {title && (
@@ -89,7 +91,7 @@ export default function SlideOver({ open, onClose, title, children, footer }: Sl
         )}
 
         {/* Scrollable body */}
-        <div className="flex-1 overflow-y-auto px-5 py-4">{children}</div>
+        <div className={`flex-1 ${wide ? "overflow-hidden" : "overflow-y-auto"} px-5 py-4`}>{children}</div>
 
         {/* Sticky footer */}
         {footer && (
