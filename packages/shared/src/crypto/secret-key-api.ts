@@ -43,7 +43,7 @@ export async function registerSecretKey(
   const body: Record<string, string> = { user_key_hash: userKeyHash };
   if (domainKeyHash) body.domain_key_hash = domainKeyHash;
 
-  const response = await fetch("/api/user/secret-key/register", {
+  const response = await fetch("/api/v1/user/secret-key/register", {
     method: "POST",
     headers: createHeaders(getApiKey),
     body: JSON.stringify(body),
@@ -62,7 +62,7 @@ export async function rollSecretKey(
   newUserPartHash: string,
   getApiKey?: () => string | null,
 ): Promise<{ success: boolean; re_encrypted: number; new_composite_key: string }> {
-  const response = await fetch("/api/user/secret-key/roll", {
+  const response = await fetch("/api/v1/user/secret-key/roll", {
     method: "POST",
     headers: createHeaders(getApiKey),
     body: JSON.stringify({
@@ -85,7 +85,7 @@ export async function resetSecretKey(
   newKeyHash: string,
   getApiKey?: () => string | null,
 ): Promise<{ success: boolean; deleted: number }> {
-  const response = await fetch("/api/user/secret-key/reset", {
+  const response = await fetch("/api/v1/user/secret-key/reset", {
     method: "POST",
     headers: createHeaders(getApiKey),
     body: JSON.stringify({ new_key_hash: newKeyHash, confirm: true }),
@@ -104,7 +104,7 @@ export async function verifySecretKey(
   key: string,
   getApiKey?: () => string | null,
 ): Promise<boolean> {
-  const response = await fetch("/api/user/secret-key/verify", {
+  const response = await fetch("/api/v1/user/secret-key/verify", {
     method: "POST",
     headers: createHeaders(getApiKey),
     body: JSON.stringify({ key }),
