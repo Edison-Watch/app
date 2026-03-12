@@ -1,18 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
+import { getEnv } from "../config";
 
-// Supabase config - these should be set via environment variables at build time
-// For development, you can hardcode them or use import.meta.env
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
+const env = getEnv();
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.error("[supabase.ts] Supabase not configured - auth disabled:", {
-    VITE_SUPABASE_URL: !!supabaseUrl,
-    VITE_SUPABASE_ANON_KEY: !!supabaseAnonKey,
-  });
-}
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+export const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, {
   auth: {
     autoRefreshToken: true,
     persistSession: true,
@@ -44,7 +35,7 @@ export interface ApiKeyResponse {
 export async function fetchApiKey(): Promise<ApiKeyResponse | null> {
   const edgeFunctionUrl =
     import.meta.env.VITE_SUPABASE_EDGE_FUNCTION_URL ||
-    `${supabaseUrl}/functions/v1/get-api-key`;
+    `${env.SUPABASE_URL}/functions/v1/get-api-key`;
 
   try {
     if (getSessionState.inProgress) {
