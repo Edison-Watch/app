@@ -112,10 +112,14 @@ export async function verifySecretKey(
   key: string,
   getApiKey?: () => string | null,
 ): Promise<VerifySecretKeyResult> {
+  // If the key doesn't look like a composite key (no "user:" prefix),
+  // wrap it so the backend can parse it. This handles users who copied
+  // the raw base64 key instead of the full composite format.
+  const normalizedKey = key.includes(":") ? key : `user:${key}`;
   const response = await fetch("/api/v1/user/secret-key/verify", {
     method: "POST",
     headers: createHeaders(getApiKey),
-    body: JSON.stringify({ key }),
+    body: JSON.stringify({ key: normalizedKey }),
   });
   if (!response.ok) {
     return { valid: false, domainValid: null, expiresAt: null, daysRemaining: null, expired: false };
