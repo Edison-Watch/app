@@ -9,7 +9,7 @@
  * All anon keys are publishable (safe to include in client bundles).
  */
 
-const STORAGE_KEY = "edison_debug_env";
+export const STORAGE_KEY = "edison_debug_env";
 
 export interface EnvConfig {
   SUPABASE_URL: string;
@@ -18,6 +18,10 @@ export interface EnvConfig {
   POSTHOG_API_KEY: string;
   POSTHOG_FEEDBACK_SURVEY_ID: string;
   DEPLOY_ENV: string;
+  /** Default API server base URL for self-serve users (backend_base_url is null). */
+  API_BASE_URL: string;
+  /** Default MCP server base URL for self-serve users. */
+  MCP_BASE_URL: string;
 }
 
 const DEMO_CONFIG: EnvConfig = {
@@ -28,6 +32,8 @@ const DEMO_CONFIG: EnvConfig = {
   POSTHOG_API_KEY: "phc_KNuu0bmHlZwps48BcFYfax4aqVJJJWBF00mP43490CQ",
   POSTHOG_FEEDBACK_SURVEY_ID: "019c5262-bd68-0000-2209-0e41b3563834",
   DEPLOY_ENV: "demo",
+  API_BASE_URL: "https://demo-dashboard.edison.watch",
+  MCP_BASE_URL: "https://demo-dashboard.edison.watch",
 };
 
 const RELEASE_CONFIG: EnvConfig = {
@@ -38,6 +44,8 @@ const RELEASE_CONFIG: EnvConfig = {
   POSTHOG_API_KEY: "phc_KNuu0bmHlZwps48BcFYfax4aqVJJJWBF00mP43490CQ",
   POSTHOG_FEEDBACK_SURVEY_ID: "019c5262-bd68-0000-2209-0e41b3563834",
   DEPLOY_ENV: "release",
+  API_BASE_URL: "https://dashboard.edison.watch",
+  MCP_BASE_URL: "https://dashboard.edison.watch",
 };
 
 const CONFIGS: Record<string, EnvConfig> = {
