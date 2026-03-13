@@ -99,19 +99,35 @@ export async function resetSecretKey(
   return response.json();
 }
 
+export interface VerifySecretKeyResult {
+  valid: boolean;
+  domainValid: boolean | null;
+  expiresAt: string | null;
+  daysRemaining: number | null;
+  expired: boolean;
+}
+
 /** Verify a secret key against the server-stored hash. */
 export async function verifySecretKey(
   key: string,
   getApiKey?: () => string | null,
-): Promise<boolean> {
+): Promise<VerifySecretKeyResult> {
   const response = await fetch("/api/v1/user/secret-key/verify", {
     method: "POST",
     headers: createHeaders(getApiKey),
     body: JSON.stringify({ key }),
   });
-  if (!response.ok) return false;
+  if (!response.ok) {
+    return { valid: false, domainValid: null, expiresAt: null, daysRemaining: null, expired: false };
+  }
   const data = await response.json();
-  return data.valid === true;
+  return {
+    valid: data.valid === true,
+    domainValid: data.domain_valid ?? null,
+    expiresAt: data.expires_at ?? null,
+    daysRemaining: data.days_remaining ?? null,
+    expired: data.expired === true,
+  };
 }
 
 /** Get cached secret key from localStorage. */

@@ -23,4 +23,5 @@ export {
   getCachedSecretKey,
   cacheSecretKey,
   clearCachedSecretKey,
+  type VerifySecretKeyResult,
 } from "./secret-key-api";
