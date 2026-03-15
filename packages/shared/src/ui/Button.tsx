@@ -1,4 +1,4 @@
-import { type ButtonHTMLAttributes, type ReactNode } from "react";
+import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
 
 type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "warning";
 type ButtonSize = "sm" | "md" | "lg";
@@ -57,7 +57,7 @@ function Spinner() {
   );
 }
 
-export default function Button({
+const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button({
   variant = "primary",
   size = "md",
   loading = false,
@@ -66,9 +66,10 @@ export default function Button({
   className = "",
   type = "button",
   ...rest
-}: ButtonProps) {
+}, ref) {
   return (
     <button
+      ref={ref}
       type={type}
       className={`inline-flex items-center justify-center gap-2 font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-base)] disabled:opacity-50 disabled:pointer-events-none ${variantStyles[variant]} ${sizeStyles[size]} ${className}`}
       disabled={disabled || loading}
@@ -78,4 +79,6 @@ export default function Button({
       {children}
     </button>
   );
-}
+});
+
+export default Button;

@@ -6,6 +6,7 @@ type BadgeSize = "sm" | "md";
 interface BadgeProps {
   variant?: BadgeVariant;
   size?: BadgeSize;
+  onClick?: (e: React.MouseEvent) => void;
   children: ReactNode;
 }
 
@@ -26,12 +27,21 @@ const sizeStyles: Record<BadgeSize, string> = {
 export default function Badge({
   variant = "neutral",
   size = "md",
+  onClick,
   children,
 }: BadgeProps) {
+  const className = `inline-flex items-center font-medium rounded-full border ${variantStyles[variant]} ${sizeStyles[size]}${onClick ? " cursor-pointer hover:brightness-125" : ""}`;
+
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} className={className}>
+        {children}
+      </button>
+    );
+  }
+
   return (
-    <span
-      className={`inline-flex items-center font-medium rounded-full border ${variantStyles[variant]} ${sizeStyles[size]}`}
-    >
+    <span className={className}>
       {children}
     </span>
   );
