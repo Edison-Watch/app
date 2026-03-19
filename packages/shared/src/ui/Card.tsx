@@ -18,13 +18,13 @@ export default function Card({ header, footer, children, className = "" }: CardP
       }}
     >
       {header && (
-        <div className="px-5 py-4 border-b border-[var(--border)] text-[var(--text-primary)] font-medium">
+        <div className="px-4 py-3 border-b border-[var(--border)] text-sm text-[var(--text-primary)] font-medium">
           {header}
         </div>
       )}
-      <div className="px-5 pt-4 pb-5">{children}</div>
+      <div className="px-4 py-4">{children}</div>
       {footer && (
-        <div className="px-5 py-3 border-t border-[var(--border)] bg-[var(--bg-base)]/50">
+        <div className="px-4 py-3 border-t border-[var(--border)] bg-[var(--bg-base)]/50">
           {footer}
         </div>
       )}
