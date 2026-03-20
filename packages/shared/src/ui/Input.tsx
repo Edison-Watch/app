@@ -27,28 +27,27 @@ const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
       {description && (
         <p className="text-xs text-[var(--text-muted)]">{description}</p>
       )}
-      <div className="relative">
-        <input
-          ref={ref}
-          id={id}
-          type={inputType}
-          className={`w-full px-4 py-2 text-sm rounded-md bg-[var(--bg-input)] border text-[var(--text-primary)] placeholder:text-[var(--text-muted)] transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-transparent ${
-            type === "password" ? "pr-10 " : ""
-          }${
+      {type === "password" ? (
+        <div
+          className={`flex items-center rounded-md bg-[var(--bg-input)] border transition-colors focus-within:ring-2 focus-within:ring-[var(--accent)] focus-within:border-transparent ${
             error
-              ? "border-[var(--danger)] focus:ring-[var(--danger)]"
+              ? "border-[var(--danger)] focus-within:ring-[var(--danger)]"
               : "border-[var(--border)] hover:border-[var(--accent-muted)]"
-          } ${className}`}
-          aria-invalid={!!error}
-          aria-describedby={error ? `${id}-error` : undefined}
-          {...rest}
-        />
-        {type === "password" && (
+          }`}
+        >
+          <input
+            ref={ref}
+            id={id}
+            type={inputType}
+            className={`flex-1 min-w-0 px-4 py-2 text-sm bg-transparent text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none ${className}`}
+            aria-invalid={!!error}
+            aria-describedby={error ? `${id}-error` : undefined}
+            {...rest}
+          />
           <button
             type="button"
             onClick={() => setShowPassword((s) => !s)}
-            style={{ position: "absolute", right: "0.75rem", top: "50%", transform: "translateY(-50%)" }}
-            className="flex items-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+            className="shrink-0 flex items-center px-3 py-2 border-l border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
             tabIndex={-1}
             aria-label={showPassword ? "Hide password" : "Show password"}
           >
@@ -65,8 +64,24 @@ const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
               </svg>
             )}
           </button>
-        )}
-      </div>
+        </div>
+      ) : (
+        <div className="relative">
+          <input
+            ref={ref}
+            id={id}
+            type={inputType}
+            className={`w-full px-4 py-2 text-sm rounded-md bg-[var(--bg-input)] border text-[var(--text-primary)] placeholder:text-[var(--text-muted)] transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-transparent ${
+              error
+                ? "border-[var(--danger)] focus:ring-[var(--danger)]"
+                : "border-[var(--border)] hover:border-[var(--accent-muted)]"
+            } ${className}`}
+            aria-invalid={!!error}
+            aria-describedby={error ? `${id}-error` : undefined}
+            {...rest}
+          />
+        </div>
+      )}
       {error && (
         <p id={`${id}-error`} className="text-xs text-[var(--danger)]" role="alert">
           {error}
