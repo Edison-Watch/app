@@ -27,8 +27,8 @@ export default function Tooltip({ content, placement = "top", children }: Toolti
     else if (placement === "bottom" && rect.bottom > window.innerHeight) flipped = "top";
     else if (placement === "left" && rect.left < 0) flipped = "right";
     else if (placement === "right" && rect.right > window.innerWidth) flipped = "left";
-    if (flipped !== actualPlacement) setActualPlacement(flipped);
-  }, [visible, placement, actualPlacement]);
+    setActualPlacement(flipped);
+  }, [visible, placement]);
 
   // Reset placement when preference changes
   useEffect(() => {
