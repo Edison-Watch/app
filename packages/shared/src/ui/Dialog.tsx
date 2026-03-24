@@ -40,13 +40,12 @@ export default function Dialog({ open, onClose, title, children }: DialogProps) 
     [onClose],
   );
 
+  // Auto-focus first focusable element only when the dialog opens (not on re-renders)
+  const hasAutoFocused = useRef(false);
   useEffect(() => {
-    if (open) {
+    if (open && !hasAutoFocused.current) {
+      hasAutoFocused.current = true;
       previousFocusRef.current = document.activeElement as HTMLElement;
-      document.body.style.overflow = "hidden";
-      document.addEventListener("keydown", handleKeyDown);
-
-      // Focus first focusable element
       requestAnimationFrame(() => {
         const focusable = dialogRef.current?.querySelector<HTMLElement>(
           'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
@@ -54,11 +53,23 @@ export default function Dialog({ open, onClose, title, children }: DialogProps) 
         focusable?.focus();
       });
     }
+    if (!open) {
+      hasAutoFocused.current = false;
+    }
+  }, [open]);
+
+  useEffect(() => {
+    if (open) {
+      document.body.style.overflow = "hidden";
+      document.addEventListener("keydown", handleKeyDown);
+    }
 
     return () => {
       document.body.style.overflow = "";
       document.removeEventListener("keydown", handleKeyDown);
-      previousFocusRef.current?.focus();
+      if (!open) {
+        previousFocusRef.current?.focus();
+      }
     };
   }, [open, handleKeyDown]);
 
