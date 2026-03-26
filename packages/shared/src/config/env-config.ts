@@ -33,7 +33,7 @@ const DEMO_CONFIG: EnvConfig = {
   POSTHOG_FEEDBACK_SURVEY_ID: "019c5262-bd68-0000-2209-0e41b3563834",
   DEPLOY_ENV: "demo",
   API_BASE_URL: "https://demo-dashboard.edison.watch",
-  MCP_BASE_URL: "https://edison-watch-production.up.railway.app",
+  MCP_BASE_URL: "https://edison-watch-demo.up.railway.app",
 };
 
 const RELEASE_CONFIG: EnvConfig = {
