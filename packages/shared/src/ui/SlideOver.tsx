@@ -91,7 +91,7 @@ export default function SlideOver({ open, onClose, title, children, footer, wide
         )}
 
         {/* Scrollable body */}
-        <div className={`flex-1 ${wide ? "overflow-hidden" : "overflow-y-auto"} px-5 py-4`}>{children}</div>
+        <div className="flex-1 overflow-y-auto px-5 py-4">{children}</div>
 
         {/* Sticky footer */}
         {footer && (
