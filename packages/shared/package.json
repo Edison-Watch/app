@@ -36,6 +36,11 @@
       "import": "./dist/ui/*.js",
       "require": "./dist/ui/*.cjs"
     },
+    "./hooks/*": {
+      "types": "./src/hooks/*.ts",
+      "import": "./dist/hooks/*.js",
+      "require": "./dist/hooks/*.cjs"
+    },
     "./theme/tokens.css": "./src/theme/tokens.css"
   },
   "files": [
