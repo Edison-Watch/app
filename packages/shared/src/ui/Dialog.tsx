@@ -5,9 +5,11 @@ interface DialogProps {
   onClose: () => void;
   title?: string;
   children: ReactNode;
+  /** Use a wider dialog (e.g. for forms with more content) */
+  wide?: boolean;
 }
 
-export default function Dialog({ open, onClose, title, children }: DialogProps) {
+export default function Dialog({ open, onClose, title, children, wide }: DialogProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
 
@@ -91,7 +93,7 @@ export default function Dialog({ open, onClose, title, children }: DialogProps) 
       {/* Content */}
       <div
         ref={dialogRef}
-        className="relative z-10 w-full max-w-lg mx-4 rounded-lg border border-[var(--border)] bg-[var(--bg-raised)] shadow-2xl animate-in fade-in zoom-in-95"
+        className={`relative z-10 w-full ${wide ? "max-w-[700px]" : "max-w-lg"} mx-4 max-h-[85vh] flex flex-col rounded-lg border border-[var(--border)] bg-[var(--bg-raised)] shadow-2xl animate-in fade-in zoom-in-95`}
       >
         {title && (
           <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)]">
@@ -105,7 +107,7 @@ export default function Dialog({ open, onClose, title, children }: DialogProps) 
             </button>
           </div>
         )}
-        <div className="px-5 py-4">{children}</div>
+        <div className="px-5 py-4 overflow-y-auto flex-1 min-h-0">{children}</div>
       </div>
     </div>
   );
