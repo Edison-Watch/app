@@ -41,6 +41,11 @@
       "import": "./dist/hooks/*.js",
       "require": "./dist/hooks/*.cjs"
     },
+    "./agent-registry": {
+      "types": "./src/agent-registry/index.ts",
+      "import": "./dist/agent-registry/index.js",
+      "require": "./dist/agent-registry/index.cjs"
+    },
     "./theme/tokens.css": "./src/theme/tokens.css"
   },
   "files": [
