@@ -5,10 +5,11 @@ type Placement = "top" | "bottom" | "left" | "right";
 interface TooltipProps {
   content: ReactNode;
   placement?: Placement;
+  className?: string;
   children: ReactNode;
 }
 
-export default function Tooltip({ content, placement = "top", children }: TooltipProps) {
+export default function Tooltip({ content, placement = "top", className, children }: TooltipProps) {
   const [visible, setVisible] = useState(false);
   const [actualPlacement, setActualPlacement] = useState(placement);
   const triggerRef = useRef<HTMLSpanElement>(null);
@@ -58,7 +59,7 @@ export default function Tooltip({ content, placement = "top", children }: Toolti
           ref={tooltipRef}
           id={tooltipId.current}
           role="tooltip"
-          className={`absolute z-50 max-w-xs rounded-lg border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-xs text-[var(--text-primary)] shadow-lg pointer-events-none ${positionClasses[actualPlacement]}`}
+          className={`absolute z-50 ${className ?? "max-w-xs"} rounded-lg border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-xs text-[var(--text-primary)] shadow-lg pointer-events-none ${positionClasses[actualPlacement]}`}
         >
           {content}
         </div>
