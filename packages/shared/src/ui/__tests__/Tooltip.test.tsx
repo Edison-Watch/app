@@ -43,18 +43,19 @@ describe("Tooltip", () => {
     expect(screen.queryByRole("tooltip")).toBeNull();
   });
 
-  it("links trigger to tooltip via aria-describedby", () => {
+  it("links trigger to tooltip via aria-describedby on the child element", () => {
     render(
       <Tooltip content="Accessible tip">
         <button>Trigger</button>
       </Tooltip>,
     );
 
-    const trigger = screen.getByText("Trigger").parentElement!;
-    fireEvent.mouseEnter(trigger);
+    const wrapper = screen.getByText("Trigger").parentElement!;
+    fireEvent.mouseEnter(wrapper);
 
     const tooltip = screen.getByRole("tooltip");
     const id = tooltip.getAttribute("id");
-    expect(trigger.getAttribute("aria-describedby")).toBe(id);
+    const button = screen.getByText("Trigger");
+    expect(button.getAttribute("aria-describedby")).toBe(id);
   });
 });
