@@ -29,7 +29,7 @@ describe("ErrorBoundary", () => {
 
     // After reset, the child throws again so we're back in error state
     // (in a real app the cause would be fixed). The important thing is
-    // that the reset was attempted — the error boundary works.
+    // that the reset was attempted - the error boundary works.
     expect(screen.getByRole("alert")).toBeTruthy();
 
     spy.mockRestore();

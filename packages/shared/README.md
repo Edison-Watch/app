@@ -57,10 +57,10 @@ When you intentionally change a component's appearance:
 
 The GitHub Actions workflow (`.github/workflows/visual-regression-shared.yaml`) runs automatically on PRs that modify:
 
-- `packages/shared/src/ui/**` — component source
-- `packages/shared/src/theme/**` — design tokens
-- `packages/shared/.storybook/**` — Storybook config
-- `packages/shared/visual-tests/**` — test files and baselines
+- `packages/shared/src/ui/**` - component source
+- `packages/shared/src/theme/**` - design tokens
+- `packages/shared/.storybook/**` - Storybook config
+- `packages/shared/visual-tests/**` - test files and baselines
 
 If a visual diff is detected, the workflow fails and uploads diff artifacts for review.
 

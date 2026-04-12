@@ -85,7 +85,7 @@ export const AGENT_REGISTRY: Record<AgentId, AgentIconEntry> = {
   "claude-cowork": {
     displayName: "Claude Cowork",
     brandColor: "#C4745B",
-    // Complex raster logo — no SVG path available. Consumers that need the
+    // Complex raster logo - no SVG path available. Consumers that need the
     // full icon should provide their own asset; others fall back to monogram.
   },
 
@@ -156,13 +156,13 @@ export const AGENT_REGISTRY: Record<AgentId, AgentIconEntry> = {
   devin: {
     displayName: "Devin",
     brandColor: "#059669",
-    // No official simple-icons SVG available — consumers fall back to monogram.
+    // No official simple-icons SVG available - consumers fall back to monogram.
   },
 
   aider: {
     displayName: "Aider",
     brandColor: "#E11D48",
-    // No official simple-icons SVG available — consumers fall back to monogram.
+    // No official simple-icons SVG available - consumers fall back to monogram.
   },
 };
 

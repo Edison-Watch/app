@@ -71,7 +71,7 @@ export function getEnv(): EnvConfig {
   return CONFIGS[name] ?? CONFIGS["demo"]!;
 }
 
-/** Look up config by explicit name — safe for Node/main-process (no localStorage). */
+/** Look up config by explicit name - safe for Node/main-process (no localStorage). */
 export function getEnvByName(name: string): EnvConfig | undefined {
   return CONFIGS[name];
 }
