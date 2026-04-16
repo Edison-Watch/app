@@ -60,17 +60,35 @@ export default function Tooltip({ content, placement = "top", className, childre
     cancelAnimationFrame(rafRef.current);
     rafRef.current = requestAnimationFrame(() => {
       if (!tooltipRef.current) return;
-      const rect = tooltipRef.current.getBoundingClientRect();
-      let flipped = placement;
+      const margin = 8;
+      let flipped: Placement = placement;
       let { top, left } = pos;
-      if (placement === "top" && rect.top < 0) { flipped = "bottom"; top = trigger.bottom + 8; }
-      else if (placement === "bottom" && rect.bottom > window.innerHeight) { flipped = "top"; top = trigger.top - 8; }
-      else if (placement === "left" && rect.left < 0) { flipped = "right"; left = trigger.right + 8; }
-      else if (placement === "right" && rect.right > window.innerWidth) { flipped = "left"; left = trigger.left - 8; }
-      if (flipped !== placement) {
-        setCoords({ top, left });
-        setActualPlacement(flipped);
+
+      const rect = tooltipRef.current.getBoundingClientRect();
+      if (placement === "top" && rect.top < margin) { flipped = "bottom"; top = trigger.bottom + margin; }
+      else if (placement === "bottom" && rect.bottom > window.innerHeight - margin) { flipped = "top"; top = trigger.top - margin; }
+      else if (placement === "left" && rect.left < margin) { flipped = "right"; left = trigger.right + margin; }
+      else if (placement === "right" && rect.right > window.innerWidth - margin) { flipped = "left"; left = trigger.left - margin; }
+
+      // Recompute effective rect after any flip, then shift along the cross-axis
+      // so the tooltip stays inside the viewport when wider/taller than the gap
+      // between the trigger and the viewport edge.
+      const width = rect.width;
+      const height = rect.height;
+      if (flipped === "top" || flipped === "bottom") {
+        const halfW = width / 2;
+        const minLeft = margin + halfW;
+        const maxLeft = window.innerWidth - margin - halfW;
+        if (maxLeft >= minLeft) left = Math.min(Math.max(left, minLeft), maxLeft);
+      } else {
+        const halfH = height / 2;
+        const minTop = margin + halfH;
+        const maxTop = window.innerHeight - margin - halfH;
+        if (maxTop >= minTop) top = Math.min(Math.max(top, minTop), maxTop);
       }
+
+      setCoords({ top, left });
+      if (flipped !== placement) setActualPlacement(flipped);
     });
   }, [placement]);
 
