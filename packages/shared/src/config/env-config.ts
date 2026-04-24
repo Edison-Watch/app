@@ -45,7 +45,7 @@ const RELEASE_CONFIG: EnvConfig = {
   POSTHOG_FEEDBACK_SURVEY_ID: "019c5262-bd68-0000-2209-0e41b3563834",
   DEPLOY_ENV: "release",
   API_BASE_URL: "https://dashboard.edison.watch",
-  MCP_BASE_URL: "https://edison-watch-release.up.railway.app",
+  MCP_BASE_URL: "https://mcp.edison.watch",
 };
 
 const CONFIGS: Record<string, EnvConfig> = {
