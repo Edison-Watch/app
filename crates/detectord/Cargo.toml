@@ -9,12 +9,20 @@ readme = "README.md"
 keywords = ["mcp", "model-context-protocol", "watcher", "config", "claude"]
 categories = ["development-tools", "filesystem", "command-line-utilities"]
 
+[features]
+default = ["vscode", "claude_code"]
+# Each client can be opted into independently. `vscode` pulls in rusqlite
+# (for reading VSCode's `state.vscdb` workspace history); consumers who only
+# care about Claude Code can disable it and skip that build cost entirely.
+vscode = ["dep:rusqlite"]
+claude_code = []
+
 [dependencies]
 anyhow = "1.0.102"
 dirs = "6.0.0"
 notify = "8.2.0"
 notify-debouncer-full = "0.7.0"
-rusqlite = { version = "0.39.0", features = ["bundled"] }
+rusqlite = { version = "0.39.0", features = ["bundled"], optional = true }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
 thiserror = "2.0.18"
@@ -23,3 +31,7 @@ tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 
 [dev-dependencies]
 tempfile = "3.27.0"
+
+[[bin]]
+name = "mcp_detector"
+required-features = ["vscode", "claude_code"]
