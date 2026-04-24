@@ -6,7 +6,7 @@ A background tool that watches the on-disk configs of MCP (Model Context Protoco
 
 MCP servers are configured independently by each client (Claude Code, VSCode, Cursor, Claude Desktop, ...), often in several places per client: a global user-level file, per-project files, and sometimes application state stored in a SQLite database. `mcp_detector` unifies those sources into a single live stream of change events.
 
-For the initial milestone it focuses on one behaviour: **when a new MCP server appears in any tracked config, print a line identifying it, its scope (global vs project-specific), and its transport (stdio vs remote).** Removals and in-place modifications are planned but out of scope for v0.
+For the initial milestone it focuses on additions and removals: **when an MCP server appears in or disappears from any tracked config, print a line identifying it, its scope (global vs project-specific), and its transport (stdio vs remote).** In-place edits (same server name, different fields) are not reported yet.
 
 ## Design
 
