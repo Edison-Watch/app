@@ -31,6 +31,9 @@ pub enum Error {
         #[source]
         source: serde_json::Error,
     },
+
+    #[error("failed to spawn watcher thread: {0}")]
+    Thread(#[source] io::Error),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

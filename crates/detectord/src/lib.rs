@@ -8,4 +8,4 @@ pub mod watcher;
 pub use client::Client;
 pub use error::{Error, Result};
 pub use types::{ChangeEvent, McpServer, Scope, Transport};
-pub use watcher::Watcher;
+pub use watcher::{Watcher, WatcherHandle};
