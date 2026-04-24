@@ -2,6 +2,12 @@
 name = "mcp_detector"
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.88"
+description = "Watches MCP (Model Context Protocol) client configs and reports added or removed servers as they happen."
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+keywords = ["mcp", "model-context-protocol", "watcher", "config", "claude"]
+categories = ["development-tools", "filesystem", "command-line-utilities"]
 
 [dependencies]
 anyhow = "1.0.102"
