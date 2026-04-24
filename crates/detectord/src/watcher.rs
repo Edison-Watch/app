@@ -4,12 +4,12 @@ use std::sync::Arc;
 use std::sync::mpsc;
 use std::time::Duration;
 
-use anyhow::{Context, Result};
 use notify::RecursiveMode;
 use notify_debouncer_full::{DebounceEventResult, new_debouncer};
 
 use crate::client::Client;
 use crate::diff::Snapshot;
+use crate::error::Result;
 use crate::types::ChangeEvent;
 
 pub struct Watcher {
@@ -58,17 +58,14 @@ impl Watcher {
         let (tx, rx) = mpsc::channel::<DebounceEventResult>();
         let mut debouncer = new_debouncer(Duration::from_millis(500), None, move |res| {
             let _ = tx.send(res);
-        })
-        .context("create debouncer")?;
+        })?;
 
         for dir in &dirs {
             if !dir.exists() {
                 tracing::debug!(dir = %dir.display(), "skipping non-existent watch dir");
                 continue;
             }
-            debouncer
-                .watch(dir, RecursiveMode::NonRecursive)
-                .with_context(|| format!("watch {}", dir.display()))?;
+            debouncer.watch(dir, RecursiveMode::NonRecursive)?;
             tracing::info!(dir = %dir.display(), "watching");
         }
 

@@ -342,7 +342,6 @@ dependencies = [
 name = "mcp_detector"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "dirs",
  "notify",
  "notify-debouncer-full",

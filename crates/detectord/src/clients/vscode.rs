@@ -1,12 +1,12 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result};
 use rusqlite::OptionalExtension;
 use serde::Deserialize;
 
 use crate::client::Client;
 use crate::clients::detect_transport;
+use crate::error::{Error, Result};
 use crate::types::{McpServer, Scope};
 
 const CLIENT_NAME: &str = "vscode";
@@ -128,7 +128,10 @@ fn state_vscdb_path() -> Option<PathBuf> {
 }
 
 fn discover_workspaces() -> Result<Vec<PathBuf>> {
-    let db_path = state_vscdb_path().context("no state.vscdb path")?;
+    let Some(db_path) = state_vscdb_path() else {
+        tracing::debug!("no vscode user dir on this platform");
+        return Ok(Vec::new());
+    };
     if !db_path.exists() {
         tracing::debug!(path = %db_path.display(), "state.vscdb not present");
         return Ok(Vec::new());
@@ -136,15 +139,15 @@ fn discover_workspaces() -> Result<Vec<PathBuf>> {
 
     // `immutable=1` tells SQLite the file won't change on disk so it can skip
     // the WAL and locking; this lets us read safely while VSCode is running.
-    let uri = format!(
-        "file:{}?mode=ro&immutable=1",
-        db_path.to_string_lossy()
-    );
+    let uri = format!("file:{}?mode=ro&immutable=1", db_path.to_string_lossy());
     let conn = rusqlite::Connection::open_with_flags(
         &uri,
         rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_URI,
     )
-    .with_context(|| format!("open {}", db_path.display()))?;
+    .map_err(|source| Error::Sqlite {
+        path: db_path.clone(),
+        source,
+    })?;
 
     let raw: Option<String> = conn
         .query_row(
@@ -152,7 +155,11 @@ fn discover_workspaces() -> Result<Vec<PathBuf>> {
             [],
             |r| r.get(0),
         )
-        .optional()?;
+        .optional()
+        .map_err(|source| Error::Sqlite {
+            path: db_path.clone(),
+            source,
+        })?;
     let Some(raw) = raw else {
         return Ok(Vec::new());
     };
@@ -167,7 +174,10 @@ fn discover_workspaces() -> Result<Vec<PathBuf>> {
         folder_uri: Option<String>,
     }
 
-    let recent: Recent = serde_json::from_str(&raw).context("parse recentlyOpenedPathsList")?;
+    let recent: Recent = serde_json::from_str(&raw).map_err(|source| Error::Json {
+        path: db_path.clone(),
+        source,
+    })?;
     Ok(recent
         .entries
         .into_iter()

@@ -1,7 +1,6 @@
 use std::path::PathBuf;
 
-use anyhow::Result;
-
+use crate::error::Result;
 use crate::types::McpServer;
 
 pub trait Client: Send + Sync {

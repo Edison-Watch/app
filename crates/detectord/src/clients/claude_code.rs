@@ -1,11 +1,11 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result};
 use serde::Deserialize;
 
 use crate::client::Client;
 use crate::clients::detect_transport;
+use crate::error::{Error, Result};
 use crate::types::{McpServer, Scope};
 
 const CLIENT_NAME: &str = "claude_code";
@@ -92,13 +92,17 @@ struct ProjectEntry {
 }
 
 fn projects_from_user_config(path: &Path) -> Result<Vec<PathBuf>> {
-    let text = std::fs::read_to_string(path)
-        .with_context(|| format!("read {}", path.display()))?;
+    let text = std::fs::read_to_string(path).map_err(|source| Error::Io {
+        path: path.to_path_buf(),
+        source,
+    })?;
     if text.trim().is_empty() {
         return Ok(Vec::new());
     }
-    let cfg: UserConfig =
-        serde_json::from_str(&text).with_context(|| format!("parse {}", path.display()))?;
+    let cfg: UserConfig = serde_json::from_str(&text).map_err(|source| Error::Json {
+        path: path.to_path_buf(),
+        source,
+    })?;
     Ok(cfg.projects.keys().map(PathBuf::from).collect())
 }
 

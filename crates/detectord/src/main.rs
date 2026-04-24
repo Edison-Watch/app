@@ -1,8 +1,7 @@
 use std::sync::Arc;
 
-use anyhow::Result;
 use mcp_detector::{
-    Client, Watcher,
+    Client, Result, Watcher,
     clients::{ClaudeCode, VsCode},
 };
 use tracing_subscriber::EnvFilter;
