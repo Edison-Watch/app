@@ -8,6 +8,8 @@ export default defineConfig({
     "config/index": "src/config/index.ts",
     "ui/index": "src/ui/index.ts",
     "agent-registry/index": "src/agent-registry/index.ts",
+    "animations/index": "src/animations/index.ts",
+    "svg/index": "src/svg/index.ts",
   },
   format: ["esm", "cjs"],
   dts: true,
