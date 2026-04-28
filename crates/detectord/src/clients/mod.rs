@@ -1,3 +1,7 @@
+//! Bundled [`Client`](crate::Client) implementations. Each one is gated
+//! behind its own cargo feature so consumers can opt in only to the clients
+//! they care about.
+
 #[cfg(any(feature = "claude_code", feature = "vscode"))]
 mod transport;
 

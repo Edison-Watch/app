@@ -1,3 +1,6 @@
+//! The driver: subscribes to every client's watch paths via a debounced
+//! filesystem watcher and emits [`ChangeEvent`]s as snapshots diverge.
+
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -17,11 +20,22 @@ use crate::types::ChangeEvent;
 /// How often the event loop wakes up to check the stop flag.
 const STOP_CHECK_INTERVAL: Duration = Duration::from_millis(250);
 
+/// Driver that observes a fixed set of [`Client`]s and emits [`ChangeEvent`]s
+/// as their configs change.
+///
+/// A `Watcher` is constructed with [`Watcher::new`] and consumed by either
+/// [`Watcher::run`] (blocking, callback-based) or [`Watcher::spawn`]
+/// (background thread, channel-based).
+///
+/// Both methods take an initial snapshot silently — only changes after that
+/// point produce events.
 pub struct Watcher {
     clients: Vec<Arc<dyn Client>>,
 }
 
 impl Watcher {
+    /// Create a watcher over the given clients. The list is fixed for the
+    /// lifetime of the watcher; clients added later will not be observed.
     pub fn new(clients: Vec<Arc<dyn Client>>) -> Self {
         Self { clients }
     }

@@ -1,3 +1,12 @@
+//! VSCode [`Client`] implementation. Watches the user-level
+//! `Code/User/mcp.json` plus a `.vscode/mcp.json` inside every workspace
+//! VSCode currently knows about.
+//!
+//! Workspace discovery goes through `Code/User/globalStorage/state.vscdb`
+//! (an SQLite database VSCode uses for application state) — specifically
+//! the `history.recentlyOpenedPathsList` row. The DB is opened with
+//! `?mode=ro&immutable=1` so reads are safe even while VSCode is running.
+
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
@@ -11,6 +20,10 @@ use crate::types::{McpServer, Scope};
 
 const CLIENT_NAME: &str = "vscode";
 
+/// VSCode MCP-config source.
+///
+/// Construct with [`VsCode::discover`], then hand it to a
+/// [`Watcher`](crate::Watcher).
 pub struct VsCode {
     global_config: Option<PathBuf>,
     /// (project_dir, path to `<project>/.vscode/mcp.json`)
@@ -18,6 +31,15 @@ pub struct VsCode {
 }
 
 impl VsCode {
+    /// Locate VSCode's config files: the global `mcp.json` in the user-level
+    /// `Code/User/` directory, plus a `.vscode/mcp.json` inside every
+    /// workspace listed in `state.vscdb`.
+    ///
+    /// Returns `Ok` even if nothing is found — a `VsCode` with no paths is
+    /// harmless and simply produces no events. SQLite or JSON failures during
+    /// workspace discovery are logged at `warn` and treated as "no
+    /// workspaces", so a corrupt `state.vscdb` won't prevent the global
+    /// config from being watched.
     pub fn discover() -> Result<Self> {
         let global_config = global_mcp_path();
         let projects = discover_workspaces().unwrap_or_else(|e| {

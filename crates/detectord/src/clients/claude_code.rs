@@ -1,3 +1,8 @@
+//! Claude Code [`Client`] implementation. Watches `~/.claude.json` (which
+//! contains both the global `mcpServers` map and a `projects` sub-map with
+//! per-project servers) plus a `.mcp.json` inside every project listed in
+//! that file.
+
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
@@ -10,6 +15,10 @@ use crate::types::{McpServer, Scope};
 
 const CLIENT_NAME: &str = "claude_code";
 
+/// Claude Code MCP-config source.
+///
+/// Construct with [`ClaudeCode::discover`], then hand it to a
+/// [`Watcher`](crate::Watcher).
 pub struct ClaudeCode {
     /// `~/.claude.json` — single user-level file that holds both global
     /// servers and a `projects` map with per-project servers.
@@ -20,6 +29,12 @@ pub struct ClaudeCode {
 }
 
 impl ClaudeCode {
+    /// Locate Claude Code's config files: `~/.claude.json` plus a `.mcp.json`
+    /// in every project directory enumerated under that file's `projects`
+    /// map.
+    ///
+    /// Returns `Ok` even if `~/.claude.json` is absent or unreadable — the
+    /// resulting `ClaudeCode` simply has no paths to watch.
     pub fn discover() -> Result<Self> {
         let user_config = dirs::home_dir().map(|h| h.join(".claude.json"));
         let mut project_configs: Vec<(PathBuf, PathBuf)> = Vec::new();

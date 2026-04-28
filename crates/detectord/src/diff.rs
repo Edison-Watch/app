@@ -1,10 +1,19 @@
+//! Snapshot + diff used internally by the watcher to turn a freshly-parsed
+//! list of [`McpServer`]s into a stream of [`ChangeEvent`]s.
+
 use std::collections::HashMap;
 use std::path::PathBuf;
 
 use crate::types::{ChangeEvent, McpServer, Scope};
 
+/// Identity used to detect "is this the same server as before?". A server is
+/// uniquely identified by `(source file, scope, name)` — that way the same
+/// server name appearing in two different scopes (e.g. global *and* a
+/// specific project) is treated as two distinct entries.
 type Key = (PathBuf, PathBuf, String);
 
+/// In-memory map of every currently-known server, keyed by `(source file,
+/// scope, name)`. The watcher keeps one of these per client.
 #[derive(Default)]
 pub struct Snapshot {
     by_key: HashMap<Key, McpServer>,
