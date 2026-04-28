@@ -86,11 +86,7 @@ impl Watcher {
         ))
     }
 
-    fn run_inner(
-        self,
-        stop: Arc<AtomicBool>,
-        on_event: &mut dyn FnMut(ChangeEvent),
-    ) -> Result<()> {
+    fn run_inner(self, stop: Arc<AtomicBool>, on_event: &mut dyn FnMut(ChangeEvent)) -> Result<()> {
         let mut dirs: HashSet<PathBuf> = HashSet::new();
         for c in &self.clients {
             for p in c.watch_paths() {
@@ -105,11 +101,7 @@ impl Watcher {
             let mut snap = Snapshot::new();
             match c.parse_all() {
                 Ok(servers) => {
-                    tracing::info!(
-                        client = c.name(),
-                        count = servers.len(),
-                        "initial snapshot"
-                    );
+                    tracing::info!(client = c.name(), count = servers.len(), "initial snapshot");
                     snap.prime(&servers);
                 }
                 Err(e) => tracing::warn!(client = c.name(), error = %e, "initial parse failed"),

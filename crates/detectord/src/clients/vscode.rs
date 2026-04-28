@@ -162,10 +162,7 @@ fn global_mcp_path() -> Option<PathBuf> {
 
 fn vscode_user_dir() -> Option<PathBuf> {
     if cfg!(target_os = "macos") {
-        Some(
-            dirs::home_dir()?
-                .join("Library/Application Support/Code/User"),
-        )
+        Some(dirs::home_dir()?.join("Library/Application Support/Code/User"))
     } else {
         // Linux: ~/.config/Code/User, Windows: %APPDATA%/Code/User.
         Some(dirs::config_dir()?.join("Code").join("User"))
@@ -331,10 +328,7 @@ mod tests {
         let proj_a = dir.path().join("proj_a");
         let proj_b = dir.path().join("proj_b");
 
-        let v = VsCode::from_paths(
-            Some(global.clone()),
-            [proj_a.clone(), proj_b.clone()],
-        );
+        let v = VsCode::from_paths(Some(global.clone()), [proj_a.clone(), proj_b.clone()]);
         let watched = v.watch_paths();
         assert!(watched.contains(&global));
         assert!(watched.contains(&proj_a.join(".vscode").join("mcp.json")));
@@ -345,11 +339,7 @@ mod tests {
     fn from_paths_parse_all_emits_global_and_project_servers() {
         let dir = tempdir().unwrap();
         let global = dir.path().join("mcp.json");
-        std::fs::write(
-            &global,
-            r#"{"servers":{"g":{"command":"echo"}}}"#,
-        )
-        .unwrap();
+        std::fs::write(&global, r#"{"servers":{"g":{"command":"echo"}}}"#).unwrap();
         let proj = dir.path().join("p");
         std::fs::create_dir_all(proj.join(".vscode")).unwrap();
         std::fs::write(

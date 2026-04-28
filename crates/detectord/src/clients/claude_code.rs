@@ -322,11 +322,7 @@ mod tests {
     fn from_paths_parse_all_combines_user_and_project_configs() {
         let dir = tempdir().unwrap();
         let user = dir.path().join(".claude.json");
-        std::fs::write(
-            &user,
-            r#"{"mcpServers":{"u":{"command":"node"}}}"#,
-        )
-        .unwrap();
+        std::fs::write(&user, r#"{"mcpServers":{"u":{"command":"node"}}}"#).unwrap();
         let proj = dir.path().join("p");
         std::fs::create_dir_all(&proj).unwrap();
         std::fs::write(
