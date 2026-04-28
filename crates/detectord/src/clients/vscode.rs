@@ -58,6 +58,33 @@ impl VsCode {
             project_configs,
         })
     }
+
+    /// Construct a `VsCode` from explicit paths instead of platform discovery.
+    ///
+    /// Useful in tests, CI, or non-standard installs where
+    /// [`VsCode::discover`] either points at the wrong locations or finds
+    /// nothing because VSCode hasn't been opened on this machine.
+    ///
+    /// - `global_mcp_json` is the user-level `mcp.json` to watch (or `None`
+    ///   to skip the global config entirely).
+    /// - `project_dirs` is an iterator of workspace root directories; for
+    ///   each one, `<dir>/.vscode/mcp.json` is added to the watch set.
+    pub fn from_paths(
+        global_mcp_json: Option<PathBuf>,
+        project_dirs: impl IntoIterator<Item = PathBuf>,
+    ) -> Self {
+        let project_configs = project_dirs
+            .into_iter()
+            .map(|p| {
+                let cfg = p.join(".vscode").join("mcp.json");
+                (p, cfg)
+            })
+            .collect();
+        Self {
+            global_config: global_mcp_json,
+            project_configs,
+        }
+    }
 }
 
 impl Client for VsCode {
@@ -295,5 +322,50 @@ mod tests {
             file_uri_to_path("file:///Users/foo/My%20Project").unwrap(),
             PathBuf::from("/Users/foo/My Project")
         );
+    }
+
+    #[test]
+    fn from_paths_watches_global_and_project_configs() {
+        let dir = tempdir().unwrap();
+        let global = dir.path().join("user").join("mcp.json");
+        let proj_a = dir.path().join("proj_a");
+        let proj_b = dir.path().join("proj_b");
+
+        let v = VsCode::from_paths(
+            Some(global.clone()),
+            [proj_a.clone(), proj_b.clone()],
+        );
+        let watched = v.watch_paths();
+        assert!(watched.contains(&global));
+        assert!(watched.contains(&proj_a.join(".vscode").join("mcp.json")));
+        assert!(watched.contains(&proj_b.join(".vscode").join("mcp.json")));
+    }
+
+    #[test]
+    fn from_paths_parse_all_emits_global_and_project_servers() {
+        let dir = tempdir().unwrap();
+        let global = dir.path().join("mcp.json");
+        std::fs::write(
+            &global,
+            r#"{"servers":{"g":{"command":"echo"}}}"#,
+        )
+        .unwrap();
+        let proj = dir.path().join("p");
+        std::fs::create_dir_all(proj.join(".vscode")).unwrap();
+        std::fs::write(
+            proj.join(".vscode").join("mcp.json"),
+            r#"{"servers":{"p":{"type":"http","url":"https://x"}}}"#,
+        )
+        .unwrap();
+
+        let v = VsCode::from_paths(Some(global.clone()), [proj.clone()]);
+        let servers = v.parse_all().unwrap();
+
+        assert_eq!(servers.len(), 2);
+        let by_name: BTreeMap<_, _> = servers.iter().map(|s| (s.name.clone(), s)).collect();
+        assert_eq!(by_name["g"].scope, Scope::Global);
+        assert_eq!(by_name["g"].transport, crate::types::Transport::Stdio);
+        assert_eq!(by_name["p"].scope, Scope::Project(proj));
+        assert_eq!(by_name["p"].transport, crate::types::Transport::Remote);
     }
 }

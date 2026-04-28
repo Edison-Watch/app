@@ -58,6 +58,32 @@ impl ClaudeCode {
             project_configs,
         })
     }
+
+    /// Construct a `ClaudeCode` from explicit paths instead of running the
+    /// usual user-config discovery.
+    ///
+    /// Useful in tests, CI, or unusual installs.
+    ///
+    /// - `user_config` is the path to a `.claude.json`-shaped file (or
+    ///   `None` to skip).
+    /// - `project_dirs` is an iterator of project root directories; for each
+    ///   one, `<dir>/.mcp.json` is added to the watch set.
+    pub fn from_paths(
+        user_config: Option<PathBuf>,
+        project_dirs: impl IntoIterator<Item = PathBuf>,
+    ) -> Self {
+        let project_configs = project_dirs
+            .into_iter()
+            .map(|p| {
+                let cfg = p.join(".mcp.json");
+                (p, cfg)
+            })
+            .collect();
+        Self {
+            user_config,
+            project_configs,
+        }
+    }
 }
 
 impl Client for ClaudeCode {
@@ -279,5 +305,44 @@ mod tests {
         let path = dir.path().join(".claude.json");
         std::fs::write(&path, "not json").unwrap();
         assert!(parse_user_config(&path).is_empty());
+    }
+
+    #[test]
+    fn from_paths_watches_user_and_project_configs() {
+        let dir = tempdir().unwrap();
+        let user = dir.path().join(".claude.json");
+        let proj = dir.path().join("proj");
+        let cc = ClaudeCode::from_paths(Some(user.clone()), [proj.clone()]);
+        let watched = cc.watch_paths();
+        assert!(watched.contains(&user));
+        assert!(watched.contains(&proj.join(".mcp.json")));
+    }
+
+    #[test]
+    fn from_paths_parse_all_combines_user_and_project_configs() {
+        let dir = tempdir().unwrap();
+        let user = dir.path().join(".claude.json");
+        std::fs::write(
+            &user,
+            r#"{"mcpServers":{"u":{"command":"node"}}}"#,
+        )
+        .unwrap();
+        let proj = dir.path().join("p");
+        std::fs::create_dir_all(&proj).unwrap();
+        std::fs::write(
+            proj.join(".mcp.json"),
+            r#"{"mcpServers":{"p":{"type":"http","url":"https://x"}}}"#,
+        )
+        .unwrap();
+
+        let cc = ClaudeCode::from_paths(Some(user.clone()), [proj.clone()]);
+        let servers = cc.parse_all().unwrap();
+
+        assert_eq!(servers.len(), 2);
+        let by_name: BTreeMap<_, _> = servers.iter().map(|s| (s.name.clone(), s)).collect();
+        assert_eq!(by_name["u"].scope, Scope::Global);
+        assert_eq!(by_name["u"].transport, Transport::Stdio);
+        assert_eq!(by_name["p"].scope, Scope::Project(proj));
+        assert_eq!(by_name["p"].transport, Transport::Remote);
     }
 }
