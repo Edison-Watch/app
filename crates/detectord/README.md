@@ -12,7 +12,7 @@ For the initial milestone it focuses on additions and removals: **when an MCP se
 
 - **Library + binary.** Core logic lives in `src/lib.rs`; `src/main.rs` is a thin CLI that wires the library to stdout.
 - **Client abstraction.** Each supported client implements a common trait exposing (a) the set of config paths to watch and (b) a parser that normalises the on-disk shape into a shared `McpServer` type.
-- **Event-driven watching.** Uses `notify-debouncer-full` against parent directories rather than individual files — most editors write configs via atomic rename, which breaks single-file watches.
+- **Event-driven watching.** Uses `notify-debouncer-full` against parent directories rather than individual files - most editors write configs via atomic rename, which breaks single-file watches.
 - **Stateful diffing.** Maintains a last-known snapshot per config source. On each debounced event it reparses and emits structured events for anything new.
 
 ## Source shapes
@@ -21,7 +21,7 @@ Config sources across clients differ in several important ways:
 
 - **Format.** Most clients use JSON (`mcp.json`, `.mcp.json`, etc.), but some store configuration or the metadata needed to *discover* project-level configs in a SQLite database (e.g. VSCode's `state.vscdb` workspace history).
 - **Scope.** A single file can mix global and project-scoped entries (Claude Code's `~/.claude.json` embeds a `projects` map with per-project server lists).
-- **Location.** Project-level configs live inside each project directory, so the detector has to know which projects to watch — either by enumerating them from the client's own state, or from a user-provided list.
+- **Location.** Project-level configs live inside each project directory, so the detector has to know which projects to watch - either by enumerating them from the client's own state, or from a user-provided list.
 
 The client abstraction hides all of this from the core watcher and diff logic.
 
@@ -31,8 +31,8 @@ The client abstraction hides all of this from the core watcher and diff logic.
 |-----------------|-------------|----------------|
 | VSCode          | Implemented | `vscode`       |
 | Claude Code     | Implemented | `claude_code`  |
-| Cursor          | Planned     | —              |
-| Claude Desktop  | Planned     | —              |
+| Cursor          | Planned     | -              |
+| Claude Desktop  | Planned     | -              |
 
 ## Use as a library
 
@@ -71,8 +71,8 @@ fn main() -> Result<()> {
 
 Each bundled client lives behind its own feature; both are on by default.
 
-- `vscode` — pulls in `rusqlite` (bundled) for reading VSCode's `state.vscdb` workspace history.
-- `claude_code` — no extra deps.
+- `vscode` - pulls in `rusqlite` (bundled) for reading VSCode's `state.vscdb` workspace history.
+- `claude_code` - no extra deps.
 
 A consumer that only needs one client can disable the other and skip the bundled-SQLite build cost:
 

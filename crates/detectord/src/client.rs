@@ -1,4 +1,4 @@
-//! The [`Client`] trait — the extension point for adding support for a new
+//! The [`Client`] trait - the extension point for adding support for a new
 //! MCP client.
 
 use std::path::PathBuf;
@@ -24,7 +24,7 @@ pub trait Client: Send + Sync {
     /// The watcher subscribes to each path's **parent directory**, not the
     /// file itself, because most editors write configs via atomic rename
     /// (create temp + rename over target) and that pattern invalidates
-    /// single-file watches. Returning a non-existent path is fine — the
+    /// single-file watches. Returning a non-existent path is fine - the
     /// watcher will simply skip the parent dir if it does not exist either.
     fn watch_paths(&self) -> Vec<PathBuf>;
 
@@ -32,7 +32,7 @@ pub trait Client: Send + Sync {
     ///
     /// Called on startup (to seed the snapshot) and again on every debounced
     /// filesystem event. Implementations should be tolerant of missing or
-    /// malformed files — log and return what was parseable rather than
+    /// malformed files - log and return what was parseable rather than
     /// erroring out, so one broken config can't kill the detector.
     fn parse_all(&self) -> Result<Vec<McpServer>>;
 }

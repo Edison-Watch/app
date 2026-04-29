@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use crate::types::{ChangeEvent, McpServer, Scope};
 
 /// Identity used to detect "is this the same server as before?". A server is
-/// uniquely identified by `(source file, scope, name)` — that way the same
+/// uniquely identified by `(source file, scope, name)` - that way the same
 /// server name appearing in two different scopes (e.g. global *and* a
 /// specific project) is treated as two distinct entries.
 type Key = (PathBuf, PathBuf, String);

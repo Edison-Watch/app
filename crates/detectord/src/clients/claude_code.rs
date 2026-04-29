@@ -20,7 +20,7 @@ const CLIENT_NAME: &str = "claude_code";
 /// Construct with [`ClaudeCode::discover`], then hand it to a
 /// [`Watcher`](crate::Watcher).
 pub struct ClaudeCode {
-    /// `~/.claude.json` — single user-level file that holds both global
+    /// `~/.claude.json` - single user-level file that holds both global
     /// servers and a `projects` map with per-project servers.
     user_config: Option<PathBuf>,
     /// (project_dir, path to `<project>/.mcp.json`) for each project CC knows
@@ -33,7 +33,7 @@ impl ClaudeCode {
     /// in every project directory enumerated under that file's `projects`
     /// map.
     ///
-    /// Returns `Ok` even if `~/.claude.json` is absent or unreadable — the
+    /// Returns `Ok` even if `~/.claude.json` is absent or unreadable - the
     /// resulting `ClaudeCode` simply has no paths to watch.
     pub fn discover() -> Result<Self> {
         let user_config = dirs::home_dir().map(|h| h.join(".claude.json"));

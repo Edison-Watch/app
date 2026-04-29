@@ -1,7 +1,7 @@
 //! End-to-end smoke test for [`mcp_detector::Watcher::spawn`].
 //!
 //! Asserts that mutating a watched config file actually produces an `Added`
-//! / `Removed` event on the receiver — the only path *not* covered by unit
+//! / `Removed` event on the receiver - the only path *not* covered by unit
 //! tests, and the place where the filesystem-watcher integration is most
 //! likely to break silently (per-OS event-delivery quirks, atomic-rename
 //! handling, debouncer wiring, etc.).
@@ -54,15 +54,13 @@ fn spawn_delivers_added_event_when_a_server_appears() {
     // Give the worker time to set up the debouncer + register the watch.
     std::thread::sleep(Duration::from_millis(300));
 
-    std::fs::write(
-        &global,
-        r#"{"servers":{"new-thing":{"command":"echo"}}}"#,
-    )
-    .unwrap();
+    std::fs::write(&global, r#"{"servers":{"new-thing":{"command":"echo"}}}"#).unwrap();
 
-    let ev = wait_for(&events, Duration::from_secs(10), |e| {
-        matches!(e, ChangeEvent::Added(s) if s.name == "new-thing")
-    })
+    let ev = wait_for(
+        &events,
+        Duration::from_secs(10),
+        |e| matches!(e, ChangeEvent::Added(s) if s.name == "new-thing"),
+    )
     .expect("Added event for new-thing within 10s");
     if let ChangeEvent::Added(s) = ev {
         assert_eq!(s.client, "vscode");
@@ -74,11 +72,7 @@ fn spawn_delivers_added_event_when_a_server_appears() {
 fn spawn_delivers_removed_event_when_a_server_disappears() {
     let dir = tempdir().unwrap();
     let global = dir.path().join("mcp.json");
-    std::fs::write(
-        &global,
-        r#"{"servers":{"existing":{"command":"echo"}}}"#,
-    )
-    .unwrap();
+    std::fs::write(&global, r#"{"servers":{"existing":{"command":"echo"}}}"#).unwrap();
 
     let client = Arc::new(VsCode::from_paths(
         Some(global.clone()),
@@ -92,9 +86,11 @@ fn spawn_delivers_removed_event_when_a_server_disappears() {
 
     std::fs::write(&global, r#"{"servers":{}}"#).unwrap();
 
-    wait_for(&events, Duration::from_secs(10), |e| {
-        matches!(e, ChangeEvent::Removed(s) if s.name == "existing")
-    })
+    wait_for(
+        &events,
+        Duration::from_secs(10),
+        |e| matches!(e, ChangeEvent::Removed(s) if s.name == "existing"),
+    )
     .expect("Removed event for existing within 10s");
 }
 

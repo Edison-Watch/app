@@ -66,7 +66,7 @@ impl std::fmt::Display for Scope {
 
 /// Something happened to a tracked MCP server.
 ///
-/// Modifications to an existing server are not reported — only additions and
+/// Modifications to an existing server are not reported - only additions and
 /// removals.
 #[derive(Debug, Clone)]
 pub enum ChangeEvent {

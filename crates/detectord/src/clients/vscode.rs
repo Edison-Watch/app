@@ -3,7 +3,7 @@
 //! VSCode currently knows about.
 //!
 //! Workspace discovery goes through `Code/User/globalStorage/state.vscdb`
-//! (an SQLite database VSCode uses for application state) — specifically
+//! (an SQLite database VSCode uses for application state) - specifically
 //! the `history.recentlyOpenedPathsList` row. The DB is opened with
 //! `?mode=ro&immutable=1` so reads are safe even while VSCode is running.
 
@@ -35,7 +35,7 @@ impl VsCode {
     /// `Code/User/` directory, plus a `.vscode/mcp.json` inside every
     /// workspace listed in `state.vscdb`.
     ///
-    /// Returns `Ok` even if nothing is found — a `VsCode` with no paths is
+    /// Returns `Ok` even if nothing is found - a `VsCode` with no paths is
     /// harmless and simply produces no events. SQLite or JSON failures during
     /// workspace discovery are logged at `warn` and treated as "no
     /// workspaces", so a corrupt `state.vscdb` won't prevent the global

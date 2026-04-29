@@ -39,7 +39,7 @@ jobs:
       matrix:
         include:
           # Default features run the full suite (lib + integration) on both
-          # Linux (inotify) and macOS (FSEvents) — the integration tests
+          # Linux (inotify) and macOS (FSEvents) - the integration tests
           # actually exercise the platform-specific filesystem watcher.
           - name: default features (linux)
             os: ubuntu-latest

@@ -10,7 +10,7 @@ once it has a tagged release.
 
 ### Added
 
-- `Client` trait (`name`, `watch_paths`, `parse_all`) — the extension point for
+- `Client` trait (`name`, `watch_paths`, `parse_all`) - the extension point for
   adding support for a new MCP client.
 - `Watcher::run` (blocking, callback-based) and `Watcher::spawn` (background
   thread + `mpsc::Receiver` + `WatcherHandle` that stops the worker on drop)

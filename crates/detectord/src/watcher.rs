@@ -27,7 +27,7 @@ const STOP_CHECK_INTERVAL: Duration = Duration::from_millis(250);
 /// [`Watcher::run`] (blocking, callback-based) or [`Watcher::spawn`]
 /// (background thread, channel-based).
 ///
-/// Both methods take an initial snapshot silently — only changes after that
+/// Both methods take an initial snapshot silently - only changes after that
 /// point produce events.
 pub struct Watcher {
     clients: Vec<Arc<dyn Client>>,
@@ -59,7 +59,7 @@ impl Watcher {
     /// The returned [`WatcherHandle`] will signal the worker to stop and join
     /// it either when `.stop()` is called explicitly or when the handle is
     /// dropped. Dropping the [`Receiver`](mpsc::Receiver) alone does **not**
-    /// stop the worker — hold on to the handle for that.
+    /// stop the worker - hold on to the handle for that.
     pub fn spawn(self) -> Result<(mpsc::Receiver<ChangeEvent>, WatcherHandle)> {
         let (ev_tx, ev_rx) = mpsc::channel::<ChangeEvent>();
         let stop = Arc::new(AtomicBool::new(false));

@@ -3,7 +3,7 @@
 //!
 //! MCP servers are configured independently by each client (Claude Code,
 //! VSCode, Cursor, Claude Desktop, ...), often across several files per
-//! client — a global user-level file, per-project files, and sometimes
+//! client - a global user-level file, per-project files, and sometimes
 //! application state stored in a SQLite database. This crate unifies those
 //! sources behind a single [`Client`] trait, watches them via an event-driven
 //! filesystem watcher, and emits a [`ChangeEvent`] whenever a server appears
@@ -36,12 +36,12 @@
 //!
 //! Each client lives behind its own feature; both are on by default.
 //!
-//! - `vscode` — enables [`clients::VsCode`]; pulls in `rusqlite` (bundled).
-//! - `claude_code` — enables [`clients::ClaudeCode`].
+//! - `vscode` - enables [`clients::VsCode`]; pulls in `rusqlite` (bundled).
+//! - `claude_code` - enables [`clients::ClaudeCode`].
 //!
 //! # Event semantics
 //!
-//! - The initial snapshot taken on startup is **silent** — no `Added` events
+//! - The initial snapshot taken on startup is **silent** - no `Added` events
 //!   are emitted for servers that already exist when the watcher starts.
 //! - Subsequent additions emit [`ChangeEvent::Added`].
 //! - Subsequent removals emit [`ChangeEvent::Removed`].

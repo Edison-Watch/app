@@ -3,7 +3,7 @@
 //! Run with: `cargo run --example watch`.
 //!
 //! Demonstrates [`Watcher::spawn`], which is usually what you want when
-//! integrating the watcher into a larger program — it runs on a background
+//! integrating the watcher into a larger program - it runs on a background
 //! thread, delivers events on an `mpsc::Receiver`, and stops cleanly when
 //! the returned [`WatcherHandle`](mcp_detector::WatcherHandle) is dropped.
 
