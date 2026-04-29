@@ -27,19 +27,64 @@ The client abstraction hides all of this from the core watcher and diff logic.
 
 ## Supported clients
 
-| Client          | Status           |
-|-----------------|------------------|
-| VSCode          | Planned (first)  |
-| Claude Code     | Planned (second) |
-| Cursor          | Later            |
-| Claude Desktop  | Later            |
+| Client          | Status      | Cargo feature  |
+|-----------------|-------------|----------------|
+| VSCode          | Implemented | `vscode`       |
+| Claude Code     | Implemented | `claude_code`  |
+| Cursor          | Planned     | —              |
+| Claude Desktop  | Planned     | —              |
 
-## Usage
+## Use as a library
 
-_TBD — tool is in early development._
+The crate is library-first; the binary is a thin wrapper. Add it to your project:
 
-## Building
+```toml
+[dependencies]
+mcp_detector = "0.1"
+```
+
+Then drive the watcher in code:
+
+```rust,no_run
+use std::sync::Arc;
+use mcp_detector::{Client, Result, Watcher, clients::{ClaudeCode, VsCode}};
+
+fn main() -> Result<()> {
+    let clients: Vec<Arc<dyn Client>> = vec![
+        Arc::new(VsCode::discover()?),
+        Arc::new(ClaudeCode::discover()?),
+    ];
+
+    let (events, _handle) = Watcher::new(clients).spawn()?;
+    for ev in events {
+        println!("{ev}");
+    }
+    Ok(())
+}
+```
+
+`Watcher::spawn` runs the watcher on a background thread; the returned handle stops the worker on drop. For a blocking, callback-based variant, use `Watcher::run`. See `cargo run --example watch` for a full example.
+
+`VsCode::discover()` and `ClaudeCode::discover()` use platform-specific paths. For tests, CI, or non-standard installs, use `from_paths(...)` to point each client at explicit locations instead.
+
+### Cargo features
+
+Each bundled client lives behind its own feature; both are on by default.
+
+- `vscode` — pulls in `rusqlite` (bundled) for reading VSCode's `state.vscdb` workspace history.
+- `claude_code` — no extra deps.
+
+A consumer that only needs one client can disable the other and skip the bundled-SQLite build cost:
+
+```toml
+[dependencies]
+mcp_detector = { version = "0.1", default-features = false, features = ["claude_code"] }
+```
+
+## Run as a binary
 
 ```bash
-cargo build --release
+cargo run --release
 ```
+
+The binary registers both bundled clients, prints `ADDED ...` / `REMOVED ...` lines to stdout, and runs until killed. Set `RUST_LOG=debug` to see watch-setup and event-loop diagnostics.
