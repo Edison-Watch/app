@@ -1,5 +1,5 @@
 [package]
-name = "mcp_detector"
+name = "mcp_detector_lib"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.88"
@@ -33,4 +33,5 @@ tempfile = "3.27.0"
 
 [[bin]]
 name = "mcp_detector"
+path = "src/main.rs"
 required-features = ["vscode", "claude_code"]

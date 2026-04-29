@@ -339,7 +339,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "mcp_detector"
+name = "mcp_detector_lib"
 version = "0.1.0"
 dependencies = [
  "dirs",

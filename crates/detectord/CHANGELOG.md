@@ -8,6 +8,12 @@ once it has a tagged release.
 
 ## [Unreleased]
 
+### Changed
+
+- Renamed the crate from `mcp_detector` to `mcp_detector_lib` to make its
+  library-first nature explicit on crates.io. The CLI binary is still
+  installed as `mcp_detector`.
+
 ### Added
 
 - `Client` trait (`name`, `watch_paths`, `parse_all`) - the extension point for

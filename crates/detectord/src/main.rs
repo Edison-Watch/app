@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use mcp_detector::{
+use mcp_detector_lib::{
     Client, Result, Watcher,
     clients::{ClaudeCode, VsCode},
 };

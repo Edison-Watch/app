@@ -5,11 +5,11 @@
 //! Demonstrates [`Watcher::spawn`], which is usually what you want when
 //! integrating the watcher into a larger program - it runs on a background
 //! thread, delivers events on an `mpsc::Receiver`, and stops cleanly when
-//! the returned [`WatcherHandle`](mcp_detector::WatcherHandle) is dropped.
+//! the returned [`WatcherHandle`](mcp_detector_lib::WatcherHandle) is dropped.
 
 use std::sync::Arc;
 
-use mcp_detector::{
+use mcp_detector_lib::{
     Client, Result, Watcher,
     clients::{ClaudeCode, VsCode},
 };

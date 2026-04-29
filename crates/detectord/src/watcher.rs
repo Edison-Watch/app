@@ -66,7 +66,7 @@ impl Watcher {
         let stop_c = stop.clone();
 
         let thread = thread::Builder::new()
-            .name("mcp_detector".into())
+            .name("mcp_detector_lib".into())
             .spawn(move || {
                 let mut on_event = move |e| {
                     let _ = ev_tx.send(e);

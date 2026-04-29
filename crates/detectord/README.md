@@ -1,10 +1,10 @@
-# mcp_detector
+# MCP Detector Lib
 
 A background tool that watches the on-disk configs of MCP (Model Context Protocol) clients and reports changes as they happen.
 
 ## What it does
 
-MCP servers are configured independently by each client (Claude Code, VSCode, Cursor, Claude Desktop, ...), often in several places per client: a global user-level file, per-project files, and sometimes application state stored in a SQLite database. `mcp_detector` unifies those sources into a single live stream of change events.
+MCP servers are configured independently by each client (Claude Code, VSCode, Cursor, Claude Desktop, ...), often in several places per client: a global user-level file, per-project files, and sometimes application state stored in a SQLite database. `mcp_detector_lib` unifies those sources into a single live stream of change events.
 
 For the initial milestone it focuses on additions and removals: **when an MCP server appears in or disappears from any tracked config, print a line identifying it, its scope (global vs project-specific), and its transport (stdio vs remote).** In-place edits (same server name, different fields) are not reported yet.
 
@@ -40,14 +40,14 @@ The crate is library-first; the binary is a thin wrapper. Add it to your project
 
 ```toml
 [dependencies]
-mcp_detector = "0.1"
+mcp_detector_lib = "0.1"
 ```
 
 Then drive the watcher in code:
 
 ```rust,no_run
 use std::sync::Arc;
-use mcp_detector::{Client, Result, Watcher, clients::{ClaudeCode, VsCode}};
+use mcp_detector_lib::{Client, Result, Watcher, clients::{ClaudeCode, VsCode}};
 
 fn main() -> Result<()> {
     let clients: Vec<Arc<dyn Client>> = vec![
@@ -78,7 +78,7 @@ A consumer that only needs one client can disable the other and skip the bundled
 
 ```toml
 [dependencies]
-mcp_detector = { version = "0.1", default-features = false, features = ["claude_code"] }
+mcp_detector_lib = { version = "0.1", default-features = false, features = ["claude_code"] }
 ```
 
 ## Run as a binary
