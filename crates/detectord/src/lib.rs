@@ -57,7 +57,7 @@
 
 pub mod client;
 pub mod clients;
-pub mod diff;
+pub(crate) mod diff;
 pub mod error;
 pub mod types;
 pub mod watcher;

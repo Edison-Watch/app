@@ -15,24 +15,24 @@ type Key = (PathBuf, PathBuf, String);
 /// In-memory map of every currently-known server, keyed by `(source file,
 /// scope, name)`. The watcher keeps one of these per client.
 #[derive(Default)]
-pub struct Snapshot {
+pub(crate) struct Snapshot {
     by_key: HashMap<Key, McpServer>,
 }
 
 impl Snapshot {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self::default()
     }
 
     /// Seed the snapshot without emitting events.
-    pub fn prime(&mut self, current: &[McpServer]) {
+    pub(crate) fn prime(&mut self, current: &[McpServer]) {
         self.by_key = current.iter().map(|s| (key(s), s.clone())).collect();
     }
 
     /// Replace the snapshot with `current` and return `Added` / `Removed`
     /// events for any servers that appeared or disappeared. In-place edits
     /// (same key, different fields) are not reported yet.
-    pub fn update(&mut self, current: &[McpServer]) -> Vec<ChangeEvent> {
+    pub(crate) fn update(&mut self, current: &[McpServer]) -> Vec<ChangeEvent> {
         let new_map: HashMap<Key, McpServer> =
             current.iter().map(|s| (key(s), s.clone())).collect();
 
