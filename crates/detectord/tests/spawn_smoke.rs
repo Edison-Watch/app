@@ -45,6 +45,7 @@ fn spawn_delivers_added_event_when_a_server_appears() {
 
     let client = Arc::new(VsCode::from_paths(
         Some(global.clone()),
+        None,
         Vec::<PathBuf>::new(),
     ));
     let (events, _handle) = Watcher::new(vec![client as Arc<dyn Client>])
@@ -76,6 +77,7 @@ fn spawn_delivers_removed_event_when_a_server_disappears() {
 
     let client = Arc::new(VsCode::from_paths(
         Some(global.clone()),
+        None,
         Vec::<PathBuf>::new(),
     ));
     let (events, _handle) = Watcher::new(vec![client as Arc<dyn Client>])
@@ -102,6 +104,7 @@ fn dropping_the_handle_stops_the_worker() {
 
     let client = Arc::new(VsCode::from_paths(
         Some(global.clone()),
+        None,
         Vec::<PathBuf>::new(),
     ));
     let (events, handle) = Watcher::new(vec![client as Arc<dyn Client>])
