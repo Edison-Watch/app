@@ -1,11 +1,19 @@
-//! VSCode [`Client`] implementation. Watches three sources:
+//! VSCode [`Client`] implementation. Watches four sources:
 //!
 //! 1. **User-level `Code/User/mcp.json`** — the file users edit by hand.
 //! 2. **Per-workspace `<workspace>/.vscode/mcp.json`** for every workspace
 //!    listed in `state.vscdb` under `history.recentlyOpenedPathsList`.
-//! 3. **`state.vscdb` itself, key `mcpToolCache`** — extension-registered
-//!    MCP servers that VSCode extensions add at runtime via the Extension
-//!    API. Those entries never appear in any `mcp.json` file.
+//! 3. **`state.vscdb` itself, key `mcpToolCache`** — older static-contribution
+//!    extension servers (the row's `extensionServers` array). Modern VSCode
+//!    versions tend to leave this empty.
+//! 4. **`~/.vscode/extensions/extensions.json` plus each extension's
+//!    `package.json`** — extensions that contribute the
+//!    `mcpServerDefinitionProviders` contribution point. This is the
+//!    *modern* way extensions register MCP servers (via
+//!    `vscode.lm.registerMcpServerDefinitionProvider`); the runtime
+//!    registration is in-memory only and never reaches `state.vscdb`,
+//!    so a static scan of installed extensions is the only way to see
+//!    them on disk.
 //!
 //! `state.vscdb` is opened with `?mode=ro&immutable=1` so reads are safe
 //! even while VSCode is running.
@@ -33,6 +41,10 @@ pub struct VsCode {
     /// workspace enumeration at `discover()` and for ongoing reads of the
     /// `mcpToolCache` row on every `parse_all`.
     state_db: Option<PathBuf>,
+    /// `~/.vscode/extensions/` — root for the `extensions.json` index and
+    /// each extension's `package.json`, scanned for the
+    /// `mcpServerDefinitionProviders` contribution point.
+    extensions_dir: Option<PathBuf>,
     /// (project_dir, path to `<project>/.vscode/mcp.json`)
     project_configs: Vec<(PathBuf, PathBuf)>,
 }
@@ -51,6 +63,7 @@ impl VsCode {
     pub fn discover() -> Result<Self> {
         let global_config = global_mcp_path();
         let state_db = state_vscdb_path();
+        let extensions_dir = vscode_extensions_dir();
         let projects = state_db
             .as_deref()
             .map(discover_workspaces)
@@ -70,6 +83,7 @@ impl VsCode {
         Ok(Self {
             global_config,
             state_db,
+            extensions_dir,
             project_configs,
         })
     }
@@ -101,8 +115,19 @@ impl VsCode {
         Self {
             global_config: global_mcp_json,
             state_db: state_vscdb,
+            extensions_dir: None,
             project_configs,
         }
+    }
+
+    /// Builder-style setter for the extensions directory (typically
+    /// `~/.vscode/extensions`). Used to enable scanning of extensions that
+    /// contribute the `mcpServerDefinitionProviders` contribution point —
+    /// i.e. extensions like `upstash.context7-mcp` that register MCP
+    /// servers programmatically via `vscode.lm.registerMcpServerDefinitionProvider`.
+    pub fn with_extensions_dir(mut self, extensions_dir: Option<PathBuf>) -> Self {
+        self.extensions_dir = extensions_dir;
+        self
     }
 }
 
@@ -118,6 +143,11 @@ impl Client for VsCode {
         }
         if let Some(p) = &self.state_db {
             v.push(p.clone());
+        }
+        if let Some(d) = &self.extensions_dir {
+            // Watch the extensions index file. Its parent dir contains every
+            // extension subdir, so install/uninstall events fire there too.
+            v.push(d.join("extensions.json"));
         }
         for (_, cfg) in &self.project_configs {
             v.push(cfg.clone());
@@ -141,6 +171,11 @@ impl Client for VsCode {
             && db.exists()
         {
             out.extend(parse_mcp_tool_cache(db));
+        }
+        if let Some(d) = &self.extensions_dir
+            && d.exists()
+        {
+            out.extend(parse_extension_providers(d));
         }
         Ok(out)
     }
@@ -303,6 +338,108 @@ fn vscode_user_dir() -> Option<PathBuf> {
 
 fn state_vscdb_path() -> Option<PathBuf> {
     Some(vscode_user_dir()?.join("globalStorage").join("state.vscdb"))
+}
+
+fn vscode_extensions_dir() -> Option<PathBuf> {
+    // Same on every platform — VSCode always uses ~/.vscode/extensions.
+    Some(dirs::home_dir()?.join(".vscode").join("extensions"))
+}
+
+#[derive(Debug, Deserialize)]
+struct ExtensionsIndexEntry {
+    location: ExtensionLocation,
+}
+
+#[derive(Debug, Deserialize)]
+struct ExtensionLocation {
+    /// Absolute path to the extension's install directory.
+    path: PathBuf,
+}
+
+#[derive(Debug, Deserialize)]
+struct ExtensionPackageJson {
+    contributes: Option<Contributes>,
+}
+
+#[derive(Debug, Deserialize)]
+struct Contributes {
+    #[serde(default, rename = "mcpServerDefinitionProviders")]
+    mcp_server_definition_providers: Vec<McpServerProviderContribution>,
+}
+
+#[derive(Debug, Deserialize)]
+struct McpServerProviderContribution {
+    id: String,
+}
+
+/// Scan installed VSCode extensions for the `mcpServerDefinitionProviders`
+/// contribution point. Each provider declaration becomes one [`McpServer`]
+/// with `name = provider.id`.
+///
+/// This catches extensions like `upstash.context7-mcp` that register MCP
+/// servers programmatically via `vscode.lm.registerMcpServerDefinitionProvider`.
+/// Those registrations live in VSCode's in-memory runtime and are never
+/// persisted to `state.vscdb`, so a static scan of `package.json` files is
+/// the only on-disk way to see them.
+///
+/// Caveats:
+/// - Transport is unknown without running the provider; we default to
+///   [`Transport::Stdio`] since that's the common case.
+/// - We can't tell whether the extension is enabled in any given workspace
+///   (per-workspace enable/disable lives in `state.vscdb`); we assume
+///   "installed implies in use", same model as how `mcp.json` works.
+fn parse_extension_providers(extensions_dir: &Path) -> Vec<McpServer> {
+    let index_path = extensions_dir.join("extensions.json");
+    if !index_path.exists() {
+        return Vec::new();
+    }
+    let text = match std::fs::read_to_string(&index_path) {
+        Ok(t) => t,
+        Err(e) => {
+            tracing::debug!(file = %index_path.display(), error = %e, "extensions.json read failed");
+            return Vec::new();
+        }
+    };
+    let entries: Vec<ExtensionsIndexEntry> = match serde_json::from_str(&text) {
+        Ok(e) => e,
+        Err(e) => {
+            tracing::debug!(file = %index_path.display(), error = %e, "extensions.json parse failed");
+            return Vec::new();
+        }
+    };
+
+    let mut out = Vec::new();
+    for ent in entries {
+        let pkg_path = ent.location.path.join("package.json");
+        if !pkg_path.exists() {
+            continue;
+        }
+        let pkg_text = match std::fs::read_to_string(&pkg_path) {
+            Ok(t) => t,
+            Err(_) => continue,
+        };
+        // Extension package.json files are technically JSON but some are
+        // shipped as JSONC (comments / trailing commas). Lenient parser
+        // matches what VSCode itself does.
+        let pkg: ExtensionPackageJson = match serde_json_lenient::from_str(&pkg_text) {
+            Ok(p) => p,
+            Err(_) => continue,
+        };
+        let providers = pkg
+            .contributes
+            .map(|c| c.mcp_server_definition_providers)
+            .unwrap_or_default();
+        for p in providers {
+            out.push(McpServer {
+                client: CLIENT_NAME,
+                name: p.id,
+                transport: Transport::Stdio,
+                scope: Scope::Global,
+                source: pkg_path.clone(),
+            });
+        }
+    }
+    out
 }
 
 fn discover_workspaces(db_path: &Path) -> Result<Vec<PathBuf>> {
@@ -610,6 +747,120 @@ mod tests {
         let db = dir.path().join("state.vscdb");
         make_test_vscdb(&db, &[("mcpToolCache", "not json")]);
         assert!(parse_mcp_tool_cache(&db).is_empty());
+    }
+
+    /// Build a fake `~/.vscode/extensions/` layout: an extensions.json
+    /// pointing at one or more extension dirs, each with a package.json.
+    fn make_extensions_dir(root: &Path, extensions: &[(&str, /* package_json */ &str)]) -> PathBuf {
+        let ext_root = root.join("extensions");
+        std::fs::create_dir_all(&ext_root).unwrap();
+        let mut index = Vec::new();
+        for (id, pkg_json) in extensions {
+            let dir = ext_root.join(id);
+            std::fs::create_dir_all(&dir).unwrap();
+            std::fs::write(dir.join("package.json"), pkg_json).unwrap();
+            index.push(serde_json::json!({
+                "identifier": { "id": id },
+                "location": { "path": dir.to_string_lossy() }
+            }));
+        }
+        std::fs::write(
+            ext_root.join("extensions.json"),
+            serde_json::Value::Array(index).to_string(),
+        )
+        .unwrap();
+        ext_root
+    }
+
+    #[test]
+    fn parse_extension_providers_finds_mcp_server_definition_contributors() {
+        let dir = tempdir().unwrap();
+        let ext_root = make_extensions_dir(
+            dir.path(),
+            &[
+                (
+                    "upstash.context7-mcp-1.0.1",
+                    r#"{ "name": "context7-mcp", "publisher": "Upstash",
+                         "contributes": { "mcpServerDefinitionProviders": [
+                             { "id": "context7", "label": "Context7" }
+                         ]} }"#,
+                ),
+                (
+                    "some.other-extension-2.3",
+                    r#"{ "name": "other", "publisher": "x",
+                         "contributes": { "commands": [] } }"#,
+                ),
+            ],
+        );
+
+        let servers = parse_extension_providers(&ext_root);
+        assert_eq!(servers.len(), 1);
+        assert_eq!(servers[0].name, "context7");
+        assert_eq!(servers[0].transport, Transport::Stdio);
+        assert_eq!(servers[0].scope, Scope::Global);
+        assert!(servers[0].source.ends_with("package.json"));
+    }
+
+    #[test]
+    fn parse_extension_providers_supports_multiple_providers_per_extension() {
+        let dir = tempdir().unwrap();
+        let ext_root = make_extensions_dir(
+            dir.path(),
+            &[(
+                "vendor.multi-1.0",
+                r#"{ "name": "multi",
+                     "contributes": { "mcpServerDefinitionProviders": [
+                         { "id": "alpha", "label": "Alpha" },
+                         { "id": "beta",  "label": "Beta"  }
+                     ]} }"#,
+            )],
+        );
+        let names: HashSet<String> = parse_extension_providers(&ext_root)
+            .into_iter()
+            .map(|s| s.name)
+            .collect();
+        assert!(names.contains("alpha"));
+        assert!(names.contains("beta"));
+    }
+
+    #[test]
+    fn parse_extension_providers_tolerates_missing_index() {
+        let dir = tempdir().unwrap();
+        // No extensions.json, no extension dirs.
+        assert!(parse_extension_providers(dir.path()).is_empty());
+    }
+
+    #[test]
+    fn parse_extension_providers_tolerates_jsonc_in_package_json() {
+        let dir = tempdir().unwrap();
+        let ext_root = make_extensions_dir(
+            dir.path(),
+            &[(
+                "vendor.commented-1.0",
+                r#"{
+                    // VSCode extension manifests sometimes ship with comments.
+                    "name": "commented",
+                    "contributes": {
+                        "mcpServerDefinitionProviders": [
+                            { "id": "with-comment" },
+                        ],
+                    },
+                }"#,
+            )],
+        );
+        let servers = parse_extension_providers(&ext_root);
+        assert_eq!(servers.len(), 1);
+        assert_eq!(servers[0].name, "with-comment");
+    }
+
+    #[test]
+    fn from_paths_with_extensions_dir_includes_it_in_watch_paths() {
+        let dir = tempdir().unwrap();
+        let ext_dir = dir.path().join("extensions");
+        std::fs::create_dir_all(&ext_dir).unwrap();
+        let v = VsCode::from_paths(None, None, std::iter::empty::<PathBuf>())
+            .with_extensions_dir(Some(ext_dir.clone()));
+        assert!(v.watch_paths().contains(&ext_dir.join("extensions.json")));
     }
 
     #[test]

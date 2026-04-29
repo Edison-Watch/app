@@ -10,10 +10,19 @@ once it has a tagged release.
 
 ### Added
 
-- VSCode `state.vscdb` `mcpToolCache` reader: extension-registered MCP
-  servers (added at runtime via the VSCode Extension API) are now
-  detected. They appear with `Scope::Global` and `source` set to the
-  `state.vscdb` path. (Phase 4.1)
+- VSCode `state.vscdb` `mcpToolCache` reader: catches the older
+  static-contribution `extensionServers` shape. (Phase 4.1)
+- VSCode extension-provider scanner: reads
+  `~/.vscode/extensions/extensions.json` and each entry's `package.json`,
+  emitting one `McpServer` per `contributes.mcpServerDefinitionProviders`
+  declaration. This is how modern extensions (e.g. `upstash.context7-mcp`,
+  `github.copilot-chat`, `ms-python.vscode-pylance`) register MCP servers
+  via `vscode.lm.registerMcpServerDefinitionProvider`; the runtime
+  registration is in-memory only and never reaches `state.vscdb`, so the
+  static `package.json` scan is the only on-disk surface. New builder-style
+  setter `VsCode::with_extensions_dir` lets consumers point this at an
+  explicit path. `discover()` populates it from `~/.vscode/extensions` by
+  default.
 - JSONC-tolerant parsing for VSCode's `mcp.json`: line comments
   (`//`), block comments (`/* */`), and trailing commas are now
   accepted, matching VSCode's own parser behaviour. (Phase 4.2)
