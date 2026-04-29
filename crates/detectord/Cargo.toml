@@ -14,7 +14,7 @@ default = ["vscode", "claude_code"]
 # Each client can be opted into independently. `vscode` pulls in rusqlite
 # (for reading VSCode's `state.vscdb` workspace history); consumers who only
 # care about Claude Code can disable it and skip that build cost entirely.
-vscode = ["dep:rusqlite"]
+vscode = ["dep:rusqlite", "dep:serde_json_lenient"]
 claude_code = []
 
 [dependencies]
@@ -24,6 +24,7 @@ notify-debouncer-full = "0.7.0"
 rusqlite = { version = "0.39.0", features = ["bundled"], optional = true }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
+serde_json_lenient = { version = "0.2.4", optional = true }
 thiserror = "2.0.18"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }

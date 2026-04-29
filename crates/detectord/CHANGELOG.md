@@ -8,7 +8,22 @@ once it has a tagged release.
 
 ## [Unreleased]
 
+### Added
+
+- VSCode `state.vscdb` `mcpToolCache` reader: extension-registered MCP
+  servers (added at runtime via the VSCode Extension API) are now
+  detected. They appear with `Scope::Global` and `source` set to the
+  `state.vscdb` path. (Phase 4.1)
+- JSONC-tolerant parsing for VSCode's `mcp.json`: line comments
+  (`//`), block comments (`/* */`), and trailing commas are now
+  accepted, matching VSCode's own parser behaviour. (Phase 4.2)
+
 ### Changed
+
+- **Breaking:** `VsCode::from_paths` gained a `state_vscdb:
+  Option<PathBuf>` second parameter so consumers can point the
+  extension-server reader at an explicit SQLite path (or pass `None`
+  to skip extension-server discovery).
 
 - Renamed the crate from `mcp_detector` to `mcp_detector_lib` to make its
   library-first nature explicit on crates.io. The CLI binary is still

@@ -163,7 +163,10 @@ fn parse_file(path: &Path, scope: Scope) -> Vec<McpServer> {
     if text.trim().is_empty() {
         return Vec::new();
     }
-    let parsed: McpFile = match serde_json::from_str(&text) {
+    // VSCode treats `mcp.json` and `settings.json` as JSONC (JSON with
+    // Comments + trailing commas), so we use a lenient parser. edison-watch
+    // does the same — see client_2/src/main/runtime/mcpConfigActions.ts:57-59.
+    let parsed: McpFile = match serde_json_lenient::from_str(&text) {
         Ok(p) => p,
         Err(e) => {
             tracing::debug!(file = %path.display(), error = %e, "parse failed");
@@ -418,6 +421,51 @@ mod tests {
     #[test]
     fn parse_file_tolerates_missing_file() {
         assert!(parse_file(Path::new("/definitely/not/here.json"), Scope::Global).is_empty());
+    }
+
+    #[test]
+    fn parse_file_accepts_line_and_block_comments() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("mcp.json");
+        std::fs::write(
+            &path,
+            r#"// VSCode-style header comment
+{
+    /* MCP servers I use day-to-day. */
+    "servers": {
+        // a tool I rely on
+        "local-tool": { "command": "npx" /* TODO: pin args */ }
+    }
+}"#,
+        )
+        .unwrap();
+
+        let servers = parse_file(&path, Scope::Global);
+        assert_eq!(servers.len(), 1);
+        assert_eq!(servers[0].name, "local-tool");
+        assert_eq!(servers[0].transport, Transport::Stdio);
+    }
+
+    #[test]
+    fn parse_file_accepts_trailing_commas() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("mcp.json");
+        std::fs::write(
+            &path,
+            r#"{
+                "servers": {
+                    "a": { "command": "x", "args": ["one", "two",] },
+                    "b": { "url": "https://x", },
+                },
+            }"#,
+        )
+        .unwrap();
+
+        let servers = parse_file(&path, Scope::Global);
+        assert_eq!(servers.len(), 2);
+        let by_name: BTreeMap<_, _> = servers.iter().map(|s| (s.name.clone(), s)).collect();
+        assert_eq!(by_name["a"].transport, Transport::Stdio);
+        assert_eq!(by_name["b"].transport, Transport::Remote);
     }
 
     #[test]
