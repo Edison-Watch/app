@@ -1,19 +1,23 @@
-# MCP Detector
+# Edison Quarantine Daemon
 
-Cargo workspace that watches the on-disk configs of MCP (Model Context Protocol) clients and reports changes as they happen. Two crates:
+This repo contains the open Rust code for the Quarantine Daemon for the Edison Watch Desktop App. It contains a cargo workspace that watches the on-disk configs of MCP (Model Context Protocol) clients and reports changes as they happen. Two crates:
 
 | Crate | Path | Role |
 |---|---|---|
 | `mcp_detector_lib` | [crates/mcp_detector_lib/](crates/mcp_detector_lib/) | Library: client abstraction, filesystem watcher, diff engine. Cross-platform, publishable. |
-| `mcp_detector_daemon` | [crates/mcp_detector_daemon/](crates/mcp_detector_daemon/) | Long-lived macOS daemon: wraps the library behind a Unix-socket IPC, gated on Full Disk Access. |
+| `mcp_detector_daemon` | [crates/mcp_detector_daemon/](crates/mcp_detector_daemon/) | Long-lived daemon: wraps the library behind a Unix-socket IPC, gated on Full Disk Access. |
 
 Build everything: `cargo build --workspace --release`.
 
-## What it does
+## Motivation
 
-MCP servers are configured independently by each client (Claude Code, VSCode, Cursor, Claude Desktop, ...) — often in several places per client: a global user-level file, per-project files, and sometimes application state stored in a SQLite database. This workspace unifies those sources into a single live stream of change events.
+MCP servers are configured independently by each client (Claude Code, VSCode, Cursor, Claude Desktop, ...) — often in several places per client: a global user-level file, per-project files, and sometimes application state stored in a SQLite database. Keeping track of this is difficult in a big project.
+
+## Progress
 
 For the initial milestone the focus is additions and removals: **when an MCP server appears in or disappears from any tracked config, an event is emitted identifying it, its scope (global vs project-specific), and its transport (stdio vs remote).** In-place edits (same server name, different fields) are not reported yet.
+
+Additionally, at the current stage the daemon and library only report changes and perform no modifications of their own, mostly to make sure that it works without breaking anything. In the future the library will be able to prevent modifications to the configs before they happen by tracking filesystem events. 
 
 ## Library — `mcp_detector_lib`
 
@@ -33,12 +37,14 @@ The client abstraction hides all of this from the core watcher and diff logic.
 
 ### Supported clients
 
-| Client | Status | Cargo feature |
-|---|---|---|
-| VSCode | Implemented | `vscode` |
-| Claude Code | Implemented | `claude_code` |
-| Cursor | Planned | – |
-| Claude Desktop | Planned | – |
+| Client | Status | Cargo feature | Notes |
+|---|---|---|---|
+| VSCode | Implemented | `vscode` | Handles global, project-specific, and extension-based MCP servers |
+| Claude Code | Implemented | `claude_code` | Handles global and project-specific servers. Remote connectors are out of scope for this daemon. |
+| Cursor | Planned | - | Can handle everything via hooks |
+| Claude Desktop & Cowork | Planned | - | Same as Claude Code |
+| Zed | Planned | - | N/A |
+| Codex CLI | Planned | - | N/A |
 
 ### Use as a dependency
 
@@ -90,7 +96,7 @@ Long-lived macOS process that wraps the library and exposes its events over a Un
 ### State machine
 
 ```
-Starting → AwaitingFda ↔ Running
+Starting -> AwaitingFda <-> Running
 ```
 
 - Boots the IPC server immediately so clients can connect and observe `awaiting_fda` even before permissions are granted.
