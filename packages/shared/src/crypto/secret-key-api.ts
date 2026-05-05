@@ -107,7 +107,14 @@ export interface VerifySecretKeyResult {
   expired: boolean;
 }
 
-/** Verify a secret key against the server-stored hash. */
+/**
+ * Verify a secret key against the server-stored hash.
+ *
+ * Throws on transport / non-2xx errors so callers can distinguish a real
+ * "wrong key" answer (200 with valid=false) from a transient failure
+ * (network down, server 500). Treating the two as "invalid" used to silently
+ * clear a perfectly good cached key on a hiccup.
+ */
 export async function verifySecretKey(
   key: string,
   getApiKey?: () => string | null,
@@ -122,7 +129,7 @@ export async function verifySecretKey(
     body: JSON.stringify({ key: normalizedKey }),
   });
   if (!response.ok) {
-    return { valid: false, domainValid: null, expiresAt: null, daysRemaining: null, expired: false };
+    throw new Error(`verifySecretKey failed: HTTP ${response.status}`);
   }
   const data = await response.json();
   return {
