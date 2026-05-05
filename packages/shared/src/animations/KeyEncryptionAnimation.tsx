@@ -22,21 +22,8 @@
  *   </div>
  */
 
-import { MCP_ICON_PATHS, MCP_ICON_VIEWBOX } from '../svg/mcp-svg'
 import { EDISON_E_PATH, EDISON_FRAME_PATH, EDISON_LOGO_VIEWBOX } from '../svg/edison-logo-svg'
-
-const O = '#da7756'
-
-function McpIcon({ x, y, size, color, opacity = '0.65' }: {
-  x: number; y: number; size: number; color: string; opacity?: string
-}): React.ReactNode {
-  return (
-    <svg x={x} y={y} width={size} height={size} viewBox={MCP_ICON_VIEWBOX}>
-      <path d={MCP_ICON_PATHS[0]} fill={color} fillOpacity={opacity} />
-      <path d={MCP_ICON_PATHS[1]} fill={color} fillOpacity={opacity} />
-    </svg>
-  )
-}
+import { McpIcon, ORANGE, ProgressBar } from './_shared'
 
 const CSS = `
 .ek-anim { color: var(--text-primary); }
@@ -217,9 +204,9 @@ function PadlockOpen({ x, y }: { x: number; y: number }): React.ReactNode {
   return (
     <g>
       <rect x={x} y={y + 5} width="10" height="8" rx="1.5"
-        fill={O} fillOpacity="0.25" stroke={O} strokeOpacity="0.35" strokeWidth="0.6" />
+        fill={ORANGE} fillOpacity="0.25" stroke={ORANGE} strokeOpacity="0.35" strokeWidth="0.6" />
       <path d={`M${x + 2.5} ${y + 5}V${y + 2}a2.5 2.5 0 015 0`}
-        fill="none" stroke={O} strokeWidth="1.2" strokeOpacity="0.5" strokeLinecap="round" />
+        fill="none" stroke={ORANGE} strokeWidth="1.2" strokeOpacity="0.5" strokeLinecap="round" />
     </g>
   )
 }
@@ -245,14 +232,14 @@ function CredentialCard({
 }: {
   y: number; label: string; locked: boolean;
 }): React.ReactNode {
-  const borderColor = locked ? 'var(--accent)' : O
-  const textColor = locked ? 'var(--accent)' : O
+  const borderColor = locked ? 'var(--accent)' : ORANGE
+  const textColor = locked ? 'var(--accent)' : ORANGE
   return (
     <g>
       <rect x="20" y={y} width="136" height="26" rx="5"
         fill={locked ? 'var(--accent)' : 'var(--text-primary)'} fillOpacity={locked ? 0.03 : 0.04}
         stroke={borderColor} strokeOpacity="0.35" strokeWidth="1.2" />
-      <McpIcon x={25} y={y + 5} size={14} color={locked ? 'var(--accent)' : O} opacity="0.55" />
+      <McpIcon x={25} y={y + 5} size={14} color={locked ? 'var(--accent)' : ORANGE} opacity="0.55" />
       {locked
         ? <PadlockClosed x={42} y={y + 2} />
         : <PadlockOpen x={42} y={y + 2} />}
@@ -432,10 +419,7 @@ export default function KeyEncryptionAnimation(): React.ReactNode {
         </g>
 
         {/* Progress bar */}
-        <rect x="20" y="188" width="460" height="1.5" rx="0.75"
-          fill="var(--text-primary)" fillOpacity="0.1" />
-        <rect className="ek-progress" x="20" y="188" width="460" height="1.5" rx="0.75"
-          fill="var(--text-primary)" fillOpacity="0.35" />
+        <ProgressBar y={188} width={460} className="ek-progress" />
       </svg>
     </div>
   )

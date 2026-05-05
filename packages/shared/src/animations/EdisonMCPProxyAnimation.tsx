@@ -11,13 +11,7 @@
  * Requires CSS custom properties: --text-primary, --accent, --text-muted.
  */
 import { AGENT_REGISTRY } from '../agent-registry/index'
-import { MCP_ICON_PATHS, MCP_ICON_VIEWBOX } from '../svg/mcp-svg'
-import {
-  EDISON_E_PATH, EDISON_FRAME_PATH, EDISON_LOGO_VIEWBOX,
-  EDISON_WATCH_FILL_PATH, EDISON_WATCH_STROKE_PATH,
-} from '../svg/edison-logo-svg'
-
-const O = '#da7756'
+import { EdisonLogo, McpIcon, McpPacket, ORANGE as O, ProgressBar } from './_shared'
 
 const CLAUDE_SPRITE = AGENT_REGISTRY['claude-code']
 const CURSOR_SPRITE = AGENT_REGISTRY['cursor']
@@ -122,17 +116,6 @@ const CSS = `
 }
 `
 
-function McpIcon({ x, y, size, color, opacity = '0.65' }: {
-  x: number; y: number; size: number; color: string; opacity?: string
-}): React.ReactNode {
-  return (
-    <svg x={x} y={y} width={size} height={size} viewBox={MCP_ICON_VIEWBOX}>
-      <path d={MCP_ICON_PATHS[0]} fill={color} fillOpacity={opacity} />
-      <path d={MCP_ICON_PATHS[1]} fill={color} fillOpacity={opacity} />
-    </svg>
-  )
-}
-
 function McpServer({ x, y }: { x: number; y: number }): React.ReactNode {
   return (
     <g>
@@ -148,18 +131,6 @@ function McpServer({ x, y }: { x: number; y: number }): React.ReactNode {
         stroke="var(--text-muted)" strokeOpacity="0.15" strokeWidth="1" strokeDasharray="2 2"
       />
     </g>
-  )
-}
-
-function Packet(): React.ReactNode {
-  return (
-    <>
-      <circle r="10" fillOpacity="0.12" />
-      <g transform="translate(-6,-6) scale(0.5)">
-        <path d={MCP_ICON_PATHS[0]} />
-        <path d={MCP_ICON_PATHS[1]} />
-      </g>
-    </>
   )
 }
 
@@ -190,16 +161,7 @@ export default function EdisonMCPProxyAnimation(): React.ReactNode {
         <g className="ew-edison">
           <circle className="ew-pulse" cx="257" cy="93" r="30"
             fill="none" stroke="var(--accent)" strokeOpacity="0.5" strokeWidth="1.5" />
-          <svg x="230" y="67" width="54" height="52.5" viewBox={EDISON_LOGO_VIEWBOX}>
-            <path d={EDISON_E_PATH}
-              fill="var(--accent)" fillOpacity="0.8" stroke="var(--accent)" strokeWidth="5" strokeMiterlimit="10" />
-            <path d={EDISON_WATCH_FILL_PATH}
-              fill="var(--accent)" fillOpacity="0.8" />
-            <path d={EDISON_WATCH_STROKE_PATH}
-              stroke="var(--accent)" strokeOpacity="0.8" strokeWidth="4" strokeMiterlimit="10" />
-            <path d={EDISON_FRAME_PATH}
-              fill="var(--accent)" fillOpacity="0.8" />
-          </svg>
+          <EdisonLogo x={230} y={67} w={54} h={52.5} />
         </g>
 
         {/* Phase 2: routed connector lines (laptop -> Edison -> servers) */}
@@ -261,16 +223,7 @@ export default function EdisonMCPProxyAnimation(): React.ReactNode {
             strokeWidth="1.5"
           />
           {/* Edison logo badge at top-left */}
-          <svg x="14" y="62" width="20" height="19.5" viewBox={EDISON_LOGO_VIEWBOX}>
-            <path d={EDISON_E_PATH}
-              fill="var(--accent)" fillOpacity="0.8" stroke="var(--accent)" strokeWidth="5" strokeMiterlimit="10" />
-            <path d={EDISON_WATCH_FILL_PATH}
-              fill="var(--accent)" fillOpacity="0.8" />
-            <path d={EDISON_WATCH_STROKE_PATH}
-              stroke="var(--accent)" strokeOpacity="0.8" strokeWidth="4" strokeMiterlimit="10" />
-            <path d={EDISON_FRAME_PATH}
-              fill="var(--accent)" fillOpacity="0.8" />
-          </svg>
+          <EdisonLogo x={14} y={62} w={20} h={19.5} />
         </g>
 
         {/* 3 MCP servers (always visible) */}
@@ -295,13 +248,10 @@ export default function EdisonMCPProxyAnimation(): React.ReactNode {
         </text>
 
         {/* 3 Packets (each animates direct -> hidden -> routed) */}
-        <g className="ew-pkt ew-pkt-main"><Packet /></g>
+        <g className="ew-pkt ew-pkt-main"><McpPacket /></g>
 
         {/* Progress bar */}
-        <rect x="20" y="188" width="460" height="1.5" rx="0.75"
-          fill="var(--text-primary)" fillOpacity="0.1" />
-        <rect className="ew-progress" x="20" y="188" width="460" height="1.5" rx="0.75"
-          fill="var(--text-primary)" fillOpacity="0.35" />
+        <ProgressBar y={188} width={460} className="ew-progress" />
       </svg>
     </div>
   )

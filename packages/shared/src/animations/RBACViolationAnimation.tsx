@@ -15,9 +15,9 @@
  */
 
 import { useId } from 'react'
-import { AGENT_REGISTRY, type AgentIconEntry } from '../agent-registry'
+import { AGENT_REGISTRY } from '../agent-registry'
+import { AgentIcon, McpIcon, ProgressBar, RED as R } from './_shared'
 
-const R = '#d94040'
 const WARN_Y = '#f59e0b'
 const DRIVE_GREEN = '#00ac47'
 
@@ -29,11 +29,6 @@ const GMAIL_SVG_VIEWBOX = '0 49.4 512 399.42'
 
 const PERSON_PATH =
   'M230.92,212c-15.23-26.33-38.7-45.21-66.09-54.16a72,72,0,1,0-73.66,0c-27.39,8.94-50.86,27.82-66.09,54.16a8,8,0,1,0,13.85,8c18.84-32.56,52.14-52,89.07-52s70.23,19.44,89.07,52a8,8,0,1,0,13.85-8ZM72,96a56,56,0,1,1,56,56A56.06,56.06,0,0,1,72,96Z'
-
-const MCP_D1 =
-  'M15.688 2.343a2.588 2.588 0 00-3.61 0l-9.626 9.44a.863.863 0 01-1.203 0 .823.823 0 010-1.18l9.626-9.44a4.313 4.313 0 016.016 0 4.116 4.116 0 011.204 3.54 4.3 4.3 0 013.609 1.18l.05.05a4.115 4.115 0 010 5.9l-8.706 8.537a.274.274 0 000 .393l1.788 1.754a.823.823 0 010 1.18.863.863 0 01-1.203 0l-1.788-1.753a1.92 1.92 0 010-2.754l8.706-8.538a2.47 2.47 0 000-3.54l-.05-.049a2.588 2.588 0 00-3.607-.003l-7.172 7.034-.002.002-.098.097a.863.863 0 01-1.204 0 .823.823 0 010-1.18l7.273-7.133a2.47 2.47 0 00-.003-3.537z'
-const MCP_D2 =
-  'M14.485 4.703a.823.823 0 000-1.18.863.863 0 00-1.204 0l-7.119 6.982a4.115 4.115 0 000 5.9 4.314 4.314 0 006.016 0l7.12-6.982a.823.823 0 000-1.18.863.863 0 00-1.204 0l-7.119 6.982a2.588 2.588 0 01-3.61 0 2.47 2.47 0 010-3.54l7.12-6.982z'
 
 const AGENTS = [
   AGENT_REGISTRY['codex'],
@@ -156,40 +151,6 @@ const CSS = `
   .rbac .rbac-progress { animation: none; transform: scaleX(1); }
 }
 `
-
-function AgentIcon({ agent, x, y, size = 28 }: {
-  agent: AgentIconEntry; x: number; y: number; size?: number
-}): React.ReactNode {
-  const inner = size - 4
-  return (
-    <g>
-      <rect x={x} y={y} width={size} height={size} rx={6} fill={agent.brandColor} />
-      {agent.customSvg ? (
-        <svg
-          x={x + 2} y={y + 2} width={inner} height={inner}
-          viewBox={agent.customViewBox || '0 0 24 24'}
-          shapeRendering="crispEdges"
-          dangerouslySetInnerHTML={{ __html: agent.customSvg }}
-        />
-      ) : agent.svgPath ? (
-        <svg x={x + 2} y={y + 2} width={inner} height={inner} viewBox="0 0 24 24">
-          <path d={agent.svgPath} fill={agent.svgFill || '#fff'} />
-        </svg>
-      ) : null}
-    </g>
-  )
-}
-
-function McpIcon({ x, y, size, color, opacity = '0.65' }: {
-  x: number; y: number; size: number; color: string; opacity?: string
-}): React.ReactNode {
-  return (
-    <svg x={x} y={y} width={size} height={size} viewBox="0 0 24 24">
-      <path d={MCP_D1} fill={color} fillOpacity={opacity} />
-      <path d={MCP_D2} fill={color} fillOpacity={opacity} />
-    </svg>
-  )
-}
 
 export default function RBACViolationAnimation(): React.ReactNode {
   const id = useId()
@@ -359,10 +320,7 @@ export default function RBACViolationAnimation(): React.ReactNode {
         </g>
 
         {/* ===== PROGRESS BAR ===== */}
-        <rect x="20" y="198" width="520" height="1.5" rx="0.75"
-          fill="var(--text-primary)" fillOpacity="0.1" />
-        <rect className="rbac-progress" x="20" y="198" width="520" height="1.5" rx="0.75"
-          fill="var(--text-primary)" fillOpacity="0.35" />
+        <ProgressBar y={198} width={520} className="rbac-progress" />
       </svg>
     </div>
   )
