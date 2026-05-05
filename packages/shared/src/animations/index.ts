@@ -3,6 +3,7 @@ export { default as EdisonMCPProxyAnimation } from "./EdisonMCPProxyAnimation";
 export { default as PromptInjectionAnimation } from "./PromptInjectionAnimation";
 export { default as RBACViolationAnimation } from "./RBACViolationAnimation";
 export { default as DesktopClientAnimation } from "./DesktopClientAnimation";
+export { default as AdminFleetAnimation } from "./AdminFleetAnimation";
 export { MCP_ICON_PATHS, MCP_ICON_VIEWBOX } from "../svg/mcp-svg";
 export {
   EDISON_E_PATH, EDISON_FRAME_PATH, EDISON_LOGO_VIEWBOX,
