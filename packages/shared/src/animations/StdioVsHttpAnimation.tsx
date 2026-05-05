@@ -17,13 +17,11 @@ import {
   McpIcon,
   ProgressBar,
   RED as R,
+  RobotIcon,
   SHIELD_CHECK_PATH,
 } from './_shared'
 
 const G = '#3ddc84'
-
-const ROBOT_PATH =
-  'M200,48H136V16a8,8,0,0,0-16,0V48H56A32,32,0,0,0,24,80V192a32,32,0,0,0,32,32H200a32,32,0,0,0,32-32V80A32,32,0,0,0,200,48Zm16,144a16,16,0,0,1-16,16H56a16,16,0,0,1-16-16V80A16,16,0,0,1,56,64H200a16,16,0,0,1,16,16Zm-52-56H92a28,28,0,0,0,0,56h72a28,28,0,0,0,0-56Zm-24,16v24H116V152ZM80,164a12,12,0,0,1,12-12h8v24H92A12,12,0,0,1,80,164Zm84,12h-8V152h8a12,12,0,0,1,0,24ZM72,108a12,12,0,1,1,12,12A12,12,0,0,1,72,108Zm88,0a12,12,0,1,1,12,12A12,12,0,0,1,160,108Z'
 
 const MALWARE_PATH =
   'M136,108a28,28,0,1,0-28,28A28,28,0,0,0,136,108Zm-28,12a12,12,0,1,1,12-12A12,12,0,0,1,108,120Zm68-8a16,16,0,1,1-16,16A16,16,0,0,1,176,112Zm-32,64a16,16,0,1,1-16-16A16,16,0,0,1,144,176Zm96-56H223.66a95.52,95.52,0,0,0-22.39-53.95l12.39-12.39a8,8,0,0,0-11.32-11.32L190,54.73A95.52,95.52,0,0,0,136,32.34V16a8,8,0,0,0-16,0V32.34A95.52,95.52,0,0,0,66.05,54.73L53.66,42.34A8,8,0,0,0,42.34,53.66L54.73,66.05a95.52,95.52,0,0,0-22.39,54H16a8,8,0,0,0,0,16H32.34A95.52,95.52,0,0,0,54.73,190L42.34,202.34a8,8,0,0,0,11.32,11.32l12.39-12.39a95.52,95.52,0,0,0,54,22.39V240a8,8,0,0,0,16,0V223.66A95.52,95.52,0,0,0,190,201.27l12.39,12.39a8,8,0,0,0,11.32-11.32L201.27,190A95.52,95.52,0,0,0,223.66,136H240a8,8,0,0,0,0-16ZM128,208a80,80,0,1,1,80-80A80.09,80.09,0,0,1,128,208Z'
@@ -169,9 +167,7 @@ export default function StdioVsHttpAnimation(): React.ReactNode {
           stroke="var(--text-muted)" strokeOpacity="0.35" strokeWidth="1" />
 
         {/* Robot */}
-        <svg x="14" y="28" width="24" height="24" viewBox="0 0 256 256">
-          <path d={ROBOT_PATH} fill="var(--text-muted)" fillOpacity="0.55" />
-        </svg>
+        <RobotIcon x={14} y={28} size={24} fill="var(--text-muted)" fillOpacity="0.55" />
 
         {/* Spawn arrow */}
         <g className="sh-spawn">
@@ -245,9 +241,7 @@ export default function StdioVsHttpAnimation(): React.ReactNode {
           stroke="var(--text-muted)" strokeOpacity="0.35" strokeWidth="1" />
 
         {/* Robot */}
-        <svg x="302" y="52" width="22" height="22" viewBox="0 0 256 256">
-          <path d={ROBOT_PATH} fill="var(--text-muted)" fillOpacity="0.55" />
-        </svg>
+        <RobotIcon x={302} y={52} size={22} fill="var(--text-muted)" fillOpacity="0.55" />
 
         {/* Request arrow */}
         <g className="sh-hreq">

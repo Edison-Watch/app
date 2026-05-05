@@ -21,12 +21,9 @@ import {
   SLACK_SVG, SLACK_SVG_VIEWBOX,
   GCAL_SVG, GCAL_SVG_VIEWBOX,
 } from '../svg/app-icons-svg'
-import { ProgressBar, RED as R } from './_shared'
+import { ProgressBar, RED as R, RobotIcon } from './_shared'
 
 const G = '#3ddc84'
-
-const ROBOT_PATH =
-  'M200,48H136V16a8,8,0,0,0-16,0V48H56A32,32,0,0,0,24,80V192a32,32,0,0,0,32,32H200a32,32,0,0,0,32-32V80A32,32,0,0,0,200,48Zm16,144a16,16,0,0,1-16,16H56a16,16,0,0,1-16-16V80A16,16,0,0,1,56,64H200a16,16,0,0,1,16,16Zm-52-56H92a28,28,0,0,0,0,56h72a28,28,0,0,0,0-56Zm-24,16v24H116V152ZM80,164a12,12,0,0,1,12-12h8v24H92A12,12,0,0,1,80,164Zm84,12h-8V152h8a12,12,0,0,1,0,24ZM72,108a12,12,0,1,1,12,12A12,12,0,0,1,72,108Zm88,0a12,12,0,1,1,12,12A12,12,0,0,1,160,108Z'
 
 const GHOST_PATH =
   'M128,16a96.11,96.11,0,0,0-96,96c0,24,12.56,55.06,33.61,83,21.18,28.15,44.5,45,62.39,45s41.21-16.81,62.39-45c21.05-28,33.61-59,33.61-83A96.11,96.11,0,0,0,128,16Zm49.61,169.42C160.24,208.49,140.31,224,128,224s-32.24-15.51-49.61-38.58C59.65,160.5,48,132.37,48,112a80,80,0,0,1,160,0C208,132.37,196.35,160.5,177.61,185.42ZM120,136A40,40,0,0,0,80,96a16,16,0,0,0-16,16,40,40,0,0,0,40,40A16,16,0,0,0,120,136ZM80,112a24,24,0,0,1,24,24h0A24,24,0,0,1,80,112Zm96-16a40,40,0,0,0-40,40,16,16,0,0,0,16,16,40,40,0,0,0,40-40A16,16,0,0,0,176,96Zm-24,40a24,24,0,0,1,24-24A24,24,0,0,1,152,136Zm0,48a8,8,0,0,1-8,8H112a8,8,0,0,1,0-16h32A8,8,0,0,1,152,184Z'
@@ -255,18 +252,16 @@ export default function PromptInjectionAnimation(): React.ReactNode {
 
         {/* Clean robot (green = safe) */}
         <g className="pi-bot-clean">
-          <svg x="61" y="15" width="40" height="40" viewBox="0 0 256 256">
-            <path d={ROBOT_PATH} fill={G} fillOpacity="0.55" />
-          </svg>
+          <RobotIcon x={61} y={15} size={40} fill={G} fillOpacity="0.55" />
         </g>
 
         {/* Corrupted robot (red = compromised) + large poison icon */}
         <g className="pi-bot-dirty">
-          <svg x="61" y="15" width="40" height="40" viewBox="0 0 256 256">
-            <path d={ROBOT_PATH} fill={R} fillOpacity="0.6" />
-          </svg>
-          <circle className="pi-eye-pulse" cx="74" cy="32" r="2" fill={R} fillOpacity="0.7" />
-          <circle className="pi-eye-pulse" cx="88" cy="32" r="2" fill={R} fillOpacity="0.7" />
+          <RobotIcon x={61} y={15} size={40} fill={R} fillOpacity="0.6" />
+          {/* Pulse highlights centered on RobotIcon's pill eyes
+              (256-vb eye centers (100,156) and (156,156) mapped into the 40-px parent). */}
+          <circle className="pi-eye-pulse" cx="76.6" cy="39.4" r="2.4" fill={R} fillOpacity="0.7" />
+          <circle className="pi-eye-pulse" cx="85.4" cy="39.4" r="2.4" fill={R} fillOpacity="0.7" />
           {/* Large poison icon to the right of corrupted robot */}
           <svg x="104" y="18" width="28" height="28" viewBox="0 0 48 48">
             <path d={POISON_PATH} fill={R} fillOpacity="0.6" fillRule="evenodd" />
