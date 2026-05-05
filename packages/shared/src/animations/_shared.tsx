@@ -76,7 +76,7 @@ export function AgentIcon({ agent, x, y, size = 20 }: {
         <svg
           x={x + 2} y={y + 2} width={inner} height={inner}
           viewBox={agent.customViewBox || '0 0 24 24'}
-          shapeRendering="crispEdges"
+          {...(agent.crispEdges ? { shapeRendering: 'crispEdges' } : {})}
           dangerouslySetInnerHTML={{ __html: agent.customSvg }}
         />
       ) : agent.svgPath ? (
