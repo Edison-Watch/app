@@ -7,6 +7,7 @@ export { default as AdminFleetAnimation } from "./AdminFleetAnimation";
 export { default as StdioVsHttpAnimation } from "./StdioVsHttpAnimation";
 export { default as CodeModeSecurityAnimation } from "./CodeModeSecurityAnimation";
 export { default as SIEMIntegrationAnimation } from "./SIEMIntegrationAnimation";
+export { default as AgentBypassAnimation } from "./AgentBypassAnimation";
 export { default as ScalePilotAnimation } from "./ScalePilotAnimation";
 export { MCP_ICON_PATHS, MCP_ICON_VIEWBOX } from "../svg/mcp-svg";
 export {
