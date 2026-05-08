@@ -65,10 +65,10 @@ export function McpIcon({ x, y, size, color, opacity = '0.65' }: {
 }
 
 /**
- * Dome-headed robot with ring antenna, lit visor, and pill eyes.
+ * Dome-headed robot with ring antenna, cut-out visor, and pill eyes.
  * Body, antenna, and eyes all take the caller's `fill`/`fillOpacity`;
- * the visor is rendered as a faint light panel so the eyes read clearly
- * on any tint (green safe, red corrupted, muted neutral, ...).
+ * the visor is punched out of the head via evenodd so the background
+ * shows through cleanly on any tint (green safe, red corrupted, ...).
  */
 export function RobotIcon({ x, y, size, fill, fillOpacity = '0.55' }: {
   x: number; y: number; size: number; fill: string; fillOpacity?: string
@@ -79,10 +79,9 @@ export function RobotIcon({ x, y, size, fill, fillOpacity = '0.55' }: {
         stroke={fill} strokeOpacity={fillOpacity} strokeWidth="6" />
       <rect x="125" y="34" width="6" height="20"
         fill={fill} fillOpacity={fillOpacity} />
-      <path d="M40,144a88,88,0,0,1,176,0v44a44,44,0,0,1-44,44H84a44,44,0,0,1-44-44Z"
+      <path fillRule="evenodd"
+        d="M40,144a88,88,0,0,1,176,0v44a44,44,0,0,1-44,44H84a44,44,0,0,1-44-44Z M92,116 h72 a28,28 0 0 1 28,28 v24 a28,28 0 0 1 -28,28 h-72 a28,28 0 0 1 -28,-28 v-24 a28,28 0 0 1 28,-28 z"
         fill={fill} fillOpacity={fillOpacity} />
-      <rect x="64" y="116" width="128" height="80" rx="28"
-        fill="var(--text-primary)" fillOpacity="0.18" />
       <rect x="88" y="138" width="24" height="36" rx="12"
         fill={fill} fillOpacity={fillOpacity} />
       <rect x="144" y="138" width="24" height="36" rx="12"
