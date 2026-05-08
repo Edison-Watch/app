@@ -8,3 +8,8 @@ export {
   SLACK_SVG, SLACK_SVG_VIEWBOX,
   GCAL_SVG, GCAL_SVG_VIEWBOX,
 } from "./app-icons-svg";
+export {
+  ATTACKER_BODY_PATHS,
+  ATTACKER_HIGHLIGHT_PATHS,
+  ATTACKER_SVG_VIEWBOX,
+} from "./attacker-svg";

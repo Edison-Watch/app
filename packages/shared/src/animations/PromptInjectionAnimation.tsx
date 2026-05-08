@@ -21,12 +21,14 @@ import {
   SLACK_SVG, SLACK_SVG_VIEWBOX,
   GCAL_SVG, GCAL_SVG_VIEWBOX,
 } from '../svg/app-icons-svg'
+import {
+  ATTACKER_BODY_PATHS,
+  ATTACKER_HIGHLIGHT_PATHS,
+  ATTACKER_SVG_VIEWBOX,
+} from '../svg/attacker-svg'
 import { ProgressBar, RED as R, RobotIcon } from './_shared'
 
 const G = '#3ddc84'
-
-const GHOST_PATH =
-  'M128,16a96.11,96.11,0,0,0-96,96c0,24,12.56,55.06,33.61,83,21.18,28.15,44.5,45,62.39,45s41.21-16.81,62.39-45c21.05-28,33.61-59,33.61-83A96.11,96.11,0,0,0,128,16Zm49.61,169.42C160.24,208.49,140.31,224,128,224s-32.24-15.51-49.61-38.58C59.65,160.5,48,132.37,48,112a80,80,0,0,1,160,0C208,132.37,196.35,160.5,177.61,185.42ZM120,136A40,40,0,0,0,80,96a16,16,0,0,0-16,16,40,40,0,0,0,40,40A16,16,0,0,0,120,136ZM80,112a24,24,0,0,1,24,24h0A24,24,0,0,1,80,112Zm96-16a40,40,0,0,0-40,40,16,16,0,0,0,16,16,40,40,0,0,0,40-40A16,16,0,0,0,176,96Zm-24,40a24,24,0,0,1,24-24A24,24,0,0,1,152,136Zm0,48a8,8,0,0,1-8,8H112a8,8,0,0,1,0-16h32A8,8,0,0,1,152,184Z'
 
 const POISON_PATH =
   'M17 5a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1h-2v4a7 7 0 0 1 7 7v20a3 3 0 0 1-3 3H16a3 3 0 0 1-3-3V21a7 7 0 0 1 7-7v-4h-2a1 1 0 0 1-1-1zm5 5v5a1 1 0 0 1-1 1h-1a5 5 0 0 0-4.9 4h17.8a5 5 0 0 0-4.9-4h-1a1 1 0 0 1-1-1v-5zm5.536 19.829l.707.707l1.414-1.415l-2.829-2.828l-1.414 1.414l.708.708L24 30.537l-2.121-2.122l.707-.707l-1.414-1.414l-.708.707l-1.414 1.414l-.707.707l1.414 1.414l.707-.707l2.122 2.122l-2.121 2.12l-.708-.707l-1.414 1.415l.708.707l1.414 1.415l.707.706l1.414-1.414l-.707-.707L24 33.365l2.121 2.121l-.707.707l1.414 1.415l2.829-2.829l-1.414-1.414l-.707.707l-2.122-2.121z'
@@ -299,8 +301,13 @@ export default function PromptInjectionAnimation(): React.ReactNode {
           <circle className="pi-apulse" cx="396" cy="28" r="25"
             fill="none" stroke={R} strokeOpacity="0.5" strokeWidth="1.5" />
         </g>
-        <svg x="374" y="6" width="44" height="44" viewBox="0 0 256 256">
-          <path d={GHOST_PATH} fill={R} fillOpacity="0.5" />
+        <svg x="374" y="6" width="44" height="44" viewBox={ATTACKER_SVG_VIEWBOX}>
+          {ATTACKER_BODY_PATHS.map((d, i) => (
+            <path key={`body-${i}`} d={d} fill={R} fillOpacity="0.5" />
+          ))}
+          {ATTACKER_HIGHLIGHT_PATHS.map((d, i) => (
+            <path key={`hl-${i}`} d={d} fill="#fff" />
+          ))}
         </svg>
 
         {/* ===== MALICIOUS EMAIL (bottom-center: envelope + poison badge) ===== */}
