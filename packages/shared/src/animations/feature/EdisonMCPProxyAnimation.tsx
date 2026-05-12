@@ -10,8 +10,8 @@
  *
  * Requires CSS custom properties: --text-primary, --accent, --text-muted.
  */
-import { AGENT_REGISTRY } from '../agent-registry/index'
-import { EdisonLogo, McpIcon, McpPacket, ORANGE as O, ProgressBar } from './_shared'
+import { AGENT_REGISTRY } from '../../agent-registry/index'
+import { EdisonLogo, McpIcon, McpPacket, ORANGE as O, ProgressBar } from '../_shared'
 
 const CLAUDE_SPRITE = AGENT_REGISTRY['claude-code']
 const CURSOR_SPRITE = AGENT_REGISTRY['cursor']

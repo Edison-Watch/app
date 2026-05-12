@@ -11,7 +11,7 @@
  * 10s loop. Pure SVG + CSS. Respects `prefers-reduced-motion`.
  */
 
-import { EdisonLogo, ProgressBar } from './_shared'
+import { EdisonLogo, ProgressBar } from '../_shared'
 
 const fg = 'var(--text-primary)'
 const muted = 'var(--text-muted)'

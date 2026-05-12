@@ -14,11 +14,11 @@
  *
  * Requires CSS custom properties: --text-primary, --accent, --text-muted.
  */
-import { AGENT_REGISTRY } from '../agent-registry/index'
+import { AGENT_REGISTRY } from '../../agent-registry/index'
 import {
   AgentIcon, DANGER, EdisonLogo, McpIcon, McpPacket, ORANGE as O, ProgressBar,
   SHIELD_CHECK_PATH,
-} from './_shared'
+} from '../_shared'
 
 const CURSOR = AGENT_REGISTRY['cursor']
 const CLAUDE_CODE = AGENT_REGISTRY['claude-code']

@@ -14,13 +14,13 @@ import {
   OUTLOOK_SVG, OUTLOOK_SVG_VIEWBOX,
   SLACK_SVG, SLACK_SVG_VIEWBOX,
   GCAL_SVG, GCAL_SVG_VIEWBOX,
-} from '../svg/app-icons-svg'
+} from '../../svg/app-icons-svg'
 import {
   ATTACKER_BODY_PATHS,
   ATTACKER_HIGHLIGHT_PATHS,
   ATTACKER_SVG_VIEWBOX,
-} from '../svg/attacker-svg'
-import { DANGER, EdisonLogo, ProgressBar, RED as R, RobotIcon, SHIELD_CHECK_PATH } from './_shared'
+} from '../../svg/attacker-svg'
+import { DANGER, EdisonLogo, ProgressBar, RED as R, RobotIcon, SHIELD_CHECK_PATH } from '../_shared'
 
 const G = '#3ddc84'
 const accent = 'var(--accent)'

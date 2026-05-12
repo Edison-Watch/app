@@ -15,8 +15,8 @@
  */
 
 import { useId } from 'react'
-import { AGENT_REGISTRY } from '../agent-registry'
-import { AgentIcon, McpIcon, ProgressBar, RED as R } from './_shared'
+import { AGENT_REGISTRY } from '../../agent-registry'
+import { AgentIcon, McpIcon, ProgressBar, RED as R } from '../_shared'
 
 const WARN_Y = '#f59e0b'
 const DRIVE_GREEN = '#00ac47'

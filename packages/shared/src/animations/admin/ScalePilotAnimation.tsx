@@ -14,11 +14,11 @@
  * Requires CSS custom properties: --text-primary, --accent, --text-muted.
  */
 import { useId } from 'react'
-import { AGENT_REGISTRY } from '../agent-registry/index'
+import { AGENT_REGISTRY } from '../../agent-registry/index'
 import {
   ADMIN_PATH, AgentIcon, DANGER, EdisonLogo, EYE_PATH, EYE_SLASH_PATH,
   McpIcon, McpPacket, ORANGE as O, ProgressBar, SHIELD_CHECK_PATH,
-} from './_shared'
+} from '../_shared'
 
 const CURSOR = AGENT_REGISTRY['cursor']
 const CLAUDE_DESKTOP = AGENT_REGISTRY['claude-desktop']

@@ -22,8 +22,8 @@
  *   </div>
  */
 
-import { EDISON_E_PATH, EDISON_FRAME_PATH, EDISON_LOGO_VIEWBOX } from '../svg/edison-logo-svg'
-import { McpIcon, ORANGE, ProgressBar } from './_shared'
+import { EDISON_E_PATH, EDISON_FRAME_PATH, EDISON_LOGO_VIEWBOX } from '../../svg/edison-logo-svg'
+import { McpIcon, ORANGE, ProgressBar } from '../_shared'
 
 const CSS = `
 .ek-anim { color: var(--text-primary); }

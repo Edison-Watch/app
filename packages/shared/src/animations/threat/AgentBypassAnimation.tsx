@@ -15,8 +15,8 @@
  */
 
 import { useId } from 'react'
-import { AGENT_REGISTRY } from '../agent-registry'
-import { AgentIcon, ProgressBar, RED as R } from './_shared'
+import { AGENT_REGISTRY } from '../../agent-registry'
+import { AgentIcon, ProgressBar, RED as R } from '../_shared'
 
 const GREEN = '#3ddc84'
 

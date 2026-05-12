@@ -19,7 +19,7 @@ import {
   RED as R,
   RobotIcon,
   SHIELD_CHECK_PATH,
-} from './_shared'
+} from '../_shared'
 
 const G = '#3ddc84'
 

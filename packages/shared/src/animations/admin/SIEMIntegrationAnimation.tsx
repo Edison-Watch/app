@@ -8,10 +8,10 @@
  * 10s loop. Pure SVG + CSS. Respects `prefers-reduced-motion`.
  */
 import { useId } from 'react'
-import { AGENT_REGISTRY, type AgentIconEntry } from '../agent-registry/index'
+import { AGENT_REGISTRY, type AgentIconEntry } from '../../agent-registry/index'
 import {
   AgentIcon, DANGER, EdisonLogo, McpIcon, McpPacket, ORANGE as O, ProgressBar,
-} from './_shared'
+} from '../_shared'
 
 const CURSOR = AGENT_REGISTRY['cursor']
 const CLAUDE = AGENT_REGISTRY['claude-code']

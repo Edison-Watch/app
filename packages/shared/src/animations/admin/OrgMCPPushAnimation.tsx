@@ -11,12 +11,12 @@
  * 10s loop. Pure SVG + CSS. Respects `prefers-reduced-motion`.
  */
 
-import { ADMIN_PATH, DANGER, EdisonLogo, McpPacket, ProgressBar } from './_shared'
+import { ADMIN_PATH, DANGER, EdisonLogo, McpPacket, ProgressBar } from '../_shared'
 import {
   OUTLOOK_SVG, OUTLOOK_SVG_VIEWBOX,
   ATLASSIAN_SVG, ATLASSIAN_SVG_VIEWBOX,
   SLACK_SVG, SLACK_SVG_VIEWBOX,
-} from '../svg/app-icons-svg'
+} from '../../svg/app-icons-svg'
 
 const fg = 'var(--text-primary)'
 const muted = 'var(--text-muted)'

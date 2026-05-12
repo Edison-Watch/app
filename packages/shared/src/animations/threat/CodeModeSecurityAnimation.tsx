@@ -23,11 +23,11 @@
  */
 
 import { useId } from 'react'
-import { AGENT_REGISTRY } from '../agent-registry'
+import { AGENT_REGISTRY } from '../../agent-registry'
 import {
   AgentIcon, EdisonLogo, McpIcon, McpPacket, ORANGE as O,
   ProgressBar, RED as R,
-} from './_shared'
+} from '../_shared'
 
 const SAFE = '#3ddc84'
 

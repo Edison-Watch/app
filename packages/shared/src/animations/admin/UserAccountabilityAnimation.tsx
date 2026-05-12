@@ -12,11 +12,11 @@
  *
  * 10s loop. Pure SVG + CSS. Respects `prefers-reduced-motion`.
  */
-import { AGENT_REGISTRY } from '../agent-registry/index'
+import { AGENT_REGISTRY } from '../../agent-registry/index'
 import {
   ADMIN_PATH, AgentIcon, DANGER, EdisonLogo,
   McpIcon, McpPacket, ORANGE as O, ProgressBar,
-} from './_shared'
+} from '../_shared'
 
 const CURSOR = AGENT_REGISTRY['cursor']
 const CLAUDE = AGENT_REGISTRY['claude-code']
