@@ -13,6 +13,8 @@ export { default as DesktopInstallAnimation } from "./DesktopInstallAnimation";
 export { default as OrgMCPPushAnimation } from "./OrgMCPPushAnimation";
 export { default as TrifectaDefenseAnimation } from "./TrifectaDefenseAnimation";
 export { default as ProductJourneyAnimation } from "./ProductJourneyAnimation";
+export { default as FlexibleDeploymentAnimation } from "./FlexibleDeploymentAnimation";
+export { default as UserAccountabilityAnimation } from "./UserAccountabilityAnimation";
 export { MCP_ICON_PATHS, MCP_ICON_VIEWBOX } from "../svg/mcp-svg";
 export {
   EDISON_E_PATH, EDISON_FRAME_PATH, EDISON_LOGO_VIEWBOX,
