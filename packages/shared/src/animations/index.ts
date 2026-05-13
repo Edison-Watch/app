@@ -9,6 +9,8 @@ export { default as StdioVsHttpAnimation } from "./feature/StdioVsHttpAnimation"
 export { default as CodeModeSecurityAnimation } from "./threat/CodeModeSecurityAnimation";
 export { default as SIEMIntegrationAnimation } from "./admin/SIEMIntegrationAnimation";
 export { default as AgentBypassAnimation } from "./threat/AgentBypassAnimation";
+export { default as HumanAccessAnimation } from "./threat/HumanAccessAnimation";
+export { default as AgentBypassPathAnimation } from "./threat/AgentBypassPathAnimation";
 export { default as ScalePilotAnimation } from "./admin/ScalePilotAnimation";
 export { default as DesktopInstallAnimation } from "./feature/DesktopInstallAnimation";
 export { default as OrgMCPPushAnimation } from "./admin/OrgMCPPushAnimation";
