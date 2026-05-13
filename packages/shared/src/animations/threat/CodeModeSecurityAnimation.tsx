@@ -25,11 +25,9 @@
 import { useId } from 'react'
 import { AGENT_REGISTRY } from '../../agent-registry'
 import {
-  AgentIcon, EdisonLogo, McpIcon, McpPacket, ORANGE as O,
+  AgentIcon, EdisonLogo, GREEN as SAFE, McpIcon, McpPacket, ORANGE as O,
   ProgressBar, RED as R,
 } from '../_shared'
-
-const SAFE = '#3ddc84'
 
 const CLAUDE = AGENT_REGISTRY['claude-code']
 const CURSOR = AGENT_REGISTRY['cursor']

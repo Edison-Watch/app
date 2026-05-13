@@ -11,7 +11,7 @@
  * 10s loop. Pure SVG + CSS. Respects `prefers-reduced-motion`.
  */
 
-import { ADMIN_PATH, DANGER, EdisonLogo, McpPacket, ProgressBar } from '../_shared'
+import { ADMIN_PATH, EdisonLogo, FlowLine, McpPacket, ProgressBar, VerdictBadge } from '../_shared'
 import {
   OUTLOOK_SVG, OUTLOOK_SVG_VIEWBOX,
   ATLASSIAN_SVG, ATLASSIAN_SVG_VIEWBOX,
@@ -397,15 +397,11 @@ export default function OrgMCPPushAnimation(): React.ReactNode {
         {/* ===== TRAFFIC LINES: laptops -> gateway -> server ===== */}
         <g className="om-traf">
           {/* Laptops to gateway */}
-          <line className="om-line" x1={78} y1={37} x2={150} y2={82}
-            stroke={accent} strokeOpacity="0.4" strokeWidth="1.5" strokeDasharray="3 3" />
-          <line className="om-line" x1={78} y1={107} x2={150} y2={82}
-            stroke={accent} strokeOpacity="0.4" strokeWidth="1.5" strokeDasharray="3 3" />
-          <line className="om-line" x1={78} y1={177} x2={150} y2={82}
-            stroke={accent} strokeOpacity="0.4" strokeWidth="1.5" strokeDasharray="3 3" />
+          <FlowLine className="om-line" x1={78} y1={37}  x2={150} y2={82} stroke={accent} strokeOpacity={0.4} />
+          <FlowLine className="om-line" x1={78} y1={107} x2={150} y2={82} stroke={accent} strokeOpacity={0.4} />
+          <FlowLine className="om-line" x1={78} y1={177} x2={150} y2={82} stroke={accent} strokeOpacity={0.4} />
           {/* Gateway to server */}
-          <line className="om-line" x1={330} y1={82} x2={385} y2={82}
-            stroke={accent} strokeOpacity="0.4" strokeWidth="1.5" strokeDasharray="3 3" />
+          <FlowLine className="om-line" x1={330} y1={82} x2={385} y2={82} stroke={accent} strokeOpacity={0.4} />
         </g>
 
         {/* ===== TRAFFIC PACKETS: laptops -> gateway ===== */}
@@ -418,38 +414,13 @@ export default function OrgMCPPushAnimation(): React.ReactNode {
         <g className="om-pkt om-rpkt2"><McpPacket /></g>
 
         {/* ===== VERDICT BADGES at gateway (left edge, stacked) ===== */}
-        <g className="om-v1" style={{ transformOrigin: '142px 68px' }}>
-          <circle cx={142} cy={68} r={7}
-            fill={accent} fillOpacity="0.12" stroke={accent} strokeOpacity="0.5" strokeWidth="1" />
-          <polyline points="138,68 140,70 146,64"
-            fill="none" stroke={accent} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-        </g>
-        <g className="om-v2" style={{ transformOrigin: '142px 82px' }}>
-          <circle cx={142} cy={82} r={7}
-            fill={DANGER} fillOpacity="0.12" stroke={DANGER} strokeOpacity="0.5" strokeWidth="1" />
-          <line x1={139} y1={79} x2={145} y2={85} stroke={DANGER} strokeWidth="1.4" strokeLinecap="round" />
-          <line x1={145} y1={79} x2={139} y2={85} stroke={DANGER} strokeWidth="1.4" strokeLinecap="round" />
-        </g>
-        <g className="om-v3" style={{ transformOrigin: '142px 96px' }}>
-          <circle cx={142} cy={96} r={7}
-            fill={accent} fillOpacity="0.12" stroke={accent} strokeOpacity="0.5" strokeWidth="1" />
-          <polyline points="138,96 140,98 146,92"
-            fill="none" stroke={accent} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-        </g>
+        <VerdictBadge className="om-v1" cx={142} cy={68} r={7} variant="allow" />
+        <VerdictBadge className="om-v2" cx={142} cy={82} r={7} variant="deny" />
+        <VerdictBadge className="om-v3" cx={142} cy={96} r={7} variant="allow" />
 
         {/* ===== VERDICT BADGES at Outlook server (left edge, stacked) ===== */}
-        <g className="om-v4" style={{ transformOrigin: '380px 75px' }}>
-          <circle cx={380} cy={75} r={7}
-            fill={accent} fillOpacity="0.12" stroke={accent} strokeOpacity="0.5" strokeWidth="1" />
-          <polyline points="376,75 378,77 384,71"
-            fill="none" stroke={accent} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-        </g>
-        <g className="om-v5" style={{ transformOrigin: '380px 89px' }}>
-          <circle cx={380} cy={89} r={7}
-            fill={accent} fillOpacity="0.12" stroke={accent} strokeOpacity="0.5" strokeWidth="1" />
-          <polyline points="376,89 378,91 384,85"
-            fill="none" stroke={accent} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-        </g>
+        <VerdictBadge className="om-v4" cx={380} cy={75} r={7} variant="allow" />
+        <VerdictBadge className="om-v5" cx={380} cy={89} r={7} variant="allow" />
 
         {/* Progress bar */}
         <ProgressBar y={218} width={460} className="om-progress" />

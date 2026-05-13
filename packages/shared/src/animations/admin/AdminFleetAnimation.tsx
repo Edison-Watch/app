@@ -16,8 +16,8 @@
 import { useId } from 'react'
 import { AGENT_REGISTRY } from '../../agent-registry/index'
 import {
-  ADMIN_PATH, DANGER, EdisonLogo, EYE_PATH,
-  McpPacket, ORANGE as O, ProgressBar, SHIELD_CHECK_PATH,
+  AdminFigure, DANGER, EdisonGateway, EdisonLogo, EYE_PATH, FlowLine,
+  McpPacket, ORANGE as O, ProgressBar, SHIELD_CHECK_PATH, VerdictBadge,
 } from '../_shared'
 import {
   AdminNoVisibilityOverlay, FleetDirectLines, GITHUB_SVG, Laptop,
@@ -179,15 +179,7 @@ export default function AdminFleetAnimation(): React.ReactNode {
         aria-hidden="true"
       >
         {/* ══ Admin icon (always visible) ══ */}
-        <g>
-          <svg x={327} y={2} width={26} height={26} viewBox="0 0 256 256">
-            <path d={ADMIN_PATH} fill="var(--text-primary)" fillOpacity="0.7" />
-          </svg>
-          <text x="340" y="40" textAnchor="middle"
-            fill="var(--text-primary)" fontSize="8" fontWeight="bold" fontFamily="system-ui,sans-serif">
-            Admin
-          </text>
-        </g>
+        <AdminFigure cx={340} y={2} size={26} />
 
         {/* ══ Phase 1: admin has no visibility ══ */}
         <g className="afc-direct">
@@ -201,9 +193,8 @@ export default function AdminFleetAnimation(): React.ReactNode {
 
         {/* ══ Edison gateway (fades in for phase 2) ══ */}
         <g className="afc-edison">
-          <circle className="afc-pulse" cx="340" cy="130" r="30"
-            fill="none" stroke="var(--accent)" strokeOpacity="0.5" strokeWidth="1.5" />
-          <EdisonLogo x={313} y={104} w={54} h={52.5} />
+          <EdisonGateway cx={340} cy={130} r={30} logoW={54} pulseClassName="afc-pulse"
+            label="Edison Watch" />
           {/* Large eye under admin - full visibility */}
           <svg x={322} y={46} width={36} height={36} viewBox="0 0 256 256">
             <path d={EYE_PATH} fill="var(--accent)" fillOpacity="0.85" />
@@ -212,28 +203,18 @@ export default function AdminFleetAnimation(): React.ReactNode {
             fill="var(--accent)" fillOpacity="0.85" fontSize="8" fontWeight="bold" fontFamily="system-ui,sans-serif">
             Full visibility
           </text>
-          <text x="340" y="175" textAnchor="middle"
-            fill="var(--text-primary)" fontSize="9" fontWeight="bold" fontFamily="system-ui,sans-serif">
-            Edison Watch
-          </text>
         </g>
 
         {/* ══ Phase 2: routed connection lines ══ */}
         <g className="afc-routed">
           {/* Laptops → Edison */}
-          <line className="afc-line" x1="120" y1="33" x2="310" y2="130"
-            stroke="var(--text-muted)" strokeOpacity="0.5" strokeWidth="1.5" strokeDasharray="3 3" />
-          <line className="afc-line" x1="120" y1="133" x2="310" y2="130"
-            stroke="var(--text-muted)" strokeOpacity="0.5" strokeWidth="1.5" strokeDasharray="3 3" />
-          <line className="afc-line" x1="120" y1="233" x2="310" y2="130"
-            stroke="var(--text-muted)" strokeOpacity="0.5" strokeWidth="1.5" strokeDasharray="3 3" />
+          <FlowLine className="afc-line" x1={120} y1={33}  x2={310} y2={130} stroke="var(--text-muted)" />
+          <FlowLine className="afc-line" x1={120} y1={133} x2={310} y2={130} stroke="var(--text-muted)" />
+          <FlowLine className="afc-line" x1={120} y1={233} x2={310} y2={130} stroke="var(--text-muted)" />
           {/* Edison → servers (accent) */}
-          <line className="afc-line" x1="370" y1="130" x2="560" y2="47"
-            stroke="var(--accent)" strokeOpacity="0.5" strokeWidth="1.5" strokeDasharray="3 3" />
-          <line className="afc-line" x1="370" y1="130" x2="560" y2="127"
-            stroke="var(--accent)" strokeOpacity="0.5" strokeWidth="1.5" strokeDasharray="3 3" />
-          <line className="afc-line" x1="370" y1="130" x2="560" y2="207"
-            stroke="var(--accent)" strokeOpacity="0.5" strokeWidth="1.5" strokeDasharray="3 3" />
+          <FlowLine className="afc-line" x1={370} y1={130} x2={560} y2={47}  stroke="var(--accent)" />
+          <FlowLine className="afc-line" x1={370} y1={130} x2={560} y2={127} stroke="var(--accent)" />
+          <FlowLine className="afc-line" x1={370} y1={130} x2={560} y2={207} stroke="var(--accent)" />
         </g>
 
         {/* ══ 3 Laptops (always visible) ══ */}
@@ -257,27 +238,9 @@ export default function AdminFleetAnimation(): React.ReactNode {
         </g>
 
         {/* ══ Policy verdicts near Edison (Phase 2, staggered) ══ */}
-        {/* Laptop 1 → allowed */}
-        <g className="afc-v1" style={{ transformOrigin: '290px 108px' }}>
-          <circle cx="290" cy="108" r="9"
-            fill="var(--accent)" fillOpacity="0.12" stroke="var(--accent)" strokeOpacity="0.5" strokeWidth="1" />
-          <polyline points="285,108 288,111 295,104"
-            fill="none" stroke="var(--accent)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-        </g>
-        {/* Laptop 2 → allowed */}
-        <g className="afc-v2" style={{ transformOrigin: '290px 130px' }}>
-          <circle cx="290" cy="130" r="9"
-            fill="var(--accent)" fillOpacity="0.12" stroke="var(--accent)" strokeOpacity="0.5" strokeWidth="1" />
-          <polyline points="285,130 288,133 295,126"
-            fill="none" stroke="var(--accent)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-        </g>
-        {/* Laptop 3 → denied */}
-        <g className="afc-v3" style={{ transformOrigin: '290px 152px' }}>
-          <circle cx="290" cy="152" r="9"
-            fill={DANGER} fillOpacity="0.12" stroke={DANGER} strokeOpacity="0.5" strokeWidth="1" />
-          <line x1="286" y1="148" x2="294" y2="156" stroke={DANGER} strokeWidth="1.8" strokeLinecap="round" />
-          <line x1="294" y1="148" x2="286" y2="156" stroke={DANGER} strokeWidth="1.8" strokeLinecap="round" />
-        </g>
+        <VerdictBadge className="afc-v1" cx={290} cy={108} r={9} variant="allow" />
+        <VerdictBadge className="afc-v2" cx={290} cy={130} r={9} variant="allow" />
+        <VerdictBadge className="afc-v3" cx={290} cy={152} r={9} variant="deny" />
         {/* Policy icon near Edison */}
         <g className="afc-routed">
           <svg x={355} y={155} width={18} height={18} viewBox="0 0 256 256">

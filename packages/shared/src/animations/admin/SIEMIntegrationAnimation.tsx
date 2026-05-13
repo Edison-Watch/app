@@ -10,7 +10,7 @@
 import { useId } from 'react'
 import { AGENT_REGISTRY, type AgentIconEntry } from '../../agent-registry/index'
 import {
-  AgentIcon, DANGER, EdisonLogo, McpIcon, McpPacket, ORANGE as O, ProgressBar,
+  AgentIcon, DANGER, EdisonLogo, McpIcon, McpPacket, ORANGE as O, ProgressBar, VerdictBadge,
 } from '../_shared'
 
 const CURSOR = AGENT_REGISTRY['cursor']
@@ -392,27 +392,9 @@ export default function SIEMIntegrationAnimation(): React.ReactNode {
         </g>
 
         {/* ══ Policy verdict badges (left side of Edison, facing clients) ══ */}
-        {/* pkt1 → allowed */}
-        <g className="siem-v1" style={{ transformOrigin: '185px 102px' }}>
-          <circle cx="185" cy="102" r="9"
-            fill="var(--accent)" fillOpacity="0.12" stroke="var(--accent)" strokeOpacity="0.5" strokeWidth="1" />
-          <polyline points="180,102 183,105 190,98"
-            fill="none" stroke="var(--accent)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-        </g>
-        {/* pkt2 → allowed */}
-        <g className="siem-v2" style={{ transformOrigin: '185px 122px' }}>
-          <circle cx="185" cy="122" r="9"
-            fill="var(--accent)" fillOpacity="0.12" stroke="var(--accent)" strokeOpacity="0.5" strokeWidth="1" />
-          <polyline points="180,122 183,125 190,118"
-            fill="none" stroke="var(--accent)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-        </g>
-        {/* pkt3 → denied */}
-        <g className="siem-v3" style={{ transformOrigin: '185px 142px' }}>
-          <circle cx="185" cy="142" r="9"
-            fill={DANGER} fillOpacity="0.12" stroke={DANGER} strokeOpacity="0.5" strokeWidth="1" />
-          <line x1="181" y1="138" x2="189" y2="146" stroke={DANGER} strokeWidth="1.8" strokeLinecap="round" />
-          <line x1="189" y1="138" x2="181" y2="146" stroke={DANGER} strokeWidth="1.8" strokeLinecap="round" />
-        </g>
+        <VerdictBadge className="siem-v1" cx={185} cy={102} r={9} variant="allow" />
+        <VerdictBadge className="siem-v2" cx={185} cy={122} r={9} variant="allow" />
+        <VerdictBadge className="siem-v3" cx={185} cy={142} r={9} variant="deny" />
 
         {/* ══ Tool call packets ══ */}
         <g className="siem-pkt1" fill="currentColor"><McpPacket /></g>

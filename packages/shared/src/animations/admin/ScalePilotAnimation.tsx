@@ -17,7 +17,7 @@ import { useId } from 'react'
 import { AGENT_REGISTRY } from '../../agent-registry/index'
 import {
   ADMIN_PATH, AgentIcon, DANGER, EdisonLogo, EYE_PATH, EYE_SLASH_PATH,
-  McpIcon, McpPacket, ORANGE as O, ProgressBar, SHIELD_CHECK_PATH,
+  McpIcon, McpPacket, ORANGE as O, ProgressBar, SHIELD_CHECK_PATH, VerdictBadge,
 } from '../_shared'
 
 const CURSOR = AGENT_REGISTRY['cursor']
@@ -427,41 +427,11 @@ export default function ScalePilotAnimation(): React.ReactNode {
         <DepartmentRow y={ROW_YS[4]} dept={DEPTS[4]} className="spa-dept-hr" />
 
         {/* ══ Policy verdicts near Edison (Phase 2, staggered with packets) ══ */}
-        {/* Engineering → allowed */}
-        <g className="spa-v-eng" style={{ transformOrigin: '310px 120px' }}>
-          <circle cx="310" cy="120" r="8"
-            fill="var(--accent)" fillOpacity="0.12" stroke="var(--accent)" strokeOpacity="0.5" strokeWidth="1" />
-          <polyline points="305.5,120 308,122.5 314.5,116"
-            fill="none" stroke="var(--accent)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-        </g>
-        {/* Sales → allowed */}
-        <g className="spa-v-sales" style={{ transformOrigin: '310px 135px' }}>
-          <circle cx="310" cy="135" r="8"
-            fill="var(--accent)" fillOpacity="0.12" stroke="var(--accent)" strokeOpacity="0.5" strokeWidth="1" />
-          <polyline points="305.5,135 308,137.5 314.5,131"
-            fill="none" stroke="var(--accent)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-        </g>
-        {/* Finance → allowed */}
-        <g className="spa-v-fin" style={{ transformOrigin: '310px 150px' }}>
-          <circle cx="310" cy="150" r="8"
-            fill="var(--accent)" fillOpacity="0.12" stroke="var(--accent)" strokeOpacity="0.5" strokeWidth="1" />
-          <polyline points="305.5,150 308,152.5 314.5,146"
-            fill="none" stroke="var(--accent)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-        </g>
-        {/* Legal → allowed */}
-        <g className="spa-v-legal" style={{ transformOrigin: '310px 165px' }}>
-          <circle cx="310" cy="165" r="8"
-            fill="var(--accent)" fillOpacity="0.12" stroke="var(--accent)" strokeOpacity="0.5" strokeWidth="1" />
-          <polyline points="305.5,165 308,167.5 314.5,161"
-            fill="none" stroke="var(--accent)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-        </g>
-        {/* HR & Ops → denied */}
-        <g className="spa-v-hr" style={{ transformOrigin: '310px 180px' }}>
-          <circle cx="310" cy="180" r="8"
-            fill={DANGER} fillOpacity="0.12" stroke={DANGER} strokeOpacity="0.5" strokeWidth="1" />
-          <line x1="306.5" y1="176.5" x2="313.5" y2="183.5" stroke={DANGER} strokeWidth="1.6" strokeLinecap="round" />
-          <line x1="313.5" y1="176.5" x2="306.5" y2="183.5" stroke={DANGER} strokeWidth="1.6" strokeLinecap="round" />
-        </g>
+        <VerdictBadge className="spa-v-eng"   cx={310} cy={120} r={8} variant="allow" />
+        <VerdictBadge className="spa-v-sales" cx={310} cy={135} r={8} variant="allow" />
+        <VerdictBadge className="spa-v-fin"   cx={310} cy={150} r={8} variant="allow" />
+        <VerdictBadge className="spa-v-legal" cx={310} cy={165} r={8} variant="allow" />
+        <VerdictBadge className="spa-v-hr"    cx={310} cy={180} r={8} variant="deny"  />
 
         {/* ══ Right column: enterprise tools (always visible) ══ */}
         <ToolServer x={560} y={18}  iconSvg={GITHUB_SVG}   iconViewBox="0 0 1024 1024" label="GitHub" />

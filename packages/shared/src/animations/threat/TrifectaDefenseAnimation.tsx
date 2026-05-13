@@ -20,13 +20,12 @@ import {
   ATTACKER_HIGHLIGHT_PATHS,
   ATTACKER_SVG_VIEWBOX,
 } from '../../svg/attacker-svg'
-import { DANGER, EdisonLogo, ProgressBar, RED as R, RobotIcon, SHIELD_CHECK_PATH } from '../_shared'
+import {
+  DANGER, EdisonLogo, GREEN as G, POISON_PATH, ProgressBar, RED as R,
+  RobotIcon, SHIELD_CHECK_PATH,
+} from '../_shared'
 
-const G = '#3ddc84'
 const accent = 'var(--accent)'
-
-const POISON_PATH =
-  'M17 5a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1h-2v4a7 7 0 0 1 7 7v20a3 3 0 0 1-3 3H16a3 3 0 0 1-3-3V21a7 7 0 0 1 7-7v-4h-2a1 1 0 0 1-1-1zm5 5v5a1 1 0 0 1-1 1h-1a5 5 0 0 0-4.9 4h17.8a5 5 0 0 0-4.9-4h-1a1 1 0 0 1-1-1v-5zm5.536 19.829l.707.707l1.414-1.415l-2.829-2.828l-1.414 1.414l.708.708L24 30.537l-2.121-2.122l.707-.707l-1.414-1.414l-.708.707l-1.414 1.414l-.707.707l1.414 1.414l.707-.707l2.122 2.122l-2.121 2.12l-.708-.707l-1.414 1.415l.708.707l1.414 1.415l.707.706l1.414-1.414l-.707-.707L24 33.365l2.121 2.121l-.707.707l1.414 1.415l2.829-2.829l-1.414-1.414l-.707.707l-2.122-2.121z'
 
 const CSS = `
 .td-anim { color: var(--text-primary); }
