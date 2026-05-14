@@ -6,6 +6,11 @@ export { default as DesktopClientAnimation } from "./feature/DesktopClientAnimat
 export { default as AdminFleetAnimation } from "./admin/AdminFleetAnimation";
 export { default as AdminFleetBlindAnimation } from "./admin/AdminFleetBlindAnimation";
 export { default as StdioVsHttpAnimation } from "./feature/StdioVsHttpAnimation";
+export {
+  default as StdioVirusAnimation,
+  StdioVirusContent,
+  STDIO_VIRUS_CSS,
+} from "./feature/StdioVirusAnimation";
 export { default as CodeModeSecurityAnimation } from "./threat/CodeModeSecurityAnimation";
 export { default as SIEMIntegrationAnimation } from "./admin/SIEMIntegrationAnimation";
 export { default as AgentBypassAnimation } from "./threat/AgentBypassAnimation";
