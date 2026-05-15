@@ -420,11 +420,11 @@ export default function ScalePilotAnimation(): React.ReactNode {
         </g>
 
         {/* ══ Department rows (always present; activate together in Phase 2) ══ */}
-        <DepartmentRow y={ROW_YS[0]} dept={DEPTS[0]} className="spa-dept-eng" />
-        <DepartmentRow y={ROW_YS[1]} dept={DEPTS[1]} className="spa-dept-sales" />
-        <DepartmentRow y={ROW_YS[2]} dept={DEPTS[2]} className="spa-dept-fin" />
-        <DepartmentRow y={ROW_YS[3]} dept={DEPTS[3]} className="spa-dept-legal" />
-        <DepartmentRow y={ROW_YS[4]} dept={DEPTS[4]} className="spa-dept-hr" />
+        <DepartmentRow y={ROW_YS[0]!} dept={DEPTS[0]!} className="spa-dept-eng" />
+        <DepartmentRow y={ROW_YS[1]!} dept={DEPTS[1]!} className="spa-dept-sales" />
+        <DepartmentRow y={ROW_YS[2]!} dept={DEPTS[2]!} className="spa-dept-fin" />
+        <DepartmentRow y={ROW_YS[3]!} dept={DEPTS[3]!} className="spa-dept-legal" />
+        <DepartmentRow y={ROW_YS[4]!} dept={DEPTS[4]!} className="spa-dept-hr" />
 
         {/* ══ Policy verdicts near Edison (Phase 2, staggered with packets) ══ */}
         <VerdictBadge className="spa-v-eng"   cx={310} cy={120} r={8} variant="allow" />

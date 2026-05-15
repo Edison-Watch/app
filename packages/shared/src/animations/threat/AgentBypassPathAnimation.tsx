@@ -143,10 +143,10 @@ export default function AgentBypassPathAnimation(): React.ReactNode {
           fill="var(--text-primary)" fillOpacity="0.03"
           stroke={R} strokeOpacity="0.35" strokeWidth="1"
           strokeDasharray="4 3" />
-        <AgentIcon agent={AGENTS[0]} x={34} y={58} size={28} />
-        <AgentIcon agent={AGENTS[1]} x={68} y={58} size={28} />
-        <AgentIcon agent={AGENTS[2]} x={34} y={92} size={28} />
-        <AgentIcon agent={AGENTS[3]} x={68} y={92} size={28} />
+        <AgentIcon agent={AGENTS[0]!} x={34} y={58} size={28} />
+        <AgentIcon agent={AGENTS[1]!} x={68} y={58} size={28} />
+        <AgentIcon agent={AGENTS[2]!} x={34} y={92} size={28} />
+        <AgentIcon agent={AGENTS[3]!} x={68} y={92} size={28} />
 
         <text x="65" y="146" textAnchor="middle"
           fill="var(--text-primary)" fillOpacity="0.55"

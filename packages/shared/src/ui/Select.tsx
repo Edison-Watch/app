@@ -127,7 +127,7 @@ export default function Select({
         case "Enter":
           e.preventDefault();
           if (focusedIndex >= 0 && focusedIndex < enabledFiltered.length) {
-            select(enabledFiltered[focusedIndex].value);
+            select(enabledFiltered[focusedIndex]!.value);
           }
           break;
       }

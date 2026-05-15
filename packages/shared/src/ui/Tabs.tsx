@@ -58,7 +58,7 @@ export default function Tabs({ tabs, param = "tab", defaultTab, onChange }: Tabs
         return;
       }
 
-      setTab(tabs[next].key);
+      setTab(tabs[next]!.key);
       tabRefs.current[next]?.focus();
     },
     [tabs, active, setTab],

@@ -210,10 +210,10 @@ export default function RBACViolationAnimation(): React.ReactNode {
           fill="var(--accent)" fillOpacity="0" />
 
         {/* 2×2 agent grid */}
-        <AgentIcon agent={AGENTS[0]} x={208} y={38} size={30} />
-        <AgentIcon agent={AGENTS[1]} x={248} y={38} size={30} />
-        <AgentIcon agent={AGENTS[2]} x={208} y={78} size={30} />
-        <AgentIcon agent={AGENTS[3]} x={248} y={78} size={30} />
+        <AgentIcon agent={AGENTS[0]!} x={208} y={38} size={30} />
+        <AgentIcon agent={AGENTS[1]!} x={248} y={38} size={30} />
+        <AgentIcon agent={AGENTS[2]!} x={208} y={78} size={30} />
+        <AgentIcon agent={AGENTS[3]!} x={248} y={78} size={30} />
 
         <text x="253" y="138" textAnchor="middle"
           fill="var(--text-primary)" fillOpacity="0.5" fontSize="8" fontWeight="bold"

@@ -270,7 +270,7 @@ export function agentFallbackColor(name: string): string {
   for (let i = 0; i < name.length; i++) {
     hash = (hash * 31 + name.charCodeAt(i)) | 0;
   }
-  return FALLBACK_COLORS[Math.abs(hash) % FALLBACK_COLORS.length];
+  return FALLBACK_COLORS[Math.abs(hash) % FALLBACK_COLORS.length]!;
 }
 
 /** Two-letter monogram for unknown agents. */

@@ -55,7 +55,7 @@ export default function Dropdown({ trigger, items, onSelect, align = "left" }: D
         case " ":
           e.preventDefault();
           if (focusedIndex >= 0 && focusedIndex < enabledItems.length) {
-            onSelect(enabledItems[focusedIndex].key);
+            onSelect(enabledItems[focusedIndex]!.key);
             close();
           }
           break;
