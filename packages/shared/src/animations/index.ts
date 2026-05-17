@@ -23,6 +23,7 @@ export { default as TrifectaDefenseAnimation } from "./threat/TrifectaDefenseAni
 export { default as ProductJourneyAnimation } from "./feature/ProductJourneyAnimation";
 export { default as FlexibleDeploymentAnimation } from "./feature/FlexibleDeploymentAnimation";
 export { default as UserAccountabilityAnimation } from "./admin/UserAccountabilityAnimation";
+export { default as SecurityBusinessValueAnimation } from "./admin/SecurityBusinessValueAnimation";
 export { MCP_ICON_PATHS, MCP_ICON_VIEWBOX } from "../svg/mcp-svg";
 export {
   EDISON_E_PATH, EDISON_FRAME_PATH, EDISON_LOGO_VIEWBOX,

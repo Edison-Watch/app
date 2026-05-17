@@ -52,6 +52,54 @@ Canonical implementations - copy from these.
 Labels carry meaning - don't drift: "Edison Gateway", "Edison Watch",
 "Edison On-Prem", "Edison Cloud", "Edison Databases".
 
+## Copywriting
+
+Captions and labels are read by **security-literate, not AI-literate**
+buyers (enterprise IT admins, CISOs). Lead with verbs they already use
+(`approve`, `block`, `ticket`, `audit`, `scope`, `permission`); never
+ship AI-Twitter shorthand in a user-visible label. Canonical voice:
+`admin/SecurityBusinessValueAnimation.tsx` ("Routine request -
+approved automatically", "Sensitive data leaving the company -
+blocked"). Grounding: SANS 2025 CISO AI report finds "insufficient AI
+knowledge" is a top defense inhibitor.
+
+Banlist for labels and captions - plain-English replacement on the
+right. Internal codenames (metaphor C, etc.) may still use the
+jargon; **user-visible text may not**.
+
+| Don't write | Write instead |
+|---|---|
+| Lethal trifecta | "Three-way risk" or label the three corners (private data / outside content / outbound channel) |
+| MCP / MCP server | "Connector" or the tool name ("Slack connector") |
+| MCP proxy | "Edison Gateway" (canonical) |
+| Prompt injection | "Hidden instructions in content" / "poisoned content" |
+| Jailbreak | "Bypasses the agent's rules" |
+| Tool call / tool-use | Name the action: "send email", "read file" |
+| Agentic / A2A | "AI agent" / "one AI talking to another" |
+| Scope (OAuth-style) | "Permission" or "what the agent can touch" |
+| Shadow MCP / MCP sprawl | "Unapproved connector" / "no connector inventory" |
+| Tool poisoning | "Booby-trapped connector" |
+| RAG / embeddings / fine-tuning / system prompt | Skip, or "the agent's rulebook" |
+| HKDF / AES-256-GCM | "AES-256 encryption" - drop the primitive |
+| Zero-knowledge encryption | "Keys never leave you" |
+| Exfiltration | "Data leaving the company" |
+| PII / IP / confidential data | Name the data: "customer list", "source code", "salary file" |
+
+Rules:
+
+1. **One clause per caption**, <=8 words. Two ideas - en-dash.
+2. **Define an acronym before animating it.** If `MCP` or `RBAC` must
+   appear, the first phase caption spells it once, then it's free.
+3. **One name per concept.** `Edison Gateway` stays - don't drift to
+   "proxy", "broker", "shim" (same rule as the metaphors section).
+4. **Outcomes, not implementations.** "Sent to IT" beats "Routed via
+   webhook"; "Blocked" beats "Policy denied tool-call".
+5. **Answer at least one of:** *who acted?* / *were they allowed?* /
+   *can I prove it after?* That's the buyer's mental model.
+
+When in doubt, read the label out loud to a CFO. If they ask "what's
+an MCP?", rewrite.
+
 ## `_shared/`
 
 Surface (`_shared/index.ts`):
