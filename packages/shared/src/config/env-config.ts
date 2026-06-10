@@ -29,6 +29,8 @@ export interface EnvConfig {
   API_BASE_URL: string
   /** Default MCP server base URL for self-serve users. */
   MCP_BASE_URL: string
+  /** Base URL of the desktop release bucket (electron-updater feed host). */
+  RELEASES_BASE_URL: string
 }
 
 const DEMO_CONFIG: EnvConfig = {
@@ -41,7 +43,8 @@ const DEMO_CONFIG: EnvConfig = {
   POSTHOG_FEEDBACK_SURVEY_ID: '019c5262-bd68-0000-2209-0e41b3563834',
   DEPLOY_ENV: 'demo',
   API_BASE_URL: 'https://demo-dashboard.edison.watch',
-  MCP_BASE_URL: 'https://edison-watch-demo.up.railway.app'
+  MCP_BASE_URL: 'https://edison-watch-demo.up.railway.app',
+  RELEASES_BASE_URL: 'https://demo-releases.edison.watch'
 }
 
 const RELEASE_CONFIG: EnvConfig = {
@@ -54,7 +57,8 @@ const RELEASE_CONFIG: EnvConfig = {
   POSTHOG_FEEDBACK_SURVEY_ID: '019c5262-bd68-0000-2209-0e41b3563834',
   DEPLOY_ENV: 'release',
   API_BASE_URL: 'https://dashboard.edison.watch',
-  MCP_BASE_URL: 'https://mcp.edison.watch'
+  MCP_BASE_URL: 'https://mcp.edison.watch',
+  RELEASES_BASE_URL: 'https://releases.edison.watch'
 }
 
 // Fully-offline local stack (docker-compose). Auth (GoTrue) and the edge
@@ -72,7 +76,8 @@ const LOCAL_CONFIG: EnvConfig = {
   POSTHOG_FEEDBACK_SURVEY_ID: '',
   DEPLOY_ENV: 'local',
   API_BASE_URL: 'http://localhost:3001',
-  MCP_BASE_URL: 'http://localhost:3000'
+  MCP_BASE_URL: 'http://localhost:3000',
+  RELEASES_BASE_URL: ''
 }
 
 const CONFIGS: Record<string, EnvConfig> = {
