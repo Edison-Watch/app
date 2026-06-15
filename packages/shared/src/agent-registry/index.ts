@@ -29,6 +29,7 @@ export type AgentId =
   | 'aider'
   | 'm365-copilot'
   | 'chatgpt'
+  | 'oai-workspace-agents'
 
 export interface AgentIconEntry {
   displayName: string
@@ -220,6 +221,52 @@ export const AGENT_REGISTRY: Record<AgentId, AgentIconEntry> = {
     brandColor: '#000000',
     svgPath:
       'M22.282 9.821a5.985 5.985 0 0 0-.516-4.91 6.046 6.046 0 0 0-6.51-2.9A6.065 6.065 0 0 0 4.981 4.18a5.985 5.985 0 0 0-3.998 2.9 6.046 6.046 0 0 0 .743 7.097 5.98 5.98 0 0 0 .51 4.911 6.051 6.051 0 0 0 6.515 2.9A5.985 5.985 0 0 0 13.26 24a6.056 6.056 0 0 0 5.772-4.206 5.99 5.99 0 0 0 3.997-2.9 6.056 6.056 0 0 0-.747-7.073zM13.26 22.43a4.476 4.476 0 0 1-2.876-1.04l.141-.081 4.779-2.758a.795.795 0 0 0 .392-.681v-6.737l2.02 1.168a.071.071 0 0 1 .038.052v5.583a4.504 4.504 0 0 1-4.494 4.494zM3.6 18.304a4.47 4.47 0 0 1-.535-3.014l.142.085 4.783 2.759a.771.771 0 0 0 .78 0l5.843-3.369v2.332a.08.08 0 0 1-.033.062L9.74 19.95a4.5 4.5 0 0 1-6.14-1.646zM2.34 7.896a4.485 4.485 0 0 1 2.366-1.973V11.6a.766.766 0 0 0 .388.677l5.815 3.354-2.02 1.168a.076.076 0 0 1-.071 0l-4.83-2.786A4.504 4.504 0 0 1 2.34 7.872zm16.597 3.855l-5.833-3.387L15.124 7.2a.076.076 0 0 1 .071 0l4.83 2.791a4.494 4.494 0 0 1-.676 8.105v-5.678a.79.79 0 0 0-.41-.676zm2.01-3.023l-.141-.085-4.774-2.782a.776.776 0 0 0-.785 0L9.409 9.23V6.897a.066.066 0 0 1 .028-.061l4.83-2.787a4.5 4.5 0 0 1 6.681 4.66zM8.307 12.863l-2.02-1.164a.08.08 0 0 1-.038-.057V6.074a4.5 4.5 0 0 1 7.376-3.453l-.142.08L8.704 5.46a.795.795 0 0 0-.393.681zm1.097-2.361l2.602-1.502 2.603 1.502v3.003l-2.603 1.502-2.602-1.502z'
+  },
+
+  'oai-workspace-agents': {
+    displayName: 'OpenAI Workspace Agents',
+    brandColor: '#19223D',
+    // Cute white robot mark for OpenAI's Workspace Agents. Not on simple-icons,
+    // so it's a self-contained customSvg: a navy rounded background (so the
+    // white robot stays visible, including in the background-less Electron
+    // dialog icons) plus the multi-gradient robot artwork. Gradient ids are
+    // prefixed `oaiwa-` to avoid colliding with other inline SVGs on the page.
+    customViewBox: '0 0 480 480',
+    customSvg: [
+      '<defs>',
+      '<radialGradient id="oaiwa-head" cx="38%" cy="28%" r="85%">',
+      '<stop offset="0%" stop-color="#FFFFFF"/>',
+      '<stop offset="58%" stop-color="#F7F9FB"/>',
+      '<stop offset="100%" stop-color="#D9DEE4"/>',
+      '</radialGradient>',
+      '<radialGradient id="oaiwa-ball" cx="34%" cy="30%" r="80%">',
+      '<stop offset="0%" stop-color="#E2F5FF"/>',
+      '<stop offset="38%" stop-color="#5BB8F4"/>',
+      '<stop offset="100%" stop-color="#2389DA"/>',
+      '</radialGradient>',
+      '<linearGradient id="oaiwa-ear" x1="0" y1="0" x2="0" y2="1">',
+      '<stop offset="0%" stop-color="#EDF0F3"/>',
+      '<stop offset="100%" stop-color="#CFD5DB"/>',
+      '</linearGradient>',
+      '<linearGradient id="oaiwa-eye" x1="0" y1="0" x2="0" y2="1">',
+      '<stop offset="0%" stop-color="#2A3458"/>',
+      '<stop offset="100%" stop-color="#19223D"/>',
+      '</linearGradient>',
+      '</defs>',
+      '<rect x="0" y="0" width="480" height="480" rx="96" ry="96" fill="#19223D"/>',
+      '<line x1="240" y1="170" x2="240" y2="116" stroke="#AEB6BF" stroke-width="6" stroke-linecap="round"/>',
+      '<circle cx="240" cy="92" r="23" fill="url(#oaiwa-ball)"/>',
+      '<ellipse cx="232" cy="83" rx="7" ry="5" fill="#FFFFFF" opacity="0.7"/>',
+      '<ellipse cx="120" cy="276" rx="23" ry="31" fill="url(#oaiwa-ear)"/>',
+      '<ellipse cx="360" cy="276" rx="23" ry="31" fill="url(#oaiwa-ear)"/>',
+      '<rect x="120" y="165" width="240" height="210" rx="92" ry="88" fill="url(#oaiwa-head)"/>',
+      '<rect x="194" y="252" width="36" height="66" rx="18" fill="url(#oaiwa-eye)"/>',
+      '<rect x="250" y="252" width="36" height="66" rx="18" fill="url(#oaiwa-eye)"/>',
+      '<ellipse cx="205" cy="271" rx="5.5" ry="11" fill="#FFFFFF" opacity="0.85"/>',
+      '<ellipse cx="261" cy="271" rx="5.5" ry="11" fill="#FFFFFF" opacity="0.85"/>',
+      '<circle cx="221" cy="304" r="3" fill="#FFFFFF" opacity="0.45"/>',
+      '<circle cx="277" cy="304" r="3" fill="#FFFFFF" opacity="0.45"/>'
+    ].join('')
   }
 }
 
