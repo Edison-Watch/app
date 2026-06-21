@@ -5,6 +5,8 @@ export interface DropdownItem {
   label: ReactNode;
   disabled?: boolean;
   danger?: boolean;
+  /** Render a non-interactive separator row instead of a menu item. */
+  divider?: boolean;
 }
 
 interface DropdownProps {
@@ -12,9 +14,17 @@ interface DropdownProps {
   items: DropdownItem[];
   onSelect: (key: string) => void;
   align?: "left" | "right";
+  /** Cap the menu height (px) and show a scrollbar when items overflow. */
+  maxHeight?: number;
 }
 
-export default function Dropdown({ trigger, items, onSelect, align = "left" }: DropdownProps) {
+export default function Dropdown({
+  trigger,
+  items,
+  onSelect,
+  align = "left",
+  maxHeight,
+}: DropdownProps) {
   const [open, setOpen] = useState(false);
   const [focusedIndex, setFocusedIndex] = useState(-1);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -25,7 +35,7 @@ export default function Dropdown({ trigger, items, onSelect, align = "left" }: D
     setFocusedIndex(-1);
   }, []);
 
-  const enabledItems = items.filter((i) => !i.disabled);
+  const enabledItems = items.filter((i) => !i.disabled && !i.divider);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -95,11 +105,21 @@ export default function Dropdown({ trigger, items, onSelect, align = "left" }: D
         <div
           ref={menuRef}
           role="menu"
+          style={maxHeight ? { maxHeight, overflowY: "scroll" } : undefined}
           className={`absolute z-50 mt-1 min-w-[10rem] rounded-md border border-[var(--border)] bg-[var(--bg-raised)] shadow-lg py-1 ${
-            align === "right" ? "right-0" : "left-0"
-          }`}
+            maxHeight ? "scrollbar-stable" : ""
+          } ${align === "right" ? "right-0" : "left-0"}`}
         >
           {items.map((item) => {
+            if (item.divider) {
+              return (
+                <div
+                  key={item.key}
+                  role="separator"
+                  className="my-1 border-t border-[var(--border)]"
+                />
+              );
+            }
             const enabledIdx = enabledItems.indexOf(item);
             const isFocused = enabledIdx === focusedIndex;
             return (
