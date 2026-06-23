@@ -19,9 +19,7 @@
     "noImplicitOverride": true,
     "noFallthroughCasesInSwitch": true,
     "noImplicitReturns": true,
-    "noEmit": true,
-    "baseUrl": ".",
-    "paths": {}
+    "noEmit": true
   },
   "include": ["src"],
   "exclude": ["src/**/__tests__/**"]
