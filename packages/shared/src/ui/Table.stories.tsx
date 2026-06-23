@@ -12,21 +12,61 @@ interface Session {
 }
 
 const sampleData: Session[] = [
-  { id: "s-001", agent: "code-review-bot", status: "completed", duration: 12400, toolCalls: 5 },
-  { id: "s-002", agent: "deploy-agent", status: "running", duration: 3200, toolCalls: 2 },
-  { id: "s-003", agent: "security-scanner", status: "failed", duration: 45000, toolCalls: 12 },
-  { id: "s-004", agent: "test-runner", status: "completed", duration: 8700, toolCalls: 8 },
-  { id: "s-005", agent: "code-review-bot", status: "completed", duration: 6100, toolCalls: 3 },
+  {
+    id: "s-001",
+    agent: "code-review-bot",
+    status: "completed",
+    duration: 12400,
+    toolCalls: 5,
+  },
+  {
+    id: "s-002",
+    agent: "deploy-agent",
+    status: "running",
+    duration: 3200,
+    toolCalls: 2,
+  },
+  {
+    id: "s-003",
+    agent: "security-scanner",
+    status: "failed",
+    duration: 45000,
+    toolCalls: 12,
+  },
+  {
+    id: "s-004",
+    agent: "test-runner",
+    status: "completed",
+    duration: 8700,
+    toolCalls: 8,
+  },
+  {
+    id: "s-005",
+    agent: "code-review-bot",
+    status: "completed",
+    duration: 6100,
+    toolCalls: 3,
+  },
 ];
 
 const columns = [
-  { key: "agent", header: "Agent", sortable: true, render: (row: Session) => row.agent },
+  {
+    key: "agent",
+    header: "Agent",
+    sortable: true,
+    render: (row: Session) => row.agent,
+  },
   {
     key: "status",
     header: "Status",
     sortable: true,
     render: (row: Session) => {
-      const variant = row.status === "completed" ? "success" : row.status === "running" ? "info" : "danger";
+      const variant =
+        row.status === "completed"
+          ? "success"
+          : row.status === "running"
+            ? "info"
+            : "danger";
       return <Badge variant={variant}>{row.status}</Badge>;
     },
   },
@@ -56,7 +96,11 @@ type Story = StoryObj;
 
 export const Default: Story = {
   render: () => (
-    <Table columns={columns} data={sampleData} getRowKey={(r: Session) => r.id} />
+    <Table
+      columns={columns}
+      data={sampleData}
+      getRowKey={(r: Session) => r.id}
+    />
   ),
 };
 
@@ -73,7 +117,12 @@ export const WithSortableColumns: Story = {
 
 export const Loading: Story = {
   render: () => (
-    <Table columns={columns} data={[]} loading getRowKey={(r: Session) => r.id} />
+    <Table
+      columns={columns}
+      data={[]}
+      loading
+      getRowKey={(r: Session) => r.id}
+    />
   ),
 };
 

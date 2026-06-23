@@ -1,6 +1,12 @@
 import type { ReactNode } from "react";
 
-type BadgeVariant = "success" | "warning" | "danger" | "info" | "neutral" | "blocked";
+type BadgeVariant =
+  | "success"
+  | "warning"
+  | "danger"
+  | "info"
+  | "neutral"
+  | "blocked";
 type BadgeSize = "sm" | "md";
 
 interface BadgeProps {
@@ -40,9 +46,5 @@ export default function Badge({
     );
   }
 
-  return (
-    <span className={className}>
-      {children}
-    </span>
-  );
+  return <span className={className}>{children}</span>;
 }

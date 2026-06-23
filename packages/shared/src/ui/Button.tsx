@@ -1,6 +1,12 @@
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
 
-type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "success" | "warning";
+type ButtonVariant =
+  | "primary"
+  | "secondary"
+  | "ghost"
+  | "danger"
+  | "success"
+  | "warning";
 type ButtonSize = "sm" | "md" | "lg";
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -59,16 +65,19 @@ function Spinner() {
   );
 }
 
-const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button({
-  variant = "primary",
-  size = "md",
-  loading = false,
-  disabled,
-  children,
-  className = "",
-  type = "button",
-  ...rest
-}, ref) {
+const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
+  {
+    variant = "primary",
+    size = "md",
+    loading = false,
+    disabled,
+    children,
+    className = "",
+    type = "button",
+    ...rest
+  },
+  ref,
+) {
   return (
     <button
       ref={ref}

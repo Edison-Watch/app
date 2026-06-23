@@ -29,7 +29,7 @@ export default function Select({
   value: controlledValue,
   defaultValue,
   onChange,
-  options: staticOptions,
+  options: staticOptions = [],
   loadOptions,
   placeholder = "Select...",
   searchable = false,
@@ -47,7 +47,7 @@ export default function Select({
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const options = loadOptions ? asyncOptions : (staticOptions ?? []);
+  const options = loadOptions ? asyncOptions : staticOptions;
 
   const filtered = useMemo(() => {
     if (!searchable || !search) return options;
@@ -55,7 +55,8 @@ export default function Select({
     return options.filter((o) => o.label.toLowerCase().includes(lower));
   }, [options, search, searchable]);
 
-  const selectedLabel = options.find((o) => o.value === currentValue)?.label ?? "";
+  const selectedLabel =
+    options.find((o) => o.value === currentValue)?.label ?? "";
 
   const select = useCallback(
     (val: string) => {
@@ -88,7 +89,10 @@ export default function Select({
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(e.target as Node)
+      ) {
         setOpen(false);
         setSearch("");
       }
@@ -159,8 +163,18 @@ export default function Select({
         <span className={currentValue ? "" : "text-[var(--text-muted)]"}>
           {currentValue ? selectedLabel || currentValue : placeholder}
         </span>
-        <svg className="w-4 h-4 text-[var(--text-muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        <svg
+          className="w-4 h-4 text-[var(--text-muted)]"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M19 9l-7 7-7-7"
+          />
         </svg>
       </button>
 
@@ -186,9 +200,13 @@ export default function Select({
           )}
 
           {loading ? (
-            <div className="px-3 py-4 text-sm text-center text-[var(--text-muted)]">Loading...</div>
+            <div className="px-3 py-4 text-sm text-center text-[var(--text-muted)]">
+              Loading...
+            </div>
           ) : filtered.length === 0 ? (
-            <div className="px-3 py-4 text-sm text-center text-[var(--text-muted)]">No options</div>
+            <div className="px-3 py-4 text-sm text-center text-[var(--text-muted)]">
+              No options
+            </div>
           ) : (
             filtered.map((option) => {
               const enabledFiltered = filtered.filter((o) => !o.disabled);
@@ -215,7 +233,9 @@ export default function Select({
                   }}
                 >
                   {option.label}
-                  {isSelected && <span className="ml-2 text-[var(--accent)]">✓</span>}
+                  {isSelected && (
+                    <span className="ml-2 text-[var(--accent)]">✓</span>
+                  )}
                 </button>
               );
             })

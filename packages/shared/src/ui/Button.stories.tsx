@@ -18,17 +18,33 @@ const meta: Meta<typeof Button> = {
 export default meta;
 type Story = StoryObj<typeof Button>;
 
-export const Primary: Story = { args: { variant: "primary", children: "Primary" } };
-export const Secondary: Story = { args: { variant: "secondary", children: "Secondary" } };
+export const Primary: Story = {
+  args: { variant: "primary", children: "Primary" },
+};
+export const Secondary: Story = {
+  args: { variant: "secondary", children: "Secondary" },
+};
 export const Ghost: Story = { args: { variant: "ghost", children: "Ghost" } };
-export const Danger: Story = { args: { variant: "danger", children: "Danger" } };
+export const Danger: Story = {
+  args: { variant: "danger", children: "Danger" },
+};
 
-export const Small: Story = { args: { variant: "primary", size: "sm", children: "Small" } };
-export const Medium: Story = { args: { variant: "primary", size: "md", children: "Medium" } };
-export const Large: Story = { args: { variant: "primary", size: "lg", children: "Large" } };
+export const Small: Story = {
+  args: { variant: "primary", size: "sm", children: "Small" },
+};
+export const Medium: Story = {
+  args: { variant: "primary", size: "md", children: "Medium" },
+};
+export const Large: Story = {
+  args: { variant: "primary", size: "lg", children: "Large" },
+};
 
-export const Loading: Story = { args: { variant: "primary", loading: true, children: "Loading..." } };
-export const Disabled: Story = { args: { variant: "primary", disabled: true, children: "Disabled" } };
+export const Loading: Story = {
+  args: { variant: "primary", loading: true, children: "Loading..." },
+};
+export const Disabled: Story = {
+  args: { variant: "primary", disabled: true, children: "Disabled" },
+};
 
 export const AllVariants: Story = {
   render: () => (
@@ -54,10 +70,18 @@ export const AllSizes: Story = {
 export const LoadingVariants: Story = {
   render: () => (
     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-      <Button variant="primary" loading>Primary</Button>
-      <Button variant="secondary" loading>Secondary</Button>
-      <Button variant="ghost" loading>Ghost</Button>
-      <Button variant="danger" loading>Danger</Button>
+      <Button variant="primary" loading>
+        Primary
+      </Button>
+      <Button variant="secondary" loading>
+        Secondary
+      </Button>
+      <Button variant="ghost" loading>
+        Ghost
+      </Button>
+      <Button variant="danger" loading>
+        Danger
+      </Button>
     </div>
   ),
 };
@@ -65,10 +89,18 @@ export const LoadingVariants: Story = {
 export const DisabledVariants: Story = {
   render: () => (
     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-      <Button variant="primary" disabled>Primary</Button>
-      <Button variant="secondary" disabled>Secondary</Button>
-      <Button variant="ghost" disabled>Ghost</Button>
-      <Button variant="danger" disabled>Danger</Button>
+      <Button variant="primary" disabled>
+        Primary
+      </Button>
+      <Button variant="secondary" disabled>
+        Secondary
+      </Button>
+      <Button variant="ghost" disabled>
+        Ghost
+      </Button>
+      <Button variant="danger" disabled>
+        Danger
+      </Button>
     </div>
   ),
 };

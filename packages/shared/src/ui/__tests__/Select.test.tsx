@@ -12,7 +12,9 @@ describe("Select", () => {
 
   it("opens and selects an option", () => {
     const onChange = vi.fn();
-    render(<Select options={options} onChange={onChange} placeholder="Pick fruit" />);
+    render(
+      <Select options={options} onChange={onChange} placeholder="Pick fruit" />,
+    );
 
     fireEvent.click(screen.getByText("Pick fruit"));
     fireEvent.click(screen.getByText("Banana"));
@@ -21,7 +23,14 @@ describe("Select", () => {
 
   it("filters options when searchable", () => {
     const onChange = vi.fn();
-    render(<Select options={options} onChange={onChange} searchable placeholder="Pick" />);
+    render(
+      <Select
+        options={options}
+        onChange={onChange}
+        searchable
+        placeholder="Pick"
+      />,
+    );
 
     fireEvent.click(screen.getByText("Pick"));
     const searchInput = screen.getByPlaceholderText("Search...");

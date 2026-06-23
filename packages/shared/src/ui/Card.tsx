@@ -7,7 +7,12 @@ interface CardProps {
   className?: string;
 }
 
-export default function Card({ header, footer, children, className = "" }: CardProps) {
+export default function Card({
+  header,
+  footer,
+  children,
+  className = "",
+}: CardProps) {
   return (
     <div
       className={`rounded-lg border border-[var(--border)] bg-[var(--bg-raised)] overflow-hidden ${className}`}

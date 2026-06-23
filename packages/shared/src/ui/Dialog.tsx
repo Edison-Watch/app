@@ -9,7 +9,13 @@ interface DialogProps {
   wide?: boolean;
 }
 
-export default function Dialog({ open, onClose, title, children, wide }: DialogProps) {
+export default function Dialog({
+  open,
+  onClose,
+  title,
+  children,
+  wide,
+}: DialogProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
 
@@ -97,7 +103,9 @@ export default function Dialog({ open, onClose, title, children, wide }: DialogP
       >
         {title && (
           <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)]">
-            <h2 className="text-lg font-semibold text-[var(--text-primary)]">{title}</h2>
+            <h2 className="text-lg font-semibold text-[var(--text-primary)]">
+              {title}
+            </h2>
             <button
               onClick={onClose}
               className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
@@ -107,7 +115,9 @@ export default function Dialog({ open, onClose, title, children, wide }: DialogP
             </button>
           </div>
         )}
-        <div className="px-5 py-4 overflow-y-auto flex-1 min-h-0">{children}</div>
+        <div className="px-5 py-4 overflow-y-auto flex-1 min-h-0">
+          {children}
+        </div>
       </div>
     </div>
   );

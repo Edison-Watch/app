@@ -3,9 +3,9 @@
  * (HumanAccessAnimation, AgentBypassPathAnimation, AgentBypassAnimation).
  */
 
-import React from 'react'
+import React from "react";
 
-export { GREEN, PERSON_PATH } from '../_shared'
+export { GREEN, PERSON_PATH } from "../_shared";
 
 /**
  * SSO/RBAC mesh wall: a thin slab with a 5×7 grid pattern. Used to
@@ -13,42 +13,78 @@ export { GREEN, PERSON_PATH } from '../_shared'
  * traffic. `color` selects accent (active) vs muted (defeated).
  */
 export function MeshWall({
-  x, y, width, height, label, color
+  x,
+  y,
+  width,
+  height,
+  label,
+  color,
 }: {
-  x: number; y: number; width: number; height: number
-  label?: string; color: string
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  label?: string;
+  color: string;
 }): React.ReactNode {
-  const cols = 5
-  const rows = 7
-  const dx = width / cols
-  const dy = height / rows
+  const cols = 5;
+  const rows = 7;
+  const dx = width / cols;
+  const dy = height / rows;
   return (
     <g>
-      <rect x={x} y={y} width={width} height={height} rx="2"
-        fill="var(--text-primary)" fillOpacity="0.02"
-        stroke={color} strokeOpacity="0.7" strokeWidth="1.4" />
+      <rect
+        x={x}
+        y={y}
+        width={width}
+        height={height}
+        rx="2"
+        fill="var(--text-primary)"
+        fillOpacity="0.02"
+        stroke={color}
+        strokeOpacity="0.7"
+        strokeWidth="1.4"
+      />
       {Array.from({ length: cols - 1 }, (_, i) => (
-        <line key={`v${i}`}
-          x1={x + (i + 1) * dx} y1={y}
-          x2={x + (i + 1) * dx} y2={y + height}
-          stroke={color} strokeOpacity="0.45" strokeWidth="0.8" />
+        <line
+          key={`v${i}`}
+          x1={x + (i + 1) * dx}
+          y1={y}
+          x2={x + (i + 1) * dx}
+          y2={y + height}
+          stroke={color}
+          strokeOpacity="0.45"
+          strokeWidth="0.8"
+        />
       ))}
       {Array.from({ length: rows - 1 }, (_, i) => (
-        <line key={`h${i}`}
-          x1={x} y1={y + (i + 1) * dy}
-          x2={x + width} y2={y + (i + 1) * dy}
-          stroke={color} strokeOpacity="0.45" strokeWidth="0.8" />
+        <line
+          key={`h${i}`}
+          x1={x}
+          y1={y + (i + 1) * dy}
+          x2={x + width}
+          y2={y + (i + 1) * dy}
+          stroke={color}
+          strokeOpacity="0.45"
+          strokeWidth="0.8"
+        />
       ))}
       {label && (
-        <text x={x + width / 2} y={y - 6} textAnchor="middle"
-          fill={color} fillOpacity="0.85"
-          fontSize="9" fontWeight="600"
-          fontFamily="system-ui,sans-serif">
+        <text
+          x={x + width / 2}
+          y={y - 6}
+          textAnchor="middle"
+          fill={color}
+          fillOpacity="0.85"
+          fontSize="9"
+          fontWeight="600"
+          fontFamily="system-ui,sans-serif"
+        >
           {label}
         </text>
       )}
     </g>
-  )
+  );
 }
 
 /**
@@ -56,38 +92,105 @@ export function MeshWall({
  * cube-stack illustration in the marketing diagram.
  */
 export function DataCylinder({
-  cx, cy, size = 36, className
+  cx,
+  cy,
+  size = 36,
+  className,
 }: {
-  cx: number; cy: number; size?: number; className?: string
+  cx: number;
+  cy: number;
+  size?: number;
+  className?: string;
 }): React.ReactNode {
-  const w = size
-  const h = size * 1.4
-  const ry = size * 0.22
-  const top = cy - h / 2
-  const bot = cy + h / 2
-  const x0 = cx - w / 2
+  const w = size;
+  const h = size * 1.4;
+  const ry = size * 0.22;
+  const top = cy - h / 2;
+  const bot = cy + h / 2;
+  const x0 = cx - w / 2;
   return (
     <g className={className}>
-      <rect x={x0} y={top + ry} width={w} height={h - ry * 2}
-        fill="var(--accent)" fillOpacity="0.15" />
-      <ellipse cx={cx} cy={top + ry} rx={w / 2} ry={ry}
-        fill="var(--accent)" fillOpacity="0.15" />
-      <ellipse cx={cx} cy={bot - ry} rx={w / 2} ry={ry}
-        fill="var(--accent)" fillOpacity="0.25" />
-      <line x1={x0} y1={top + ry} x2={x0} y2={bot - ry}
-        stroke="var(--accent)" strokeOpacity="0.6" strokeWidth="1" />
-      <line x1={x0 + w} y1={top + ry} x2={x0 + w} y2={bot - ry}
-        stroke="var(--accent)" strokeOpacity="0.6" strokeWidth="1" />
-      <ellipse cx={cx} cy={bot - ry} rx={w / 2} ry={ry}
+      <rect
+        x={x0}
+        y={top + ry}
+        width={w}
+        height={h - ry * 2}
+        fill="var(--accent)"
+        fillOpacity="0.15"
+      />
+      <ellipse
+        cx={cx}
+        cy={top + ry}
+        rx={w / 2}
+        ry={ry}
+        fill="var(--accent)"
+        fillOpacity="0.15"
+      />
+      <ellipse
+        cx={cx}
+        cy={bot - ry}
+        rx={w / 2}
+        ry={ry}
+        fill="var(--accent)"
+        fillOpacity="0.25"
+      />
+      <line
+        x1={x0}
+        y1={top + ry}
+        x2={x0}
+        y2={bot - ry}
+        stroke="var(--accent)"
+        strokeOpacity="0.6"
+        strokeWidth="1"
+      />
+      <line
+        x1={x0 + w}
+        y1={top + ry}
+        x2={x0 + w}
+        y2={bot - ry}
+        stroke="var(--accent)"
+        strokeOpacity="0.6"
+        strokeWidth="1"
+      />
+      <ellipse
+        cx={cx}
+        cy={bot - ry}
+        rx={w / 2}
+        ry={ry}
         fill="none"
-        stroke="var(--accent)" strokeOpacity="0.6" strokeWidth="1" />
-      <ellipse cx={cx} cy={top + ry} rx={w / 2} ry={ry}
-        fill="var(--accent)" fillOpacity="0.45"
-        stroke="var(--accent)" strokeOpacity="0.8" strokeWidth="1" />
-      <line x1={cx - w * 0.2} y1={top + ry + ry * 0.6} x2={cx + w * 0.2} y2={top + ry + ry * 0.6}
-        stroke="var(--accent)" strokeOpacity="0.3" strokeWidth="0.6" />
-      <line x1={cx - w * 0.28} y1={top + ry + ry * 1.8} x2={cx + w * 0.28} y2={top + ry + ry * 1.8}
-        stroke="var(--accent)" strokeOpacity="0.2" strokeWidth="0.6" />
+        stroke="var(--accent)"
+        strokeOpacity="0.6"
+        strokeWidth="1"
+      />
+      <ellipse
+        cx={cx}
+        cy={top + ry}
+        rx={w / 2}
+        ry={ry}
+        fill="var(--accent)"
+        fillOpacity="0.45"
+        stroke="var(--accent)"
+        strokeOpacity="0.8"
+        strokeWidth="1"
+      />
+      <line
+        x1={cx - w * 0.2}
+        y1={top + ry + ry * 0.6}
+        x2={cx + w * 0.2}
+        y2={top + ry + ry * 0.6}
+        stroke="var(--accent)"
+        strokeOpacity="0.3"
+        strokeWidth="0.6"
+      />
+      <line
+        x1={cx - w * 0.28}
+        y1={top + ry + ry * 1.8}
+        x2={cx + w * 0.28}
+        y2={top + ry + ry * 1.8}
+        stroke="var(--accent)"
+        strokeOpacity="0.2"
+        strokeWidth="0.6"
+      />
     </g>
-  )
+  );
 }

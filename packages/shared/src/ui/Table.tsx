@@ -67,14 +67,22 @@ export default function Table<T>({
               <th
                 key={col.key}
                 className={`px-4 py-3 font-medium text-[var(--text-secondary)] ${
-                  col.sortable ? "cursor-pointer select-none hover:text-[var(--text-primary)]" : ""
+                  col.sortable
+                    ? "cursor-pointer select-none hover:text-[var(--text-primary)]"
+                    : ""
                 } ${col.numeric ? "tabular-nums text-right" : ""}`}
                 onClick={col.sortable ? () => handleSort(col.key) : undefined}
               >
                 <span className="inline-flex items-center gap-1">
                   {col.header}
                   {col.sortable && sortKey === col.key && (
-                    <span aria-label={sortDir === "asc" ? "sorted ascending" : "sorted descending"}>
+                    <span
+                      aria-label={
+                        sortDir === "asc"
+                          ? "sorted ascending"
+                          : "sorted descending"
+                      }
+                    >
                       {sortDir === "asc" ? "↑" : "↓"}
                     </span>
                   )}

@@ -11,21 +11,30 @@
  */
 
 import {
-  OUTLOOK_SVG, OUTLOOK_SVG_VIEWBOX,
-  SLACK_SVG, SLACK_SVG_VIEWBOX,
-  GCAL_SVG, GCAL_SVG_VIEWBOX,
-} from '../../svg/app-icons-svg'
+  OUTLOOK_SVG,
+  OUTLOOK_SVG_VIEWBOX,
+  SLACK_SVG,
+  SLACK_SVG_VIEWBOX,
+  GCAL_SVG,
+  GCAL_SVG_VIEWBOX,
+} from "../../svg/app-icons-svg";
 import {
   ATTACKER_BODY_PATHS,
   ATTACKER_HIGHLIGHT_PATHS,
   ATTACKER_SVG_VIEWBOX,
-} from '../../svg/attacker-svg'
+} from "../../svg/attacker-svg";
 import {
-  DANGER, EdisonLogo, GREEN as G, POISON_PATH, ProgressBar, RED as R,
-  RobotIcon, SHIELD_CHECK_PATH,
-} from '../_shared'
+  DANGER,
+  EdisonLogo,
+  GREEN as G,
+  POISON_PATH,
+  ProgressBar,
+  RED as R,
+  RobotIcon,
+  SHIELD_CHECK_PATH,
+} from "../_shared";
 
-const accent = 'var(--accent)'
+const accent = "var(--accent)";
 
 const CSS = `
 .td-anim { color: var(--text-primary); }
@@ -446,7 +455,7 @@ const CSS = `
   .td-anim .td-hl2 { opacity: 0.4; }
   .td-anim .td-progress { animation: none; transform: scaleX(1); }
 }
-`
+`;
 
 export default function TrifectaDefenseAnimation(): React.ReactNode {
   return (
@@ -455,14 +464,21 @@ export default function TrifectaDefenseAnimation(): React.ReactNode {
       <svg
         className="td-anim"
         viewBox="0 0 500 190"
-        style={{ width: '100%', maxWidth: 500, height: 'auto' }}
+        style={{ width: "100%", maxWidth: 500, height: "auto" }}
         xmlns="http://www.w3.org/2000/svg"
         role="presentation"
         aria-hidden="true"
       >
         <defs>
-          <marker id="td-arrR" viewBox="0 0 10 10" refX="9" refY="5"
-            markerWidth="5" markerHeight="5" orient="auto">
+          <marker
+            id="td-arrR"
+            viewBox="0 0 10 10"
+            refX="9"
+            refY="5"
+            markerWidth="5"
+            markerHeight="5"
+            orient="auto"
+          >
             <path d="M0 1 L9 5 L0 9 Z" fill={R} fillOpacity={0.5} />
           </marker>
         </defs>
@@ -470,17 +486,45 @@ export default function TrifectaDefenseAnimation(): React.ReactNode {
         {/* ===== LAPTOP (always visible) ===== */}
         <g>
           {/* Phase 1 ring */}
-          <rect className="td-ring1" x="8" y="12" width="150" height="82" rx="6"
-            fill="var(--text-primary)" fillOpacity="0.03"
-            stroke="var(--text-muted)" strokeOpacity="0.35" strokeWidth="1.5" />
+          <rect
+            className="td-ring1"
+            x="8"
+            y="12"
+            width="150"
+            height="82"
+            rx="6"
+            fill="var(--text-primary)"
+            fillOpacity="0.03"
+            stroke="var(--text-muted)"
+            strokeOpacity="0.35"
+            strokeWidth="1.5"
+          />
           {/* Phase 2 ring (layered on top) */}
-          <rect className="td-ring2" x="8" y="12" width="150" height="82" rx="6"
+          <rect
+            className="td-ring2"
+            x="8"
+            y="12"
+            width="150"
+            height="82"
+            rx="6"
             fill="none"
-            stroke="var(--text-muted)" strokeOpacity="0" strokeWidth="1.5" />
+            stroke="var(--text-muted)"
+            strokeOpacity="0"
+            strokeWidth="1.5"
+          />
         </g>
-        <rect x="4" y="96" width="158" height="7" rx="3.5"
-          fill="var(--text-primary)" fillOpacity="0.04"
-          stroke="var(--text-muted)" strokeOpacity="0.35" strokeWidth="1" />
+        <rect
+          x="4"
+          y="96"
+          width="158"
+          height="7"
+          rx="3.5"
+          fill="var(--text-primary)"
+          fillOpacity="0.04"
+          stroke="var(--text-muted)"
+          strokeOpacity="0.35"
+          strokeWidth="1"
+        />
 
         {/* Phase 1 robot states */}
         <g className="td-bot1-clean">
@@ -488,10 +532,29 @@ export default function TrifectaDefenseAnimation(): React.ReactNode {
         </g>
         <g className="td-bot1-dirty">
           <RobotIcon x={61} y={15} size={40} fill={R} fillOpacity="0.6" />
-          <circle className="td-eye-pulse" cx="76.6" cy="39.4" r="2.4" fill={R} fillOpacity="0.7" />
-          <circle className="td-eye-pulse" cx="85.4" cy="39.4" r="2.4" fill={R} fillOpacity="0.7" />
+          <circle
+            className="td-eye-pulse"
+            cx="76.6"
+            cy="39.4"
+            r="2.4"
+            fill={R}
+            fillOpacity="0.7"
+          />
+          <circle
+            className="td-eye-pulse"
+            cx="85.4"
+            cy="39.4"
+            r="2.4"
+            fill={R}
+            fillOpacity="0.7"
+          />
           <svg x="104" y="18" width="28" height="28" viewBox="0 0 48 48">
-            <path d={POISON_PATH} fill={R} fillOpacity="0.6" fillRule="evenodd" />
+            <path
+              d={POISON_PATH}
+              fill={R}
+              fillOpacity="0.6"
+              fillRule="evenodd"
+            />
           </svg>
         </g>
 
@@ -501,44 +564,156 @@ export default function TrifectaDefenseAnimation(): React.ReactNode {
         </g>
         <g className="td-bot2-dirty">
           <RobotIcon x={61} y={15} size={40} fill={R} fillOpacity="0.6" />
-          <circle className="td-eye-pulse" cx="76.6" cy="39.4" r="2.4" fill={R} fillOpacity="0.7" />
-          <circle className="td-eye-pulse" cx="85.4" cy="39.4" r="2.4" fill={R} fillOpacity="0.7" />
+          <circle
+            className="td-eye-pulse"
+            cx="76.6"
+            cy="39.4"
+            r="2.4"
+            fill={R}
+            fillOpacity="0.7"
+          />
+          <circle
+            className="td-eye-pulse"
+            cx="85.4"
+            cy="39.4"
+            r="2.4"
+            fill={R}
+            fillOpacity="0.7"
+          />
           <svg x="104" y="18" width="28" height="28" viewBox="0 0 48 48">
-            <path d={POISON_PATH} fill={R} fillOpacity="0.6" fillRule="evenodd" />
+            <path
+              d={POISON_PATH}
+              fill={R}
+              fillOpacity="0.6"
+              fillRule="evenodd"
+            />
           </svg>
         </g>
 
         {/* App connector icons */}
-        <rect x="34" y="58" width="24" height="24" rx="5"
-          fill="var(--text-primary)" fillOpacity="0.06"
-          stroke="var(--text-muted)" strokeOpacity="0.2" strokeWidth="0.8" />
-        <svg x="37" y="61" width="18" height="18" viewBox={OUTLOOK_SVG_VIEWBOX}
-          dangerouslySetInnerHTML={{ __html: OUTLOOK_SVG }} />
-        <rect x="64" y="58" width="24" height="24" rx="5"
-          fill="var(--text-primary)" fillOpacity="0.06"
-          stroke="var(--text-muted)" strokeOpacity="0.2" strokeWidth="0.8" />
-        <svg x="67" y="61" width="18" height="18" viewBox={SLACK_SVG_VIEWBOX}
-          dangerouslySetInnerHTML={{ __html: SLACK_SVG }} />
-        <rect x="94" y="58" width="24" height="24" rx="5"
-          fill="var(--text-primary)" fillOpacity="0.06"
-          stroke="var(--text-muted)" strokeOpacity="0.2" strokeWidth="0.8" />
-        <svg x="97" y="61" width="18" height="18" viewBox={GCAL_SVG_VIEWBOX}
-          dangerouslySetInnerHTML={{ __html: GCAL_SVG }} />
+        <rect
+          x="34"
+          y="58"
+          width="24"
+          height="24"
+          rx="5"
+          fill="var(--text-primary)"
+          fillOpacity="0.06"
+          stroke="var(--text-muted)"
+          strokeOpacity="0.2"
+          strokeWidth="0.8"
+        />
+        <svg
+          x="37"
+          y="61"
+          width="18"
+          height="18"
+          viewBox={OUTLOOK_SVG_VIEWBOX}
+          dangerouslySetInnerHTML={{ __html: OUTLOOK_SVG }}
+        />
+        <rect
+          x="64"
+          y="58"
+          width="24"
+          height="24"
+          rx="5"
+          fill="var(--text-primary)"
+          fillOpacity="0.06"
+          stroke="var(--text-muted)"
+          strokeOpacity="0.2"
+          strokeWidth="0.8"
+        />
+        <svg
+          x="67"
+          y="61"
+          width="18"
+          height="18"
+          viewBox={SLACK_SVG_VIEWBOX}
+          dangerouslySetInnerHTML={{ __html: SLACK_SVG }}
+        />
+        <rect
+          x="94"
+          y="58"
+          width="24"
+          height="24"
+          rx="5"
+          fill="var(--text-primary)"
+          fillOpacity="0.06"
+          stroke="var(--text-muted)"
+          strokeOpacity="0.2"
+          strokeWidth="0.8"
+        />
+        <svg
+          x="97"
+          y="61"
+          width="18"
+          height="18"
+          viewBox={GCAL_SVG_VIEWBOX}
+          dangerouslySetInnerHTML={{ __html: GCAL_SVG }}
+        />
 
         {/* App highlight overlays (per phase) */}
-        <rect className="td-hl1" x="34" y="58" width="84" height="24" rx="5" fill={R} />
-        <rect className="td-hl2" x="34" y="58" width="84" height="24" rx="5" fill={R} />
+        <rect
+          className="td-hl1"
+          x="34"
+          y="58"
+          width="84"
+          height="24"
+          rx="5"
+          fill={R}
+        />
+        <rect
+          className="td-hl2"
+          x="34"
+          y="58"
+          width="84"
+          height="24"
+          rx="5"
+          fill={R}
+        />
 
         {/* Laptop flash (per phase) */}
-        <rect className="td-flash1" x="8" y="12" width="150" height="82" rx="6" fill={R} fillOpacity="0" />
-        <rect className="td-flash2" x="8" y="12" width="150" height="82" rx="6" fill={R} fillOpacity="0" />
+        <rect
+          className="td-flash1"
+          x="8"
+          y="12"
+          width="150"
+          height="82"
+          rx="6"
+          fill={R}
+          fillOpacity="0"
+        />
+        <rect
+          className="td-flash2"
+          x="8"
+          y="12"
+          width="150"
+          height="82"
+          rx="6"
+          fill={R}
+          fillOpacity="0"
+        />
 
         {/* ===== ATTACKER (top-right, always visible) ===== */}
         <g className="td-apulse-wrap">
-          <circle className="td-apulse" cx="396" cy="28" r="25"
-            fill="none" stroke={R} strokeOpacity="0.5" strokeWidth="1.5" />
+          <circle
+            className="td-apulse"
+            cx="396"
+            cy="28"
+            r="25"
+            fill="none"
+            stroke={R}
+            strokeOpacity="0.5"
+            strokeWidth="1.5"
+          />
         </g>
-        <svg x="374" y="6" width="44" height="44" viewBox={ATTACKER_SVG_VIEWBOX}>
+        <svg
+          x="374"
+          y="6"
+          width="44"
+          height="44"
+          viewBox={ATTACKER_SVG_VIEWBOX}
+        >
           {ATTACKER_BODY_PATHS.map((d, i) => (
             <path key={`body-${i}`} d={d} fill={R} fillOpacity="0.5" />
           ))}
@@ -549,188 +724,525 @@ export default function TrifectaDefenseAnimation(): React.ReactNode {
 
         {/* ===== MALICIOUS EMAIL (per phase) ===== */}
         <g className="td-poison1">
-          <circle className="td-pglow" cx="268" cy="132" r="30" fill={R} fillOpacity="0.06" />
-          <rect x="244" y="114" width="48" height="34" rx="3"
-            fill="var(--text-primary)" fillOpacity="0.06"
-            stroke={R} strokeOpacity="0.25" strokeWidth="1.2" />
-          <path d="M244,114 L268,134 L292,114"
-            fill="none" stroke={R} strokeOpacity="0.25" strokeWidth="1.2" strokeLinejoin="round" />
-          <circle cx="290" cy="144" r="13"
-            fill="var(--text-primary)" fillOpacity="0.12"
-            stroke={R} strokeOpacity="0.35" strokeWidth="0.8" />
+          <circle
+            className="td-pglow"
+            cx="268"
+            cy="132"
+            r="30"
+            fill={R}
+            fillOpacity="0.06"
+          />
+          <rect
+            x="244"
+            y="114"
+            width="48"
+            height="34"
+            rx="3"
+            fill="var(--text-primary)"
+            fillOpacity="0.06"
+            stroke={R}
+            strokeOpacity="0.25"
+            strokeWidth="1.2"
+          />
+          <path
+            d="M244,114 L268,134 L292,114"
+            fill="none"
+            stroke={R}
+            strokeOpacity="0.25"
+            strokeWidth="1.2"
+            strokeLinejoin="round"
+          />
+          <circle
+            cx="290"
+            cy="144"
+            r="13"
+            fill="var(--text-primary)"
+            fillOpacity="0.12"
+            stroke={R}
+            strokeOpacity="0.35"
+            strokeWidth="0.8"
+          />
           <svg x="278" y="132" width="24" height="24" viewBox="0 0 48 48">
-            <path d={POISON_PATH} fill={R} fillOpacity="0.65" fillRule="evenodd" />
+            <path
+              d={POISON_PATH}
+              fill={R}
+              fillOpacity="0.65"
+              fillRule="evenodd"
+            />
           </svg>
         </g>
         <g className="td-poison2">
-          <circle className="td-pglow" cx="268" cy="132" r="30" fill={R} fillOpacity="0.06" />
-          <rect x="244" y="114" width="48" height="34" rx="3"
-            fill="var(--text-primary)" fillOpacity="0.06"
-            stroke={R} strokeOpacity="0.25" strokeWidth="1.2" />
-          <path d="M244,114 L268,134 L292,114"
-            fill="none" stroke={R} strokeOpacity="0.25" strokeWidth="1.2" strokeLinejoin="round" />
-          <circle cx="290" cy="144" r="13"
-            fill="var(--text-primary)" fillOpacity="0.12"
-            stroke={R} strokeOpacity="0.35" strokeWidth="0.8" />
+          <circle
+            className="td-pglow"
+            cx="268"
+            cy="132"
+            r="30"
+            fill={R}
+            fillOpacity="0.06"
+          />
+          <rect
+            x="244"
+            y="114"
+            width="48"
+            height="34"
+            rx="3"
+            fill="var(--text-primary)"
+            fillOpacity="0.06"
+            stroke={R}
+            strokeOpacity="0.25"
+            strokeWidth="1.2"
+          />
+          <path
+            d="M244,114 L268,134 L292,114"
+            fill="none"
+            stroke={R}
+            strokeOpacity="0.25"
+            strokeWidth="1.2"
+            strokeLinejoin="round"
+          />
+          <circle
+            cx="290"
+            cy="144"
+            r="13"
+            fill="var(--text-primary)"
+            fillOpacity="0.12"
+            stroke={R}
+            strokeOpacity="0.35"
+            strokeWidth="0.8"
+          />
           <svg x="278" y="132" width="24" height="24" viewBox="0 0 48 48">
-            <path d={POISON_PATH} fill={R} fillOpacity="0.65" fillRule="evenodd" />
+            <path
+              d={POISON_PATH}
+              fill={R}
+              fillOpacity="0.65"
+              fillRule="evenodd"
+            />
           </svg>
         </g>
 
         {/* ═══ PHASE 1 ARROWS ═══ */}
         <g className="td-a1-1">
-          <line className="td-line" x1="374" y1="44" x2="290" y2="116"
-            stroke={R} strokeOpacity="0.35" strokeWidth="1.5"
-            strokeDasharray="3 3" markerEnd="url(#td-arrR)" />
+          <line
+            className="td-line"
+            x1="374"
+            y1="44"
+            x2="290"
+            y2="116"
+            stroke={R}
+            strokeOpacity="0.35"
+            strokeWidth="1.5"
+            strokeDasharray="3 3"
+            markerEnd="url(#td-arrR)"
+          />
         </g>
         <g className="td-a1-2">
-          <line className="td-line" x1="246" y1="130" x2="158" y2="54"
-            stroke={R} strokeOpacity="0.4" strokeWidth="1.5"
-            strokeDasharray="3 3" markerEnd="url(#td-arrR)" />
+          <line
+            className="td-line"
+            x1="246"
+            y1="130"
+            x2="158"
+            y2="54"
+            stroke={R}
+            strokeOpacity="0.4"
+            strokeWidth="1.5"
+            strokeDasharray="3 3"
+            markerEnd="url(#td-arrR)"
+          />
         </g>
         <g className="td-a1-3">
-          <line className="td-line" x1="158" y1="26" x2="376" y2="22"
-            stroke={R} strokeOpacity="0.4" strokeWidth="1.5"
-            strokeDasharray="3 3" markerEnd="url(#td-arrR)" />
+          <line
+            className="td-line"
+            x1="158"
+            y1="26"
+            x2="376"
+            y2="22"
+            stroke={R}
+            strokeOpacity="0.4"
+            strokeWidth="1.5"
+            strokeDasharray="3 3"
+            markerEnd="url(#td-arrR)"
+          />
         </g>
 
         {/* Phase 1 packets */}
         <g className="td-pk1-1">
-          <rect x="-12" y="-8" width="24" height="16" rx="2"
-            fill={R} fillOpacity="0.25" stroke={R} strokeOpacity="0.5" strokeWidth="1" />
-          <path d="M-12,-8 L0,2 L12,-8"
-            fill="none" stroke={R} strokeOpacity="0.6" strokeWidth="1" strokeLinejoin="round" />
+          <rect
+            x="-12"
+            y="-8"
+            width="24"
+            height="16"
+            rx="2"
+            fill={R}
+            fillOpacity="0.25"
+            stroke={R}
+            strokeOpacity="0.5"
+            strokeWidth="1"
+          />
+          <path
+            d="M-12,-8 L0,2 L12,-8"
+            fill="none"
+            stroke={R}
+            strokeOpacity="0.6"
+            strokeWidth="1"
+            strokeLinejoin="round"
+          />
         </g>
         <g className="td-pk1-2">
-          <rect x="-10" y="-7" width="20" height="14" rx="2"
-            fill={R} fillOpacity="0.25" stroke={R} strokeOpacity="0.5" strokeWidth="0.8" />
-          <path d="M-10,-7 L0,1 L10,-7"
-            fill="none" stroke={R} strokeOpacity="0.6" strokeWidth="0.8" strokeLinejoin="round" />
+          <rect
+            x="-10"
+            y="-7"
+            width="20"
+            height="14"
+            rx="2"
+            fill={R}
+            fillOpacity="0.25"
+            stroke={R}
+            strokeOpacity="0.5"
+            strokeWidth="0.8"
+          />
+          <path
+            d="M-10,-7 L0,1 L10,-7"
+            fill="none"
+            stroke={R}
+            strokeOpacity="0.6"
+            strokeWidth="0.8"
+            strokeLinejoin="round"
+          />
         </g>
         <g className="td-pk1-3">
-          <rect x="-10" y="-7" width="20" height="14" rx="2"
-            fill={R} fillOpacity="0.25" stroke={R} strokeOpacity="0.5" strokeWidth="0.8" />
-          <path d="M-10,-7 L0,1 L10,-7"
-            fill="none" stroke={R} strokeOpacity="0.6" strokeWidth="0.8" strokeLinejoin="round" />
+          <rect
+            x="-10"
+            y="-7"
+            width="20"
+            height="14"
+            rx="2"
+            fill={R}
+            fillOpacity="0.25"
+            stroke={R}
+            strokeOpacity="0.5"
+            strokeWidth="0.8"
+          />
+          <path
+            d="M-10,-7 L0,1 L10,-7"
+            fill="none"
+            stroke={R}
+            strokeOpacity="0.6"
+            strokeWidth="0.8"
+            strokeLinejoin="round"
+          />
         </g>
 
         {/* Phase 1 warning label */}
         <g className="td-label1">
-          <text x="267" y="16" textAnchor="middle"
-            fill={R} fontSize="8" fontWeight="600" fontFamily="system-ui,sans-serif" opacity="0.8">
+          <text
+            x="267"
+            y="16"
+            textAnchor="middle"
+            fill={R}
+            fontSize="8"
+            fontWeight="600"
+            fontFamily="system-ui,sans-serif"
+            opacity="0.8"
+          >
             The AI leaked sensitive data
           </text>
         </g>
 
         {/* ═══ EDISON GATEWAY (fades in between phases) ═══ */}
         <g className="td-edison">
-          <rect x="245" y="4" width="44" height="38" rx="6"
-            fill="var(--text-primary)" fillOpacity="0.05"
-            stroke={accent} strokeOpacity="0.4" strokeWidth="1.2" />
+          <rect
+            x="245"
+            y="4"
+            width="44"
+            height="38"
+            rx="6"
+            fill="var(--text-primary)"
+            fillOpacity="0.05"
+            stroke={accent}
+            strokeOpacity="0.4"
+            strokeWidth="1.2"
+          />
           <EdisonLogo x={255} y={8} w={24} h={23} />
         </g>
 
         {/* ═══ PHASE 2 ARROWS ═══ */}
         {/* P2 Arrow 1: Attacker → Email */}
         <g className="td-a2-1">
-          <line className="td-line" x1="374" y1="44" x2="290" y2="116"
-            stroke={R} strokeOpacity="0.35" strokeWidth="1.5"
-            strokeDasharray="3 3" markerEnd="url(#td-arrR)" />
+          <line
+            className="td-line"
+            x1="374"
+            y1="44"
+            x2="290"
+            y2="116"
+            stroke={R}
+            strokeOpacity="0.35"
+            strokeWidth="1.5"
+            strokeDasharray="3 3"
+            markerEnd="url(#td-arrR)"
+          />
         </g>
         {/* P2 Arrow 2: Email → Edison */}
         <g className="td-a2-2">
-          <line className="td-line" x1="268" y1="114" x2="267" y2="44"
-            stroke={R} strokeOpacity="0.4" strokeWidth="1.5"
-            strokeDasharray="3 3" markerEnd="url(#td-arrR)" />
+          <line
+            className="td-line"
+            x1="268"
+            y1="114"
+            x2="267"
+            y2="44"
+            stroke={R}
+            strokeOpacity="0.4"
+            strokeWidth="1.5"
+            strokeDasharray="3 3"
+            markerEnd="url(#td-arrR)"
+          />
         </g>
         {/* P2 Arrow 3: Edison → Laptop */}
         <g className="td-a2-3">
-          <line className="td-line" x1="245" y1="24" x2="158" y2="36"
-            stroke={R} strokeOpacity="0.4" strokeWidth="1.5"
-            strokeDasharray="3 3" markerEnd="url(#td-arrR)" />
+          <line
+            className="td-line"
+            x1="245"
+            y1="24"
+            x2="158"
+            y2="36"
+            stroke={R}
+            strokeOpacity="0.4"
+            strokeWidth="1.5"
+            strokeDasharray="3 3"
+            markerEnd="url(#td-arrR)"
+          />
         </g>
         {/* P2 Arrow 4: Laptop → Edison (exfiltration attempt) */}
         <g className="td-a2-4">
-          <line className="td-line" x1="158" y1="26" x2="248" y2="22"
-            stroke={R} strokeOpacity="0.4" strokeWidth="1.5"
-            strokeDasharray="3 3" markerEnd="url(#td-arrR)" />
+          <line
+            className="td-line"
+            x1="158"
+            y1="26"
+            x2="248"
+            y2="22"
+            stroke={R}
+            strokeOpacity="0.4"
+            strokeWidth="1.5"
+            strokeDasharray="3 3"
+            markerEnd="url(#td-arrR)"
+          />
         </g>
 
         {/* Phase 2 packets */}
         <g className="td-pk2-1">
-          <rect x="-12" y="-8" width="24" height="16" rx="2"
-            fill={R} fillOpacity="0.25" stroke={R} strokeOpacity="0.5" strokeWidth="1" />
-          <path d="M-12,-8 L0,2 L12,-8"
-            fill="none" stroke={R} strokeOpacity="0.6" strokeWidth="1" strokeLinejoin="round" />
+          <rect
+            x="-12"
+            y="-8"
+            width="24"
+            height="16"
+            rx="2"
+            fill={R}
+            fillOpacity="0.25"
+            stroke={R}
+            strokeOpacity="0.5"
+            strokeWidth="1"
+          />
+          <path
+            d="M-12,-8 L0,2 L12,-8"
+            fill="none"
+            stroke={R}
+            strokeOpacity="0.6"
+            strokeWidth="1"
+            strokeLinejoin="round"
+          />
         </g>
         <g className="td-pk2-2">
-          <rect x="-10" y="-7" width="20" height="14" rx="2"
-            fill={R} fillOpacity="0.25" stroke={R} strokeOpacity="0.5" strokeWidth="0.8" />
-          <path d="M-10,-7 L0,1 L10,-7"
-            fill="none" stroke={R} strokeOpacity="0.6" strokeWidth="0.8" strokeLinejoin="round" />
+          <rect
+            x="-10"
+            y="-7"
+            width="20"
+            height="14"
+            rx="2"
+            fill={R}
+            fillOpacity="0.25"
+            stroke={R}
+            strokeOpacity="0.5"
+            strokeWidth="0.8"
+          />
+          <path
+            d="M-10,-7 L0,1 L10,-7"
+            fill="none"
+            stroke={R}
+            strokeOpacity="0.6"
+            strokeWidth="0.8"
+            strokeLinejoin="round"
+          />
         </g>
         <g className="td-pk2-3">
-          <rect x="-10" y="-7" width="20" height="14" rx="2"
-            fill={R} fillOpacity="0.25" stroke={R} strokeOpacity="0.5" strokeWidth="0.8" />
-          <path d="M-10,-7 L0,1 L10,-7"
-            fill="none" stroke={R} strokeOpacity="0.6" strokeWidth="0.8" strokeLinejoin="round" />
+          <rect
+            x="-10"
+            y="-7"
+            width="20"
+            height="14"
+            rx="2"
+            fill={R}
+            fillOpacity="0.25"
+            stroke={R}
+            strokeOpacity="0.5"
+            strokeWidth="0.8"
+          />
+          <path
+            d="M-10,-7 L0,1 L10,-7"
+            fill="none"
+            stroke={R}
+            strokeOpacity="0.6"
+            strokeWidth="0.8"
+            strokeLinejoin="round"
+          />
         </g>
         <g className="td-pk2-4">
-          <rect x="-10" y="-7" width="20" height="14" rx="2"
-            fill={R} fillOpacity="0.25" stroke={R} strokeOpacity="0.5" strokeWidth="0.8" />
-          <path d="M-10,-7 L0,1 L10,-7"
-            fill="none" stroke={R} strokeOpacity="0.6" strokeWidth="0.8" strokeLinejoin="round" />
+          <rect
+            x="-10"
+            y="-7"
+            width="20"
+            height="14"
+            rx="2"
+            fill={R}
+            fillOpacity="0.25"
+            stroke={R}
+            strokeOpacity="0.5"
+            strokeWidth="0.8"
+          />
+          <path
+            d="M-10,-7 L0,1 L10,-7"
+            fill="none"
+            stroke={R}
+            strokeOpacity="0.6"
+            strokeWidth="0.8"
+            strokeLinejoin="round"
+          />
         </g>
 
         {/* Exclamation ! badge (appears when email passes through Edison) */}
-        <g className="td-exclaim" style={{ transformOrigin: '290px 38px' }}>
-          <circle cx="290" cy="38" r="8"
-            fill="var(--text-primary)" fillOpacity="0.08" stroke={R} strokeOpacity="0.6" strokeWidth="1.2" />
-          <text x="290" y="42" textAnchor="middle"
-            fill={R} fontSize="12" fontWeight="bold" fontFamily="system-ui,sans-serif">!</text>
+        <g className="td-exclaim" style={{ transformOrigin: "290px 38px" }}>
+          <circle
+            cx="290"
+            cy="38"
+            r="8"
+            fill="var(--text-primary)"
+            fillOpacity="0.08"
+            stroke={R}
+            strokeOpacity="0.6"
+            strokeWidth="1.2"
+          />
+          <text
+            x="290"
+            y="42"
+            textAnchor="middle"
+            fill={R}
+            fontSize="12"
+            fontWeight="bold"
+            fontFamily="system-ui,sans-serif"
+          >
+            !
+          </text>
         </g>
 
         {/* Shield check (accent) */}
-        <g className="td-shield" style={{ transformOrigin: '267px 24px' }}>
+        <g className="td-shield" style={{ transformOrigin: "267px 24px" }}>
           <svg x="253" y="28" width="28" height="28" viewBox="0 0 256 256">
             <path d={SHIELD_CHECK_PATH} fill={accent} fillOpacity="0.7" />
           </svg>
         </g>
 
         {/* Red X denied badge (left of Edison) */}
-        <g className="td-blocked" style={{ transformOrigin: '236px 23px' }}>
-          <circle cx="236" cy="23" r="9"
-            fill={DANGER} fillOpacity="0.12" stroke={DANGER} strokeOpacity="0.5" strokeWidth="1" />
-          <line x1="232" y1="19" x2="240" y2="27" stroke={DANGER} strokeWidth="1.8" strokeLinecap="round" />
-          <line x1="240" y1="19" x2="232" y2="27" stroke={DANGER} strokeWidth="1.8" strokeLinecap="round" />
+        <g className="td-blocked" style={{ transformOrigin: "236px 23px" }}>
+          <circle
+            cx="236"
+            cy="23"
+            r="9"
+            fill={DANGER}
+            fillOpacity="0.12"
+            stroke={DANGER}
+            strokeOpacity="0.5"
+            strokeWidth="1"
+          />
+          <line
+            x1="232"
+            y1="19"
+            x2="240"
+            y2="27"
+            stroke={DANGER}
+            strokeWidth="1.8"
+            strokeLinecap="round"
+          />
+          <line
+            x1="240"
+            y1="19"
+            x2="232"
+            y2="27"
+            stroke={DANGER}
+            strokeWidth="1.8"
+            strokeLinecap="round"
+          />
         </g>
 
         {/* Phase 2 success label */}
         <g className="td-label2">
-          <text x="340" y="16" textAnchor="middle"
-            fill={accent} fontSize="8" fontWeight="600" fontFamily="system-ui,sans-serif" opacity="0.9">
+          <text
+            x="340"
+            y="16"
+            textAnchor="middle"
+            fill={accent}
+            fontSize="8"
+            fontWeight="600"
+            fontFamily="system-ui,sans-serif"
+            opacity="0.9"
+          >
             Edison blocked the leak
           </text>
         </g>
 
         {/* ===== LABELS ===== */}
-        <text x="83" y="114" textAnchor="middle"
-          fill="var(--text-primary)" fontSize="9" fontWeight="bold" fontFamily="system-ui,sans-serif">
+        <text
+          x="83"
+          y="114"
+          textAnchor="middle"
+          fill="var(--text-primary)"
+          fontSize="9"
+          fontWeight="bold"
+          fontFamily="system-ui,sans-serif"
+        >
           Your AI Agent
         </text>
-        <text x="396" y="62" textAnchor="middle"
-          fill="var(--text-primary)" fontSize="9" fontWeight="bold" fontFamily="system-ui,sans-serif">
+        <text
+          x="396"
+          y="62"
+          textAnchor="middle"
+          fill="var(--text-primary)"
+          fontSize="9"
+          fontWeight="bold"
+          fontFamily="system-ui,sans-serif"
+        >
           Attacker
         </text>
         <g className="td-poison1">
-          <text x="268" y="162" textAnchor="middle"
-            fill="var(--text-primary)" fontSize="8" fontWeight="bold" fontFamily="system-ui,sans-serif">
+          <text
+            x="268"
+            y="162"
+            textAnchor="middle"
+            fill="var(--text-primary)"
+            fontSize="8"
+            fontWeight="bold"
+            fontFamily="system-ui,sans-serif"
+          >
             Malicious Email with jailbreak instructions
           </text>
         </g>
         <g className="td-poison2">
-          <text x="268" y="162" textAnchor="middle"
-            fill="var(--text-primary)" fontSize="8" fontWeight="bold" fontFamily="system-ui,sans-serif">
+          <text
+            x="268"
+            y="162"
+            textAnchor="middle"
+            fill="var(--text-primary)"
+            fontSize="8"
+            fontWeight="bold"
+            fontFamily="system-ui,sans-serif"
+          >
             Malicious Email with jailbreak instructions
           </text>
         </g>
@@ -738,5 +1250,5 @@ export default function TrifectaDefenseAnimation(): React.ReactNode {
         <ProgressBar y={188} width={460} className="td-progress" />
       </svg>
     </div>
-  )
+  );
 }

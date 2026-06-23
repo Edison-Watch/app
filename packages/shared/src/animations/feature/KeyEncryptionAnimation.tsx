@@ -22,8 +22,12 @@
  *   </div>
  */
 
-import { EDISON_E_PATH, EDISON_FRAME_PATH, EDISON_LOGO_VIEWBOX } from '../../svg/edison-logo-svg'
-import { McpIcon, ORANGE, ProgressBar } from '../_shared'
+import {
+  EDISON_E_PATH,
+  EDISON_FRAME_PATH,
+  EDISON_LOGO_VIEWBOX,
+} from "../../svg/edison-logo-svg";
+import { McpIcon, ORANGE, ProgressBar } from "../_shared";
 
 const CSS = `
 .ek-anim { color: var(--text-primary); }
@@ -197,58 +201,123 @@ const CSS = `
   .ek-anim .ek-zk { opacity: 1; }
   .ek-anim .ek-progress { animation: none; transform: scaleX(1); }
 }
-`
+`;
 
 /** Small padlock - open variant (shackle disconnected). */
 function PadlockOpen({ x, y }: { x: number; y: number }): React.ReactNode {
   return (
     <g>
-      <rect x={x} y={y + 5} width="10" height="8" rx="1.5"
-        fill={ORANGE} fillOpacity="0.25" stroke={ORANGE} strokeOpacity="0.35" strokeWidth="0.6" />
-      <path d={`M${x + 2.5} ${y + 5}V${y + 2}a2.5 2.5 0 015 0`}
-        fill="none" stroke={ORANGE} strokeWidth="1.2" strokeOpacity="0.5" strokeLinecap="round" />
+      <rect
+        x={x}
+        y={y + 5}
+        width="10"
+        height="8"
+        rx="1.5"
+        fill={ORANGE}
+        fillOpacity="0.25"
+        stroke={ORANGE}
+        strokeOpacity="0.35"
+        strokeWidth="0.6"
+      />
+      <path
+        d={`M${x + 2.5} ${y + 5}V${y + 2}a2.5 2.5 0 015 0`}
+        fill="none"
+        stroke={ORANGE}
+        strokeWidth="1.2"
+        strokeOpacity="0.5"
+        strokeLinecap="round"
+      />
     </g>
-  )
+  );
 }
 
 /** Small padlock - closed variant (shackle connected). */
 function PadlockClosed({ x, y }: { x: number; y: number }): React.ReactNode {
   return (
     <g>
-      <rect x={x} y={y + 5} width="10" height="8" rx="1.5"
-        fill="var(--accent)" fillOpacity="0.25" stroke="var(--accent)" strokeOpacity="0.35" strokeWidth="0.6" />
-      <path d={`M${x + 2.5} ${y + 5}V${y + 2}a2.5 2.5 0 015 0V${y + 5}`}
-        fill="none" stroke="var(--accent)" strokeWidth="1.2" strokeOpacity="0.5" strokeLinecap="round" />
+      <rect
+        x={x}
+        y={y + 5}
+        width="10"
+        height="8"
+        rx="1.5"
+        fill="var(--accent)"
+        fillOpacity="0.25"
+        stroke="var(--accent)"
+        strokeOpacity="0.35"
+        strokeWidth="0.6"
+      />
+      <path
+        d={`M${x + 2.5} ${y + 5}V${y + 2}a2.5 2.5 0 015 0V${y + 5}`}
+        fill="none"
+        stroke="var(--accent)"
+        strokeWidth="1.2"
+        strokeOpacity="0.5"
+        strokeLinecap="round"
+      />
       {/* keyhole dot */}
-      <circle cx={x + 5} cy={y + 9.5} r="1.2"
-        fill="var(--accent)" fillOpacity="0.4" />
+      <circle
+        cx={x + 5}
+        cy={y + 9.5}
+        r="1.2"
+        fill="var(--accent)"
+        fillOpacity="0.4"
+      />
     </g>
-  )
+  );
 }
 
 /** Credential card - a rounded-rect "object" with MCP icon + padlock + label. */
 function CredentialCard({
-  y, label, locked,
+  y,
+  label,
+  locked,
 }: {
-  y: number; label: string; locked: boolean;
+  y: number;
+  label: string;
+  locked: boolean;
 }): React.ReactNode {
-  const borderColor = locked ? 'var(--accent)' : ORANGE
-  const textColor = locked ? 'var(--accent)' : ORANGE
+  const borderColor = locked ? "var(--accent)" : ORANGE;
+  const textColor = locked ? "var(--accent)" : ORANGE;
   return (
     <g>
-      <rect x="20" y={y} width="136" height="26" rx="5"
-        fill={locked ? 'var(--accent)' : 'var(--text-primary)'} fillOpacity={locked ? 0.03 : 0.04}
-        stroke={borderColor} strokeOpacity="0.35" strokeWidth="1.2" />
-      <McpIcon x={25} y={y + 5} size={14} color={locked ? 'var(--accent)' : ORANGE} opacity="0.55" />
-      {locked
-        ? <PadlockClosed x={42} y={y + 2} />
-        : <PadlockOpen x={42} y={y + 2} />}
-      <text x={57} y={y + 16} fontSize="7.5" fontWeight="600"
-        fill={textColor} fontFamily="ui-monospace,monospace" opacity="0.7">
+      <rect
+        x="20"
+        y={y}
+        width="136"
+        height="26"
+        rx="5"
+        fill={locked ? "var(--accent)" : "var(--text-primary)"}
+        fillOpacity={locked ? 0.03 : 0.04}
+        stroke={borderColor}
+        strokeOpacity="0.35"
+        strokeWidth="1.2"
+      />
+      <McpIcon
+        x={25}
+        y={y + 5}
+        size={14}
+        color={locked ? "var(--accent)" : ORANGE}
+        opacity="0.55"
+      />
+      {locked ? (
+        <PadlockClosed x={42} y={y + 2} />
+      ) : (
+        <PadlockOpen x={42} y={y + 2} />
+      )}
+      <text
+        x={57}
+        y={y + 16}
+        fontSize="7.5"
+        fontWeight="600"
+        fill={textColor}
+        fontFamily="ui-monospace,monospace"
+        opacity="0.7"
+      >
         {label}
       </text>
     </g>
-  )
+  );
 }
 
 function EncryptedPacket(): React.ReactNode {
@@ -257,7 +326,7 @@ function EncryptedPacket(): React.ReactNode {
       <circle r="9" fillOpacity="0.12" />
       <circle r="3.5" fillOpacity="0.5" />
     </>
-  )
+  );
 }
 
 export default function KeyEncryptionAnimation(): React.ReactNode {
@@ -274,12 +343,31 @@ export default function KeyEncryptionAnimation(): React.ReactNode {
         aria-hidden="true"
       >
         {/* Laptop shell (matches EncryptionAnimation) */}
-        <rect className="ek-laptop-ring" x="4" y="23" width="168" height="96" rx="7"
-          fill="var(--text-primary)" fillOpacity="0.03"
-          stroke="var(--text-muted)" strokeOpacity="0.35" strokeWidth="1.5" />
-        <rect x="0" y="121" width="176" height="8" rx="4"
-          fill="var(--text-primary)" fillOpacity="0.04"
-          stroke="var(--text-muted)" strokeOpacity="0.35" strokeWidth="1" />
+        <rect
+          className="ek-laptop-ring"
+          x="4"
+          y="23"
+          width="168"
+          height="96"
+          rx="7"
+          fill="var(--text-primary)"
+          fillOpacity="0.03"
+          stroke="var(--text-muted)"
+          strokeOpacity="0.35"
+          strokeWidth="1.5"
+        />
+        <rect
+          x="0"
+          y="121"
+          width="176"
+          height="8"
+          rx="4"
+          fill="var(--text-primary)"
+          fillOpacity="0.04"
+          stroke="var(--text-muted)"
+          strokeOpacity="0.35"
+          strokeWidth="1"
+        />
 
         {/* Plaintext credential cards (phase 1) */}
         <g className="ek-plain">
@@ -296,71 +384,198 @@ export default function KeyEncryptionAnimation(): React.ReactNode {
         </g>
 
         {/* Accent flash overlay on laptop */}
-        <rect className="ek-flash" x="4" y="23" width="168" height="96" rx="7"
-          fill="var(--accent)" fillOpacity="0" />
+        <rect
+          className="ek-flash"
+          x="4"
+          y="23"
+          width="168"
+          height="96"
+          rx="7"
+          fill="var(--accent)"
+          fillOpacity="0"
+        />
 
         {/* Key icon above laptop (persists after appearing) */}
         <g className="ek-key-icon">
           {/* Pulse ring - only visible during encryption phase */}
           <g className="ek-pulse-wrap">
-            <circle className="ek-key-pulse" cx="90" cy="-8" r="22"
-              fill="none" stroke="var(--accent)" strokeOpacity="0.5" strokeWidth="1.5" />
+            <circle
+              className="ek-key-pulse"
+              cx="90"
+              cy="-8"
+              r="22"
+              fill="none"
+              stroke="var(--accent)"
+              strokeOpacity="0.5"
+              strokeWidth="1.5"
+            />
           </g>
           {/* Key head (ring with hole) */}
-          <circle cx="78" cy="-8" r="10"
-            fill="var(--accent)" fillOpacity="0.06"
-            stroke="var(--accent)" strokeWidth="2.2" strokeOpacity="0.7" />
-          <circle cx="78" cy="-8" r="3.5"
-            fill="var(--accent)" fillOpacity="0.2" />
+          <circle
+            cx="78"
+            cy="-8"
+            r="10"
+            fill="var(--accent)"
+            fillOpacity="0.06"
+            stroke="var(--accent)"
+            strokeWidth="2.2"
+            strokeOpacity="0.7"
+          />
+          <circle
+            cx="78"
+            cy="-8"
+            r="3.5"
+            fill="var(--accent)"
+            fillOpacity="0.2"
+          />
           {/* Key shaft + teeth */}
-          <line x1="88" y1="-8" x2="112" y2="-8"
-            stroke="var(--accent)" strokeWidth="3" strokeLinecap="round" strokeOpacity="0.7" />
-          <line x1="106" y1="-8" x2="106" y2="-1"
-            stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeOpacity="0.7" />
-          <line x1="98" y1="-8" x2="98" y2="-2"
-            stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeOpacity="0.7" />
+          <line
+            x1="88"
+            y1="-8"
+            x2="112"
+            y2="-8"
+            stroke="var(--accent)"
+            strokeWidth="3"
+            strokeLinecap="round"
+            strokeOpacity="0.7"
+          />
+          <line
+            x1="106"
+            y1="-8"
+            x2="106"
+            y2="-1"
+            stroke="var(--accent)"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeOpacity="0.7"
+          />
+          <line
+            x1="98"
+            y1="-8"
+            x2="98"
+            y2="-2"
+            stroke="var(--accent)"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeOpacity="0.7"
+          />
           {/* Label */}
-          <text x="90" y="14" textAnchor="middle"
-            fill="var(--accent)" fontSize="7.5" fontWeight="600" fontFamily="system-ui,sans-serif" opacity="0.7">
+          <text
+            x="90"
+            y="14"
+            textAnchor="middle"
+            fill="var(--accent)"
+            fontSize="7.5"
+            fontWeight="600"
+            fontFamily="system-ui,sans-serif"
+            opacity="0.7"
+          >
             Personal Encryption Key
           </text>
         </g>
 
         {/* Edison logo + label */}
-        <svg x="378" y="-22" width="36" height="36" viewBox={EDISON_LOGO_VIEWBOX}>
-          <path d={EDISON_E_PATH}
-            fill="var(--accent)" fillOpacity="0.7" stroke="var(--accent)" strokeWidth="5" strokeMiterlimit="10" />
-          <path d={EDISON_FRAME_PATH}
-            fill="var(--accent)" fillOpacity="0.7" />
+        <svg
+          x="378"
+          y="-22"
+          width="36"
+          height="36"
+          viewBox={EDISON_LOGO_VIEWBOX}
+        >
+          <path
+            d={EDISON_E_PATH}
+            fill="var(--accent)"
+            fillOpacity="0.7"
+            stroke="var(--accent)"
+            strokeWidth="5"
+            strokeMiterlimit="10"
+          />
+          <path d={EDISON_FRAME_PATH} fill="var(--accent)" fillOpacity="0.7" />
         </svg>
-        <text x="395" y="24" textAnchor="middle"
-          fill="var(--text-primary)" fontSize="9" fontWeight="bold" fontFamily="system-ui,sans-serif" opacity="0.7">
+        <text
+          x="395"
+          y="24"
+          textAnchor="middle"
+          fill="var(--text-primary)"
+          fontSize="9"
+          fontWeight="bold"
+          fontFamily="system-ui,sans-serif"
+          opacity="0.7"
+        >
           Edison Databases
         </text>
 
         {/* Edison vault */}
-        <rect x="330" y="38" width="130" height="75" rx="6"
-          fill="var(--text-primary)" fillOpacity="0.03"
-          stroke="var(--text-muted)" strokeOpacity="0.35" strokeWidth="1" />
+        <rect
+          x="330"
+          y="38"
+          width="130"
+          height="75"
+          rx="6"
+          fill="var(--text-primary)"
+          fillOpacity="0.03"
+          stroke="var(--text-muted)"
+          strokeOpacity="0.35"
+          strokeWidth="1"
+        />
 
         {/* Vault encrypted entries (appear when packet arrives) */}
         <g className="ek-vault-content">
-          <McpIcon x={336} y={44} size={12} color="var(--accent)" opacity="0.5" />
+          <McpIcon
+            x={336}
+            y={44}
+            size={12}
+            color="var(--accent)"
+            opacity="0.5"
+          />
           <PadlockClosed x={350} y={44} />
-          <text x="365" y="56" fontSize="6.5" fontWeight="600"
-            fill="var(--accent)" fontFamily="ui-monospace,monospace" opacity="0.6">
+          <text
+            x="365"
+            y="56"
+            fontSize="6.5"
+            fontWeight="600"
+            fill="var(--accent)"
+            fontFamily="ui-monospace,monospace"
+            opacity="0.6"
+          >
             $EDISON$1$a3B...
           </text>
-          <McpIcon x={336} y={66} size={12} color="var(--accent)" opacity="0.5" />
+          <McpIcon
+            x={336}
+            y={66}
+            size={12}
+            color="var(--accent)"
+            opacity="0.5"
+          />
           <PadlockClosed x={350} y={66} />
-          <text x="365" y="78" fontSize="6.5" fontWeight="600"
-            fill="var(--accent)" fontFamily="ui-monospace,monospace" opacity="0.6">
+          <text
+            x="365"
+            y="78"
+            fontSize="6.5"
+            fontWeight="600"
+            fill="var(--accent)"
+            fontFamily="ui-monospace,monospace"
+            opacity="0.6"
+          >
             $EDISON$1$k7P...
           </text>
-          <McpIcon x={336} y={88} size={12} color="var(--accent)" opacity="0.5" />
+          <McpIcon
+            x={336}
+            y={88}
+            size={12}
+            color="var(--accent)"
+            opacity="0.5"
+          />
           <PadlockClosed x={350} y={88} />
-          <text x="365" y="100" fontSize="6.5" fontWeight="600"
-            fill="var(--accent)" fontFamily="ui-monospace,monospace" opacity="0.6">
+          <text
+            x="365"
+            y="100"
+            fontSize="6.5"
+            fontWeight="600"
+            fill="var(--accent)"
+            fontFamily="ui-monospace,monospace"
+            opacity="0.6"
+          >
             $EDISON$1$mN2...
           </text>
         </g>
@@ -368,52 +583,115 @@ export default function KeyEncryptionAnimation(): React.ReactNode {
         {/* Shield (next to Edison logo) */}
         <g className="ek-shield">
           <svg x={350} y={-18} width={28} height={28} viewBox="0 0 24 24">
-            <path d="M12,1L3,5V11C3,16.55 6.84,21.74 12,23C17.16,21.74 21,16.55 21,11V5L12,1Z"
-              fill="var(--accent)" fillOpacity="0.08"
-              stroke="var(--accent)" strokeWidth="1.2" strokeOpacity="0.5" strokeLinejoin="round" />
-            <path d="M9 12 L11 14 L15 10"
-              fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" strokeOpacity="0.7" />
+            <path
+              d="M12,1L3,5V11C3,16.55 6.84,21.74 12,23C17.16,21.74 21,16.55 21,11V5L12,1Z"
+              fill="var(--accent)"
+              fillOpacity="0.08"
+              stroke="var(--accent)"
+              strokeWidth="1.2"
+              strokeOpacity="0.5"
+              strokeLinejoin="round"
+            />
+            <path
+              d="M9 12 L11 14 L15 10"
+              fill="none"
+              stroke="var(--accent)"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeOpacity="0.7"
+            />
           </svg>
         </g>
 
         {/* Flow line (laptop -> Edison) */}
         <g className="ek-flow">
-          <line className="ek-line"
-            x1="176" y1="71" x2="330" y2="71"
-            stroke="var(--accent)" strokeOpacity="0.4" strokeWidth="1.5" strokeDasharray="3 3" />
+          <line
+            className="ek-line"
+            x1="176"
+            y1="71"
+            x2="330"
+            y2="71"
+            stroke="var(--accent)"
+            strokeOpacity="0.4"
+            strokeWidth="1.5"
+            strokeDasharray="3 3"
+          />
         </g>
 
         {/* Animated packet */}
-        <g className="ek-pkt ek-pkt-main"><EncryptedPacket /></g>
+        <g className="ek-pkt ek-pkt-main">
+          <EncryptedPacket />
+        </g>
 
         {/* Labels */}
-        <text x="88" y="145" textAnchor="middle"
-          fill="var(--text-primary)" fontSize="9" fontWeight="bold" fontFamily="system-ui,sans-serif">
+        <text
+          x="88"
+          y="145"
+          textAnchor="middle"
+          fill="var(--text-primary)"
+          fontSize="9"
+          fontWeight="bold"
+          fontFamily="system-ui,sans-serif"
+        >
           Your Device
         </text>
 
         {/* Big crossed-out eye */}
         <g className="ek-eye">
           {/* Eye outline (almond shape) */}
-          <path d="M367 140 Q395 116 423 140 Q395 164 367 140Z"
-            fill="none" stroke="var(--accent)" strokeWidth="2" strokeOpacity="0.6" />
+          <path
+            d="M367 140 Q395 116 423 140 Q395 164 367 140Z"
+            fill="none"
+            stroke="var(--accent)"
+            strokeWidth="2"
+            strokeOpacity="0.6"
+          />
           {/* Iris */}
-          <circle cx="395" cy="140" r="10"
-            fill="none" stroke="var(--accent)" strokeWidth="1.5" strokeOpacity="0.5" />
+          <circle
+            cx="395"
+            cy="140"
+            r="10"
+            fill="none"
+            stroke="var(--accent)"
+            strokeWidth="1.5"
+            strokeOpacity="0.5"
+          />
           {/* Pupil */}
-          <circle cx="395" cy="140" r="4"
-            fill="var(--accent)" fillOpacity="0.2" />
+          <circle
+            cx="395"
+            cy="140"
+            r="4"
+            fill="var(--accent)"
+            fillOpacity="0.2"
+          />
         </g>
 
         {/* Animated slash through eye */}
-        <line className="ek-slash"
-          x1="370" y1="160" x2="420" y2="120"
-          stroke="var(--accent)" strokeWidth="3" strokeLinecap="round" strokeOpacity="0.7" />
+        <line
+          className="ek-slash"
+          x1="370"
+          y1="160"
+          x2="420"
+          y2="120"
+          stroke="var(--accent)"
+          strokeWidth="3"
+          strokeLinecap="round"
+          strokeOpacity="0.7"
+        />
 
         {/* Zero-knowledge text */}
         <g className="ek-zk">
-          <text x="395" y="174" textAnchor="middle"
-            fill="var(--accent)" fontSize="7.5" fontWeight="600" fontFamily="system-ui,sans-serif" opacity="0.6">
+          <text
+            x="395"
+            y="174"
+            textAnchor="middle"
+            fill="var(--accent)"
+            fontSize="7.5"
+            fontWeight="600"
+            fontFamily="system-ui,sans-serif"
+            opacity="0.6"
+          >
             Edison cannot read encrypted credentials
           </text>
         </g>
@@ -422,5 +700,5 @@ export default function KeyEncryptionAnimation(): React.ReactNode {
         <ProgressBar y={188} width={460} className="ek-progress" />
       </svg>
     </div>
-  )
+  );
 }

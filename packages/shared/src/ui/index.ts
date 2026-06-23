@@ -7,7 +7,12 @@ export { default as EmptyState } from "./EmptyState";
 export { default as ErrorBoundary } from "./ErrorBoundary";
 export { default as Input } from "./Input";
 export { default as Select } from "./Select";
-export { SkeletonText, SkeletonRect, SkeletonCircle, PageSkeleton } from "./Skeleton";
+export {
+  SkeletonText,
+  SkeletonRect,
+  SkeletonCircle,
+  PageSkeleton,
+} from "./Skeleton";
 export { default as SlideOver } from "./SlideOver";
 export { default as SSEIndicator } from "./SSEIndicator";
 export type { SSEStatus } from "./SSEIndicator";

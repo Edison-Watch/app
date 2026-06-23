@@ -8,7 +8,13 @@ interface SwitchProps {
   loading?: boolean;
 }
 
-export default function Switch({ checked, onChange, label, disabled, loading }: SwitchProps) {
+export default function Switch({
+  checked,
+  onChange,
+  label,
+  disabled,
+  loading,
+}: SwitchProps) {
   const isDisabled = disabled || loading;
 
   const handleClick = useCallback(() => {
@@ -27,7 +33,9 @@ export default function Switch({ checked, onChange, label, disabled, loading }: 
   );
 
   return (
-    <label className={`inline-flex items-center gap-2 ${isDisabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}>
+    <label
+      className={`inline-flex items-center gap-2 ${isDisabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}
+    >
       <button
         type="button"
         role="switch"
@@ -46,9 +54,26 @@ export default function Switch({ checked, onChange, label, disabled, loading }: 
           }`}
         >
           {loading && (
-            <svg className="h-3 w-3 animate-spin text-gray-400" viewBox="0 0 24 24" fill="none">
-              <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" className="opacity-25" />
-              <path d="M4 12a8 8 0 018-8" stroke="currentColor" strokeWidth="3" strokeLinecap="round" className="opacity-75" />
+            <svg
+              className="h-3 w-3 animate-spin text-gray-400"
+              viewBox="0 0 24 24"
+              fill="none"
+            >
+              <circle
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="3"
+                className="opacity-25"
+              />
+              <path
+                d="M4 12a8 8 0 018-8"
+                stroke="currentColor"
+                strokeWidth="3"
+                strokeLinecap="round"
+                className="opacity-75"
+              />
             </svg>
           )}
         </span>

@@ -11,16 +11,26 @@
  * 10s loop. Pure SVG + CSS. Respects `prefers-reduced-motion`.
  */
 
-import { ADMIN_PATH, EdisonLogo, FlowLine, McpPacket, ProgressBar, VerdictBadge } from '../_shared'
 import {
-  OUTLOOK_SVG, OUTLOOK_SVG_VIEWBOX,
-  ATLASSIAN_SVG, ATLASSIAN_SVG_VIEWBOX,
-  SLACK_SVG, SLACK_SVG_VIEWBOX,
-} from '../../svg/app-icons-svg'
+  ADMIN_PATH,
+  EdisonLogo,
+  FlowLine,
+  McpPacket,
+  ProgressBar,
+  VerdictBadge,
+} from "../_shared";
+import {
+  OUTLOOK_SVG,
+  OUTLOOK_SVG_VIEWBOX,
+  ATLASSIAN_SVG,
+  ATLASSIAN_SVG_VIEWBOX,
+  SLACK_SVG,
+  SLACK_SVG_VIEWBOX,
+} from "../../svg/app-icons-svg";
 
-const fg = 'var(--text-primary)'
-const muted = 'var(--text-muted)'
-const accent = 'var(--accent)'
+const fg = "var(--text-primary)";
+const muted = "var(--text-muted)";
+const accent = "var(--accent)";
 
 const CSS = `
 .om-anim { color: ${fg}; }
@@ -238,7 +248,7 @@ const CSS = `
   .om-anim .om-v1, .om-anim .om-v2, .om-anim .om-v3, .om-anim .om-v4, .om-anim .om-v5 { opacity: 1; transform: scale(1); }
   .om-anim .om-progress { animation: none; transform: scaleX(1); }
 }
-`
+`;
 
 export default function OrgMCPPushAnimation(): React.ReactNode {
   return (
@@ -255,20 +265,45 @@ export default function OrgMCPPushAnimation(): React.ReactNode {
       >
         {/* ===== EMPLOYEE LAPTOPS (left column) ===== */}
         {[
-          { y: 15, label: 'Employee A' },
-          { y: 85, label: 'Employee B' },
-          { y: 155, label: 'Employee C' },
+          { y: 15, label: "Employee A" },
+          { y: 85, label: "Employee B" },
+          { y: 155, label: "Employee C" },
         ].map(({ y, label }) => (
           <g key={label}>
-            <rect x={8} y={y} width={70} height={45} rx={5}
-              fill={fg} fillOpacity="0.03"
-              stroke={muted} strokeOpacity="0.3" strokeWidth="1" />
-            <rect x={5} y={y + 47} width={76} height={5} rx={2.5}
-              fill={fg} fillOpacity="0.04"
-              stroke={muted} strokeOpacity="0.3" strokeWidth="0.8" />
+            <rect
+              x={8}
+              y={y}
+              width={70}
+              height={45}
+              rx={5}
+              fill={fg}
+              fillOpacity="0.03"
+              stroke={muted}
+              strokeOpacity="0.3"
+              strokeWidth="1"
+            />
+            <rect
+              x={5}
+              y={y + 47}
+              width={76}
+              height={5}
+              rx={2.5}
+              fill={fg}
+              fillOpacity="0.04"
+              stroke={muted}
+              strokeOpacity="0.3"
+              strokeWidth="0.8"
+            />
             <EdisonLogo x={30} y={y + 6} w={20} h={19} />
-            <text x={43} y={y + 62} textAnchor="middle"
-              fill={fg} fontSize="6" fontFamily="system-ui,sans-serif" fillOpacity="0.4">
+            <text
+              x={43}
+              y={y + 62}
+              textAnchor="middle"
+              fill={fg}
+              fontSize="6"
+              fontFamily="system-ui,sans-serif"
+              fillOpacity="0.4"
+            >
               {label}
             </text>
           </g>
@@ -281,115 +316,342 @@ export default function OrgMCPPushAnimation(): React.ReactNode {
           </clipPath>
         </defs>
         <g clipPath="url(#om-clip-left)">
-          <circle className="om-ripple1" cx={150} cy={82} r={80}
-            fill="none" stroke={accent} strokeOpacity="0.5" strokeWidth="2" />
-          <circle className="om-ripple2" cx={150} cy={82} r={80}
-            fill="none" stroke={accent} strokeOpacity="0.35" strokeWidth="1.5" />
+          <circle
+            className="om-ripple1"
+            cx={150}
+            cy={82}
+            r={80}
+            fill="none"
+            stroke={accent}
+            strokeOpacity="0.5"
+            strokeWidth="2"
+          />
+          <circle
+            className="om-ripple2"
+            cx={150}
+            cy={82}
+            r={80}
+            fill="none"
+            stroke={accent}
+            strokeOpacity="0.35"
+            strokeWidth="1.5"
+          />
         </g>
 
         {/* ===== All 3 MCP icons appearing on each laptop (below Edison logo, centered) ===== */}
         {/* Employee A */}
         <g className="om-mcp1">
-          <svg x={28} y={44} width={9} height={9} viewBox={OUTLOOK_SVG_VIEWBOX}
-            dangerouslySetInnerHTML={{ __html: OUTLOOK_SVG }} />
-          <svg x={39} y={44} width={9} height={9} viewBox={ATLASSIAN_SVG_VIEWBOX}
-            dangerouslySetInnerHTML={{ __html: ATLASSIAN_SVG }} />
-          <svg x={50} y={44} width={9} height={9} viewBox={SLACK_SVG_VIEWBOX}
-            dangerouslySetInnerHTML={{ __html: SLACK_SVG }} />
+          <svg
+            x={28}
+            y={44}
+            width={9}
+            height={9}
+            viewBox={OUTLOOK_SVG_VIEWBOX}
+            dangerouslySetInnerHTML={{ __html: OUTLOOK_SVG }}
+          />
+          <svg
+            x={39}
+            y={44}
+            width={9}
+            height={9}
+            viewBox={ATLASSIAN_SVG_VIEWBOX}
+            dangerouslySetInnerHTML={{ __html: ATLASSIAN_SVG }}
+          />
+          <svg
+            x={50}
+            y={44}
+            width={9}
+            height={9}
+            viewBox={SLACK_SVG_VIEWBOX}
+            dangerouslySetInnerHTML={{ __html: SLACK_SVG }}
+          />
         </g>
         {/* Employee B */}
         <g className="om-mcp2">
-          <svg x={28} y={114} width={9} height={9} viewBox={OUTLOOK_SVG_VIEWBOX}
-            dangerouslySetInnerHTML={{ __html: OUTLOOK_SVG }} />
-          <svg x={39} y={114} width={9} height={9} viewBox={ATLASSIAN_SVG_VIEWBOX}
-            dangerouslySetInnerHTML={{ __html: ATLASSIAN_SVG }} />
-          <svg x={50} y={114} width={9} height={9} viewBox={SLACK_SVG_VIEWBOX}
-            dangerouslySetInnerHTML={{ __html: SLACK_SVG }} />
+          <svg
+            x={28}
+            y={114}
+            width={9}
+            height={9}
+            viewBox={OUTLOOK_SVG_VIEWBOX}
+            dangerouslySetInnerHTML={{ __html: OUTLOOK_SVG }}
+          />
+          <svg
+            x={39}
+            y={114}
+            width={9}
+            height={9}
+            viewBox={ATLASSIAN_SVG_VIEWBOX}
+            dangerouslySetInnerHTML={{ __html: ATLASSIAN_SVG }}
+          />
+          <svg
+            x={50}
+            y={114}
+            width={9}
+            height={9}
+            viewBox={SLACK_SVG_VIEWBOX}
+            dangerouslySetInnerHTML={{ __html: SLACK_SVG }}
+          />
         </g>
         {/* Employee C */}
         <g className="om-mcp3">
-          <svg x={28} y={184} width={9} height={9} viewBox={OUTLOOK_SVG_VIEWBOX}
-            dangerouslySetInnerHTML={{ __html: OUTLOOK_SVG }} />
-          <svg x={39} y={184} width={9} height={9} viewBox={ATLASSIAN_SVG_VIEWBOX}
-            dangerouslySetInnerHTML={{ __html: ATLASSIAN_SVG }} />
-          <svg x={50} y={184} width={9} height={9} viewBox={SLACK_SVG_VIEWBOX}
-            dangerouslySetInnerHTML={{ __html: SLACK_SVG }} />
+          <svg
+            x={28}
+            y={184}
+            width={9}
+            height={9}
+            viewBox={OUTLOOK_SVG_VIEWBOX}
+            dangerouslySetInnerHTML={{ __html: OUTLOOK_SVG }}
+          />
+          <svg
+            x={39}
+            y={184}
+            width={9}
+            height={9}
+            viewBox={ATLASSIAN_SVG_VIEWBOX}
+            dangerouslySetInnerHTML={{ __html: ATLASSIAN_SVG }}
+          />
+          <svg
+            x={50}
+            y={184}
+            width={9}
+            height={9}
+            viewBox={SLACK_SVG_VIEWBOX}
+            dangerouslySetInnerHTML={{ __html: SLACK_SVG }}
+          />
         </g>
 
         {/* ===== EDISON GATEWAY PANEL (center) ===== */}
-        <rect className="om-panel-glow" x={150} y={40} width={180} height={90} rx={7}
-          fill={fg} fillOpacity="0.03"
-          stroke={muted} strokeOpacity="0.2" strokeWidth="1.5" />
+        <rect
+          className="om-panel-glow"
+          x={150}
+          y={40}
+          width={180}
+          height={90}
+          rx={7}
+          fill={fg}
+          fillOpacity="0.03"
+          stroke={muted}
+          strokeOpacity="0.2"
+          strokeWidth="1.5"
+        />
 
         <svg x={158} y={46} width={16} height={16} viewBox="0 0 256 256">
           <path d={ADMIN_PATH} fill={accent} fillOpacity="0.6" />
         </svg>
-        <text x={178} y={58} fill={fg} fontSize="7.5" fontWeight="bold" fontFamily="system-ui,sans-serif" fillOpacity="0.6">
+        <text
+          x={178}
+          y={58}
+          fill={fg}
+          fontSize="7.5"
+          fontWeight="bold"
+          fontFamily="system-ui,sans-serif"
+          fillOpacity="0.6"
+        >
           Edison Gateway
         </text>
         <EdisonLogo x={298} y={44} w={22} h={21} />
 
         {/* MCP server entry rows */}
-        <rect x={158} y={66} width={164} height={18} rx={3}
-          fill={fg} fillOpacity="0.02"
-          stroke={muted} strokeOpacity="0.12" strokeWidth="0.6" />
-        <svg x={161} y={68} width={13} height={13} viewBox={OUTLOOK_SVG_VIEWBOX}
-          dangerouslySetInnerHTML={{ __html: OUTLOOK_SVG }} />
-        <text x={178} y={78} fill={fg} fontSize="6" fontWeight="600" fontFamily="ui-monospace,monospace" fillOpacity="0.5">
+        <rect
+          x={158}
+          y={66}
+          width={164}
+          height={18}
+          rx={3}
+          fill={fg}
+          fillOpacity="0.02"
+          stroke={muted}
+          strokeOpacity="0.12"
+          strokeWidth="0.6"
+        />
+        <svg
+          x={161}
+          y={68}
+          width={13}
+          height={13}
+          viewBox={OUTLOOK_SVG_VIEWBOX}
+          dangerouslySetInnerHTML={{ __html: OUTLOOK_SVG }}
+        />
+        <text
+          x={178}
+          y={78}
+          fill={fg}
+          fontSize="6"
+          fontWeight="600"
+          fontFamily="ui-monospace,monospace"
+          fillOpacity="0.5"
+        >
           outlook-mcp
         </text>
 
-        <rect x={158} y={86} width={164} height={18} rx={3}
-          fill={fg} fillOpacity="0.02"
-          stroke={muted} strokeOpacity="0.12" strokeWidth="0.6" />
-        <svg x={161} y={88} width={13} height={13} viewBox={ATLASSIAN_SVG_VIEWBOX}
-          dangerouslySetInnerHTML={{ __html: ATLASSIAN_SVG }} />
-        <text x={178} y={98} fill={fg} fontSize="6" fontWeight="600" fontFamily="ui-monospace,monospace" fillOpacity="0.5">
+        <rect
+          x={158}
+          y={86}
+          width={164}
+          height={18}
+          rx={3}
+          fill={fg}
+          fillOpacity="0.02"
+          stroke={muted}
+          strokeOpacity="0.12"
+          strokeWidth="0.6"
+        />
+        <svg
+          x={161}
+          y={88}
+          width={13}
+          height={13}
+          viewBox={ATLASSIAN_SVG_VIEWBOX}
+          dangerouslySetInnerHTML={{ __html: ATLASSIAN_SVG }}
+        />
+        <text
+          x={178}
+          y={98}
+          fill={fg}
+          fontSize="6"
+          fontWeight="600"
+          fontFamily="ui-monospace,monospace"
+          fillOpacity="0.5"
+        >
           atlassian-mcp
         </text>
 
-        <rect x={158} y={106} width={164} height={18} rx={3}
-          fill={fg} fillOpacity="0.02"
-          stroke={muted} strokeOpacity="0.12" strokeWidth="0.6" />
-        <svg x={161} y={108} width={13} height={13} viewBox={SLACK_SVG_VIEWBOX}
-          dangerouslySetInnerHTML={{ __html: SLACK_SVG }} />
-        <text x={178} y={118} fill={fg} fontSize="6" fontWeight="600" fontFamily="ui-monospace,monospace" fillOpacity="0.5">
+        <rect
+          x={158}
+          y={106}
+          width={164}
+          height={18}
+          rx={3}
+          fill={fg}
+          fillOpacity="0.02"
+          stroke={muted}
+          strokeOpacity="0.12"
+          strokeWidth="0.6"
+        />
+        <svg
+          x={161}
+          y={108}
+          width={13}
+          height={13}
+          viewBox={SLACK_SVG_VIEWBOX}
+          dangerouslySetInnerHTML={{ __html: SLACK_SVG }}
+        />
+        <text
+          x={178}
+          y={118}
+          fill={fg}
+          fontSize="6"
+          fontWeight="600"
+          fontFamily="ui-monospace,monospace"
+          fillOpacity="0.5"
+        >
           slack-mcp
         </text>
 
         {/* Toggle switches (one per row) */}
         <g>
-          <rect className="om-toggle-bg" x={295} y={70} width={20} height={10} rx={5}
-            fill={muted} fillOpacity="0.2" />
-          <circle className="om-toggle-knob" cx={301} cy={75} r={3.5}
-            fill="white" fillOpacity="0.9" />
+          <rect
+            className="om-toggle-bg"
+            x={295}
+            y={70}
+            width={20}
+            height={10}
+            rx={5}
+            fill={muted}
+            fillOpacity="0.2"
+          />
+          <circle
+            className="om-toggle-knob"
+            cx={301}
+            cy={75}
+            r={3.5}
+            fill="white"
+            fillOpacity="0.9"
+          />
         </g>
 
         {/* ===== MCP SERVERS (right) ===== */}
         <g className="om-srv">
-          <rect x={385} y={48} width={105} height={70} rx={5}
-            fill={fg} fillOpacity="0.03"
-            stroke={accent} strokeOpacity="0.25" strokeWidth="1" />
-          <text x={437} y={62} textAnchor="middle" fill={fg} fontSize="6" fontWeight="600"
-            fontFamily="system-ui,sans-serif" fillOpacity="0.45">
+          <rect
+            x={385}
+            y={48}
+            width={105}
+            height={70}
+            rx={5}
+            fill={fg}
+            fillOpacity="0.03"
+            stroke={accent}
+            strokeOpacity="0.25"
+            strokeWidth="1"
+          />
+          <text
+            x={437}
+            y={62}
+            textAnchor="middle"
+            fill={fg}
+            fontSize="6"
+            fontWeight="600"
+            fontFamily="system-ui,sans-serif"
+            fillOpacity="0.45"
+          >
             MCP Servers
           </text>
-          <svg x={393} y={67} width={14} height={14} viewBox={OUTLOOK_SVG_VIEWBOX}
-            dangerouslySetInnerHTML={{ __html: OUTLOOK_SVG }} />
-          <text x={411} y={77} fill={fg} fontSize="5.5" fontWeight="500"
-            fontFamily="ui-monospace,monospace" fillOpacity="0.45">
+          <svg
+            x={393}
+            y={67}
+            width={14}
+            height={14}
+            viewBox={OUTLOOK_SVG_VIEWBOX}
+            dangerouslySetInnerHTML={{ __html: OUTLOOK_SVG }}
+          />
+          <text
+            x={411}
+            y={77}
+            fill={fg}
+            fontSize="5.5"
+            fontWeight="500"
+            fontFamily="ui-monospace,monospace"
+            fillOpacity="0.45"
+          >
             outlook-mcp
           </text>
-          <svg x={393} y={83} width={14} height={14} viewBox={ATLASSIAN_SVG_VIEWBOX}
-            dangerouslySetInnerHTML={{ __html: ATLASSIAN_SVG }} />
-          <text x={411} y={93} fill={fg} fontSize="5.5" fontWeight="500"
-            fontFamily="ui-monospace,monospace" fillOpacity="0.45">
+          <svg
+            x={393}
+            y={83}
+            width={14}
+            height={14}
+            viewBox={ATLASSIAN_SVG_VIEWBOX}
+            dangerouslySetInnerHTML={{ __html: ATLASSIAN_SVG }}
+          />
+          <text
+            x={411}
+            y={93}
+            fill={fg}
+            fontSize="5.5"
+            fontWeight="500"
+            fontFamily="ui-monospace,monospace"
+            fillOpacity="0.45"
+          >
             atlassian-mcp
           </text>
-          <svg x={393} y={99} width={14} height={14} viewBox={SLACK_SVG_VIEWBOX}
-            dangerouslySetInnerHTML={{ __html: SLACK_SVG }} />
-          <text x={411} y={109} fill={fg} fontSize="5.5" fontWeight="500"
-            fontFamily="ui-monospace,monospace" fillOpacity="0.45">
+          <svg
+            x={393}
+            y={99}
+            width={14}
+            height={14}
+            viewBox={SLACK_SVG_VIEWBOX}
+            dangerouslySetInnerHTML={{ __html: SLACK_SVG }}
+          />
+          <text
+            x={411}
+            y={109}
+            fill={fg}
+            fontSize="5.5"
+            fontWeight="500"
+            fontFamily="ui-monospace,monospace"
+            fillOpacity="0.45"
+          >
             slack-mcp
           </text>
         </g>
@@ -397,34 +659,100 @@ export default function OrgMCPPushAnimation(): React.ReactNode {
         {/* ===== TRAFFIC LINES: laptops -> gateway -> server ===== */}
         <g className="om-traf">
           {/* Laptops to gateway */}
-          <FlowLine className="om-line" x1={78} y1={37}  x2={150} y2={82} stroke={accent} strokeOpacity={0.4} />
-          <FlowLine className="om-line" x1={78} y1={107} x2={150} y2={82} stroke={accent} strokeOpacity={0.4} />
-          <FlowLine className="om-line" x1={78} y1={177} x2={150} y2={82} stroke={accent} strokeOpacity={0.4} />
+          <FlowLine
+            className="om-line"
+            x1={78}
+            y1={37}
+            x2={150}
+            y2={82}
+            stroke={accent}
+            strokeOpacity={0.4}
+          />
+          <FlowLine
+            className="om-line"
+            x1={78}
+            y1={107}
+            x2={150}
+            y2={82}
+            stroke={accent}
+            strokeOpacity={0.4}
+          />
+          <FlowLine
+            className="om-line"
+            x1={78}
+            y1={177}
+            x2={150}
+            y2={82}
+            stroke={accent}
+            strokeOpacity={0.4}
+          />
           {/* Gateway to server */}
-          <FlowLine className="om-line" x1={330} y1={82} x2={385} y2={82} stroke={accent} strokeOpacity={0.4} />
+          <FlowLine
+            className="om-line"
+            x1={330}
+            y1={82}
+            x2={385}
+            y2={82}
+            stroke={accent}
+            strokeOpacity={0.4}
+          />
         </g>
 
         {/* ===== TRAFFIC PACKETS: laptops -> gateway ===== */}
-        <g className="om-pkt om-tp1"><McpPacket /></g>
-        <g className="om-pkt om-tp2"><McpPacket /></g>
-        <g className="om-pkt om-tp3"><McpPacket /></g>
+        <g className="om-pkt om-tp1">
+          <McpPacket />
+        </g>
+        <g className="om-pkt om-tp2">
+          <McpPacket />
+        </g>
+        <g className="om-pkt om-tp3">
+          <McpPacket />
+        </g>
 
         {/* ===== PROXY PACKETS: gateway -> server (2 allowed) ===== */}
-        <g className="om-pkt om-rpkt1"><McpPacket /></g>
-        <g className="om-pkt om-rpkt2"><McpPacket /></g>
+        <g className="om-pkt om-rpkt1">
+          <McpPacket />
+        </g>
+        <g className="om-pkt om-rpkt2">
+          <McpPacket />
+        </g>
 
         {/* ===== VERDICT BADGES at gateway (left edge, stacked) ===== */}
-        <VerdictBadge className="om-v1" cx={142} cy={68} r={7} variant="allow" />
+        <VerdictBadge
+          className="om-v1"
+          cx={142}
+          cy={68}
+          r={7}
+          variant="allow"
+        />
         <VerdictBadge className="om-v2" cx={142} cy={82} r={7} variant="deny" />
-        <VerdictBadge className="om-v3" cx={142} cy={96} r={7} variant="allow" />
+        <VerdictBadge
+          className="om-v3"
+          cx={142}
+          cy={96}
+          r={7}
+          variant="allow"
+        />
 
         {/* ===== VERDICT BADGES at Outlook server (left edge, stacked) ===== */}
-        <VerdictBadge className="om-v4" cx={380} cy={75} r={7} variant="allow" />
-        <VerdictBadge className="om-v5" cx={380} cy={89} r={7} variant="allow" />
+        <VerdictBadge
+          className="om-v4"
+          cx={380}
+          cy={75}
+          r={7}
+          variant="allow"
+        />
+        <VerdictBadge
+          className="om-v5"
+          cx={380}
+          cy={89}
+          r={7}
+          variant="allow"
+        />
 
         {/* Progress bar */}
         <ProgressBar y={218} width={460} className="om-progress" />
       </svg>
     </div>
-  )
+  );
 }

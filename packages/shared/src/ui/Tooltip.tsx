@@ -22,9 +22,12 @@ function computePosition(
   trigger: DOMRect,
   placement: Placement,
 ): { top: number; left: number } {
-  if (placement === "top") return { top: trigger.top - 8, left: trigger.left + trigger.width / 2 };
-  if (placement === "bottom") return { top: trigger.bottom + 8, left: trigger.left + trigger.width / 2 };
-  if (placement === "left") return { top: trigger.top + trigger.height / 2, left: trigger.left - 8 };
+  if (placement === "top")
+    return { top: trigger.top - 8, left: trigger.left + trigger.width / 2 };
+  if (placement === "bottom")
+    return { top: trigger.bottom + 8, left: trigger.left + trigger.width / 2 };
+  if (placement === "left")
+    return { top: trigger.top + trigger.height / 2, left: trigger.left - 8 };
   return { top: trigger.top + trigger.height / 2, left: trigger.right + 8 };
 }
 
@@ -35,9 +38,16 @@ const TRANSFORM: Record<Placement, string> = {
   right: "translate(0, -50%)",
 };
 
-export default function Tooltip({ content, placement = "top", className, children }: TooltipProps) {
+export default function Tooltip({
+  content,
+  placement = "top",
+  className,
+  children,
+}: TooltipProps) {
   const [visible, setVisible] = useState(false);
-  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
+  const [coords, setCoords] = useState<{ top: number; left: number } | null>(
+    null,
+  );
   const [actualPlacement, setActualPlacement] = useState(placement);
   const triggerRef = useRef<HTMLSpanElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
@@ -65,10 +75,25 @@ export default function Tooltip({ content, placement = "top", className, childre
       let { top, left } = pos;
 
       const rect = tooltipRef.current.getBoundingClientRect();
-      if (placement === "top" && rect.top < margin) { flipped = "bottom"; top = trigger.bottom + margin; }
-      else if (placement === "bottom" && rect.bottom > window.innerHeight - margin) { flipped = "top"; top = trigger.top - margin; }
-      else if (placement === "left" && rect.left < margin) { flipped = "right"; left = trigger.right + margin; }
-      else if (placement === "right" && rect.right > window.innerWidth - margin) { flipped = "left"; left = trigger.left - margin; }
+      if (placement === "top" && rect.top < margin) {
+        flipped = "bottom";
+        top = trigger.bottom + margin;
+      } else if (
+        placement === "bottom" &&
+        rect.bottom > window.innerHeight - margin
+      ) {
+        flipped = "top";
+        top = trigger.top - margin;
+      } else if (placement === "left" && rect.left < margin) {
+        flipped = "right";
+        left = trigger.right + margin;
+      } else if (
+        placement === "right" &&
+        rect.right > window.innerWidth - margin
+      ) {
+        flipped = "left";
+        left = trigger.left - margin;
+      }
 
       // Recompute effective rect after any flip, then shift along the cross-axis
       // so the tooltip stays inside the viewport when wider/taller than the gap
@@ -79,7 +104,8 @@ export default function Tooltip({ content, placement = "top", className, childre
         const halfW = width / 2;
         const minLeft = margin + halfW;
         const maxLeft = window.innerWidth - margin - halfW;
-        if (maxLeft >= minLeft) left = Math.min(Math.max(left, minLeft), maxLeft);
+        if (maxLeft >= minLeft)
+          left = Math.min(Math.max(left, minLeft), maxLeft);
       } else {
         const halfH = height / 2;
         const minTop = margin + halfH;

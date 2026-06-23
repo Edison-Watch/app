@@ -8,10 +8,10 @@
  */
 
 /** Brand orange used for "before Edison" / unencrypted / pre-trifecta state. */
-export const ORANGE = '#da7756'
+export const ORANGE = "#da7756";
 /** Saturated red used for attacker / corrupted-robot / unsafe visuals. */
-export const RED = '#d94040'
+export const RED = "#d94040";
 /** Tailwind red-500 used for danger badges (eye-slash, X marks, quarantine). */
-export const DANGER = '#ef4444'
+export const DANGER = "#ef4444";
 /** Bright safe-green used for safe robots / allowed flow / taint-safe values. */
-export const GREEN = '#3ddc84'
+export const GREEN = "#3ddc84";

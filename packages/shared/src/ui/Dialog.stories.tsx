@@ -18,13 +18,21 @@ export const Default: Story = {
     return (
       <div style={{ padding: 40 }}>
         <Button onClick={() => setOpen(true)}>Open Dialog</Button>
-        <Dialog open={open} onClose={() => setOpen(false)} title="Confirm Action">
+        <Dialog
+          open={open}
+          onClose={() => setOpen(false)}
+          title="Confirm Action"
+        >
           <p style={{ color: "var(--text-secondary)", marginBottom: 16 }}>
             Are you sure you want to proceed? This action cannot be undone.
           </p>
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-            <Button variant="secondary" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button variant="danger" onClick={() => setOpen(false)}>Delete</Button>
+            <Button variant="secondary" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="danger" onClick={() => setOpen(false)}>
+              Delete
+            </Button>
           </div>
         </Dialog>
       </div>
@@ -42,7 +50,9 @@ export const WithoutTitle: Story = {
           <p style={{ color: "var(--text-primary)", marginBottom: 16 }}>
             A simple dialog without a title.
           </p>
-          <Button variant="primary" onClick={() => setOpen(false)}>OK</Button>
+          <Button variant="primary" onClick={() => setOpen(false)}>
+            OK
+          </Button>
         </Dialog>
       </div>
     );
@@ -56,7 +66,8 @@ export const OpenByDefault: Story = {
     title: "Static Dialog",
     children: (
       <p style={{ color: "var(--text-secondary)" }}>
-        This dialog is open for demonstration. Click the backdrop or press Esc to close.
+        This dialog is open for demonstration. Click the backdrop or press Esc
+        to close.
       </p>
     ),
   },

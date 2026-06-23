@@ -53,9 +53,15 @@ export const WithLabelAndError: Story = {
 
 export const AllTypes: Story = {
   render: () => (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16, width: 300 }}>
+    <div
+      style={{ display: "flex", flexDirection: "column", gap: 16, width: 300 }}
+    >
       <Input type="text" label="Text Input" placeholder="Type here..." />
-      <Input type="password" label="Password Input" placeholder="Enter password" />
+      <Input
+        type="password"
+        label="Password Input"
+        placeholder="Enter password"
+      />
       <Input type="search" label="Search Input" placeholder="Search..." />
     </div>
   ),

@@ -18,8 +18,19 @@ export const Default: Story = {
     return (
       <div style={{ padding: 40 }}>
         <Button onClick={() => setOpen(true)}>Open SlideOver</Button>
-        <SlideOver open={open} onClose={() => setOpen(false)} title="Session Details">
-          <div style={{ color: "var(--text-secondary)", display: "flex", flexDirection: "column", gap: 12 }}>
+        <SlideOver
+          open={open}
+          onClose={() => setOpen(false)}
+          title="Session Details"
+        >
+          <div
+            style={{
+              color: "var(--text-secondary)",
+              display: "flex",
+              flexDirection: "column",
+              gap: 12,
+            }}
+          >
             <p>Agent: code-review-bot</p>
             <p>Duration: 12.4s</p>
             <p>Status: Completed</p>
@@ -42,9 +53,15 @@ export const WithFooter: Story = {
           onClose={() => setOpen(false)}
           title="Edit Policy"
           footer={
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-              <Button variant="secondary" onClick={() => setOpen(false)}>Cancel</Button>
-              <Button variant="primary" onClick={() => setOpen(false)}>Save</Button>
+            <div
+              style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}
+            >
+              <Button variant="secondary" onClick={() => setOpen(false)}>
+                Cancel
+              </Button>
+              <Button variant="primary" onClick={() => setOpen(false)}>
+                Save
+              </Button>
             </div>
           }
         >

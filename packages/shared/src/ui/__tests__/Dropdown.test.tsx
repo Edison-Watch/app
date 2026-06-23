@@ -12,7 +12,13 @@ describe("Dropdown", () => {
 
   it("opens on click and shows items", () => {
     const onSelect = vi.fn();
-    render(<Dropdown trigger={<span>Menu</span>} items={items} onSelect={onSelect} />);
+    render(
+      <Dropdown
+        trigger={<span>Menu</span>}
+        items={items}
+        onSelect={onSelect}
+      />,
+    );
 
     fireEvent.click(screen.getByText("Menu"));
     expect(screen.getByText("Edit")).toBeDefined();
@@ -21,7 +27,13 @@ describe("Dropdown", () => {
 
   it("calls onSelect when clicking an item", () => {
     const onSelect = vi.fn();
-    render(<Dropdown trigger={<span>Menu</span>} items={items} onSelect={onSelect} />);
+    render(
+      <Dropdown
+        trigger={<span>Menu</span>}
+        items={items}
+        onSelect={onSelect}
+      />,
+    );
 
     fireEvent.click(screen.getByText("Menu"));
     fireEvent.click(screen.getByText("Edit"));
@@ -30,7 +42,13 @@ describe("Dropdown", () => {
 
   it("navigates with keyboard arrows and selects with Enter", () => {
     const onSelect = vi.fn();
-    render(<Dropdown trigger={<span>Menu</span>} items={items} onSelect={onSelect} />);
+    render(
+      <Dropdown
+        trigger={<span>Menu</span>}
+        items={items}
+        onSelect={onSelect}
+      />,
+    );
 
     const trigger = screen.getByText("Menu").parentElement!;
     fireEvent.keyDown(trigger, { key: "ArrowDown" });

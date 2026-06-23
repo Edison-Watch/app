@@ -28,7 +28,9 @@ export function hasMagicPrefix(value: string): boolean {
 
 /** Strip the magic prefix if present; return unchanged otherwise. */
 function stripMagicPrefix(value: string): string {
-  return value.startsWith(MAGIC_PREFIX) ? value.slice(MAGIC_PREFIX.length) : value;
+  return value.startsWith(MAGIC_PREFIX)
+    ? value.slice(MAGIC_PREFIX.length)
+    : value;
 }
 
 // -- Composite Key Parsing --
@@ -57,7 +59,9 @@ export function parseCompositeKey(key: string): CompositeKey {
       const rest = segment.slice(5);
       const colonIdx = rest.indexOf(":");
       if (colonIdx === -1) {
-        throw new Error(`Invalid role key segment (missing role name): ${segment}`);
+        throw new Error(
+          `Invalid role key segment (missing role name): ${segment}`,
+        );
       }
       roleKeys[rest.slice(0, colonIdx)] = rest.slice(colonIdx + 1);
     } else {
@@ -73,7 +77,10 @@ export function parseCompositeKey(key: string): CompositeKey {
 }
 
 /** Build a composite key string from its parts. */
-export function buildCompositeKey(userPart: string, domainPart: string | null): string {
+export function buildCompositeKey(
+  userPart: string,
+  domainPart: string | null,
+): string {
   const parts = [`user:${userPart}`];
   if (domainPart !== null) {
     parts.push(`admin:${domainPart}`);
@@ -99,7 +106,12 @@ async function deriveKey(
   const salt = new Uint8Array(32); // zero-filled per RFC 5869
 
   return crypto.subtle.deriveKey(
-    { name: "HKDF", hash: "SHA-256", salt, info: ENCODER.encode(`edison-secret:${context}`) },
+    {
+      name: "HKDF",
+      hash: "SHA-256",
+      salt,
+      info: ENCODER.encode(`edison-secret:${context}`),
+    },
     ikm,
     { name: "AES-GCM", length: 256 },
     false,
@@ -115,7 +127,9 @@ export async function encryptSecret(
   serverName: string,
   templateKey: string,
 ): Promise<string> {
-  const key = await deriveKey(secretKey, `${serverName}:${templateKey}`, ["encrypt"]);
+  const key = await deriveKey(secretKey, `${serverName}:${templateKey}`, [
+    "encrypt",
+  ]);
   const nonce = crypto.getRandomValues(new Uint8Array(12));
   const ciphertext = await crypto.subtle.encrypt(
     { name: "AES-GCM", iv: nonce },
@@ -137,7 +151,9 @@ export async function decryptSecret(
   templateKey: string,
 ): Promise<string> {
   if (!encryptedBase64 || encryptedBase64.startsWith("__")) {
-    throw new Error(`Cannot decrypt sentinel or placeholder value for ${serverName}:${templateKey}`);
+    throw new Error(
+      `Cannot decrypt sentinel or placeholder value for ${serverName}:${templateKey}`,
+    );
   }
 
   const key = await deriveKey(secretKey, `${serverName}:${templateKey}`);
@@ -173,7 +189,12 @@ export async function encryptServerConfig(
       encrypted[templateKey] = plaintext;
       continue;
     }
-    encrypted[templateKey] = await encryptSecret(plaintext, secretKey, serverName, templateKey);
+    encrypted[templateKey] = await encryptSecret(
+      plaintext,
+      secretKey,
+      serverName,
+      templateKey,
+    );
   }
   return encrypted;
 }
@@ -217,7 +238,10 @@ export async function decryptServerConfigs(
 
 // -- Domain Key Functions --
 
-async function deriveDomainKey(domainKey: string, context: string): Promise<CryptoKey> {
+async function deriveDomainKey(
+  domainKey: string,
+  context: string,
+): Promise<CryptoKey> {
   const ikm = await crypto.subtle.importKey(
     "raw",
     ENCODER.encode(domainKey),
@@ -247,7 +271,9 @@ export async function decryptDomainSecret(
   templateKey: string,
 ): Promise<string> {
   if (!encryptedBase64 || encryptedBase64.startsWith("__")) {
-    throw new Error(`Cannot decrypt sentinel or placeholder value for ${serverName}:${templateKey}`);
+    throw new Error(
+      `Cannot decrypt sentinel or placeholder value for ${serverName}:${templateKey}`,
+    );
   }
 
   const key = await deriveDomainKey(domainKey, `${serverName}:${templateKey}`);
@@ -315,7 +341,10 @@ export async function generateDomainKeyForMint(): Promise<{
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
   const domainKey = btoa(String.fromCharCode(...bytes));
-  const hashBuffer = await crypto.subtle.digest("SHA-256", ENCODER.encode(domainKey));
+  const hashBuffer = await crypto.subtle.digest(
+    "SHA-256",
+    ENCODER.encode(domainKey),
+  );
   const domainKeyHash = Array.from(new Uint8Array(hashBuffer))
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");

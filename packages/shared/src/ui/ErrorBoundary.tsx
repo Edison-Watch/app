@@ -31,7 +31,10 @@ export default class ErrorBoundary extends Component<Props, State> {
     if (this.state.hasError) {
       if (this.props.fallback) return this.props.fallback;
       return (
-        <div className="flex flex-col items-center justify-center gap-4 py-12 text-center" role="alert">
+        <div
+          className="flex flex-col items-center justify-center gap-4 py-12 text-center"
+          role="alert"
+        >
           <div className="text-4xl">⚠️</div>
           <h2 className="text-lg font-semibold text-[var(--text-primary)]">
             Something went wrong

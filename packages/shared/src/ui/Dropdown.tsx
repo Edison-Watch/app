@@ -1,4 +1,10 @@
-import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
 export interface DropdownItem {
   key: string;
@@ -59,7 +65,9 @@ export default function Dropdown({
           break;
         case "ArrowUp":
           e.preventDefault();
-          setFocusedIndex((i) => (i - 1 + enabledItems.length) % enabledItems.length);
+          setFocusedIndex(
+            (i) => (i - 1 + enabledItems.length) % enabledItems.length,
+          );
           break;
         case "Enter":
         case " ":
@@ -78,7 +86,10 @@ export default function Dropdown({
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(e.target as Node)
+      ) {
         close();
       }
     };
@@ -87,7 +98,11 @@ export default function Dropdown({
   }, [open, close]);
 
   return (
-    <div ref={containerRef} className="relative inline-block" onKeyDown={handleKeyDown}>
+    <div
+      ref={containerRef}
+      className="relative inline-block"
+      onKeyDown={handleKeyDown}
+    >
       <div
         role="button"
         tabIndex={0}

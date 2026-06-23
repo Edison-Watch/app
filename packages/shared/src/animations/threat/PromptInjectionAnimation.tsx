@@ -17,16 +17,25 @@
  */
 
 import {
-  OUTLOOK_SVG, OUTLOOK_SVG_VIEWBOX,
-  SLACK_SVG, SLACK_SVG_VIEWBOX,
-  GCAL_SVG, GCAL_SVG_VIEWBOX,
-} from '../../svg/app-icons-svg'
+  OUTLOOK_SVG,
+  OUTLOOK_SVG_VIEWBOX,
+  SLACK_SVG,
+  SLACK_SVG_VIEWBOX,
+  GCAL_SVG,
+  GCAL_SVG_VIEWBOX,
+} from "../../svg/app-icons-svg";
 import {
   ATTACKER_BODY_PATHS,
   ATTACKER_HIGHLIGHT_PATHS,
   ATTACKER_SVG_VIEWBOX,
-} from '../../svg/attacker-svg'
-import { GREEN as G, POISON_PATH, ProgressBar, RED as R, RobotIcon } from '../_shared'
+} from "../../svg/attacker-svg";
+import {
+  GREEN as G,
+  POISON_PATH,
+  ProgressBar,
+  RED as R,
+  RobotIcon,
+} from "../_shared";
 
 const CSS = `
 .pi-anim { color: var(--text-primary); }
@@ -217,7 +226,7 @@ const CSS = `
   .pi-anim .pi-label { opacity: 1; }
   .pi-anim .pi-progress { animation: none; transform: scaleX(1); }
 }
-`
+`;
 
 export default function PromptInjectionAnimation(): React.ReactNode {
   return (
@@ -226,26 +235,52 @@ export default function PromptInjectionAnimation(): React.ReactNode {
       <svg
         className="pi-anim"
         viewBox="0 0 500 190"
-        style={{ width: '100%', maxWidth: 500, height: 'auto' }}
+        style={{ width: "100%", maxWidth: 500, height: "auto" }}
         xmlns="http://www.w3.org/2000/svg"
         role="presentation"
         aria-hidden="true"
       >
         {/* ===== ARROW MARKERS ===== */}
         <defs>
-          <marker id="pi-arrR" viewBox="0 0 10 10" refX="9" refY="5"
-            markerWidth="5" markerHeight="5" orient="auto">
+          <marker
+            id="pi-arrR"
+            viewBox="0 0 10 10"
+            refX="9"
+            refY="5"
+            markerWidth="5"
+            markerHeight="5"
+            orient="auto"
+          >
             <path d="M0 1 L9 5 L0 9 Z" fill={R} fillOpacity={0.5} />
           </marker>
         </defs>
 
         {/* ===== LAPTOP (left) ===== */}
-        <rect className="pi-ring" x="8" y="12" width="150" height="82" rx="6"
-          fill="var(--text-primary)" fillOpacity="0.03"
-          stroke="var(--text-muted)" strokeOpacity="0.35" strokeWidth="1.5" />
-        <rect x="4" y="96" width="158" height="7" rx="3.5"
-          fill="var(--text-primary)" fillOpacity="0.04"
-          stroke="var(--text-muted)" strokeOpacity="0.35" strokeWidth="1" />
+        <rect
+          className="pi-ring"
+          x="8"
+          y="12"
+          width="150"
+          height="82"
+          rx="6"
+          fill="var(--text-primary)"
+          fillOpacity="0.03"
+          stroke="var(--text-muted)"
+          strokeOpacity="0.35"
+          strokeWidth="1.5"
+        />
+        <rect
+          x="4"
+          y="96"
+          width="158"
+          height="7"
+          rx="3.5"
+          fill="var(--text-primary)"
+          fillOpacity="0.04"
+          stroke="var(--text-muted)"
+          strokeOpacity="0.35"
+          strokeWidth="1"
+        />
 
         {/* Clean robot (green = safe) */}
         <g className="pi-bot-clean">
@@ -257,46 +292,140 @@ export default function PromptInjectionAnimation(): React.ReactNode {
           <RobotIcon x={61} y={15} size={40} fill={R} fillOpacity="0.6" />
           {/* Pulse highlights centered on RobotIcon's pill eyes
               (256-vb eye centers (100,156) and (156,156) mapped into the 40-px parent). */}
-          <circle className="pi-eye-pulse" cx="76.6" cy="39.4" r="2.4" fill={R} fillOpacity="0.7" />
-          <circle className="pi-eye-pulse" cx="85.4" cy="39.4" r="2.4" fill={R} fillOpacity="0.7" />
+          <circle
+            className="pi-eye-pulse"
+            cx="76.6"
+            cy="39.4"
+            r="2.4"
+            fill={R}
+            fillOpacity="0.7"
+          />
+          <circle
+            className="pi-eye-pulse"
+            cx="85.4"
+            cy="39.4"
+            r="2.4"
+            fill={R}
+            fillOpacity="0.7"
+          />
           {/* Large poison icon to the right of corrupted robot */}
           <svg x="104" y="18" width="28" height="28" viewBox="0 0 48 48">
-            <path d={POISON_PATH} fill={R} fillOpacity="0.6" fillRule="evenodd" />
+            <path
+              d={POISON_PATH}
+              fill={R}
+              fillOpacity="0.6"
+              fillRule="evenodd"
+            />
           </svg>
         </g>
 
         {/* App connector icons */}
-        <rect x="34" y="58" width="24" height="24" rx="5"
-          fill="var(--text-primary)" fillOpacity="0.06"
-          stroke="var(--text-muted)" strokeOpacity="0.2" strokeWidth="0.8" />
-        <svg x="37" y="61" width="18" height="18" viewBox={OUTLOOK_SVG_VIEWBOX}
-          dangerouslySetInnerHTML={{ __html: OUTLOOK_SVG }} />
+        <rect
+          x="34"
+          y="58"
+          width="24"
+          height="24"
+          rx="5"
+          fill="var(--text-primary)"
+          fillOpacity="0.06"
+          stroke="var(--text-muted)"
+          strokeOpacity="0.2"
+          strokeWidth="0.8"
+        />
+        <svg
+          x="37"
+          y="61"
+          width="18"
+          height="18"
+          viewBox={OUTLOOK_SVG_VIEWBOX}
+          dangerouslySetInnerHTML={{ __html: OUTLOOK_SVG }}
+        />
 
-        <rect x="64" y="58" width="24" height="24" rx="5"
-          fill="var(--text-primary)" fillOpacity="0.06"
-          stroke="var(--text-muted)" strokeOpacity="0.2" strokeWidth="0.8" />
-        <svg x="67" y="61" width="18" height="18" viewBox={SLACK_SVG_VIEWBOX}
-          dangerouslySetInnerHTML={{ __html: SLACK_SVG }} />
+        <rect
+          x="64"
+          y="58"
+          width="24"
+          height="24"
+          rx="5"
+          fill="var(--text-primary)"
+          fillOpacity="0.06"
+          stroke="var(--text-muted)"
+          strokeOpacity="0.2"
+          strokeWidth="0.8"
+        />
+        <svg
+          x="67"
+          y="61"
+          width="18"
+          height="18"
+          viewBox={SLACK_SVG_VIEWBOX}
+          dangerouslySetInnerHTML={{ __html: SLACK_SVG }}
+        />
 
-        <rect x="94" y="58" width="24" height="24" rx="5"
-          fill="var(--text-primary)" fillOpacity="0.06"
-          stroke="var(--text-muted)" strokeOpacity="0.2" strokeWidth="0.8" />
-        <svg x="97" y="61" width="18" height="18" viewBox={GCAL_SVG_VIEWBOX}
-          dangerouslySetInnerHTML={{ __html: GCAL_SVG }} />
+        <rect
+          x="94"
+          y="58"
+          width="24"
+          height="24"
+          rx="5"
+          fill="var(--text-primary)"
+          fillOpacity="0.06"
+          stroke="var(--text-muted)"
+          strokeOpacity="0.2"
+          strokeWidth="0.8"
+        />
+        <svg
+          x="97"
+          y="61"
+          width="18"
+          height="18"
+          viewBox={GCAL_SVG_VIEWBOX}
+          dangerouslySetInnerHTML={{ __html: GCAL_SVG }}
+        />
 
         {/* App icon highlight overlay (strong red = data being stolen) */}
-        <rect className="pi-hl" x="34" y="58" width="84" height="24" rx="5" fill={R} />
+        <rect
+          className="pi-hl"
+          x="34"
+          y="58"
+          width="84"
+          height="24"
+          rx="5"
+          fill={R}
+        />
 
         {/* Laptop screen flash (red on corruption) */}
-        <rect className="pi-flash" x="8" y="12" width="150" height="82" rx="6"
-          fill={R} fillOpacity="0" />
+        <rect
+          className="pi-flash"
+          x="8"
+          y="12"
+          width="150"
+          height="82"
+          rx="6"
+          fill={R}
+          fillOpacity="0"
+        />
 
         {/* ===== ATTACKER (top-right, red ghost) ===== */}
         <g className="pi-apulse-wrap">
-          <circle className="pi-apulse" cx="396" cy="28" r="25"
-            fill="none" stroke={R} strokeOpacity="0.5" strokeWidth="1.5" />
+          <circle
+            className="pi-apulse"
+            cx="396"
+            cy="28"
+            r="25"
+            fill="none"
+            stroke={R}
+            strokeOpacity="0.5"
+            strokeWidth="1.5"
+          />
         </g>
-        <svg x="374" y="6" width="44" height="44" viewBox={ATTACKER_SVG_VIEWBOX}>
+        <svg
+          x="374"
+          y="6"
+          width="44"
+          height="44"
+          viewBox={ATTACKER_SVG_VIEWBOX}
+        >
           {ATTACKER_BODY_PATHS.map((d, i) => (
             <path key={`body-${i}`} d={d} fill={R} fillOpacity="0.5" />
           ))}
@@ -307,93 +436,229 @@ export default function PromptInjectionAnimation(): React.ReactNode {
 
         {/* ===== MALICIOUS EMAIL (bottom-center: envelope + poison badge) ===== */}
         <g className="pi-poison">
-          <circle className="pi-pglow" cx="268" cy="132" r="30"
-            fill={R} fillOpacity="0.06" />
+          <circle
+            className="pi-pglow"
+            cx="268"
+            cy="132"
+            r="30"
+            fill={R}
+            fillOpacity="0.06"
+          />
 
           {/* Envelope body */}
-          <rect x="244" y="114" width="48" height="34" rx="3"
-            fill="var(--text-primary)" fillOpacity="0.06"
-            stroke={R} strokeOpacity="0.25" strokeWidth="1.2" />
+          <rect
+            x="244"
+            y="114"
+            width="48"
+            height="34"
+            rx="3"
+            fill="var(--text-primary)"
+            fillOpacity="0.06"
+            stroke={R}
+            strokeOpacity="0.25"
+            strokeWidth="1.2"
+          />
           {/* Envelope flap */}
-          <path d="M244,114 L268,134 L292,114"
-            fill="none" stroke={R} strokeOpacity="0.25"
-            strokeWidth="1.2" strokeLinejoin="round" />
+          <path
+            d="M244,114 L268,134 L292,114"
+            fill="none"
+            stroke={R}
+            strokeOpacity="0.25"
+            strokeWidth="1.2"
+            strokeLinejoin="round"
+          />
 
           {/* Poison badge (bottom-right corner, larger) */}
-          <circle cx="290" cy="144" r="13"
-            fill="var(--text-primary)" fillOpacity="0.12"
-            stroke={R} strokeOpacity="0.35" strokeWidth="0.8" />
+          <circle
+            cx="290"
+            cy="144"
+            r="13"
+            fill="var(--text-primary)"
+            fillOpacity="0.12"
+            stroke={R}
+            strokeOpacity="0.35"
+            strokeWidth="0.8"
+          />
           <svg x="278" y="132" width="24" height="24" viewBox="0 0 48 48">
-            <path d={POISON_PATH} fill={R} fillOpacity="0.65" fillRule="evenodd" />
+            <path
+              d={POISON_PATH}
+              fill={R}
+              fillOpacity="0.65"
+              fillRule="evenodd"
+            />
           </svg>
         </g>
 
         {/* ===== ARROW 1: Attacker → Email (red, sends email) ===== */}
         <g className="pi-arrow1">
-          <line className="pi-line" x1="374" y1="44" x2="290" y2="116"
-            stroke={R} strokeOpacity="0.35" strokeWidth="1.5"
-            strokeDasharray="3 3" markerEnd="url(#pi-arrR)" />
+          <line
+            className="pi-line"
+            x1="374"
+            y1="44"
+            x2="290"
+            y2="116"
+            stroke={R}
+            strokeOpacity="0.35"
+            strokeWidth="1.5"
+            strokeDasharray="3 3"
+            markerEnd="url(#pi-arrR)"
+          />
         </g>
 
         {/* ===== ARROW 2: Email → Laptop (red, infects agent) ===== */}
         <g className="pi-arrow2">
-          <line className="pi-line" x1="246" y1="130" x2="158" y2="54"
-            stroke={R} strokeOpacity="0.4" strokeWidth="1.5"
-            strokeDasharray="3 3" markerEnd="url(#pi-arrR)" />
+          <line
+            className="pi-line"
+            x1="246"
+            y1="130"
+            x2="158"
+            y2="54"
+            stroke={R}
+            strokeOpacity="0.4"
+            strokeWidth="1.5"
+            strokeDasharray="3 3"
+            markerEnd="url(#pi-arrR)"
+          />
         </g>
 
         {/* ===== ARROW 3: Laptop → Attacker (red, data exfiltration) ===== */}
         <g className="pi-arrow3">
-          <line className="pi-line" x1="158" y1="26" x2="376" y2="22"
-            stroke={R} strokeOpacity="0.4" strokeWidth="1.5"
-            strokeDasharray="3 3" markerEnd="url(#pi-arrR)" />
+          <line
+            className="pi-line"
+            x1="158"
+            y1="26"
+            x2="376"
+            y2="22"
+            stroke={R}
+            strokeOpacity="0.4"
+            strokeWidth="1.5"
+            strokeDasharray="3 3"
+            markerEnd="url(#pi-arrR)"
+          />
         </g>
 
         {/* ===== PACKETS ===== */}
         {/* Packet 1: Large red envelope (Attacker → Email) */}
         <g className="pi-pkt1">
-          <rect x="-12" y="-8" width="24" height="16" rx="2"
-            fill={R} fillOpacity="0.25" stroke={R} strokeOpacity="0.5" strokeWidth="1" />
-          <path d="M-12,-8 L0,2 L12,-8"
-            fill="none" stroke={R} strokeOpacity="0.6" strokeWidth="1" strokeLinejoin="round" />
+          <rect
+            x="-12"
+            y="-8"
+            width="24"
+            height="16"
+            rx="2"
+            fill={R}
+            fillOpacity="0.25"
+            stroke={R}
+            strokeOpacity="0.5"
+            strokeWidth="1"
+          />
+          <path
+            d="M-12,-8 L0,2 L12,-8"
+            fill="none"
+            stroke={R}
+            strokeOpacity="0.6"
+            strokeWidth="1"
+            strokeLinejoin="round"
+          />
         </g>
 
         {/* Packet 2: Red envelope (Email → Laptop) */}
         <g className="pi-pkt2">
-          <rect x="-10" y="-7" width="20" height="14" rx="2"
-            fill={R} fillOpacity="0.25" stroke={R} strokeOpacity="0.5" strokeWidth="0.8" />
-          <path d="M-10,-7 L0,1 L10,-7"
-            fill="none" stroke={R} strokeOpacity="0.6" strokeWidth="0.8" strokeLinejoin="round" />
+          <rect
+            x="-10"
+            y="-7"
+            width="20"
+            height="14"
+            rx="2"
+            fill={R}
+            fillOpacity="0.25"
+            stroke={R}
+            strokeOpacity="0.5"
+            strokeWidth="0.8"
+          />
+          <path
+            d="M-10,-7 L0,1 L10,-7"
+            fill="none"
+            stroke={R}
+            strokeOpacity="0.6"
+            strokeWidth="0.8"
+            strokeLinejoin="round"
+          />
         </g>
 
         {/* Packet 3: Red envelope (Laptop → Attacker, stolen data) */}
         <g className="pi-pkt3">
-          <rect x="-10" y="-7" width="20" height="14" rx="2"
-            fill={R} fillOpacity="0.25" stroke={R} strokeOpacity="0.5" strokeWidth="0.8" />
-          <path d="M-10,-7 L0,1 L10,-7"
-            fill="none" stroke={R} strokeOpacity="0.6" strokeWidth="0.8" strokeLinejoin="round" />
+          <rect
+            x="-10"
+            y="-7"
+            width="20"
+            height="14"
+            rx="2"
+            fill={R}
+            fillOpacity="0.25"
+            stroke={R}
+            strokeOpacity="0.5"
+            strokeWidth="0.8"
+          />
+          <path
+            d="M-10,-7 L0,1 L10,-7"
+            fill="none"
+            stroke={R}
+            strokeOpacity="0.6"
+            strokeWidth="0.8"
+            strokeLinejoin="round"
+          />
         </g>
 
         {/* ===== LABELS ===== */}
-        <text x="83" y="114" textAnchor="middle"
-          fill="var(--text-primary)" fontSize="9" fontWeight="bold" fontFamily="system-ui,sans-serif">
+        <text
+          x="83"
+          y="114"
+          textAnchor="middle"
+          fill="var(--text-primary)"
+          fontSize="9"
+          fontWeight="bold"
+          fontFamily="system-ui,sans-serif"
+        >
           Your AI Agent
         </text>
-        <text x="396" y="62" textAnchor="middle"
-          fill="var(--text-primary)" fontSize="9" fontWeight="bold" fontFamily="system-ui,sans-serif">
+        <text
+          x="396"
+          y="62"
+          textAnchor="middle"
+          fill="var(--text-primary)"
+          fontSize="9"
+          fontWeight="bold"
+          fontFamily="system-ui,sans-serif"
+        >
           Attacker
         </text>
         <g className="pi-poison">
-          <text x="268" y="162" textAnchor="middle"
-            fill="var(--text-primary)" fontSize="8" fontWeight="bold" fontFamily="system-ui,sans-serif">
+          <text
+            x="268"
+            y="162"
+            textAnchor="middle"
+            fill="var(--text-primary)"
+            fontSize="8"
+            fontWeight="bold"
+            fontFamily="system-ui,sans-serif"
+          >
             Malicious Email with jailbreak instructions
           </text>
         </g>
 
         {/* Warning label positioned along arrow 3 (laptop → attacker) */}
         <g className="pi-label">
-          <text x="267" y="16" textAnchor="middle"
-            fill={R} fontSize="8" fontWeight="600" fontFamily="system-ui,sans-serif" opacity="0.8">
+          <text
+            x="267"
+            y="16"
+            textAnchor="middle"
+            fill={R}
+            fontSize="8"
+            fontWeight="600"
+            fontFamily="system-ui,sans-serif"
+            opacity="0.8"
+          >
             The AI leaked sensitive data
           </text>
         </g>
@@ -402,5 +667,5 @@ export default function PromptInjectionAnimation(): React.ReactNode {
         <ProgressBar y={188} width={460} className="pi-progress" />
       </svg>
     </div>
-  )
+  );
 }

@@ -1,4 +1,10 @@
-import { createContext, type ReactNode, useCallback, useContext, useState } from "react";
+import {
+  createContext,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useState,
+} from "react";
 
 type ToastVariant = "success" | "error" | "info";
 
@@ -31,14 +37,17 @@ let nextId = 0;
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
 
-  const addToast = useCallback((message: string, variant: ToastVariant = "info") => {
-    const id = ++nextId;
-    setToasts((prev) => [...prev, { id, message, variant }]);
+  const addToast = useCallback(
+    (message: string, variant: ToastVariant = "info") => {
+      const id = ++nextId;
+      setToasts((prev) => [...prev, { id, message, variant }]);
 
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 5000);
-  }, []);
+      setTimeout(() => {
+        setToasts((prev) => prev.filter((t) => t.id !== id));
+      }, 5000);
+    },
+    [],
+  );
 
   const dismiss = useCallback((id: number) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));

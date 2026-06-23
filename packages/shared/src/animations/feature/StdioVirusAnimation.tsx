@@ -13,10 +13,10 @@
  * Requires CSS custom properties: --text-primary, --text-muted.
  */
 
-import { McpIcon, RED as R, RobotIcon } from '../_shared'
+import { McpIcon, RED as R, RobotIcon } from "../_shared";
 
 const MALWARE_PATH =
-  'M136,108a28,28,0,1,0-28,28A28,28,0,0,0,136,108Zm-28,12a12,12,0,1,1,12-12A12,12,0,0,1,108,120Zm68-8a16,16,0,1,1-16,16A16,16,0,0,1,176,112Zm-32,64a16,16,0,1,1-16-16A16,16,0,0,1,144,176Zm96-56H223.66a95.52,95.52,0,0,0-22.39-53.95l12.39-12.39a8,8,0,0,0-11.32-11.32L190,54.73A95.52,95.52,0,0,0,136,32.34V16a8,8,0,0,0-16,0V32.34A95.52,95.52,0,0,0,66.05,54.73L53.66,42.34A8,8,0,0,0,42.34,53.66L54.73,66.05a95.52,95.52,0,0,0-22.39,54H16a8,8,0,0,0,0,16H32.34A95.52,95.52,0,0,0,54.73,190L42.34,202.34a8,8,0,0,0,11.32,11.32l12.39-12.39a95.52,95.52,0,0,0,54,22.39V240a8,8,0,0,0,16,0V223.66A95.52,95.52,0,0,0,190,201.27l12.39,12.39a8,8,0,0,0,11.32-11.32L201.27,190A95.52,95.52,0,0,0,223.66,136H240a8,8,0,0,0,0-16ZM128,208a80,80,0,1,1,80-80A80.09,80.09,0,0,1,128,208Z'
+  "M136,108a28,28,0,1,0-28,28A28,28,0,0,0,136,108Zm-28,12a12,12,0,1,1,12-12A12,12,0,0,1,108,120Zm68-8a16,16,0,1,1-16,16A16,16,0,0,1,176,112Zm-32,64a16,16,0,1,1-16-16A16,16,0,0,1,144,176Zm96-56H223.66a95.52,95.52,0,0,0-22.39-53.95l12.39-12.39a8,8,0,0,0-11.32-11.32L190,54.73A95.52,95.52,0,0,0,136,32.34V16a8,8,0,0,0-16,0V32.34A95.52,95.52,0,0,0,66.05,54.73L53.66,42.34A8,8,0,0,0,42.34,53.66L54.73,66.05a95.52,95.52,0,0,0-22.39,54H16a8,8,0,0,0,0,16H32.34A95.52,95.52,0,0,0,54.73,190L42.34,202.34a8,8,0,0,0,11.32,11.32l12.39-12.39a95.52,95.52,0,0,0,54,22.39V240a8,8,0,0,0,16,0V223.66A95.52,95.52,0,0,0,190,201.27l12.39,12.39a8,8,0,0,0,11.32-11.32L201.27,190A95.52,95.52,0,0,0,223.66,136H240a8,8,0,0,0,0-16ZM128,208a80,80,0,1,1,80-80A80.09,80.09,0,0,1,128,208Z";
 
 export const STDIO_VIRUS_CSS = `
 .sv-anim { color: var(--text-primary); }
@@ -72,7 +72,7 @@ export const STDIO_VIRUS_CSS = `
   .sv-anim .sv-m2 { opacity:.7; transform:translate(136px,86px) scale(1); }
   .sv-anim .sv-m3 { opacity:.6; transform:translate(142px,60px) scale(1); }
 }
-`
+`;
 
 /**
  * Inner SVG fragment, designed to be embedded inside a parent `<svg>` at the
@@ -85,38 +85,98 @@ export function StdioVirusContent(): React.ReactNode {
       <style>{STDIO_VIRUS_CSS}</style>
       <g className="sv-anim">
         <defs>
-          <marker id="sv-arrM" viewBox="0 0 10 10" refX="9" refY="5"
-            markerWidth="5" markerHeight="5" orient="auto">
-            <path d="M0 1 L9 5 L0 9 Z" fill="var(--text-muted)" fillOpacity={0.6} />
+          <marker
+            id="sv-arrM"
+            viewBox="0 0 10 10"
+            refX="9"
+            refY="5"
+            markerWidth="5"
+            markerHeight="5"
+            orient="auto"
+          >
+            <path
+              d="M0 1 L9 5 L0 9 Z"
+              fill="var(--text-muted)"
+              fillOpacity={0.6}
+            />
           </marker>
         </defs>
 
         {/* Laptop */}
-        <rect x="8" y="22" width="170" height="100" rx="6"
-          fill="var(--text-primary)" fillOpacity="0.03"
-          stroke="var(--text-muted)" strokeOpacity="0.35" strokeWidth="1.5" />
-        <rect x="4" y="124" width="178" height="6" rx="3"
-          fill="var(--text-primary)" fillOpacity="0.04"
-          stroke="var(--text-muted)" strokeOpacity="0.35" strokeWidth="1" />
+        <rect
+          x="8"
+          y="22"
+          width="170"
+          height="100"
+          rx="6"
+          fill="var(--text-primary)"
+          fillOpacity="0.03"
+          stroke="var(--text-muted)"
+          strokeOpacity="0.35"
+          strokeWidth="1.5"
+        />
+        <rect
+          x="4"
+          y="124"
+          width="178"
+          height="6"
+          rx="3"
+          fill="var(--text-primary)"
+          fillOpacity="0.04"
+          stroke="var(--text-muted)"
+          strokeOpacity="0.35"
+          strokeWidth="1"
+        />
 
         {/* Robot */}
-        <RobotIcon x={14} y={28} size={24} fill="var(--text-muted)" fillOpacity="0.55" />
+        <RobotIcon
+          x={14}
+          y={28}
+          size={24}
+          fill="var(--text-muted)"
+          fillOpacity="0.55"
+        />
 
         {/* Spawn arrow */}
         <g className="sv-spawn">
-          <line className="sv-line" x1="40" y1="40" x2="58" y2="37"
-            stroke="var(--text-muted)" strokeOpacity="0.5" strokeWidth="1"
-            strokeDasharray="3 3" markerEnd="url(#sv-arrM)" />
+          <line
+            className="sv-line"
+            x1="40"
+            y1="40"
+            x2="58"
+            y2="37"
+            stroke="var(--text-muted)"
+            strokeOpacity="0.5"
+            strokeWidth="1"
+            strokeDasharray="3 3"
+            markerEnd="url(#sv-arrM)"
+          />
         </g>
 
         {/* MCP process INSIDE laptop  -  always visible */}
         <g>
-          <rect x="62" y="26" width="62" height="22" rx="4"
-            fill={R} fillOpacity="0.05"
-            stroke={R} strokeOpacity="0.4" strokeWidth="1.2" />
+          <rect
+            x="62"
+            y="26"
+            width="62"
+            height="22"
+            rx="4"
+            fill={R}
+            fillOpacity="0.05"
+            stroke={R}
+            strokeOpacity="0.4"
+            strokeWidth="1.2"
+          />
           <McpIcon x={78} y={30} size={14} color={R} opacity="0.7" />
-          <text x="104" y="41" textAnchor="middle"
-            fill={R} fontSize="6" fontWeight="bold" fontFamily="system-ui,sans-serif">
+          <text
+            x="104"
+            y="41"
+            textAnchor="middle"
+            fill={R}
+            fontSize="6"
+            fontWeight="bold"
+            fontFamily="system-ui,sans-serif"
+          >
             MCP
           </text>
         </g>
@@ -144,7 +204,7 @@ export function StdioVirusContent(): React.ReactNode {
         </g>
       </g>
     </>
-  )
+  );
 }
 
 export default function StdioVirusAnimation(): React.ReactNode {
@@ -152,7 +212,7 @@ export default function StdioVirusAnimation(): React.ReactNode {
     <div className="flex justify-center">
       <svg
         viewBox="0 0 186 140"
-        style={{ width: '100%', maxWidth: 280, height: 'auto' }}
+        style={{ width: "100%", maxWidth: 280, height: "auto" }}
         xmlns="http://www.w3.org/2000/svg"
         role="presentation"
         aria-hidden="true"
@@ -160,5 +220,5 @@ export default function StdioVirusAnimation(): React.ReactNode {
         <StdioVirusContent />
       </svg>
     </div>
-  )
+  );
 }

@@ -17,7 +17,12 @@ interface TabsProps {
   onChange?: (key: string) => void;
 }
 
-export default function Tabs({ tabs, param = "tab", defaultTab, onChange }: TabsProps) {
+export default function Tabs({
+  tabs,
+  param = "tab",
+  defaultTab,
+  onChange,
+}: TabsProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const active = searchParams.get(param) ?? defaultTab ?? tabs[0]?.key ?? "";
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
@@ -40,7 +45,7 @@ export default function Tabs({ tabs, param = "tab", defaultTab, onChange }: Tabs
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLDivElement>) => {
       const idx = tabs.findIndex((t) => t.key === active);
-      let next = idx;
+      let next: number;
 
       if (e.key === "ArrowRight") {
         e.preventDefault();
@@ -75,7 +80,9 @@ export default function Tabs({ tabs, param = "tab", defaultTab, onChange }: Tabs
         return (
           <button
             key={tab.key}
-            ref={(el) => { tabRefs.current[i] = el; }}
+            ref={(el) => {
+              tabRefs.current[i] = el;
+            }}
             role="tab"
             aria-selected={isActive}
             tabIndex={isActive ? 0 : -1}

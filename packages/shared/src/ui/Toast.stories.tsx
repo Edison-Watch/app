@@ -16,21 +16,33 @@ const meta: Meta = {
 export default meta;
 type Story = StoryObj;
 
-function ToastDemo({ variant, message }: { variant?: "success" | "error" | "info"; message: string }) {
+function ToastDemo({
+  variant,
+  message,
+}: {
+  variant?: "success" | "error" | "info";
+  message: string;
+}) {
   const { addToast } = useToast();
   return <Button onClick={() => addToast(message, variant)}>Show Toast</Button>;
 }
 
 export const Success: Story = {
-  render: () => <ToastDemo variant="success" message="Policy saved successfully!" />,
+  render: () => (
+    <ToastDemo variant="success" message="Policy saved successfully!" />
+  ),
 };
 
 export const Error: Story = {
-  render: () => <ToastDemo variant="error" message="Failed to connect to server." />,
+  render: () => (
+    <ToastDemo variant="error" message="Failed to connect to server." />
+  ),
 };
 
 export const Info: Story = {
-  render: () => <ToastDemo variant="info" message="Session is being recorded." />,
+  render: () => (
+    <ToastDemo variant="info" message="Session is being recorded." />
+  ),
 };
 
 export const AllVariants: Story = {

@@ -5,7 +5,9 @@ import { ToastProvider, useToast } from "../Toast";
 
 function ToastTrigger() {
   const { addToast } = useToast();
-  return <button onClick={() => addToast("Test message", "success")}>Show</button>;
+  return (
+    <button onClick={() => addToast("Test message", "success")}>Show</button>
+  );
 }
 
 describe("Toast", () => {

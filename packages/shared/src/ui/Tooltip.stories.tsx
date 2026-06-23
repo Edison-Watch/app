@@ -71,7 +71,17 @@ export const RichContent: Story = {
   args: {
     content: (
       <span>
-        Press <kbd style={{ padding: "1px 4px", background: "var(--bg-overlay)", borderRadius: 3 }}>Esc</kbd> to close
+        Press{" "}
+        <kbd
+          style={{
+            padding: "1px 4px",
+            background: "var(--bg-overlay)",
+            borderRadius: 3,
+          }}
+        >
+          Esc
+        </kbd>{" "}
+        to close
       </span>
     ),
     placement: "top",

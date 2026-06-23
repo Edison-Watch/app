@@ -11,8 +11,12 @@ const EDISON_SECRET_KEY_STORAGE = "edison_secret_key";
  * Create authorization headers for API requests.
  * Accepts a getApiKey function to decouple from specific storage implementations.
  */
-function createHeaders(getApiKey?: () => string | null): Record<string, string> {
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
+function createHeaders(
+  getApiKey?: () => string | null,
+): Record<string, string> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
   const apiKey = getApiKey?.();
   if (apiKey) headers["Authorization"] = `Bearer ${apiKey}`;
   return headers;
@@ -51,7 +55,9 @@ export async function registerSecretKey(
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`Failed to register secret key: ${response.status} ${text}`);
+    throw new Error(
+      `Failed to register secret key: ${response.status} ${text}`,
+    );
   }
 }
 
@@ -61,7 +67,11 @@ export async function rollSecretKey(
   newUserPart: string,
   newUserPartHash: string,
   getApiKey?: () => string | null,
-): Promise<{ success: boolean; re_encrypted: number; new_composite_key: string }> {
+): Promise<{
+  success: boolean;
+  re_encrypted: number;
+  new_composite_key: string;
+}> {
   const response = await fetch("/api/v1/user/secret-key/roll", {
     method: "POST",
     headers: createHeaders(getApiKey),

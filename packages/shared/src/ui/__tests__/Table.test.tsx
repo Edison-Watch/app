@@ -10,8 +10,19 @@ interface TestRow {
 }
 
 const columns = [
-  { key: "name", header: "Name", sortable: true, render: (r: TestRow) => r.name },
-  { key: "count", header: "Count", sortable: true, numeric: true, render: (r: TestRow) => r.count },
+  {
+    key: "name",
+    header: "Name",
+    sortable: true,
+    render: (r: TestRow) => r.name,
+  },
+  {
+    key: "count",
+    header: "Count",
+    sortable: true,
+    numeric: true,
+    render: (r: TestRow) => r.count,
+  },
 ];
 
 const data: TestRow[] = [
@@ -30,7 +41,9 @@ describe("Table", () => {
   });
 
   it("shows skeleton rows when loading", () => {
-    render(<Table columns={columns} data={[]} loading getRowKey={(r) => r.id} />);
+    render(
+      <Table columns={columns} data={[]} loading getRowKey={(r) => r.id} />,
+    );
     // Should render 5 skeleton rows (each with animated pulse divs)
     const rows = document.querySelectorAll("tbody tr");
     expect(rows.length).toBe(5);

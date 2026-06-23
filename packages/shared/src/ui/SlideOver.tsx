@@ -10,7 +10,14 @@ interface SlideOverProps {
   wide?: boolean;
 }
 
-export default function SlideOver({ open, onClose, title, children, footer, wide }: SlideOverProps) {
+export default function SlideOver({
+  open,
+  onClose,
+  title,
+  children,
+  footer,
+  wide,
+}: SlideOverProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
 
@@ -67,9 +74,17 @@ export default function SlideOver({ open, onClose, title, children, footer, wide
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true" aria-label={title}>
+    <div
+      className="fixed inset-0 z-50 flex justify-end"
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+    >
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+        onClick={onClose}
+      />
 
       {/* Panel */}
       <div
@@ -79,7 +94,9 @@ export default function SlideOver({ open, onClose, title, children, footer, wide
         {/* Header */}
         {title && (
           <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)] flex-shrink-0">
-            <h2 className="text-lg font-semibold text-[var(--text-primary)]">{title}</h2>
+            <h2 className="text-lg font-semibold text-[var(--text-primary)]">
+              {title}
+            </h2>
             <button
               onClick={onClose}
               className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
@@ -95,7 +112,9 @@ export default function SlideOver({ open, onClose, title, children, footer, wide
 
         {/* Sticky footer */}
         {footer && (
-          <div className="flex-shrink-0 px-5 py-4 border-t border-[var(--border)]">{footer}</div>
+          <div className="flex-shrink-0 px-5 py-4 border-t border-[var(--border)]">
+            {footer}
+          </div>
         )}
       </div>
     </div>

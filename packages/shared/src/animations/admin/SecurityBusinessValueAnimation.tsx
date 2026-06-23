@@ -15,23 +15,30 @@
  * Requires CSS custom properties: --text-primary, --accent, --text-muted.
  */
 import {
-  ADMIN_PATH, DANGER, EdisonLogo, McpIcon, McpPacket,
-  ORANGE as O, PERSON_PATH, ProgressBar, RobotIcon,
-} from '../_shared'
-import { SLACK_SVG, SLACK_SVG_VIEWBOX } from '../../svg/app-icons-svg'
+  ADMIN_PATH,
+  DANGER,
+  EdisonLogo,
+  McpIcon,
+  McpPacket,
+  ORANGE as O,
+  PERSON_PATH,
+  ProgressBar,
+  RobotIcon,
+} from "../_shared";
+import { SLACK_SVG, SLACK_SVG_VIEWBOX } from "../../svg/app-icons-svg";
 
-const AMBER = '#f5a524'
-const TICKET = '#5b8def'
+const AMBER = "#f5a524";
+const TICKET = "#5b8def";
 
-const COLORS = ['var(--accent)', AMBER, TICKET, DANGER] as const
+const COLORS = ["var(--accent)", AMBER, TICKET, DANGER] as const;
 
 /** Destination coordinates for outbound packets */
 const DEST = [
-  { x: 580, y: 80 },   // MCP server (top-right)
-  { x: 134, y: 78 },   // Person/user (above laptop)
-  { x: 360, y: 200 },  // Admin (below Edison)
-  { x: 360, y: 210 },  // Blocked (below Edison, never arrives)
-] as const
+  { x: 580, y: 80 }, // MCP server (top-right)
+  { x: 134, y: 78 }, // Person/user (above laptop)
+  { x: 360, y: 200 }, // Admin (below Edison)
+  { x: 360, y: 210 }, // Blocked (below Edison, never arrives)
+] as const;
 
 const CSS = `
 .sbv { color: var(--text-primary); }
@@ -277,7 +284,7 @@ const CSS = `
   .sbv .sbv-h1 { opacity:1; }
   .sbv .sbv-h2, .sbv .sbv-h3, .sbv .sbv-h4 { opacity:0; }
 }
-`
+`;
 
 export default function SecurityBusinessValueAnimation(): React.ReactNode {
   return (
@@ -293,46 +300,128 @@ export default function SecurityBusinessValueAnimation(): React.ReactNode {
         aria-hidden="true"
       >
         {/* ══ Phase headings ══ */}
-        <text className="sbv-h1" x="360" y="-2" textAnchor="middle"
-          fill="var(--accent)" fontSize="10" fontWeight="bold"
-          fontFamily="system-ui,sans-serif">
+        <text
+          className="sbv-h1"
+          x="360"
+          y="-2"
+          textAnchor="middle"
+          fill="var(--accent)"
+          fontSize="10"
+          fontWeight="bold"
+          fontFamily="system-ui,sans-serif"
+        >
           Routine request - approved automatically
         </text>
-        <text className="sbv-h2" x="360" y="-2" textAnchor="middle"
-          fill={AMBER} fontSize="10" fontWeight="bold"
-          fontFamily="system-ui,sans-serif">
+        <text
+          className="sbv-h2"
+          x="360"
+          y="-2"
+          textAnchor="middle"
+          fill={AMBER}
+          fontSize="10"
+          fontWeight="bold"
+          fontFamily="system-ui,sans-serif"
+        >
           Needs consent - ask the user
         </text>
-        <text className="sbv-h3" x="360" y="-2" textAnchor="middle"
-          fill={TICKET} fontSize="10" fontWeight="bold"
-          fontFamily="system-ui,sans-serif">
+        <text
+          className="sbv-h3"
+          x="360"
+          y="-2"
+          textAnchor="middle"
+          fill={TICKET}
+          fontSize="10"
+          fontWeight="bold"
+          fontFamily="system-ui,sans-serif"
+        >
           New scenario - escalate to IT
         </text>
-        <text className="sbv-h4" x="360" y="-2" textAnchor="middle"
-          fill={DANGER} fontSize="10" fontWeight="bold"
-          fontFamily="system-ui,sans-serif">
+        <text
+          className="sbv-h4"
+          x="360"
+          y="-2"
+          textAnchor="middle"
+          fill={DANGER}
+          fontSize="10"
+          fontWeight="bold"
+          fontFamily="system-ui,sans-serif"
+        >
           Policy violation - blocked
         </text>
 
         {/* ══ Connector lines (always visible, faint) ══ */}
         {/* Laptop → Edison */}
-        <line className="sbv-line" x1="176" y1="130" x2="338" y2="130"
-          stroke="var(--text-muted)" strokeOpacity="0.35" strokeWidth="1.5" strokeDasharray="3 3" />
+        <line
+          className="sbv-line"
+          x1="176"
+          y1="130"
+          x2="338"
+          y2="130"
+          stroke="var(--text-muted)"
+          strokeOpacity="0.35"
+          strokeWidth="1.5"
+          strokeDasharray="3 3"
+        />
         {/* Edison → MCP server (top-right) */}
-        <line className="sbv-line" x1="382" y1="130" x2="570" y2="80"
-          stroke={COLORS[0]} strokeOpacity="0.15" strokeWidth="1" strokeDasharray="3 3" />
+        <line
+          className="sbv-line"
+          x1="382"
+          y1="130"
+          x2="570"
+          y2="80"
+          stroke={COLORS[0]}
+          strokeOpacity="0.15"
+          strokeWidth="1"
+          strokeDasharray="3 3"
+        />
         {/* Edison → User (back up to person above laptop) */}
-        <line className="sbv-line" x1="338" y1="130" x2="150" y2="80"
-          stroke={COLORS[1]} strokeOpacity="0.15" strokeWidth="1" strokeDasharray="3 3" />
+        <line
+          className="sbv-line"
+          x1="338"
+          y1="130"
+          x2="150"
+          y2="80"
+          stroke={COLORS[1]}
+          strokeOpacity="0.15"
+          strokeWidth="1"
+          strokeDasharray="3 3"
+        />
         {/* Edison → Admin (below Edison) */}
-        <line className="sbv-line" x1="360" y1="155" x2="360" y2="185"
-          stroke={COLORS[2]} strokeOpacity="0.15" strokeWidth="1" strokeDasharray="3 3" />
+        <line
+          className="sbv-line"
+          x1="360"
+          y1="155"
+          x2="360"
+          y2="185"
+          stroke={COLORS[2]}
+          strokeOpacity="0.15"
+          strokeWidth="1"
+          strokeDasharray="3 3"
+        />
         {/* User → Edison (return path after approval) */}
-        <line className="sbv-line" x1="155" y1="78" x2="338" y2="130"
-          stroke="var(--accent)" strokeOpacity="0.1" strokeWidth="1" strokeDasharray="3 3" />
+        <line
+          className="sbv-line"
+          x1="155"
+          y1="78"
+          x2="338"
+          y2="130"
+          stroke="var(--accent)"
+          strokeOpacity="0.1"
+          strokeWidth="1"
+          strokeDasharray="3 3"
+        />
         {/* Admin → Edison (return path after approval) */}
-        <line className="sbv-line" x1="364" y1="185" x2="364" y2="155"
-          stroke="var(--accent)" strokeOpacity="0.1" strokeWidth="1" strokeDasharray="3 3" />
+        <line
+          className="sbv-line"
+          x1="364"
+          y1="185"
+          x2="364"
+          y2="155"
+          stroke="var(--accent)"
+          strokeOpacity="0.1"
+          strokeWidth="1"
+          strokeDasharray="3 3"
+        />
 
         {/* ═══════════════════════════════════════════════
             DESTINATIONS (all 4 always visible)
@@ -340,21 +429,65 @@ export default function SecurityBusinessValueAnimation(): React.ReactNode {
 
         {/* ── 1. Slack MCP connector (top-right) - approved, tool call proceeds ── */}
         <g>
-          <rect x={560} y={56} width={130} height={48} rx={8}
-            fill="var(--accent)" fillOpacity="0.04"
-            stroke="var(--accent)" strokeOpacity="0.2" strokeWidth="1" />
-          <McpIcon x={568} y={62} size={14} color="var(--accent)" opacity="0.5" />
-          <svg x={584} y={62} width={18} height={18} viewBox={SLACK_SVG_VIEWBOX}
-            dangerouslySetInnerHTML={{ __html: SLACK_SVG }} />
-          <text x={608} y={74}
-            fill="var(--text-primary)" fontSize="8.5" fontWeight="600"
-            fontFamily="system-ui,sans-serif">Slack</text>
-          <text x={568} y={94}
-            fill="var(--text-muted)" fontSize="7"
-            fontFamily="system-ui,sans-serif">Approved · send DM</text>
+          <rect
+            x={560}
+            y={56}
+            width={130}
+            height={48}
+            rx={8}
+            fill="var(--accent)"
+            fillOpacity="0.04"
+            stroke="var(--accent)"
+            strokeOpacity="0.2"
+            strokeWidth="1"
+          />
+          <McpIcon
+            x={568}
+            y={62}
+            size={14}
+            color="var(--accent)"
+            opacity="0.5"
+          />
+          <svg
+            x={584}
+            y={62}
+            width={18}
+            height={18}
+            viewBox={SLACK_SVG_VIEWBOX}
+            dangerouslySetInnerHTML={{ __html: SLACK_SVG }}
+          />
+          <text
+            x={608}
+            y={74}
+            fill="var(--text-primary)"
+            fontSize="8.5"
+            fontWeight="600"
+            fontFamily="system-ui,sans-serif"
+          >
+            Slack
+          </text>
+          <text
+            x={568}
+            y={94}
+            fill="var(--text-muted)"
+            fontSize="7"
+            fontFamily="system-ui,sans-serif"
+          >
+            Approved · send DM
+          </text>
           {/* Highlight glow */}
-          <rect className="sbv-dh1" x={558} y={54} width={134} height={52} rx={9}
-            fill="none" stroke="var(--accent)" strokeOpacity="0.7" strokeWidth="1.5" />
+          <rect
+            className="sbv-dh1"
+            x={558}
+            y={54}
+            width={134}
+            height={52}
+            rx={9}
+            fill="none"
+            stroke="var(--accent)"
+            strokeOpacity="0.7"
+            strokeWidth="1.5"
+          />
         </g>
 
         {/* ── 2. User / User (above laptop) ── */}
@@ -362,82 +495,193 @@ export default function SecurityBusinessValueAnimation(): React.ReactNode {
           <svg x={121} y={62} width={26} height={26} viewBox="0 0 256 256">
             <path d={PERSON_PATH} fill={AMBER} fillOpacity="0.6" />
           </svg>
-          <text x="134" y="60" textAnchor="middle"
-            fill={AMBER} fillOpacity="0.85" fontSize="7.5" fontWeight="600"
-            fontFamily="system-ui,sans-serif">User</text>
+          <text
+            x="134"
+            y="60"
+            textAnchor="middle"
+            fill={AMBER}
+            fillOpacity="0.85"
+            fontSize="7.5"
+            fontWeight="600"
+            fontFamily="system-ui,sans-serif"
+          >
+            User
+          </text>
           {/* Highlight glow */}
-          <circle className="sbv-dh2" cx={134} cy={78} r={20}
-            fill="none" stroke={AMBER} strokeOpacity="0.6" strokeWidth="1.5" />
+          <circle
+            className="sbv-dh2"
+            cx={134}
+            cy={78}
+            r={20}
+            fill="none"
+            stroke={AMBER}
+            strokeOpacity="0.6"
+            strokeWidth="1.5"
+          />
         </g>
 
         {/* ── 3. IT Admin + Ticket card (below Edison) ── */}
         <g>
-          <rect x={310} y={185} width={100} height={36} rx={8}
-            fill={TICKET} fillOpacity="0.04"
-            stroke={TICKET} strokeOpacity="0.2" strokeWidth="1" />
+          <rect
+            x={310}
+            y={185}
+            width={100}
+            height={36}
+            rx={8}
+            fill={TICKET}
+            fillOpacity="0.04"
+            stroke={TICKET}
+            strokeOpacity="0.2"
+            strokeWidth="1"
+          />
           {/* Admin icon */}
           <svg x={318} y={191} width={20} height={20} viewBox="0 0 256 256">
             <path d={ADMIN_PATH} fill={TICKET} fillOpacity="0.6" />
           </svg>
-          <text x={342} y={204}
-            fill="var(--text-primary)" fontSize="8.5" fontWeight="600"
-            fontFamily="system-ui,sans-serif">IT Admin</text>
-          <text x={342} y={214}
-            fill="var(--text-muted)" fontSize="7"
-            fontFamily="system-ui,sans-serif">Escalated</text>
+          <text
+            x={342}
+            y={204}
+            fill="var(--text-primary)"
+            fontSize="8.5"
+            fontWeight="600"
+            fontFamily="system-ui,sans-serif"
+          >
+            IT Admin
+          </text>
+          <text
+            x={342}
+            y={214}
+            fill="var(--text-muted)"
+            fontSize="7"
+            fontFamily="system-ui,sans-serif"
+          >
+            Escalated
+          </text>
           {/* Highlight glow */}
-          <rect className="sbv-dh3" x={308} y={183} width={104} height={40} rx={9}
-            fill="none" stroke={TICKET} strokeOpacity="0.7" strokeWidth="1.5" />
+          <rect
+            className="sbv-dh3"
+            x={308}
+            y={183}
+            width={104}
+            height={40}
+            rx={9}
+            fill="none"
+            stroke={TICKET}
+            strokeOpacity="0.7"
+            strokeWidth="1.5"
+          />
           {/* Ticket card - appears to the right when traffic arrives */}
           <g className="sbv-ticket">
-            <rect x={420} y={189} width={78} height={28} rx={5}
-              fill={TICKET} fillOpacity="0.06"
-              stroke={TICKET} strokeOpacity="0.3" strokeWidth="0.8" />
+            <rect
+              x={420}
+              y={189}
+              width={78}
+              height={28}
+              rx={5}
+              fill={TICKET}
+              fillOpacity="0.06"
+              stroke={TICKET}
+              strokeOpacity="0.3"
+              strokeWidth="0.8"
+            />
             {/* Ticket icon */}
             <svg x={424} y={192} width={16} height={16} viewBox="0 0 256 256">
-              <path d="M232,104a8,8,0,0,0,8-8V64a16,16,0,0,0-16-16H32A16,16,0,0,0,16,64V96a8,8,0,0,0,8,8,24,24,0,0,1,0,48,8,8,0,0,0-8,8v32a16,16,0,0,0,16,16H224a16,16,0,0,0,16-16V160a8,8,0,0,0-8-8,24,24,0,0,1,0-48ZM32,167.2a40,40,0,0,0,0-78.4V64H88V192H32Zm192,0V192H104V64H224V88.8a40,40,0,0,0,0,78.4Z"
-                fill={TICKET} fillOpacity="0.7" />
+              <path
+                d="M232,104a8,8,0,0,0,8-8V64a16,16,0,0,0-16-16H32A16,16,0,0,0,16,64V96a8,8,0,0,0,8,8,24,24,0,0,1,0,48,8,8,0,0,0-8,8v32a16,16,0,0,0,16,16H224a16,16,0,0,0,16-16V160a8,8,0,0,0-8-8,24,24,0,0,1,0-48ZM32,167.2a40,40,0,0,0,0-78.4V64H88V192H32Zm192,0V192H104V64H224V88.8a40,40,0,0,0,0,78.4Z"
+                fill={TICKET}
+                fillOpacity="0.7"
+              />
             </svg>
             {/* Ticket number */}
-            <text x={444} y={201}
-              fill={TICKET} fontSize="7.5" fontWeight="bold"
-              fontFamily="system-ui,sans-serif">#4218</text>
+            <text
+              x={444}
+              y={201}
+              fill={TICKET}
+              fontSize="7.5"
+              fontWeight="bold"
+              fontFamily="system-ui,sans-serif"
+            >
+              #4218
+            </text>
             {/* Description */}
-            <text x={444} y={212}
-              fill={TICKET} fillOpacity="0.7" fontSize="6.5"
-              fontFamily="system-ui,sans-serif">HRIS access</text>
+            <text
+              x={444}
+              y={212}
+              fill={TICKET}
+              fillOpacity="0.7"
+              fontSize="6.5"
+              fontFamily="system-ui,sans-serif"
+            >
+              HRIS access
+            </text>
           </g>
         </g>
-
 
         {/* ═══════════════════════════════════════════════
             USER'S LAPTOP with AI agent inside
             ═══════════════════════════════════════════════ */}
         {/* Laptop screen */}
-        <rect x={94} y={100} width={80} height={52} rx={5}
-          fill="var(--text-primary)" fillOpacity="0.03"
-          stroke="var(--text-muted)" strokeOpacity="0.35" strokeWidth="1.5" />
+        <rect
+          x={94}
+          y={100}
+          width={80}
+          height={52}
+          rx={5}
+          fill="var(--text-primary)"
+          fillOpacity="0.03"
+          stroke="var(--text-muted)"
+          strokeOpacity="0.35"
+          strokeWidth="1.5"
+        />
         {/* Laptop stand */}
-        <rect x={90} y={154} width={88} height={5} rx={2.5}
-          fill="var(--text-primary)" fillOpacity="0.04"
-          stroke="var(--text-muted)" strokeOpacity="0.35" strokeWidth="1" />
+        <rect
+          x={90}
+          y={154}
+          width={88}
+          height={5}
+          rx={2.5}
+          fill="var(--text-primary)"
+          fillOpacity="0.04"
+          stroke="var(--text-muted)"
+          strokeOpacity="0.35"
+          strokeWidth="1"
+        />
         {/* Robot (AI agent) inside the laptop */}
         <RobotIcon x={114} y={106} size={36} fill={O} fillOpacity="0.6" />
-        <text x="134" y="146" textAnchor="middle"
-          fill="var(--text-muted)" fontSize="7"
-          fontFamily="system-ui,sans-serif">
+        <text
+          x="134"
+          y="146"
+          textAnchor="middle"
+          fill="var(--text-muted)"
+          fontSize="7"
+          fontFamily="system-ui,sans-serif"
+        >
           AI Agent
         </text>
 
         {/* ═══════════════════════════════════════════════
             EDISON GATEWAY (center)
             ═══════════════════════════════════════════════ */}
-        <circle className="sbv-pulse" cx="360" cy="130" r="24"
-          fill="none" stroke="var(--accent)" strokeOpacity="0.5" strokeWidth="1.5" />
+        <circle
+          className="sbv-pulse"
+          cx="360"
+          cy="130"
+          r="24"
+          fill="none"
+          stroke="var(--accent)"
+          strokeOpacity="0.5"
+          strokeWidth="1.5"
+        />
         <EdisonLogo x={338} y={110} w={44} h={42} />
-        <text x="360" y="166" textAnchor="middle"
-          fill="var(--text-primary)" fontSize="8" fontWeight="bold"
-          fontFamily="system-ui,sans-serif">
+        <text
+          x="360"
+          y="166"
+          textAnchor="middle"
+          fill="var(--text-primary)"
+          fontSize="8"
+          fontWeight="bold"
+          fontFamily="system-ui,sans-serif"
+        >
           Edison
         </text>
 
@@ -446,60 +690,142 @@ export default function SecurityBusinessValueAnimation(): React.ReactNode {
             ═══════════════════════════════════════════════ */}
         {COLORS.map((color, i) => (
           <g key={i} className={`sbv-radar${i + 1}`}>
-            <circle cx={360} cy={50} r={22}
-              fill="none" stroke={color} strokeOpacity="0.1" strokeWidth="0.6" />
-            <circle cx={360} cy={50} r={15}
-              fill="none" stroke={color} strokeOpacity="0.16" strokeWidth="0.6" />
-            <circle cx={360} cy={50} r={8}
-              fill="none" stroke={color} strokeOpacity="0.22" strokeWidth="0.6" />
-            <circle cx={360} cy={50} r={2}
-              fill={color} fillOpacity="0.4" />
-            <line x1={338} y1={50} x2={382} y2={50}
-              stroke={color} strokeOpacity="0.08" strokeWidth="0.5" />
-            <line x1={360} y1={28} x2={360} y2={72}
-              stroke={color} strokeOpacity="0.08" strokeWidth="0.5" />
+            <circle
+              cx={360}
+              cy={50}
+              r={22}
+              fill="none"
+              stroke={color}
+              strokeOpacity="0.1"
+              strokeWidth="0.6"
+            />
+            <circle
+              cx={360}
+              cy={50}
+              r={15}
+              fill="none"
+              stroke={color}
+              strokeOpacity="0.16"
+              strokeWidth="0.6"
+            />
+            <circle
+              cx={360}
+              cy={50}
+              r={8}
+              fill="none"
+              stroke={color}
+              strokeOpacity="0.22"
+              strokeWidth="0.6"
+            />
+            <circle cx={360} cy={50} r={2} fill={color} fillOpacity="0.4" />
+            <line
+              x1={338}
+              y1={50}
+              x2={382}
+              y2={50}
+              stroke={color}
+              strokeOpacity="0.08"
+              strokeWidth="0.5"
+            />
+            <line
+              x1={360}
+              y1={28}
+              x2={360}
+              y2={72}
+              stroke={color}
+              strokeOpacity="0.08"
+              strokeWidth="0.5"
+            />
             {/* Sweep arm */}
             <g className={`sbv-sweep${i + 1}`}>
-              <line x1={360} y1={50} x2={360} y2={29}
-                stroke={color} strokeOpacity="0.75" strokeWidth="1.2"
-                strokeLinecap="round" />
-              <path d="M360,50 L354,30 A22,22 0 0,1 360,28 Z"
-                fill={color} fillOpacity="0.12" />
+              <line
+                x1={360}
+                y1={50}
+                x2={360}
+                y2={29}
+                stroke={color}
+                strokeOpacity="0.75"
+                strokeWidth="1.2"
+                strokeLinecap="round"
+              />
+              <path
+                d="M360,50 L354,30 A22,22 0 0,1 360,28 Z"
+                fill={color}
+                fillOpacity="0.12"
+              />
             </g>
             {/* Verdict icon revealed after sweep - positioned above the radar */}
             <g className={`sbv-score${i + 1}`}>
-              <circle cx={360} cy={18} r={12}
-                fill={color} fillOpacity="0.1" />
+              <circle cx={360} cy={18} r={12} fill={color} fillOpacity="0.1" />
               {/* Checkmark for approved */}
               {i === 0 && (
-                <polyline points="354,18 358,22 366,14"
-                  fill="none" stroke={color} strokeWidth="2.2"
-                  strokeLinecap="round" strokeLinejoin="round" />
+                <polyline
+                  points="354,18 358,22 366,14"
+                  fill="none"
+                  stroke={color}
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
               )}
               {/* Warning triangle for ask user */}
               {i === 1 && (
                 <g>
-                  <path d="M360,9 L369,25 L351,25 Z"
-                    fill="none" stroke={color} strokeWidth="1.5"
-                    strokeLinejoin="round" />
-                  <text x={360} y={23} textAnchor="middle"
-                    fill={color} fontSize="9" fontWeight="bold"
-                    fontFamily="system-ui,sans-serif">!</text>
+                  <path
+                    d="M360,9 L369,25 L351,25 Z"
+                    fill="none"
+                    stroke={color}
+                    strokeWidth="1.5"
+                    strokeLinejoin="round"
+                  />
+                  <text
+                    x={360}
+                    y={23}
+                    textAnchor="middle"
+                    fill={color}
+                    fontSize="9"
+                    fontWeight="bold"
+                    fontFamily="system-ui,sans-serif"
+                  >
+                    !
+                  </text>
                 </g>
               )}
               {/* Question mark for IT ticket */}
               {i === 2 && (
-                <text x={360} y={23} textAnchor="middle"
-                  fill={color} fontSize="14" fontWeight="bold"
-                  fontFamily="system-ui,sans-serif">?</text>
+                <text
+                  x={360}
+                  y={23}
+                  textAnchor="middle"
+                  fill={color}
+                  fontSize="14"
+                  fontWeight="bold"
+                  fontFamily="system-ui,sans-serif"
+                >
+                  ?
+                </text>
               )}
               {/* Red X for blocked */}
               {i === 3 && (
                 <g>
-                  <line x1={355} y1={13} x2={365} y2={23}
-                    stroke={color} strokeWidth="2.2" strokeLinecap="round" />
-                  <line x1={365} y1={13} x2={355} y2={23}
-                    stroke={color} strokeWidth="2.2" strokeLinecap="round" />
+                  <line
+                    x1={355}
+                    y1={13}
+                    x2={365}
+                    y2={23}
+                    stroke={color}
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                  />
+                  <line
+                    x1={365}
+                    y1={13}
+                    x2={355}
+                    y2={23}
+                    stroke={color}
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                  />
                 </g>
               )}
             </g>
@@ -510,92 +836,219 @@ export default function SecurityBusinessValueAnimation(): React.ReactNode {
             PHASE 4: POLICY CHECKLIST (right of radar)
             ═══════════════════════════════════════════════ */}
         <g className="sbv-checklist">
-          <rect x={392} y={32} width={80} height={42} rx={5}
-            fill="var(--text-primary)" fillOpacity="0.03"
-            stroke={DANGER} strokeOpacity="0.2" strokeWidth="0.8" />
+          <rect
+            x={392}
+            y={32}
+            width={80}
+            height={42}
+            rx={5}
+            fill="var(--text-primary)"
+            fillOpacity="0.03"
+            stroke={DANGER}
+            strokeOpacity="0.2"
+            strokeWidth="0.8"
+          />
           {/* Row 1 - pass */}
           <g className="sbv-chk1">
-            <polyline points="399,44 401,46 405,41"
-              fill="none" stroke="var(--accent)" strokeWidth="1.5"
-              strokeLinecap="round" strokeLinejoin="round" />
-            <rect x={412} y={41} width={52} height={5} rx={2.5}
-              fill="var(--accent)" fillOpacity="0.15" />
+            <polyline
+              points="399,44 401,46 405,41"
+              fill="none"
+              stroke="var(--accent)"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+            <rect
+              x={412}
+              y={41}
+              width={52}
+              height={5}
+              rx={2.5}
+              fill="var(--accent)"
+              fillOpacity="0.15"
+            />
           </g>
           {/* Row 2 - pass */}
           <g className="sbv-chk2">
-            <polyline points="399,55 401,57 405,52"
-              fill="none" stroke="var(--accent)" strokeWidth="1.5"
-              strokeLinecap="round" strokeLinejoin="round" />
-            <rect x={412} y={52} width={40} height={5} rx={2.5}
-              fill="var(--accent)" fillOpacity="0.15" />
+            <polyline
+              points="399,55 401,57 405,52"
+              fill="none"
+              stroke="var(--accent)"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+            <rect
+              x={412}
+              y={52}
+              width={40}
+              height={5}
+              rx={2.5}
+              fill="var(--accent)"
+              fillOpacity="0.15"
+            />
           </g>
           {/* Row 3 - fail */}
           <g className="sbv-chk3">
-            <line x1={399} y1={63} x2={405} y2={69}
-              stroke={DANGER} strokeWidth="1.5" strokeLinecap="round" />
-            <line x1={405} y1={63} x2={399} y2={69}
-              stroke={DANGER} strokeWidth="1.5" strokeLinecap="round" />
-            <rect x={412} y={63} width={46} height={5} rx={2.5}
-              fill={DANGER} fillOpacity="0.2" />
+            <line
+              x1={399}
+              y1={63}
+              x2={405}
+              y2={69}
+              stroke={DANGER}
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            />
+            <line
+              x1={405}
+              y1={63}
+              x2={399}
+              y2={69}
+              stroke={DANGER}
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            />
+            <rect
+              x={412}
+              y={63}
+              width={46}
+              height={5}
+              rx={2.5}
+              fill={DANGER}
+              fillOpacity="0.2"
+            />
           </g>
         </g>
 
         {/* ══ Phase 4: big red X blocking path to Slack ══ */}
-        <g className="sbv-block-x" style={{ transformOrigin: '470px 110px' }}>
-          <circle cx={470} cy={110} r={16}
-            fill={DANGER} fillOpacity="0.1" />
-          <line x1={461} y1={101} x2={479} y2={119}
-            stroke={DANGER} strokeWidth="3" strokeLinecap="round" />
-          <line x1={479} y1={101} x2={461} y2={119}
-            stroke={DANGER} strokeWidth="3" strokeLinecap="round" />
+        <g className="sbv-block-x" style={{ transformOrigin: "470px 110px" }}>
+          <circle cx={470} cy={110} r={16} fill={DANGER} fillOpacity="0.1" />
+          <line
+            x1={461}
+            y1={101}
+            x2={479}
+            y2={119}
+            stroke={DANGER}
+            strokeWidth="3"
+            strokeLinecap="round"
+          />
+          <line
+            x1={479}
+            y1={101}
+            x2={461}
+            y2={119}
+            stroke={DANGER}
+            strokeWidth="3"
+            strokeLinecap="round"
+          />
         </g>
 
         {/* ═══════════════════════════════════════════════
             PACKETS
             ═══════════════════════════════════════════════ */}
         {/* Inbound: robot → Edison */}
-        <g className="sbv-pkt sbv-pk1"><McpPacket /></g>
-        <g className="sbv-pkt sbv-pk2"><McpPacket /></g>
-        <g className="sbv-pkt sbv-pk3"><McpPacket /></g>
-        <g className="sbv-pkt sbv-pk4"><McpPacket /></g>
+        <g className="sbv-pkt sbv-pk1">
+          <McpPacket />
+        </g>
+        <g className="sbv-pkt sbv-pk2">
+          <McpPacket />
+        </g>
+        <g className="sbv-pkt sbv-pk3">
+          <McpPacket />
+        </g>
+        <g className="sbv-pkt sbv-pk4">
+          <McpPacket />
+        </g>
 
         {/* Outbound: Edison → destinations */}
-        <g className="sbv-pkt sbv-out1"><McpPacket /></g>
-        <g className="sbv-pkt sbv-out2"><McpPacket /></g>
-        <g className="sbv-pkt sbv-out3"><McpPacket /></g>
-        <g className="sbv-pkt sbv-out4"><McpPacket /></g>
+        <g className="sbv-pkt sbv-out1">
+          <McpPacket />
+        </g>
+        <g className="sbv-pkt sbv-out2">
+          <McpPacket />
+        </g>
+        <g className="sbv-pkt sbv-out3">
+          <McpPacket />
+        </g>
+        <g className="sbv-pkt sbv-out4">
+          <McpPacket />
+        </g>
 
         {/* ══ Approval ticks (appear on intermediaries before forwarding) ══ */}
         {/* User approval tick */}
         <g className="sbv-approve2">
-          <circle cx={160} cy={75} r={8}
-            fill="var(--accent)" fillOpacity="0.15" />
-          <polyline points="155,75 158,78 165,71"
-            fill="none" stroke="var(--accent)" strokeWidth="2"
-            strokeLinecap="round" strokeLinejoin="round" />
+          <circle
+            cx={160}
+            cy={75}
+            r={8}
+            fill="var(--accent)"
+            fillOpacity="0.15"
+          />
+          <polyline
+            points="155,75 158,78 165,71"
+            fill="none"
+            stroke="var(--accent)"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
         </g>
         {/* Admin approval tick */}
         <g className="sbv-approve3">
-          <circle cx={420} cy={200} r={8}
-            fill="var(--accent)" fillOpacity="0.15" />
-          <polyline points="415,200 418,203 425,196"
-            fill="none" stroke="var(--accent)" strokeWidth="2"
-            strokeLinecap="round" strokeLinejoin="round" />
+          <circle
+            cx={420}
+            cy={200}
+            r={8}
+            fill="var(--accent)"
+            fillOpacity="0.15"
+          />
+          <polyline
+            points="415,200 418,203 425,196"
+            fill="none"
+            stroke="var(--accent)"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
         </g>
 
         {/* ══ Forwarded packets: intermediary → Slack ══ */}
-        <g className="sbv-pkt sbv-fwd2"><McpPacket /></g>
-        <g className="sbv-pkt sbv-fwd3"><McpPacket /></g>
+        <g className="sbv-pkt sbv-fwd2">
+          <McpPacket />
+        </g>
+        <g className="sbv-pkt sbv-fwd3">
+          <McpPacket />
+        </g>
 
         {/* ══ Slack highlight when forwarded packets arrive ══ */}
-        <rect className="sbv-dh1b" x={558} y={54} width={134} height={52} rx={9}
-          fill="none" stroke="var(--accent)" strokeOpacity="0.7" strokeWidth="1.5" />
-        <rect className="sbv-dh1c" x={558} y={54} width={134} height={52} rx={9}
-          fill="none" stroke="var(--accent)" strokeOpacity="0.7" strokeWidth="1.5" />
+        <rect
+          className="sbv-dh1b"
+          x={558}
+          y={54}
+          width={134}
+          height={52}
+          rx={9}
+          fill="none"
+          stroke="var(--accent)"
+          strokeOpacity="0.7"
+          strokeWidth="1.5"
+        />
+        <rect
+          className="sbv-dh1c"
+          x={558}
+          y={54}
+          width={134}
+          height={52}
+          rx={9}
+          fill="none"
+          stroke="var(--accent)"
+          strokeOpacity="0.7"
+          strokeWidth="1.5"
+        />
 
         {/* ══ Progress bar ══ */}
         <ProgressBar y={248} width={680} className="sbv-progress" />
       </svg>
     </div>
-  )
+  );
 }

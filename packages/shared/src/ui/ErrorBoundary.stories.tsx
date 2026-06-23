@@ -27,7 +27,9 @@ export const WithCustomFallback: Story = {
   render: () => (
     <ErrorBoundary
       fallback={
-        <div style={{ padding: 24, color: "var(--danger)", textAlign: "center" }}>
+        <div
+          style={{ padding: 24, color: "var(--danger)", textAlign: "center" }}
+        >
           Custom error fallback UI
         </div>
       }
@@ -40,7 +42,9 @@ export const WithCustomFallback: Story = {
 export const NoError: Story = {
   render: () => (
     <ErrorBoundary>
-      <p style={{ color: "var(--text-primary)" }}>This content renders normally.</p>
+      <p style={{ color: "var(--text-primary)" }}>
+        This content renders normally.
+      </p>
     </ErrorBoundary>
   ),
 };

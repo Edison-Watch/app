@@ -12,27 +12,49 @@ type Story = StoryObj<typeof Card>;
 
 export const Default: Story = {
   args: {
-    children: <p style={{ color: "var(--text-primary)" }}>Card body content goes here.</p>,
+    children: (
+      <p style={{ color: "var(--text-primary)" }}>
+        Card body content goes here.
+      </p>
+    ),
   },
 };
 
 export const WithHeader: Story = {
   args: {
-    header: <span style={{ color: "var(--text-primary)", fontWeight: 600 }}>Card Title</span>,
-    children: <p style={{ color: "var(--text-secondary)" }}>Content below the header.</p>,
+    header: (
+      <span style={{ color: "var(--text-primary)", fontWeight: 600 }}>
+        Card Title
+      </span>
+    ),
+    children: (
+      <p style={{ color: "var(--text-secondary)" }}>
+        Content below the header.
+      </p>
+    ),
   },
 };
 
 export const WithFooter: Story = {
   args: {
-    children: <p style={{ color: "var(--text-secondary)" }}>Card body content.</p>,
-    footer: <span style={{ color: "var(--text-muted)", fontSize: 12 }}>Last updated 2 mins ago</span>,
+    children: (
+      <p style={{ color: "var(--text-secondary)" }}>Card body content.</p>
+    ),
+    footer: (
+      <span style={{ color: "var(--text-muted)", fontSize: 12 }}>
+        Last updated 2 mins ago
+      </span>
+    ),
   },
 };
 
 export const WithHeaderAndFooter: Story = {
   args: {
-    header: <span style={{ color: "var(--text-primary)", fontWeight: 600 }}>Session Details</span>,
+    header: (
+      <span style={{ color: "var(--text-primary)", fontWeight: 600 }}>
+        Session Details
+      </span>
+    ),
     children: (
       <div style={{ color: "var(--text-secondary)" }}>
         <p>Agent: code-review-bot</p>
