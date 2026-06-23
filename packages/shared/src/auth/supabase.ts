@@ -34,7 +34,7 @@ export interface ApiKeyResponse {
  */
 export async function fetchApiKey(): Promise<ApiKeyResponse | null> {
   const edgeFunctionUrl =
-    import.meta.env.VITE_SUPABASE_EDGE_FUNCTION_URL ||
+    import.meta.env?.VITE_SUPABASE_EDGE_FUNCTION_URL ||
     `${env.FUNCTIONS_URL}/functions/v1/get-api-key`
 
   try {

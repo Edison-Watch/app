@@ -16,4 +16,10 @@ export default defineConfig({
   splitting: false,
   clean: true,
   outDir: "dist",
+  esbuildOptions(options, context) {
+    if (context.format === "cjs") {
+      // CommonJS has no import.meta; source code falls back when Vite env vars are absent.
+      options.define = { ...options.define, "import.meta.env": "{}" };
+    }
+  },
 });
