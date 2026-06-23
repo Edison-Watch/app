@@ -1,5 +1,10 @@
 # @edison/shared
 
+[![CI](https://github.com/Edison-Watch/shared/actions/workflows/ci.yaml/badge.svg?branch=main)](https://github.com/Edison-Watch/shared/actions/workflows/ci.yaml)
+[![Coverage](https://codecov.io/gh/Edison-Watch/shared/graph/badge.svg)](https://codecov.io/gh/Edison-Watch/shared)
+[![License: AGPL-3.0-only](https://img.shields.io/badge/license-AGPL--3.0--only-blue.svg)](LICENSE)
+[![Node.js >= 22](https://img.shields.io/badge/node-%3E%3D22-339933?logo=node.js&logoColor=white)](package.json)
+
 Shared React components, design tokens, and client-side utilities used by Edison Watch.
 
 This repository is public so that the shared client code used across Edison Watch can be audited and evaluated. It is intentionally an Edison Watch package, not a generic component library or a hosted service SDK.
