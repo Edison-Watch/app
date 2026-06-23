@@ -9,7 +9,7 @@
  * component just standardizes the markup.
  */
 
-import { EdisonLogo } from "./icons";
+import { EdisonLogo } from './icons'
 
 /**
  * @param cx,cy   center of the badge
@@ -24,17 +24,17 @@ export function EdisonGateway({
   r = 30,
   logoW,
   label,
-  pulseClassName,
+  pulseClassName
 }: {
-  cx: number;
-  cy: number;
-  r?: number;
-  logoW?: number;
-  label?: string;
-  pulseClassName?: string;
+  cx: number
+  cy: number
+  r?: number
+  logoW?: number
+  label?: string
+  pulseClassName?: string
 }): React.ReactNode {
-  const w = logoW ?? r * 1.8;
-  const h = w * 0.975;
+  const w = logoW ?? r * 1.8
+  const h = w * 0.975
   return (
     <>
       <circle
@@ -62,5 +62,5 @@ export function EdisonGateway({
         </text>
       )}
     </>
-  );
+  )
 }

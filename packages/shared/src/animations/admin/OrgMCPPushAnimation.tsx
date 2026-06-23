@@ -11,26 +11,19 @@
  * 10s loop. Pure SVG + CSS. Respects `prefers-reduced-motion`.
  */
 
-import {
-  ADMIN_PATH,
-  EdisonLogo,
-  FlowLine,
-  McpPacket,
-  ProgressBar,
-  VerdictBadge,
-} from "../_shared";
+import { ADMIN_PATH, EdisonLogo, FlowLine, McpPacket, ProgressBar, VerdictBadge } from '../_shared'
 import {
   OUTLOOK_SVG,
   OUTLOOK_SVG_VIEWBOX,
   ATLASSIAN_SVG,
   ATLASSIAN_SVG_VIEWBOX,
   SLACK_SVG,
-  SLACK_SVG_VIEWBOX,
-} from "../../svg/app-icons-svg";
+  SLACK_SVG_VIEWBOX
+} from '../../svg/app-icons-svg'
 
-const fg = "var(--text-primary)";
-const muted = "var(--text-muted)";
-const accent = "var(--accent)";
+const fg = 'var(--text-primary)'
+const muted = 'var(--text-muted)'
+const accent = 'var(--accent)'
 
 const CSS = `
 .om-anim { color: ${fg}; }
@@ -248,7 +241,7 @@ const CSS = `
   .om-anim .om-v1, .om-anim .om-v2, .om-anim .om-v3, .om-anim .om-v4, .om-anim .om-v5 { opacity: 1; transform: scale(1); }
   .om-anim .om-progress { animation: none; transform: scaleX(1); }
 }
-`;
+`
 
 export default function OrgMCPPushAnimation(): React.ReactNode {
   return (
@@ -265,9 +258,9 @@ export default function OrgMCPPushAnimation(): React.ReactNode {
       >
         {/* ===== EMPLOYEE LAPTOPS (left column) ===== */}
         {[
-          { y: 15, label: "Employee A" },
-          { y: 85, label: "Employee B" },
-          { y: 155, label: "Employee C" },
+          { y: 15, label: 'Employee A' },
+          { y: 85, label: 'Employee B' },
+          { y: 155, label: 'Employee C' }
         ].map(({ y, label }) => (
           <g key={label}>
             <rect
@@ -718,41 +711,17 @@ export default function OrgMCPPushAnimation(): React.ReactNode {
         </g>
 
         {/* ===== VERDICT BADGES at gateway (left edge, stacked) ===== */}
-        <VerdictBadge
-          className="om-v1"
-          cx={142}
-          cy={68}
-          r={7}
-          variant="allow"
-        />
+        <VerdictBadge className="om-v1" cx={142} cy={68} r={7} variant="allow" />
         <VerdictBadge className="om-v2" cx={142} cy={82} r={7} variant="deny" />
-        <VerdictBadge
-          className="om-v3"
-          cx={142}
-          cy={96}
-          r={7}
-          variant="allow"
-        />
+        <VerdictBadge className="om-v3" cx={142} cy={96} r={7} variant="allow" />
 
         {/* ===== VERDICT BADGES at Outlook server (left edge, stacked) ===== */}
-        <VerdictBadge
-          className="om-v4"
-          cx={380}
-          cy={75}
-          r={7}
-          variant="allow"
-        />
-        <VerdictBadge
-          className="om-v5"
-          cx={380}
-          cy={89}
-          r={7}
-          variant="allow"
-        />
+        <VerdictBadge className="om-v4" cx={380} cy={75} r={7} variant="allow" />
+        <VerdictBadge className="om-v5" cx={380} cy={89} r={7} variant="allow" />
 
         {/* Progress bar */}
         <ProgressBar y={218} width={460} className="om-progress" />
       </svg>
     </div>
-  );
+  )
 }

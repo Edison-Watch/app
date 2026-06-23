@@ -12,7 +12,7 @@
  *
  * 10s loop. Pure SVG + CSS. Respects `prefers-reduced-motion`.
  */
-import { AGENT_REGISTRY } from "../../agent-registry/index";
+import { AGENT_REGISTRY } from '../../agent-registry/index'
 import {
   ADMIN_PATH,
   AgentIcon,
@@ -21,22 +21,22 @@ import {
   McpIcon,
   McpPacket,
   ORANGE as O,
-  ProgressBar,
-} from "../_shared";
+  ProgressBar
+} from '../_shared'
 
-const CURSOR = AGENT_REGISTRY["cursor"];
-const CLAUDE = AGENT_REGISTRY["claude-code"];
-const CODEX = AGENT_REGISTRY["codex"];
-const COPILOT = AGENT_REGISTRY["copilot"];
+const CURSOR = AGENT_REGISTRY['cursor']
+const CLAUDE = AGENT_REGISTRY['claude-code']
+const CODEX = AGENT_REGISTRY['codex']
+const COPILOT = AGENT_REGISTRY['copilot']
 
 const USER_PATH =
-  "M230.92,212c-15.23-26.33-38.7-45.21-66.09-54.16a72,72,0,1,0-73.66,0C63.78,166.78,40.31,185.66,25.08,212a8,8,0,1,0,13.85,8c18.84-32.56,52.14-52,89.07-52s70.23,19.44,89.07,52a8,8,0,1,0,13.85-8ZM72,96a56,56,0,1,1,56,56A56.06,56.06,0,0,1,72,96Z";
+  'M230.92,212c-15.23-26.33-38.7-45.21-66.09-54.16a72,72,0,1,0-73.66,0C63.78,166.78,40.31,185.66,25.08,212a8,8,0,1,0,13.85,8c18.84-32.56,52.14-52,89.07-52s70.23,19.44,89.07,52a8,8,0,1,0,13.85-8ZM72,96a56,56,0,1,1,56,56A56.06,56.06,0,0,1,72,96Z'
 
 const CLIPBOARD_PATH =
-  "M200,32H163.74a47.92,47.92,0,0,0-71.48,0H56A16,16,0,0,0,40,48V216a16,16,0,0,0,16,16H200a16,16,0,0,0,16-16V48A16,16,0,0,0,200,32Zm-72,0a32,32,0,0,1,32,32H96A32,32,0,0,1,128,32Zm72,184H56V48H82.75A47.93,47.93,0,0,0,80,64v8a8,8,0,0,0,8,8h80a8,8,0,0,0,8-8V64a47.93,47.93,0,0,0-2.75-16H200ZM96,136a8,8,0,0,1,8-8h48a8,8,0,0,1,0,16H104A8,8,0,0,1,96,136Zm0,32a8,8,0,0,1,8-8h48a8,8,0,0,1,0,16H104A8,8,0,0,1,96,168Z";
+  'M200,32H163.74a47.92,47.92,0,0,0-71.48,0H56A16,16,0,0,0,40,48V216a16,16,0,0,0,16,16H200a16,16,0,0,0,16-16V48A16,16,0,0,0,200,32Zm-72,0a32,32,0,0,1,32,32H96A32,32,0,0,1,128,32Zm72,184H56V48H82.75A47.93,47.93,0,0,0,80,64v8a8,8,0,0,0,8,8h80a8,8,0,0,0,8-8V64a47.93,47.93,0,0,0-2.75-16H200ZM96,136a8,8,0,0,1,8-8h48a8,8,0,0,1,0,16H104A8,8,0,0,1,96,136Zm0,32a8,8,0,0,1,8-8h48a8,8,0,0,1,0,16H104A8,8,0,0,1,96,168Z'
 
 const POLICY_D =
-  "M208,40H48A16,16,0,0,0,32,56v56c0,52.72,25.52,84.67,46.93,102.19,23.06,18.86,46,25.26,47,25.53a8,8,0,0,0,4.2,0c1-.27,23.91-6.67,47-25.53C198.48,196.67,224,164.72,224,112V56A16,16,0,0,0,208,40Zm0,72c0,37.07-13.66,67.16-40.6,89.42A129.3,129.3,0,0,1,128,223.62a128.25,128.25,0,0,1-38.92-21.81C61.82,179.51,48,149.3,48,112l0-56,160,0ZM96,104a8,8,0,0,1,8-8h64a8,8,0,0,1,0,16H104A8,8,0,0,1,96,104Zm8,40h64a8,8,0,0,0,0-16H104a8,8,0,0,0,0,16Z";
+  'M208,40H48A16,16,0,0,0,32,56v56c0,52.72,25.52,84.67,46.93,102.19,23.06,18.86,46,25.26,47,25.53a8,8,0,0,0,4.2,0c1-.27,23.91-6.67,47-25.53C198.48,196.67,224,164.72,224,112V56A16,16,0,0,0,208,40Zm0,72c0,37.07-13.66,67.16-40.6,89.42A129.3,129.3,0,0,1,128,223.62a128.25,128.25,0,0,1-38.92-21.81C61.82,179.51,48,149.3,48,112l0-56,160,0ZM96,104a8,8,0,0,1,8-8h64a8,8,0,0,1,0,16H104A8,8,0,0,1,96,104Zm8,40h64a8,8,0,0,0,0-16H104a8,8,0,0,0,0,16Z'
 
 /*
  * Coordinate reference
@@ -234,7 +234,7 @@ const CSS = `
   .ua .ua-log2 { opacity:1; }
   .ua .ua-user-prompt { opacity:1; }
 }
-`;
+`
 
 export default function UserAccountabilityAnimation(): React.ReactNode {
   return (
@@ -306,27 +306,9 @@ export default function UserAccountabilityAnimation(): React.ReactNode {
           <AgentIcon agent={COPILOT} x={54} y={120} size={22} />
 
           {/* MCP icons */}
-          <McpIcon
-            x={84}
-            y={92}
-            size={16}
-            color="var(--text-muted)"
-            opacity="0.35"
-          />
-          <McpIcon
-            x={84}
-            y={112}
-            size={16}
-            color="var(--text-muted)"
-            opacity="0.35"
-          />
-          <McpIcon
-            x={84}
-            y={132}
-            size={16}
-            color="var(--text-muted)"
-            opacity="0.35"
-          />
+          <McpIcon x={84} y={92} size={16} color="var(--text-muted)" opacity="0.35" />
+          <McpIcon x={84} y={112} size={16} color="var(--text-muted)" opacity="0.35" />
+          <McpIcon x={84} y={132} size={16} color="var(--text-muted)" opacity="0.35" />
 
           <text
             x="68"
@@ -586,13 +568,7 @@ export default function UserAccountabilityAnimation(): React.ReactNode {
             strokeOpacity="0.35"
             strokeWidth="1.5"
           />
-          <McpIcon
-            x={474}
-            y={108}
-            size={28}
-            color="var(--text-muted)"
-            opacity="0.55"
-          />
+          <McpIcon x={474} y={108} size={28} color="var(--text-muted)" opacity="0.55" />
           <text
             x="488"
             y="156"
@@ -632,7 +608,7 @@ export default function UserAccountabilityAnimation(): React.ReactNode {
             strokeDasharray="3 3"
           />
 
-          <g className="ua-deny" style={{ transformOrigin: "252px 82px" }}>
+          <g className="ua-deny" style={{ transformOrigin: '252px 82px' }}>
             <circle
               cx="252"
               cy="82"
@@ -680,11 +656,7 @@ export default function UserAccountabilityAnimation(): React.ReactNode {
 
           <g className="ua-log1">
             <svg x={334} y={22} width={13} height={13} viewBox="0 0 256 256">
-              <path
-                d={CLIPBOARD_PATH}
-                fill="var(--text-primary)"
-                fillOpacity="0.4"
-              />
+              <path d={CLIPBOARD_PATH} fill="var(--text-primary)" fillOpacity="0.4" />
             </svg>
             <text
               x="350"
@@ -766,7 +738,7 @@ export default function UserAccountabilityAnimation(): React.ReactNode {
             </text>
           </g>
 
-          <g className="ua-approve" style={{ transformOrigin: "130px 38px" }}>
+          <g className="ua-approve" style={{ transformOrigin: '130px 38px' }}>
             <circle
               cx="130"
               cy="38"
@@ -787,7 +759,7 @@ export default function UserAccountabilityAnimation(): React.ReactNode {
             />
           </g>
 
-          <g className="ua-approve" style={{ transformOrigin: "340px 78px" }}>
+          <g className="ua-approve" style={{ transformOrigin: '340px 78px' }}>
             <circle
               cx="340"
               cy="78"
@@ -886,5 +858,5 @@ export default function UserAccountabilityAnimation(): React.ReactNode {
         <ProgressBar y={302} width={560} className="ua-progress" />
       </svg>
     </div>
-  );
+  )
 }

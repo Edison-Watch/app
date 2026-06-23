@@ -16,13 +16,13 @@ import {
   SLACK_SVG,
   SLACK_SVG_VIEWBOX,
   GCAL_SVG,
-  GCAL_SVG_VIEWBOX,
-} from "../../svg/app-icons-svg";
+  GCAL_SVG_VIEWBOX
+} from '../../svg/app-icons-svg'
 import {
   ATTACKER_BODY_PATHS,
   ATTACKER_HIGHLIGHT_PATHS,
-  ATTACKER_SVG_VIEWBOX,
-} from "../../svg/attacker-svg";
+  ATTACKER_SVG_VIEWBOX
+} from '../../svg/attacker-svg'
 import {
   DANGER,
   EdisonLogo,
@@ -31,10 +31,10 @@ import {
   ProgressBar,
   RED as R,
   RobotIcon,
-  SHIELD_CHECK_PATH,
-} from "../_shared";
+  SHIELD_CHECK_PATH
+} from '../_shared'
 
-const accent = "var(--accent)";
+const accent = 'var(--accent)'
 
 const CSS = `
 .td-anim { color: var(--text-primary); }
@@ -455,7 +455,7 @@ const CSS = `
   .td-anim .td-hl2 { opacity: 0.4; }
   .td-anim .td-progress { animation: none; transform: scaleX(1); }
 }
-`;
+`
 
 export default function TrifectaDefenseAnimation(): React.ReactNode {
   return (
@@ -464,7 +464,7 @@ export default function TrifectaDefenseAnimation(): React.ReactNode {
       <svg
         className="td-anim"
         viewBox="0 0 500 190"
-        style={{ width: "100%", maxWidth: 500, height: "auto" }}
+        style={{ width: '100%', maxWidth: 500, height: 'auto' }}
         xmlns="http://www.w3.org/2000/svg"
         role="presentation"
         aria-hidden="true"
@@ -532,29 +532,10 @@ export default function TrifectaDefenseAnimation(): React.ReactNode {
         </g>
         <g className="td-bot1-dirty">
           <RobotIcon x={61} y={15} size={40} fill={R} fillOpacity="0.6" />
-          <circle
-            className="td-eye-pulse"
-            cx="76.6"
-            cy="39.4"
-            r="2.4"
-            fill={R}
-            fillOpacity="0.7"
-          />
-          <circle
-            className="td-eye-pulse"
-            cx="85.4"
-            cy="39.4"
-            r="2.4"
-            fill={R}
-            fillOpacity="0.7"
-          />
+          <circle className="td-eye-pulse" cx="76.6" cy="39.4" r="2.4" fill={R} fillOpacity="0.7" />
+          <circle className="td-eye-pulse" cx="85.4" cy="39.4" r="2.4" fill={R} fillOpacity="0.7" />
           <svg x="104" y="18" width="28" height="28" viewBox="0 0 48 48">
-            <path
-              d={POISON_PATH}
-              fill={R}
-              fillOpacity="0.6"
-              fillRule="evenodd"
-            />
+            <path d={POISON_PATH} fill={R} fillOpacity="0.6" fillRule="evenodd" />
           </svg>
         </g>
 
@@ -564,29 +545,10 @@ export default function TrifectaDefenseAnimation(): React.ReactNode {
         </g>
         <g className="td-bot2-dirty">
           <RobotIcon x={61} y={15} size={40} fill={R} fillOpacity="0.6" />
-          <circle
-            className="td-eye-pulse"
-            cx="76.6"
-            cy="39.4"
-            r="2.4"
-            fill={R}
-            fillOpacity="0.7"
-          />
-          <circle
-            className="td-eye-pulse"
-            cx="85.4"
-            cy="39.4"
-            r="2.4"
-            fill={R}
-            fillOpacity="0.7"
-          />
+          <circle className="td-eye-pulse" cx="76.6" cy="39.4" r="2.4" fill={R} fillOpacity="0.7" />
+          <circle className="td-eye-pulse" cx="85.4" cy="39.4" r="2.4" fill={R} fillOpacity="0.7" />
           <svg x="104" y="18" width="28" height="28" viewBox="0 0 48 48">
-            <path
-              d={POISON_PATH}
-              fill={R}
-              fillOpacity="0.6"
-              fillRule="evenodd"
-            />
+            <path d={POISON_PATH} fill={R} fillOpacity="0.6" fillRule="evenodd" />
           </svg>
         </g>
 
@@ -653,24 +615,8 @@ export default function TrifectaDefenseAnimation(): React.ReactNode {
         />
 
         {/* App highlight overlays (per phase) */}
-        <rect
-          className="td-hl1"
-          x="34"
-          y="58"
-          width="84"
-          height="24"
-          rx="5"
-          fill={R}
-        />
-        <rect
-          className="td-hl2"
-          x="34"
-          y="58"
-          width="84"
-          height="24"
-          rx="5"
-          fill={R}
-        />
+        <rect className="td-hl1" x="34" y="58" width="84" height="24" rx="5" fill={R} />
+        <rect className="td-hl2" x="34" y="58" width="84" height="24" rx="5" fill={R} />
 
         {/* Laptop flash (per phase) */}
         <rect
@@ -707,13 +653,7 @@ export default function TrifectaDefenseAnimation(): React.ReactNode {
             strokeWidth="1.5"
           />
         </g>
-        <svg
-          x="374"
-          y="6"
-          width="44"
-          height="44"
-          viewBox={ATTACKER_SVG_VIEWBOX}
-        >
+        <svg x="374" y="6" width="44" height="44" viewBox={ATTACKER_SVG_VIEWBOX}>
           {ATTACKER_BODY_PATHS.map((d, i) => (
             <path key={`body-${i}`} d={d} fill={R} fillOpacity="0.5" />
           ))}
@@ -724,14 +664,7 @@ export default function TrifectaDefenseAnimation(): React.ReactNode {
 
         {/* ===== MALICIOUS EMAIL (per phase) ===== */}
         <g className="td-poison1">
-          <circle
-            className="td-pglow"
-            cx="268"
-            cy="132"
-            r="30"
-            fill={R}
-            fillOpacity="0.06"
-          />
+          <circle className="td-pglow" cx="268" cy="132" r="30" fill={R} fillOpacity="0.06" />
           <rect
             x="244"
             y="114"
@@ -763,23 +696,11 @@ export default function TrifectaDefenseAnimation(): React.ReactNode {
             strokeWidth="0.8"
           />
           <svg x="278" y="132" width="24" height="24" viewBox="0 0 48 48">
-            <path
-              d={POISON_PATH}
-              fill={R}
-              fillOpacity="0.65"
-              fillRule="evenodd"
-            />
+            <path d={POISON_PATH} fill={R} fillOpacity="0.65" fillRule="evenodd" />
           </svg>
         </g>
         <g className="td-poison2">
-          <circle
-            className="td-pglow"
-            cx="268"
-            cy="132"
-            r="30"
-            fill={R}
-            fillOpacity="0.06"
-          />
+          <circle className="td-pglow" cx="268" cy="132" r="30" fill={R} fillOpacity="0.06" />
           <rect
             x="244"
             y="114"
@@ -811,12 +732,7 @@ export default function TrifectaDefenseAnimation(): React.ReactNode {
             strokeWidth="0.8"
           />
           <svg x="278" y="132" width="24" height="24" viewBox="0 0 48 48">
-            <path
-              d={POISON_PATH}
-              fill={R}
-              fillOpacity="0.65"
-              fillRule="evenodd"
-            />
+            <path d={POISON_PATH} fill={R} fillOpacity="0.65" fillRule="evenodd" />
           </svg>
         </g>
 
@@ -1118,7 +1034,7 @@ export default function TrifectaDefenseAnimation(): React.ReactNode {
         </g>
 
         {/* Exclamation ! badge (appears when email passes through Edison) */}
-        <g className="td-exclaim" style={{ transformOrigin: "290px 38px" }}>
+        <g className="td-exclaim" style={{ transformOrigin: '290px 38px' }}>
           <circle
             cx="290"
             cy="38"
@@ -1143,14 +1059,14 @@ export default function TrifectaDefenseAnimation(): React.ReactNode {
         </g>
 
         {/* Shield check (accent) */}
-        <g className="td-shield" style={{ transformOrigin: "267px 24px" }}>
+        <g className="td-shield" style={{ transformOrigin: '267px 24px' }}>
           <svg x="253" y="28" width="28" height="28" viewBox="0 0 256 256">
             <path d={SHIELD_CHECK_PATH} fill={accent} fillOpacity="0.7" />
           </svg>
         </g>
 
         {/* Red X denied badge (left of Edison) */}
-        <g className="td-blocked" style={{ transformOrigin: "236px 23px" }}>
+        <g className="td-blocked" style={{ transformOrigin: '236px 23px' }}>
           <circle
             cx="236"
             cy="23"
@@ -1250,5 +1166,5 @@ export default function TrifectaDefenseAnimation(): React.ReactNode {
         <ProgressBar y={188} width={460} className="td-progress" />
       </svg>
     </div>
-  );
+  )
 }

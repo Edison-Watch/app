@@ -10,8 +10,8 @@ export {
   decryptDomainSecret,
   decryptAdminServerConfigs,
   generateDomainKeyForMint,
-  type CompositeKey,
-} from "./client-crypto";
+  type CompositeKey
+} from './client-crypto'
 
 export {
   generateSecretKey,
@@ -23,5 +23,5 @@ export {
   getCachedSecretKey,
   cacheSecretKey,
   clearCachedSecretKey,
-  type VerifySecretKeyResult,
-} from "./secret-key-api";
+  type VerifySecretKeyResult
+} from './secret-key-api'

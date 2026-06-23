@@ -9,9 +9,9 @@
  * draws static SVG.
  */
 
-import { DANGER } from "./colors";
+import { DANGER } from './colors'
 
-export type VerdictVariant = "allow" | "deny";
+export type VerdictVariant = 'allow' | 'deny'
 
 /**
  * @param cx,cy    badge center
@@ -25,19 +25,19 @@ export function VerdictBadge({
   r = 8,
   variant,
   className,
-  strokeWidth,
+  strokeWidth
 }: {
-  cx: number;
-  cy: number;
-  r?: number;
-  variant: VerdictVariant;
-  className?: string;
+  cx: number
+  cy: number
+  r?: number
+  variant: VerdictVariant
+  className?: string
   /** Glyph stroke width; defaults to `r * 0.2` (≈ 1.4 at r=7, 1.8 at r=9). */
-  strokeWidth?: number;
+  strokeWidth?: number
 }): React.ReactNode {
-  const color = variant === "allow" ? "var(--accent)" : DANGER;
-  const sw = strokeWidth ?? Math.max(1.2, r * 0.2);
-  const transformOrigin = `${cx}px ${cy}px`;
+  const color = variant === 'allow' ? 'var(--accent)' : DANGER
+  const sw = strokeWidth ?? Math.max(1.2, r * 0.2)
+  const transformOrigin = `${cx}px ${cy}px`
   return (
     <g className={className} style={{ transformOrigin }}>
       <circle
@@ -50,7 +50,7 @@ export function VerdictBadge({
         strokeOpacity="0.5"
         strokeWidth="1"
       />
-      {variant === "allow" ? (
+      {variant === 'allow' ? (
         <polyline
           points={`${cx - r * 0.55},${cy} ${cx - r * 0.22},${cy + r * 0.33} ${cx + r * 0.55},${cy - r * 0.44}`}
           fill="none"
@@ -82,5 +82,5 @@ export function VerdictBadge({
         </>
       )}
     </g>
-  );
+  )
 }

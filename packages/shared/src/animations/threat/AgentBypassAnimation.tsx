@@ -12,8 +12,8 @@
  * on narrower (mobile) viewports.
  */
 
-import AgentBypassPathAnimation from "./AgentBypassPathAnimation";
-import HumanAccessAnimation from "./HumanAccessAnimation";
+import AgentBypassPathAnimation from './AgentBypassPathAnimation'
+import HumanAccessAnimation from './HumanAccessAnimation'
 
 export default function AgentBypassAnimation(): React.ReactNode {
   return (
@@ -21,5 +21,5 @@ export default function AgentBypassAnimation(): React.ReactNode {
       <HumanAccessAnimation />
       <AgentBypassPathAnimation />
     </div>
-  );
+  )
 }

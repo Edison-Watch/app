@@ -1,28 +1,28 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 export interface SelectOption {
-  value: string;
-  label: string;
-  disabled?: boolean;
+  value: string
+  label: string
+  disabled?: boolean
 }
 
 interface SelectProps {
   /** Currently selected value (controlled). */
-  value?: string;
+  value?: string
   /** Default value (uncontrolled). */
-  defaultValue?: string;
+  defaultValue?: string
   /** Fired on selection change. */
-  onChange?: (value: string) => void;
+  onChange?: (value: string) => void
   /** Static options. Ignored when `loadOptions` is provided. */
-  options?: SelectOption[];
+  options?: SelectOption[]
   /** Async option loader. Receives search term, returns options. */
-  loadOptions?: (search: string) => Promise<SelectOption[]>;
+  loadOptions?: (search: string) => Promise<SelectOption[]>
   /** Placeholder text. */
-  placeholder?: string;
+  placeholder?: string
   /** Enable search / filter. */
-  searchable?: boolean;
+  searchable?: boolean
   /** Disable the select. */
-  disabled?: boolean;
+  disabled?: boolean
 }
 
 export default function Select({
@@ -31,113 +31,109 @@ export default function Select({
   onChange,
   options: staticOptions = [],
   loadOptions,
-  placeholder = "Select...",
+  placeholder = 'Select...',
   searchable = false,
-  disabled = false,
+  disabled = false
 }: SelectProps) {
-  const isControlled = controlledValue !== undefined;
-  const [internalValue, setInternalValue] = useState(defaultValue ?? "");
-  const currentValue = isControlled ? controlledValue : internalValue;
+  const isControlled = controlledValue !== undefined
+  const [internalValue, setInternalValue] = useState(defaultValue ?? '')
+  const currentValue = isControlled ? controlledValue : internalValue
 
-  const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState("");
-  const [focusedIndex, setFocusedIndex] = useState(-1);
-  const [asyncOptions, setAsyncOptions] = useState<SelectOption[]>([]);
-  const [loading, setLoading] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [open, setOpen] = useState(false)
+  const [search, setSearch] = useState('')
+  const [focusedIndex, setFocusedIndex] = useState(-1)
+  const [asyncOptions, setAsyncOptions] = useState<SelectOption[]>([])
+  const [loading, setLoading] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
 
-  const options = loadOptions ? asyncOptions : staticOptions;
+  const options = loadOptions ? asyncOptions : staticOptions
 
   const filtered = useMemo(() => {
-    if (!searchable || !search) return options;
-    const lower = search.toLowerCase();
-    return options.filter((o) => o.label.toLowerCase().includes(lower));
-  }, [options, search, searchable]);
+    if (!searchable || !search) return options
+    const lower = search.toLowerCase()
+    return options.filter((o) => o.label.toLowerCase().includes(lower))
+  }, [options, search, searchable])
 
-  const selectedLabel =
-    options.find((o) => o.value === currentValue)?.label ?? "";
+  const selectedLabel = options.find((o) => o.value === currentValue)?.label ?? ''
 
   const select = useCallback(
     (val: string) => {
-      if (!isControlled) setInternalValue(val);
-      onChange?.(val);
-      setOpen(false);
-      setSearch("");
-      setFocusedIndex(-1);
+      if (!isControlled) setInternalValue(val)
+      onChange?.(val)
+      setOpen(false)
+      setSearch('')
+      setFocusedIndex(-1)
     },
-    [isControlled, onChange],
-  );
+    [isControlled, onChange]
+  )
 
   // Async loading
   useEffect(() => {
-    if (!loadOptions || !open) return;
-    let cancelled = false;
-    setLoading(true);
+    if (!loadOptions || !open) return
+    let cancelled = false
+    setLoading(true)
     loadOptions(search).then((opts) => {
       if (!cancelled) {
-        setAsyncOptions(opts);
-        setLoading(false);
+        setAsyncOptions(opts)
+        setLoading(false)
       }
-    });
+    })
     return () => {
-      cancelled = true;
-    };
-  }, [loadOptions, open, search]);
+      cancelled = true
+    }
+  }, [loadOptions, open, search])
 
   // Outside click
   useEffect(() => {
-    if (!open) return;
+    if (!open) return
     const handler = (e: MouseEvent) => {
-      if (
-        containerRef.current &&
-        !containerRef.current.contains(e.target as Node)
-      ) {
-        setOpen(false);
-        setSearch("");
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false)
+        setSearch('')
       }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (!open) {
-        if (e.key === "Enter" || e.key === " " || e.key === "ArrowDown") {
-          e.preventDefault();
-          setOpen(true);
-          setFocusedIndex(0);
+        if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown') {
+          e.preventDefault()
+          setOpen(true)
+          setFocusedIndex(0)
         }
-        return;
+        return
       }
 
-      const enabledFiltered = filtered.filter((o) => !o.disabled);
+      const enabledFiltered = filtered.filter((o) => !o.disabled)
 
       switch (e.key) {
-        case "Escape":
-          e.preventDefault();
-          setOpen(false);
-          setSearch("");
-          break;
-        case "ArrowDown":
-          e.preventDefault();
-          setFocusedIndex((i) => Math.min(i + 1, enabledFiltered.length - 1));
-          break;
-        case "ArrowUp":
-          e.preventDefault();
-          setFocusedIndex((i) => Math.max(i - 1, 0));
-          break;
-        case "Enter":
-          e.preventDefault();
+        case 'Escape':
+          e.preventDefault()
+          setOpen(false)
+          setSearch('')
+          break
+        case 'ArrowDown':
+          e.preventDefault()
+          setFocusedIndex((i) => Math.min(i + 1, enabledFiltered.length - 1))
+          break
+        case 'ArrowUp':
+          e.preventDefault()
+          setFocusedIndex((i) => Math.max(i - 1, 0))
+          break
+        case 'Enter':
+          e.preventDefault()
           if (focusedIndex >= 0 && focusedIndex < enabledFiltered.length) {
-            select(enabledFiltered[focusedIndex]!.value);
+            select(enabledFiltered[focusedIndex]!.value)
           }
-          break;
+          break
       }
     },
-    [open, filtered, focusedIndex, select],
-  );
+    [open, filtered, focusedIndex, select]
+  )
 
   return (
     <div ref={containerRef} className="relative" onKeyDown={handleKeyDown}>
@@ -148,19 +144,19 @@ export default function Select({
         aria-expanded={open}
         className={`w-full flex items-center justify-between gap-2 px-3 py-2 text-sm rounded-md border transition-colors ${
           disabled
-            ? "border-[var(--border)] text-[var(--text-muted)] cursor-not-allowed bg-[var(--bg-base)]"
-            : "border-[var(--border)] text-[var(--text-primary)] bg-[var(--bg-raised)] hover:border-[var(--accent)] cursor-pointer"
+            ? 'border-[var(--border)] text-[var(--text-muted)] cursor-not-allowed bg-[var(--bg-base)]'
+            : 'border-[var(--border)] text-[var(--text-primary)] bg-[var(--bg-raised)] hover:border-[var(--accent)] cursor-pointer'
         }`}
         onClick={() => {
-          if (disabled) return;
-          setOpen((o) => !o);
+          if (disabled) return
+          setOpen((o) => !o)
           if (!open) {
-            setFocusedIndex(0);
-            requestAnimationFrame(() => inputRef.current?.focus());
+            setFocusedIndex(0)
+            requestAnimationFrame(() => inputRef.current?.focus())
           }
         }}
       >
-        <span className={currentValue ? "" : "text-[var(--text-muted)]"}>
+        <span className={currentValue ? '' : 'text-[var(--text-muted)]'}>
           {currentValue ? selectedLabel || currentValue : placeholder}
         </span>
         <svg
@@ -169,12 +165,7 @@ export default function Select({
           viewBox="0 0 24 24"
           stroke="currentColor"
         >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M19 9l-7 7-7-7"
-          />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
       </button>
 
@@ -192,27 +183,23 @@ export default function Select({
                 placeholder="Search..."
                 value={search}
                 onChange={(e) => {
-                  setSearch(e.target.value);
-                  setFocusedIndex(0);
+                  setSearch(e.target.value)
+                  setFocusedIndex(0)
                 }}
               />
             </div>
           )}
 
           {loading ? (
-            <div className="px-3 py-4 text-sm text-center text-[var(--text-muted)]">
-              Loading...
-            </div>
+            <div className="px-3 py-4 text-sm text-center text-[var(--text-muted)]">Loading...</div>
           ) : filtered.length === 0 ? (
-            <div className="px-3 py-4 text-sm text-center text-[var(--text-muted)]">
-              No options
-            </div>
+            <div className="px-3 py-4 text-sm text-center text-[var(--text-muted)]">No options</div>
           ) : (
             filtered.map((option) => {
-              const enabledFiltered = filtered.filter((o) => !o.disabled);
-              const enabledIdx = enabledFiltered.indexOf(option);
-              const isFocused = enabledIdx === focusedIndex;
-              const isSelected = option.value === currentValue;
+              const enabledFiltered = filtered.filter((o) => !o.disabled)
+              const enabledIdx = enabledFiltered.indexOf(option)
+              const isFocused = enabledIdx === focusedIndex
+              const isSelected = option.value === currentValue
               return (
                 <button
                   key={option.value}
@@ -222,26 +209,24 @@ export default function Select({
                   tabIndex={-1}
                   className={`w-full text-left px-3 py-2 text-sm transition-colors ${
                     option.disabled
-                      ? "text-[var(--text-muted)] cursor-not-allowed"
-                      : "text-[var(--text-primary)] hover:bg-[var(--bg-base)] cursor-pointer"
-                  } ${isFocused && !option.disabled ? "bg-[var(--bg-base)]" : ""} ${
-                    isSelected ? "font-medium" : ""
+                      ? 'text-[var(--text-muted)] cursor-not-allowed'
+                      : 'text-[var(--text-primary)] hover:bg-[var(--bg-base)] cursor-pointer'
+                  } ${isFocused && !option.disabled ? 'bg-[var(--bg-base)]' : ''} ${
+                    isSelected ? 'font-medium' : ''
                   }`}
                   onClick={() => {
-                    if (option.disabled) return;
-                    select(option.value);
+                    if (option.disabled) return
+                    select(option.value)
                   }}
                 >
                   {option.label}
-                  {isSelected && (
-                    <span className="ml-2 text-[var(--accent)]">✓</span>
-                  )}
+                  {isSelected && <span className="ml-2 text-[var(--accent)]">✓</span>}
                 </button>
-              );
+              )
             })
           )}
         </div>
       )}
     </div>
-  );
+  )
 }

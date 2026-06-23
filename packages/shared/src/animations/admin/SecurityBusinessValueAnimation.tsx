@@ -23,22 +23,22 @@ import {
   ORANGE as O,
   PERSON_PATH,
   ProgressBar,
-  RobotIcon,
-} from "../_shared";
-import { SLACK_SVG, SLACK_SVG_VIEWBOX } from "../../svg/app-icons-svg";
+  RobotIcon
+} from '../_shared'
+import { SLACK_SVG, SLACK_SVG_VIEWBOX } from '../../svg/app-icons-svg'
 
-const AMBER = "#f5a524";
-const TICKET = "#5b8def";
+const AMBER = '#f5a524'
+const TICKET = '#5b8def'
 
-const COLORS = ["var(--accent)", AMBER, TICKET, DANGER] as const;
+const COLORS = ['var(--accent)', AMBER, TICKET, DANGER] as const
 
 /** Destination coordinates for outbound packets */
 const DEST = [
   { x: 580, y: 80 }, // MCP server (top-right)
   { x: 134, y: 78 }, // Person/user (above laptop)
   { x: 360, y: 200 }, // Admin (below Edison)
-  { x: 360, y: 210 }, // Blocked (below Edison, never arrives)
-] as const;
+  { x: 360, y: 210 } // Blocked (below Edison, never arrives)
+] as const
 
 const CSS = `
 .sbv { color: var(--text-primary); }
@@ -284,7 +284,7 @@ const CSS = `
   .sbv .sbv-h1 { opacity:1; }
   .sbv .sbv-h2, .sbv .sbv-h3, .sbv .sbv-h4 { opacity:0; }
 }
-`;
+`
 
 export default function SecurityBusinessValueAnimation(): React.ReactNode {
   return (
@@ -441,13 +441,7 @@ export default function SecurityBusinessValueAnimation(): React.ReactNode {
             strokeOpacity="0.2"
             strokeWidth="1"
           />
-          <McpIcon
-            x={568}
-            y={62}
-            size={14}
-            color="var(--accent)"
-            opacity="0.5"
-          />
+          <McpIcon x={568} y={62} size={14} color="var(--accent)" opacity="0.5" />
           <svg
             x={584}
             y={62}
@@ -748,11 +742,7 @@ export default function SecurityBusinessValueAnimation(): React.ReactNode {
                 strokeWidth="1.2"
                 strokeLinecap="round"
               />
-              <path
-                d="M360,50 L354,30 A22,22 0 0,1 360,28 Z"
-                fill={color}
-                fillOpacity="0.12"
-              />
+              <path d="M360,50 L354,30 A22,22 0 0,1 360,28 Z" fill={color} fillOpacity="0.12" />
             </g>
             {/* Verdict icon revealed after sweep - positioned above the radar */}
             <g className={`sbv-score${i + 1}`}>
@@ -908,20 +898,12 @@ export default function SecurityBusinessValueAnimation(): React.ReactNode {
               strokeWidth="1.5"
               strokeLinecap="round"
             />
-            <rect
-              x={412}
-              y={63}
-              width={46}
-              height={5}
-              rx={2.5}
-              fill={DANGER}
-              fillOpacity="0.2"
-            />
+            <rect x={412} y={63} width={46} height={5} rx={2.5} fill={DANGER} fillOpacity="0.2" />
           </g>
         </g>
 
         {/* ══ Phase 4: big red X blocking path to Slack ══ */}
-        <g className="sbv-block-x" style={{ transformOrigin: "470px 110px" }}>
+        <g className="sbv-block-x" style={{ transformOrigin: '470px 110px' }}>
           <circle cx={470} cy={110} r={16} fill={DANGER} fillOpacity="0.1" />
           <line
             x1={461}
@@ -977,13 +959,7 @@ export default function SecurityBusinessValueAnimation(): React.ReactNode {
         {/* ══ Approval ticks (appear on intermediaries before forwarding) ══ */}
         {/* User approval tick */}
         <g className="sbv-approve2">
-          <circle
-            cx={160}
-            cy={75}
-            r={8}
-            fill="var(--accent)"
-            fillOpacity="0.15"
-          />
+          <circle cx={160} cy={75} r={8} fill="var(--accent)" fillOpacity="0.15" />
           <polyline
             points="155,75 158,78 165,71"
             fill="none"
@@ -995,13 +971,7 @@ export default function SecurityBusinessValueAnimation(): React.ReactNode {
         </g>
         {/* Admin approval tick */}
         <g className="sbv-approve3">
-          <circle
-            cx={420}
-            cy={200}
-            r={8}
-            fill="var(--accent)"
-            fillOpacity="0.15"
-          />
+          <circle cx={420} cy={200} r={8} fill="var(--accent)" fillOpacity="0.15" />
           <polyline
             points="415,200 418,203 425,196"
             fill="none"
@@ -1050,5 +1020,5 @@ export default function SecurityBusinessValueAnimation(): React.ReactNode {
         <ProgressBar y={248} width={680} className="sbv-progress" />
       </svg>
     </div>
-  );
+  )
 }

@@ -22,20 +22,14 @@ import {
   SLACK_SVG,
   SLACK_SVG_VIEWBOX,
   GCAL_SVG,
-  GCAL_SVG_VIEWBOX,
-} from "../../svg/app-icons-svg";
+  GCAL_SVG_VIEWBOX
+} from '../../svg/app-icons-svg'
 import {
   ATTACKER_BODY_PATHS,
   ATTACKER_HIGHLIGHT_PATHS,
-  ATTACKER_SVG_VIEWBOX,
-} from "../../svg/attacker-svg";
-import {
-  GREEN as G,
-  POISON_PATH,
-  ProgressBar,
-  RED as R,
-  RobotIcon,
-} from "../_shared";
+  ATTACKER_SVG_VIEWBOX
+} from '../../svg/attacker-svg'
+import { GREEN as G, POISON_PATH, ProgressBar, RED as R, RobotIcon } from '../_shared'
 
 const CSS = `
 .pi-anim { color: var(--text-primary); }
@@ -226,7 +220,7 @@ const CSS = `
   .pi-anim .pi-label { opacity: 1; }
   .pi-anim .pi-progress { animation: none; transform: scaleX(1); }
 }
-`;
+`
 
 export default function PromptInjectionAnimation(): React.ReactNode {
   return (
@@ -235,7 +229,7 @@ export default function PromptInjectionAnimation(): React.ReactNode {
       <svg
         className="pi-anim"
         viewBox="0 0 500 190"
-        style={{ width: "100%", maxWidth: 500, height: "auto" }}
+        style={{ width: '100%', maxWidth: 500, height: 'auto' }}
         xmlns="http://www.w3.org/2000/svg"
         role="presentation"
         aria-hidden="true"
@@ -292,30 +286,11 @@ export default function PromptInjectionAnimation(): React.ReactNode {
           <RobotIcon x={61} y={15} size={40} fill={R} fillOpacity="0.6" />
           {/* Pulse highlights centered on RobotIcon's pill eyes
               (256-vb eye centers (100,156) and (156,156) mapped into the 40-px parent). */}
-          <circle
-            className="pi-eye-pulse"
-            cx="76.6"
-            cy="39.4"
-            r="2.4"
-            fill={R}
-            fillOpacity="0.7"
-          />
-          <circle
-            className="pi-eye-pulse"
-            cx="85.4"
-            cy="39.4"
-            r="2.4"
-            fill={R}
-            fillOpacity="0.7"
-          />
+          <circle className="pi-eye-pulse" cx="76.6" cy="39.4" r="2.4" fill={R} fillOpacity="0.7" />
+          <circle className="pi-eye-pulse" cx="85.4" cy="39.4" r="2.4" fill={R} fillOpacity="0.7" />
           {/* Large poison icon to the right of corrupted robot */}
           <svg x="104" y="18" width="28" height="28" viewBox="0 0 48 48">
-            <path
-              d={POISON_PATH}
-              fill={R}
-              fillOpacity="0.6"
-              fillRule="evenodd"
-            />
+            <path d={POISON_PATH} fill={R} fillOpacity="0.6" fillRule="evenodd" />
           </svg>
         </g>
 
@@ -384,15 +359,7 @@ export default function PromptInjectionAnimation(): React.ReactNode {
         />
 
         {/* App icon highlight overlay (strong red = data being stolen) */}
-        <rect
-          className="pi-hl"
-          x="34"
-          y="58"
-          width="84"
-          height="24"
-          rx="5"
-          fill={R}
-        />
+        <rect className="pi-hl" x="34" y="58" width="84" height="24" rx="5" fill={R} />
 
         {/* Laptop screen flash (red on corruption) */}
         <rect
@@ -419,13 +386,7 @@ export default function PromptInjectionAnimation(): React.ReactNode {
             strokeWidth="1.5"
           />
         </g>
-        <svg
-          x="374"
-          y="6"
-          width="44"
-          height="44"
-          viewBox={ATTACKER_SVG_VIEWBOX}
-        >
+        <svg x="374" y="6" width="44" height="44" viewBox={ATTACKER_SVG_VIEWBOX}>
           {ATTACKER_BODY_PATHS.map((d, i) => (
             <path key={`body-${i}`} d={d} fill={R} fillOpacity="0.5" />
           ))}
@@ -436,14 +397,7 @@ export default function PromptInjectionAnimation(): React.ReactNode {
 
         {/* ===== MALICIOUS EMAIL (bottom-center: envelope + poison badge) ===== */}
         <g className="pi-poison">
-          <circle
-            className="pi-pglow"
-            cx="268"
-            cy="132"
-            r="30"
-            fill={R}
-            fillOpacity="0.06"
-          />
+          <circle className="pi-pglow" cx="268" cy="132" r="30" fill={R} fillOpacity="0.06" />
 
           {/* Envelope body */}
           <rect
@@ -480,12 +434,7 @@ export default function PromptInjectionAnimation(): React.ReactNode {
             strokeWidth="0.8"
           />
           <svg x="278" y="132" width="24" height="24" viewBox="0 0 48 48">
-            <path
-              d={POISON_PATH}
-              fill={R}
-              fillOpacity="0.65"
-              fillRule="evenodd"
-            />
+            <path d={POISON_PATH} fill={R} fillOpacity="0.65" fillRule="evenodd" />
           </svg>
         </g>
 
@@ -667,5 +616,5 @@ export default function PromptInjectionAnimation(): React.ReactNode {
         <ProgressBar y={188} width={460} className="pi-progress" />
       </svg>
     </div>
-  );
+  )
 }

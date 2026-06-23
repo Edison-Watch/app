@@ -14,17 +14,17 @@
  * paired with {@link HumanAccessAnimation}.
  */
 
-import { useId } from "react";
-import { AGENT_REGISTRY } from "../../agent-registry";
-import { AgentIcon, ProgressBar, RED as R } from "../_shared";
-import { DataCylinder, MeshWall } from "./_agentBypassParts";
+import { useId } from 'react'
+import { AGENT_REGISTRY } from '../../agent-registry'
+import { AgentIcon, ProgressBar, RED as R } from '../_shared'
+import { DataCylinder, MeshWall } from './_agentBypassParts'
 
 const AGENTS = [
-  AGENT_REGISTRY["claude-code"],
-  AGENT_REGISTRY["cursor"],
-  AGENT_REGISTRY["codex"],
-  AGENT_REGISTRY["copilot"],
-];
+  AGENT_REGISTRY['claude-code'],
+  AGENT_REGISTRY['cursor'],
+  AGENT_REGISTRY['codex'],
+  AGENT_REGISTRY['copilot']
+]
 
 const CSS = `
 .abp-anim { color: var(--text-primary); }
@@ -103,17 +103,17 @@ const CSS = `
   .abp-anim .abp-warn { opacity: 1; }
   .abp-anim .abp-progress { transform: scaleX(1); }
 }
-`;
+`
 
 export default function AgentBypassPathAnimation(): React.ReactNode {
-  const id = useId();
+  const id = useId()
   return (
     <div className="flex justify-center">
       <style>{CSS}</style>
       <svg
         className="abp-anim"
         viewBox="0 0 340 230"
-        style={{ width: "100%", maxWidth: 400, height: "auto" }}
+        style={{ width: '100%', maxWidth: 400, height: 'auto' }}
         xmlns="http://www.w3.org/2000/svg"
         role="presentation"
         aria-hidden="true"
@@ -193,13 +193,7 @@ export default function AgentBypassPathAnimation(): React.ReactNode {
         </text>
 
         {/* Mesh wall (still present, but bypassed) */}
-        <MeshWall
-          x={154}
-          y={50}
-          width={70}
-          height={130}
-          color="var(--text-muted)"
-        />
+        <MeshWall x={154} y={50} width={70} height={130} color="var(--text-muted)" />
         {/* Red flash on the wall when bypass succeeds */}
         <rect
           className="abp-wall-bad-flash"
@@ -276,5 +270,5 @@ export default function AgentBypassPathAnimation(): React.ReactNode {
         <ProgressBar y={222} width={300} className="abp-progress" />
       </svg>
     </div>
-  );
+  )
 }

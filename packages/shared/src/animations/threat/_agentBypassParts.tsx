@@ -3,9 +3,9 @@
  * (HumanAccessAnimation, AgentBypassPathAnimation, AgentBypassAnimation).
  */
 
-import React from "react";
+import React from 'react'
 
-export { GREEN, PERSON_PATH } from "../_shared";
+export { GREEN, PERSON_PATH } from '../_shared'
 
 /**
  * SSO/RBAC mesh wall: a thin slab with a 5×7 grid pattern. Used to
@@ -18,19 +18,19 @@ export function MeshWall({
   width,
   height,
   label,
-  color,
+  color
 }: {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  label?: string;
-  color: string;
+  x: number
+  y: number
+  width: number
+  height: number
+  label?: string
+  color: string
 }): React.ReactNode {
-  const cols = 5;
-  const rows = 7;
-  const dx = width / cols;
-  const dy = height / rows;
+  const cols = 5
+  const rows = 7
+  const dx = width / cols
+  const dy = height / rows
   return (
     <g>
       <rect
@@ -84,7 +84,7 @@ export function MeshWall({
         </text>
       )}
     </g>
-  );
+  )
 }
 
 /**
@@ -95,19 +95,19 @@ export function DataCylinder({
   cx,
   cy,
   size = 36,
-  className,
+  className
 }: {
-  cx: number;
-  cy: number;
-  size?: number;
-  className?: string;
+  cx: number
+  cy: number
+  size?: number
+  className?: string
 }): React.ReactNode {
-  const w = size;
-  const h = size * 1.4;
-  const ry = size * 0.22;
-  const top = cy - h / 2;
-  const bot = cy + h / 2;
-  const x0 = cx - w / 2;
+  const w = size
+  const h = size * 1.4
+  const ry = size * 0.22
+  const top = cy - h / 2
+  const bot = cy + h / 2
+  const x0 = cx - w / 2
   return (
     <g className={className}>
       <rect
@@ -118,22 +118,8 @@ export function DataCylinder({
         fill="var(--accent)"
         fillOpacity="0.15"
       />
-      <ellipse
-        cx={cx}
-        cy={top + ry}
-        rx={w / 2}
-        ry={ry}
-        fill="var(--accent)"
-        fillOpacity="0.15"
-      />
-      <ellipse
-        cx={cx}
-        cy={bot - ry}
-        rx={w / 2}
-        ry={ry}
-        fill="var(--accent)"
-        fillOpacity="0.25"
-      />
+      <ellipse cx={cx} cy={top + ry} rx={w / 2} ry={ry} fill="var(--accent)" fillOpacity="0.15" />
+      <ellipse cx={cx} cy={bot - ry} rx={w / 2} ry={ry} fill="var(--accent)" fillOpacity="0.25" />
       <line
         x1={x0}
         y1={top + ry}
@@ -192,5 +178,5 @@ export function DataCylinder({
         strokeWidth="0.6"
       />
     </g>
-  );
+  )
 }

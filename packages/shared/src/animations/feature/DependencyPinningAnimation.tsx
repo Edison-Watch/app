@@ -18,16 +18,9 @@
 import {
   ATTACKER_BODY_PATHS,
   ATTACKER_HIGHLIGHT_PATHS,
-  ATTACKER_SVG_VIEWBOX,
-} from "../../svg/attacker-svg";
-import {
-  EdisonLogo,
-  McpIcon,
-  ProgressBar,
-  RED,
-  RobotIcon,
-  VerdictBadge,
-} from "../_shared";
+  ATTACKER_SVG_VIEWBOX
+} from '../../svg/attacker-svg'
+import { EdisonLogo, McpIcon, ProgressBar, RED, RobotIcon, VerdictBadge } from '../_shared'
 
 const CSS = `
 .dp-anim { color: var(--text-primary); }
@@ -128,7 +121,7 @@ const CSS = `
   .dp-anim .dp-cap3 { opacity: 1; }
   .dp-anim .dp-progress { animation: none; transform: scaleX(1); }
 }
-`;
+`
 
 /** Travelling packet (halo + core), colour via currentColor. */
 function Pkt(): React.ReactNode {
@@ -137,41 +130,25 @@ function Pkt(): React.ReactNode {
       <circle r="7" fillOpacity="0.16" />
       <circle r="2.8" fillOpacity="0.6" />
     </>
-  );
+  )
 }
 
 /** One MCP server tile - healthy (neutral) or compromised (red + biohazard). */
-function McpServer({
-  x,
-  y,
-  bad,
-}: {
-  x: number;
-  y: number;
-  bad?: boolean;
-}): React.ReactNode {
-  const w = 58;
-  const h = 46;
+function McpServer({ x, y, bad }: { x: number; y: number; bad?: boolean }): React.ReactNode {
+  const w = 58
+  const h = 46
   return (
     <g>
-      {bad && (
-        <circle
-          cx={x + w / 2}
-          cy={y + h / 2}
-          r="34"
-          fill={RED}
-          fillOpacity="0.07"
-        />
-      )}
+      {bad && <circle cx={x + w / 2} cy={y + h / 2} r="34" fill={RED} fillOpacity="0.07" />}
       <rect
         x={x}
         y={y}
         width={w}
         height={h}
         rx="6"
-        fill={bad ? RED : "var(--text-primary)"}
+        fill={bad ? RED : 'var(--text-primary)'}
         fillOpacity={bad ? 0.06 : 0.03}
-        stroke={bad ? RED : "var(--text-muted)"}
+        stroke={bad ? RED : 'var(--text-muted)'}
         strokeOpacity={bad ? 0.5 : 0.35}
         strokeWidth="1"
       />
@@ -179,19 +156,19 @@ function McpServer({
         x={x + 17}
         y={y + 7}
         size={24}
-        color={bad ? RED : "var(--text-primary)"}
-        opacity={bad ? "0.8" : "0.65"}
+        color={bad ? RED : 'var(--text-primary)'}
+        opacity={bad ? '0.8' : '0.65'}
       />
     </g>
-  );
+  )
 }
 
 export default function DependencyPinningAnimation(): React.ReactNode {
   // Edison gateway right edge -> each server's left-middle connection point.
   const lines: Array<[number, number, string]> = [
-    [372, 37, "dp-line"], // top server
-    [372, 149, "dp-line"], // bottom server
-  ];
+    [372, 37, 'dp-line'], // top server
+    [372, 149, 'dp-line'] // bottom server
+  ]
   return (
     <div className="flex justify-center">
       <style>{CSS}</style>
@@ -268,13 +245,7 @@ export default function DependencyPinningAnimation(): React.ReactNode {
           strokeOpacity="0.35"
           strokeWidth="1.2"
         />
-        <RobotIcon
-          x={54}
-          y={72}
-          size={42}
-          fill="var(--text-primary)"
-          fillOpacity="0.6"
-        />
+        <RobotIcon x={54} y={72} size={42} fill="var(--text-primary)" fillOpacity="0.6" />
         <text
           x="74"
           y="138"
@@ -373,13 +344,7 @@ export default function DependencyPinningAnimation(): React.ReactNode {
               strokeWidth="1.5"
             />
           </g>
-          <svg
-            x="446"
-            y="71"
-            width="44"
-            height="44"
-            viewBox={ATTACKER_SVG_VIEWBOX}
-          >
+          <svg x="446" y="71" width="44" height="44" viewBox={ATTACKER_SVG_VIEWBOX}>
             {ATTACKER_BODY_PATHS.map((d, i) => (
               <path key={`b${i}`} d={d} fill={RED} fillOpacity="0.5" />
             ))}
@@ -407,13 +372,7 @@ export default function DependencyPinningAnimation(): React.ReactNode {
         </g>
 
         {/* Edison severs the compromised route */}
-        <VerdictBadge
-          cx={316}
-          cy={93}
-          r={9}
-          variant="deny"
-          className="dp-deny"
-        />
+        <VerdictBadge cx={316} cy={93} r={9} variant="deny" className="dp-deny" />
 
         {/* captions */}
         <g className="dp-cap2">
@@ -448,5 +407,5 @@ export default function DependencyPinningAnimation(): React.ReactNode {
         <ProgressBar y={188} width={460} className="dp-progress" />
       </svg>
     </div>
-  );
+  )
 }

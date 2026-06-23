@@ -10,7 +10,7 @@
  *
  * 12s loop. Pure SVG + CSS. Respects `prefers-reduced-motion`.
  */
-import { AGENT_REGISTRY } from "../../agent-registry/index";
+import { AGENT_REGISTRY } from '../../agent-registry/index'
 import {
   ADMIN_PATH,
   AgentIcon,
@@ -22,22 +22,22 @@ import {
   McpPacket,
   ORANGE as O,
   ProgressBar,
-  SHIELD_CHECK_PATH,
-} from "../_shared";
+  SHIELD_CHECK_PATH
+} from '../_shared'
 
-const CLAUDE = AGENT_REGISTRY["claude-code"];
-const CURSOR = AGENT_REGISTRY["cursor"];
-const CODEX = AGENT_REGISTRY["codex"];
+const CLAUDE = AGENT_REGISTRY['claude-code']
+const CURSOR = AGENT_REGISTRY['cursor']
+const CODEX = AGENT_REGISTRY['codex']
 
-const fg = "var(--text-primary)";
-const muted = "var(--text-muted)";
-const accent = "var(--accent)";
+const fg = 'var(--text-primary)'
+const muted = 'var(--text-muted)'
+const accent = 'var(--accent)'
 
-const CSS = `.dca{color:${fg}}.dca .dca-line{stroke-dashoffset:0;animation:dca-lf 2s linear infinite}.dca .dca-pkt path,.dca .dca-pkt circle{fill:currentColor}.dca .dca-phase1{animation:dca-p1 12s ease-in-out infinite}.dca .dca-edison{animation:dca-ed 12s ease-in-out infinite;transform-origin:279px 151px}.dca .dca-phase2{animation:dca-p2 12s ease-in-out infinite}.dca .dca-rogue{animation:dca-rogue 12s ease-in-out infinite}.dca .dca-rglow{animation:dca-rglow 1.5s ease-in-out infinite}.dca .dca-pulse{transform-origin:279px 151px;animation:dca-pulse 1.33s cubic-bezier(.2,.8,.4,1) infinite}.dca .dca-v1{animation:dca-v1 12s ease-in-out infinite}.dca .dca-v2{animation:dca-v2 12s ease-in-out infinite}.dca .dca-v3{animation:dca-v3 12s ease-in-out infinite}.dca .dca-pkt1{color:${accent};animation:dca-pkt1 12s ease-in-out infinite}.dca .dca-scan{animation:dca-scan 12s ease-in-out infinite}.dca .dca-progress{transform-origin:20px 248px;animation:dca-prog 12s linear infinite}@keyframes dca-lf{to{stroke-dashoffset:-12}}@keyframes dca-p1{0%,46%{opacity:1}54%{opacity:0}100%{opacity:0}}@keyframes dca-ed{0%,48%{opacity:0;transform:scale(.85)}56%{opacity:1;transform:scale(1)}100%{opacity:1;transform:scale(1)}}@keyframes dca-p2{0%,48%{opacity:0}56%{opacity:1}100%{opacity:1}}@keyframes dca-rogue{0%,4%{opacity:0}10%{opacity:1}100%{opacity:1}}@keyframes dca-rglow{0%,100%{stroke-opacity:.3}50%{stroke-opacity:.65}}@keyframes dca-pulse{0%{transform:scale(1);opacity:0}10%{transform:scale(1);opacity:.4}60%{transform:scale(1.5);opacity:0}100%{transform:scale(1.5);opacity:0}}@keyframes dca-v1{0%,62%{opacity:0;transform:scale(0.5)}65%{opacity:1;transform:scale(1)}100%{opacity:1;transform:scale(1)}}@keyframes dca-v2{0%,68%{opacity:0;transform:scale(0.5)}71%{opacity:1;transform:scale(1)}100%{opacity:1;transform:scale(1)}}@keyframes dca-v3{0%,74%{opacity:0;transform:scale(0.5)}77%{opacity:1;transform:scale(1)}100%{opacity:1;transform:scale(1)}}@keyframes dca-pkt1{0%,76%{opacity:0}78%{transform:translate(330px,100px);opacity:.8;color:${accent}}86%{transform:translate(470px,75px);opacity:1;color:${accent}}88%{transform:translate(470px,75px);opacity:0}100%{opacity:0}}@keyframes dca-scan{0%,56%{opacity:0;transform:translateY(0)}58%{opacity:.7;transform:translateY(0)}70%{opacity:.7;transform:translateY(82px)}72%{opacity:0;transform:translateY(82px)}100%{opacity:0}}@keyframes dca-prog{0%{transform:scaleX(0)}100%{transform:scaleX(1)}}@media(prefers-reduced-motion:reduce){.dca .dca-line,.dca .dca-phase1,.dca .dca-phase2,.dca .dca-edison,.dca .dca-rogue,.dca .dca-rglow,.dca .dca-pulse,.dca .dca-v1,.dca .dca-v2,.dca .dca-v3,.dca .dca-pkt1,.dca .dca-scan{animation:none}.dca .dca-phase1{opacity:0}.dca .dca-phase2,.dca .dca-edison{opacity:1;transform:scale(1)}.dca .dca-rogue{opacity:1}.dca .dca-v1,.dca .dca-v2,.dca .dca-v3{opacity:1;transform:scale(1)}.dca .dca-pkt1{opacity:0}.dca .dca-progress{animation:none;transform:scaleX(1)}}`;
+const CSS = `.dca{color:${fg}}.dca .dca-line{stroke-dashoffset:0;animation:dca-lf 2s linear infinite}.dca .dca-pkt path,.dca .dca-pkt circle{fill:currentColor}.dca .dca-phase1{animation:dca-p1 12s ease-in-out infinite}.dca .dca-edison{animation:dca-ed 12s ease-in-out infinite;transform-origin:279px 151px}.dca .dca-phase2{animation:dca-p2 12s ease-in-out infinite}.dca .dca-rogue{animation:dca-rogue 12s ease-in-out infinite}.dca .dca-rglow{animation:dca-rglow 1.5s ease-in-out infinite}.dca .dca-pulse{transform-origin:279px 151px;animation:dca-pulse 1.33s cubic-bezier(.2,.8,.4,1) infinite}.dca .dca-v1{animation:dca-v1 12s ease-in-out infinite}.dca .dca-v2{animation:dca-v2 12s ease-in-out infinite}.dca .dca-v3{animation:dca-v3 12s ease-in-out infinite}.dca .dca-pkt1{color:${accent};animation:dca-pkt1 12s ease-in-out infinite}.dca .dca-scan{animation:dca-scan 12s ease-in-out infinite}.dca .dca-progress{transform-origin:20px 248px;animation:dca-prog 12s linear infinite}@keyframes dca-lf{to{stroke-dashoffset:-12}}@keyframes dca-p1{0%,46%{opacity:1}54%{opacity:0}100%{opacity:0}}@keyframes dca-ed{0%,48%{opacity:0;transform:scale(.85)}56%{opacity:1;transform:scale(1)}100%{opacity:1;transform:scale(1)}}@keyframes dca-p2{0%,48%{opacity:0}56%{opacity:1}100%{opacity:1}}@keyframes dca-rogue{0%,4%{opacity:0}10%{opacity:1}100%{opacity:1}}@keyframes dca-rglow{0%,100%{stroke-opacity:.3}50%{stroke-opacity:.65}}@keyframes dca-pulse{0%{transform:scale(1);opacity:0}10%{transform:scale(1);opacity:.4}60%{transform:scale(1.5);opacity:0}100%{transform:scale(1.5);opacity:0}}@keyframes dca-v1{0%,62%{opacity:0;transform:scale(0.5)}65%{opacity:1;transform:scale(1)}100%{opacity:1;transform:scale(1)}}@keyframes dca-v2{0%,68%{opacity:0;transform:scale(0.5)}71%{opacity:1;transform:scale(1)}100%{opacity:1;transform:scale(1)}}@keyframes dca-v3{0%,74%{opacity:0;transform:scale(0.5)}77%{opacity:1;transform:scale(1)}100%{opacity:1;transform:scale(1)}}@keyframes dca-pkt1{0%,76%{opacity:0}78%{transform:translate(330px,100px);opacity:.8;color:${accent}}86%{transform:translate(470px,75px);opacity:1;color:${accent}}88%{transform:translate(470px,75px);opacity:0}100%{opacity:0}}@keyframes dca-scan{0%,56%{opacity:0;transform:translateY(0)}58%{opacity:.7;transform:translateY(0)}70%{opacity:.7;transform:translateY(82px)}72%{opacity:0;transform:translateY(82px)}100%{opacity:0}}@keyframes dca-prog{0%{transform:scaleX(0)}100%{transform:scaleX(1)}}@media(prefers-reduced-motion:reduce){.dca .dca-line,.dca .dca-phase1,.dca .dca-phase2,.dca .dca-edison,.dca .dca-rogue,.dca .dca-rglow,.dca .dca-pulse,.dca .dca-v1,.dca .dca-v2,.dca .dca-v3,.dca .dca-pkt1,.dca .dca-scan{animation:none}.dca .dca-phase1{opacity:0}.dca .dca-phase2,.dca .dca-edison{opacity:1;transform:scale(1)}.dca .dca-rogue{opacity:1}.dca .dca-v1,.dca .dca-v2,.dca .dca-v3{opacity:1;transform:scale(1)}.dca .dca-pkt1{opacity:0}.dca .dca-progress{animation:none;transform:scaleX(1)}}`
 
 export default function DesktopClientAnimation() {
   return (
-    <div style={{ display: "flex", justifyContent: "center" }}>
+    <div style={{ display: 'flex', justifyContent: 'center' }}>
       <style>{CSS}</style>
       <svg
         className="dca"
@@ -178,15 +178,7 @@ export default function DesktopClientAnimation() {
           </text>
 
           <g className="dca-phase1">
-            <rect
-              x={142}
-              y={116}
-              width={24}
-              height={12}
-              rx={2.5}
-              fill={O}
-              fillOpacity="0.15"
-            />
+            <rect x={142} y={116} width={24} height={12} rx={2.5} fill={O} fillOpacity="0.15" />
             <text
               x={154}
               y={125}
@@ -200,7 +192,7 @@ export default function DesktopClientAnimation() {
             </text>
           </g>
 
-          <g className="dca-v3" style={{ transformOrigin: "170px 122px" }}>
+          <g className="dca-v3" style={{ transformOrigin: '170px 122px' }}>
             <rect
               x={140}
               y={116}
@@ -279,14 +271,7 @@ export default function DesktopClientAnimation() {
           />
 
           {[70, 94].map((ey) => (
-            <svg
-              key={ey}
-              x={284}
-              y={ey - 9}
-              width={16}
-              height={16}
-              viewBox="0 0 256 256"
-            >
+            <svg key={ey} x={284} y={ey - 9} width={16} height={16} viewBox="0 0 256 256">
               <path d={EYE_SLASH_PATH} fill={DANGER} fillOpacity="0.35" />
             </svg>
           ))}
@@ -313,7 +298,7 @@ export default function DesktopClientAnimation() {
           </svg>
         </g>
 
-        <g className="dca-edison" style={{ transformOrigin: "279px 151px" }}>
+        <g className="dca-edison" style={{ transformOrigin: '279px 151px' }}>
           <circle
             className="dca-pulse"
             cx={279}
@@ -337,15 +322,7 @@ export default function DesktopClientAnimation() {
             strokeOpacity="0.5"
             strokeWidth="1.5"
           />
-          <rect
-            x={30}
-            y={56}
-            width={242}
-            height={4}
-            rx={1}
-            fill={accent}
-            fillOpacity="0.06"
-          />
+          <rect x={30} y={56} width={242} height={4} rx={1} fill={accent} fillOpacity="0.06" />
         </g>
 
         <g className="dca-phase2">
@@ -401,7 +378,7 @@ export default function DesktopClientAnimation() {
         </g>
 
         {/* Verdict badges */}
-        <g className="dca-v1" style={{ transformOrigin: "290px 70px" }}>
+        <g className="dca-v1" style={{ transformOrigin: '290px 70px' }}>
           <circle
             cx={290}
             cy={70}
@@ -421,7 +398,7 @@ export default function DesktopClientAnimation() {
             strokeLinejoin="round"
           />
         </g>
-        <g className="dca-v2" style={{ transformOrigin: "290px 94px" }}>
+        <g className="dca-v2" style={{ transformOrigin: '290px 94px' }}>
           <circle
             cx={290}
             cy={94}
@@ -441,7 +418,7 @@ export default function DesktopClientAnimation() {
             strokeLinejoin="round"
           />
         </g>
-        <g className="dca-v3" style={{ transformOrigin: "290px 122px" }}>
+        <g className="dca-v3" style={{ transformOrigin: '290px 122px' }}>
           <circle
             cx={290}
             cy={122}
@@ -516,39 +493,15 @@ export default function DesktopClientAnimation() {
           </text>
 
           <McpIcon x={462} y={58} size={14} color={accent} opacity="0.45" />
-          <rect
-            x={480}
-            y={62}
-            width={36}
-            height={5}
-            rx={1.5}
-            fill={accent}
-            fillOpacity="0.12"
-          />
+          <rect x={480} y={62} width={36} height={5} rx={1.5} fill={accent} fillOpacity="0.12" />
           <circle cx={524} cy={65} r={2.5} fill={accent} fillOpacity="0.5" />
 
           <McpIcon x={462} y={78} size={14} color={accent} opacity="0.45" />
-          <rect
-            x={480}
-            y={82}
-            width={32}
-            height={5}
-            rx={1.5}
-            fill={accent}
-            fillOpacity="0.12"
-          />
+          <rect x={480} y={82} width={32} height={5} rx={1.5} fill={accent} fillOpacity="0.12" />
           <circle cx={524} cy={85} r={2.5} fill={accent} fillOpacity="0.5" />
 
           <McpIcon x={462} y={98} size={14} color={DANGER} opacity="0.5" />
-          <rect
-            x={480}
-            y={102}
-            width={28}
-            height={5}
-            rx={1.5}
-            fill={DANGER}
-            fillOpacity="0.1"
-          />
+          <rect x={480} y={102} width={28} height={5} rx={1.5} fill={DANGER} fillOpacity="0.1" />
           <svg x={518} y={99} width={12} height={12} viewBox="0 0 256 256">
             <path d={SHIELD_CHECK_PATH} fill={DANGER} fillOpacity="0.5" />
           </svg>
@@ -625,5 +578,5 @@ export default function DesktopClientAnimation() {
         <ProgressBar y={248} width={580} className="dca-progress" />
       </svg>
     </div>
-  );
+  )
 }

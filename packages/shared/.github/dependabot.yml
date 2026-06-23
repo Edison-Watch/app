@@ -10,14 +10,14 @@ updates:
       storybook:
         patterns:
           - storybook
-          - "@storybook/*"
-          - "@chromatic-com/storybook"
+          - '@storybook/*'
+          - '@chromatic-com/storybook'
       testing:
         patterns:
           - vitest
-          - "@vitest/*"
-          - "@playwright/test"
-          - "@testing-library/*"
+          - '@vitest/*'
+          - '@playwright/test'
+          - '@testing-library/*'
           - jsdom
       build:
         patterns:

@@ -1,32 +1,32 @@
-import { render, screen, fireEvent } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { render, screen, fireEvent } from '@testing-library/react'
+import { describe, expect, it, vi } from 'vitest'
 
-import Switch from "../Switch";
+import Switch from '../Switch'
 
-describe("Switch", () => {
-  it("toggles on click", () => {
-    const onChange = vi.fn();
-    render(<Switch checked={false} onChange={onChange} label="Enable" />);
+describe('Switch', () => {
+  it('toggles on click', () => {
+    const onChange = vi.fn()
+    render(<Switch checked={false} onChange={onChange} label="Enable" />)
 
-    fireEvent.click(screen.getByRole("switch"));
-    expect(onChange).toHaveBeenCalledWith(true);
-  });
+    fireEvent.click(screen.getByRole('switch'))
+    expect(onChange).toHaveBeenCalledWith(true)
+  })
 
-  it("shows loading spinner in thumb", () => {
-    render(<Switch checked={true} onChange={vi.fn()} loading />);
+  it('shows loading spinner in thumb', () => {
+    render(<Switch checked={true} onChange={vi.fn()} loading />)
 
-    const switchEl = screen.getByRole("switch");
+    const switchEl = screen.getByRole('switch')
     // Loading state: button is disabled
-    expect(switchEl.hasAttribute("disabled")).toBe(true);
+    expect(switchEl.hasAttribute('disabled')).toBe(true)
     // SVG spinner rendered inside thumb
-    expect(switchEl.querySelector("svg")).toBeDefined();
-  });
+    expect(switchEl.querySelector('svg')).toBeDefined()
+  })
 
-  it("prevents toggle when disabled", () => {
-    const onChange = vi.fn();
-    render(<Switch checked={false} onChange={onChange} disabled />);
+  it('prevents toggle when disabled', () => {
+    const onChange = vi.fn()
+    render(<Switch checked={false} onChange={onChange} disabled />)
 
-    fireEvent.click(screen.getByRole("switch"));
-    expect(onChange).not.toHaveBeenCalled();
-  });
-});
+    fireEvent.click(screen.getByRole('switch'))
+    expect(onChange).not.toHaveBeenCalled()
+  })
+})

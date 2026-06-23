@@ -22,8 +22,8 @@
  * Requires CSS custom properties: --text-primary, --accent, --text-muted.
  */
 
-import { useId } from "react";
-import { AGENT_REGISTRY } from "../../agent-registry";
+import { useId } from 'react'
+import { AGENT_REGISTRY } from '../../agent-registry'
 import {
   AgentIcon,
   EdisonLogo,
@@ -32,20 +32,20 @@ import {
   McpPacket,
   ORANGE as O,
   ProgressBar,
-  RED as R,
-} from "../_shared";
+  RED as R
+} from '../_shared'
 
-const CLAUDE = AGENT_REGISTRY["claude-code"];
-const CURSOR = AGENT_REGISTRY["cursor"];
+const CLAUDE = AGENT_REGISTRY['claude-code']
+const CURSOR = AGENT_REGISTRY['cursor']
 
 const SHIELD_PATH =
-  "M208,40H48A16,16,0,0,0,32,56v56c0,52.72,25.52,84.67,46.93,102.19,23.06,18.86,46,25.26,47,25.53a8,8,0,0,0,4.2,0c1-.27,23.91-6.67,47-25.53C198.48,196.67,224,164.72,224,112V56A16,16,0,0,0,208,40Zm0,72c0,37.07-13.66,67.16-40.6,89.42A129.3,129.3,0,0,1,128,223.62a128.25,128.25,0,0,1-38.92-21.81C61.82,179.51,48,149.3,48,112l0-56,160,0Z";
+  'M208,40H48A16,16,0,0,0,32,56v56c0,52.72,25.52,84.67,46.93,102.19,23.06,18.86,46,25.26,47,25.53a8,8,0,0,0,4.2,0c1-.27,23.91-6.67,47-25.53C198.48,196.67,224,164.72,224,112V56A16,16,0,0,0,208,40Zm0,72c0,37.07-13.66,67.16-40.6,89.42A129.3,129.3,0,0,1,128,223.62a128.25,128.25,0,0,1-38.92-21.81C61.82,179.51,48,149.3,48,112l0-56,160,0Z'
 
 const CHECK_PATH =
-  "M232.49,80.49l-128,128a12,12,0,0,1-17,0l-56-56a12,12,0,1,1,17-17L96,183,215.51,63.51a12,12,0,0,1,17,17Z";
+  'M232.49,80.49l-128,128a12,12,0,0,1-17,0l-56-56a12,12,0,1,1,17-17L96,183,215.51,63.51a12,12,0,0,1,17,17Z'
 
 const X_PATH =
-  "M205.66,194.34a8,8,0,0,1-11.32,11.32L128,139.31,61.66,205.66a8,8,0,0,1-11.32-11.32L116.69,128,50.34,61.66A8,8,0,0,1,61.66,50.34L128,116.69l66.34-66.35a8,8,0,0,1,11.32,11.32L139.31,128Z";
+  'M205.66,194.34a8,8,0,0,1-11.32,11.32L128,139.31,61.66,205.66a8,8,0,0,1-11.32-11.32L116.69,128,50.34,61.66A8,8,0,0,1,61.66,50.34L128,116.69l66.34-66.35a8,8,0,0,1,11.32,11.32L139.31,128Z'
 
 const CSS = `
 .cms { color: var(--text-primary); }
@@ -304,7 +304,7 @@ const CSS = `
   .cms .cms-return, .cms .cms-ast-bad, .cms .cms-block-flash { opacity: 0; }
   .cms .cms-progress { transform: scaleX(1); }
 }
-`;
+`
 
 function McpServer({ x, y }: { x: number; y: number }): React.ReactNode {
   return (
@@ -321,20 +321,8 @@ function McpServer({ x, y }: { x: number; y: number }): React.ReactNode {
         strokeOpacity="0.35"
         strokeWidth="1"
       />
-      <McpIcon
-        x={x + 13}
-        y={y + 5}
-        size={22}
-        color="var(--text-muted)"
-        opacity="0.6"
-      />
-      <circle
-        cx={x + 25}
-        cy={y + 33}
-        r="1.3"
-        fill="var(--text-muted)"
-        fillOpacity="0.35"
-      />
+      <McpIcon x={x + 13} y={y + 5} size={22} color="var(--text-muted)" opacity="0.6" />
+      <circle cx={x + 25} cy={y + 33} r="1.3" fill="var(--text-muted)" fillOpacity="0.35" />
       <line
         x1={x + 31}
         y1={y + 33}
@@ -346,18 +334,18 @@ function McpServer({ x, y }: { x: number; y: number }): React.ReactNode {
         strokeDasharray="2 2"
       />
     </g>
-  );
+  )
 }
 
 export default function CodeModeSecurityAnimation(): React.ReactNode {
-  const id = useId();
+  const id = useId()
   return (
     <div className="flex justify-center">
       <style>{CSS}</style>
       <svg
         className="cms"
         viewBox="0 0 540 210"
-        style={{ width: "100%", maxWidth: 720, height: "auto" }}
+        style={{ width: '100%', maxWidth: 720, height: 'auto' }}
         xmlns="http://www.w3.org/2000/svg"
         role="presentation"
         aria-hidden="true"
@@ -372,11 +360,7 @@ export default function CodeModeSecurityAnimation(): React.ReactNode {
             markerHeight="5"
             orient="auto"
           >
-            <path
-              d="M0 1 L9 5 L0 9 Z"
-              fill="var(--text-muted)"
-              fillOpacity={0.5}
-            />
+            <path d="M0 1 L9 5 L0 9 Z" fill="var(--text-muted)" fillOpacity={0.5} />
           </marker>
           <marker
             id={`${id}-arrA`}
@@ -462,15 +446,7 @@ export default function CodeModeSecurityAnimation(): React.ReactNode {
 
         {/* Animated code lines (token-like rects) */}
         <g className="cms-code1">
-          <rect
-            x="24"
-            y="54"
-            width="22"
-            height="4"
-            rx="1"
-            fill="#c084fc"
-            fillOpacity="0.7"
-          />
+          <rect x="24" y="54" width="22" height="4" rx="1" fill="#c084fc" fillOpacity="0.7" />
           <rect
             x="48"
             y="54"
@@ -480,26 +456,10 @@ export default function CodeModeSecurityAnimation(): React.ReactNode {
             fill="var(--text-primary)"
             fillOpacity="0.55"
           />
-          <rect
-            x="64"
-            y="54"
-            width="36"
-            height="4"
-            rx="1"
-            fill={O}
-            fillOpacity="0.6"
-          />
+          <rect x="64" y="54" width="36" height="4" rx="1" fill={O} fillOpacity="0.6" />
         </g>
         <g className="cms-code2">
-          <rect
-            x="30"
-            y="66"
-            width="14"
-            height="4"
-            rx="1"
-            fill="#60a5fa"
-            fillOpacity="0.7"
-          />
+          <rect x="30" y="66" width="14" height="4" rx="1" fill="#60a5fa" fillOpacity="0.7" />
           <rect
             x="46"
             y="66"
@@ -509,15 +469,7 @@ export default function CodeModeSecurityAnimation(): React.ReactNode {
             fill="var(--text-primary)"
             fillOpacity="0.55"
           />
-          <rect
-            x="68"
-            y="66"
-            width="32"
-            height="4"
-            rx="1"
-            fill={O}
-            fillOpacity="0.6"
-          />
+          <rect x="68" y="66" width="32" height="4" rx="1" fill={O} fillOpacity="0.6" />
           <rect
             x="102"
             y="66"
@@ -529,15 +481,7 @@ export default function CodeModeSecurityAnimation(): React.ReactNode {
           />
         </g>
         <g className="cms-code3">
-          <rect
-            x="30"
-            y="78"
-            width="14"
-            height="4"
-            rx="1"
-            fill="#60a5fa"
-            fillOpacity="0.7"
-          />
+          <rect x="30" y="78" width="14" height="4" rx="1" fill="#60a5fa" fillOpacity="0.7" />
           <rect
             x="46"
             y="78"
@@ -547,35 +491,11 @@ export default function CodeModeSecurityAnimation(): React.ReactNode {
             fill="var(--text-primary)"
             fillOpacity="0.55"
           />
-          <rect
-            x="66"
-            y="78"
-            width="40"
-            height="4"
-            rx="1"
-            fill={O}
-            fillOpacity="0.6"
-          />
+          <rect x="66" y="78" width="40" height="4" rx="1" fill={O} fillOpacity="0.6" />
         </g>
         <g className="cms-code4">
-          <rect
-            x="30"
-            y="90"
-            width="22"
-            height="4"
-            rx="1"
-            fill="#c084fc"
-            fillOpacity="0.7"
-          />
-          <rect
-            x="54"
-            y="90"
-            width="34"
-            height="4"
-            rx="1"
-            fill={SAFE}
-            fillOpacity="0.6"
-          />
+          <rect x="30" y="90" width="22" height="4" rx="1" fill="#c084fc" fillOpacity="0.7" />
+          <rect x="54" y="90" width="34" height="4" rx="1" fill={SAFE} fillOpacity="0.6" />
           <rect
             x="24"
             y="102"
@@ -680,26 +600,12 @@ export default function CodeModeSecurityAnimation(): React.ReactNode {
           <g fillOpacity="0.6">
             <rect x="200" y="38" width="14" height="3" rx="1" fill="#c084fc" />
             <rect x="216" y="38" width="20" height="3" rx="1" fill={O} />
-            <rect
-              x="238"
-              y="38"
-              width="34"
-              height="3"
-              rx="1"
-              fill="var(--text-muted)"
-            />
+            <rect x="238" y="38" width="34" height="3" rx="1" fill="var(--text-muted)" />
           </g>
           <g fillOpacity="0.6">
             <rect x="200" y="46" width="10" height="3" rx="1" fill="#60a5fa" />
             <rect x="212" y="46" width="22" height="3" rx="1" fill={O} />
-            <rect
-              x="236"
-              y="46"
-              width="36"
-              height="3"
-              rx="1"
-              fill="var(--text-muted)"
-            />
+            <rect x="236" y="46" width="36" height="3" rx="1" fill="var(--text-muted)" />
           </g>
           {/* "eval(" line that gets rejected */}
           <g className="cms-bad-flash">
@@ -810,36 +716,15 @@ export default function CodeModeSecurityAnimation(): React.ReactNode {
             fontFamily="ui-monospace,SFMono-Regular,Consolas,monospace"
             fontSize="6"
           >
-            <rect
-              x="198"
-              y="91"
-              width="2.4"
-              height="2.4"
-              rx="0.6"
-              fill={SAFE}
-            />
+            <rect x="198" y="91" width="2.4" height="2.4" rx="0.6" fill={SAFE} />
             <text x="203" y="94" fill="var(--text-primary)" fillOpacity="0.7">
               cal.list()
             </text>
-            <rect
-              x="198"
-              y="101"
-              width="2.4"
-              height="2.4"
-              rx="0.6"
-              fill={SAFE}
-            />
+            <rect x="198" y="101" width="2.4" height="2.4" rx="0.6" fill={SAFE} />
             <text x="203" y="104" fill="var(--text-primary)" fillOpacity="0.7">
               docs.read()
             </text>
-            <rect
-              x="198"
-              y="111"
-              width="2.4"
-              height="2.4"
-              rx="0.6"
-              fill={SAFE}
-            />
+            <rect x="198" y="111" width="2.4" height="2.4" rx="0.6" fill={SAFE} />
             <text x="203" y="114" fill="var(--text-primary)" fillOpacity="0.7">
               gmail.search()
             </text>
@@ -1120,5 +1005,5 @@ export default function CodeModeSecurityAnimation(): React.ReactNode {
         <ProgressBar y={205} width={500} className="cms-progress" />
       </svg>
     </div>
-  );
+  )
 }

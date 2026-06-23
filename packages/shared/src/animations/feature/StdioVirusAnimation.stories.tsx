@@ -1,44 +1,39 @@
-import type { Meta, StoryObj } from "@storybook/react-vite";
-import StdioVirusAnimation from "./StdioVirusAnimation";
+import type { Meta, StoryObj } from '@storybook/react-vite'
+import StdioVirusAnimation from './StdioVirusAnimation'
 
 const meta: Meta<typeof StdioVirusAnimation> = {
-  title: "Animations/StdioVirusAnimation",
+  title: 'Animations/StdioVirusAnimation',
   component: StdioVirusAnimation,
   parameters: {
-    layout: "centered",
-  },
-};
+    layout: 'centered'
+  }
+}
 
-export default meta;
-type Story = StoryObj<typeof meta>;
+export default meta
+type Story = StoryObj<typeof meta>
 
 export const Default: Story = {
   decorators: [
     (Story: React.ComponentType) => (
-      <div
-        style={{ padding: "24px", width: 500, background: "var(--bg-base)" }}
-      >
-        <style>{"[data-story] svg { max-width: none !important; }"}</style>
+      <div style={{ padding: '24px', width: 500, background: 'var(--bg-base)' }}>
+        <style>{'[data-story] svg { max-width: none !important; }'}</style>
         <div data-story>
           <Story />
         </div>
       </div>
-    ),
-  ],
-};
+    )
+  ]
+}
 
 export const LightTheme: Story = {
   decorators: [
     (Story: React.ComponentType) => (
-      <div
-        data-theme="light"
-        style={{ padding: "24px", width: 500, background: "#f8fafc" }}
-      >
-        <style>{"[data-story] svg { max-width: none !important; }"}</style>
+      <div data-theme="light" style={{ padding: '24px', width: 500, background: '#f8fafc' }}>
+        <style>{'[data-story] svg { max-width: none !important; }'}</style>
         <div data-story>
           <Story />
         </div>
       </div>
-    ),
-  ],
-};
+    )
+  ]
+}

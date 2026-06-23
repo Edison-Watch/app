@@ -19,23 +19,23 @@ export function FlowLine({
   stroke,
   strokeOpacity = 0.5,
   strokeWidth = 1.5,
-  strokeDasharray = "3 3",
-  className,
+  strokeDasharray = '3 3',
+  className
 }: {
-  x1: number;
-  y1: number;
-  x2: number;
-  y2: number;
+  x1: number
+  y1: number
+  x2: number
+  y2: number
   /**
    * Stroke color. Pass `var(--text-muted)` for "before Edison" / inert,
    * `var(--accent)` for "via Edison", or a `DANGER`/`RED`/`GREEN`
    * constant for semantic flows.
    */
-  stroke: string;
-  strokeOpacity?: number | string;
-  strokeWidth?: number | string;
-  strokeDasharray?: string;
-  className?: string;
+  stroke: string
+  strokeOpacity?: number | string
+  strokeWidth?: number | string
+  strokeDasharray?: string
+  className?: string
 }): React.ReactNode {
   return (
     <line
@@ -49,5 +49,5 @@ export function FlowLine({
       strokeWidth={strokeWidth}
       strokeDasharray={strokeDasharray}
     />
-  );
+  )
 }

@@ -22,12 +22,8 @@
  *   </div>
  */
 
-import {
-  EDISON_E_PATH,
-  EDISON_FRAME_PATH,
-  EDISON_LOGO_VIEWBOX,
-} from "../../svg/edison-logo-svg";
-import { McpIcon, ORANGE, ProgressBar } from "../_shared";
+import { EDISON_E_PATH, EDISON_FRAME_PATH, EDISON_LOGO_VIEWBOX } from '../../svg/edison-logo-svg'
+import { McpIcon, ORANGE, ProgressBar } from '../_shared'
 
 const CSS = `
 .ek-anim { color: var(--text-primary); }
@@ -201,7 +197,7 @@ const CSS = `
   .ek-anim .ek-zk { opacity: 1; }
   .ek-anim .ek-progress { animation: none; transform: scaleX(1); }
 }
-`;
+`
 
 /** Small padlock - open variant (shackle disconnected). */
 function PadlockOpen({ x, y }: { x: number; y: number }): React.ReactNode {
@@ -228,7 +224,7 @@ function PadlockOpen({ x, y }: { x: number; y: number }): React.ReactNode {
         strokeLinecap="round"
       />
     </g>
-  );
+  )
 }
 
 /** Small padlock - closed variant (shackle connected). */
@@ -256,29 +252,23 @@ function PadlockClosed({ x, y }: { x: number; y: number }): React.ReactNode {
         strokeLinecap="round"
       />
       {/* keyhole dot */}
-      <circle
-        cx={x + 5}
-        cy={y + 9.5}
-        r="1.2"
-        fill="var(--accent)"
-        fillOpacity="0.4"
-      />
+      <circle cx={x + 5} cy={y + 9.5} r="1.2" fill="var(--accent)" fillOpacity="0.4" />
     </g>
-  );
+  )
 }
 
 /** Credential card - a rounded-rect "object" with MCP icon + padlock + label. */
 function CredentialCard({
   y,
   label,
-  locked,
+  locked
 }: {
-  y: number;
-  label: string;
-  locked: boolean;
+  y: number
+  label: string
+  locked: boolean
 }): React.ReactNode {
-  const borderColor = locked ? "var(--accent)" : ORANGE;
-  const textColor = locked ? "var(--accent)" : ORANGE;
+  const borderColor = locked ? 'var(--accent)' : ORANGE
+  const textColor = locked ? 'var(--accent)' : ORANGE
   return (
     <g>
       <rect
@@ -287,7 +277,7 @@ function CredentialCard({
         width="136"
         height="26"
         rx="5"
-        fill={locked ? "var(--accent)" : "var(--text-primary)"}
+        fill={locked ? 'var(--accent)' : 'var(--text-primary)'}
         fillOpacity={locked ? 0.03 : 0.04}
         stroke={borderColor}
         strokeOpacity="0.35"
@@ -297,14 +287,10 @@ function CredentialCard({
         x={25}
         y={y + 5}
         size={14}
-        color={locked ? "var(--accent)" : ORANGE}
+        color={locked ? 'var(--accent)' : ORANGE}
         opacity="0.55"
       />
-      {locked ? (
-        <PadlockClosed x={42} y={y + 2} />
-      ) : (
-        <PadlockOpen x={42} y={y + 2} />
-      )}
+      {locked ? <PadlockClosed x={42} y={y + 2} /> : <PadlockOpen x={42} y={y + 2} />}
       <text
         x={57}
         y={y + 16}
@@ -317,7 +303,7 @@ function CredentialCard({
         {label}
       </text>
     </g>
-  );
+  )
 }
 
 function EncryptedPacket(): React.ReactNode {
@@ -326,7 +312,7 @@ function EncryptedPacket(): React.ReactNode {
       <circle r="9" fillOpacity="0.12" />
       <circle r="3.5" fillOpacity="0.5" />
     </>
-  );
+  )
 }
 
 export default function KeyEncryptionAnimation(): React.ReactNode {
@@ -421,13 +407,7 @@ export default function KeyEncryptionAnimation(): React.ReactNode {
             strokeWidth="2.2"
             strokeOpacity="0.7"
           />
-          <circle
-            cx="78"
-            cy="-8"
-            r="3.5"
-            fill="var(--accent)"
-            fillOpacity="0.2"
-          />
+          <circle cx="78" cy="-8" r="3.5" fill="var(--accent)" fillOpacity="0.2" />
           {/* Key shaft + teeth */}
           <line
             x1="88"
@@ -475,13 +455,7 @@ export default function KeyEncryptionAnimation(): React.ReactNode {
         </g>
 
         {/* Edison logo + label */}
-        <svg
-          x="378"
-          y="-22"
-          width="36"
-          height="36"
-          viewBox={EDISON_LOGO_VIEWBOX}
-        >
+        <svg x="378" y="-22" width="36" height="36" viewBox={EDISON_LOGO_VIEWBOX}>
           <path
             d={EDISON_E_PATH}
             fill="var(--accent)"
@@ -521,13 +495,7 @@ export default function KeyEncryptionAnimation(): React.ReactNode {
 
         {/* Vault encrypted entries (appear when packet arrives) */}
         <g className="ek-vault-content">
-          <McpIcon
-            x={336}
-            y={44}
-            size={12}
-            color="var(--accent)"
-            opacity="0.5"
-          />
+          <McpIcon x={336} y={44} size={12} color="var(--accent)" opacity="0.5" />
           <PadlockClosed x={350} y={44} />
           <text
             x="365"
@@ -540,13 +508,7 @@ export default function KeyEncryptionAnimation(): React.ReactNode {
           >
             $EDISON$1$a3B...
           </text>
-          <McpIcon
-            x={336}
-            y={66}
-            size={12}
-            color="var(--accent)"
-            opacity="0.5"
-          />
+          <McpIcon x={336} y={66} size={12} color="var(--accent)" opacity="0.5" />
           <PadlockClosed x={350} y={66} />
           <text
             x="365"
@@ -559,13 +521,7 @@ export default function KeyEncryptionAnimation(): React.ReactNode {
           >
             $EDISON$1$k7P...
           </text>
-          <McpIcon
-            x={336}
-            y={88}
-            size={12}
-            color="var(--accent)"
-            opacity="0.5"
-          />
+          <McpIcon x={336} y={88} size={12} color="var(--accent)" opacity="0.5" />
           <PadlockClosed x={350} y={88} />
           <text
             x="365"
@@ -658,13 +614,7 @@ export default function KeyEncryptionAnimation(): React.ReactNode {
             strokeOpacity="0.5"
           />
           {/* Pupil */}
-          <circle
-            cx="395"
-            cy="140"
-            r="4"
-            fill="var(--accent)"
-            fillOpacity="0.2"
-          />
+          <circle cx="395" cy="140" r="4" fill="var(--accent)" fillOpacity="0.2" />
         </g>
 
         {/* Animated slash through eye */}
@@ -700,5 +650,5 @@ export default function KeyEncryptionAnimation(): React.ReactNode {
         <ProgressBar y={188} width={460} className="ek-progress" />
       </svg>
     </div>
-  );
+  )
 }

@@ -3,7 +3,7 @@
  * the top of every fleet/policy animation (metaphor A).
  */
 
-import { ADMIN_PATH } from "./svg-paths";
+import { ADMIN_PATH } from './svg-paths'
 
 /**
  * @param cx     horizontal center of the figure (text and icon both centered)
@@ -16,28 +16,22 @@ export function AdminFigure({
   cx,
   y,
   size = 26,
-  label = "Admin",
-  color = "var(--text-primary)",
-  iconOpacity = "0.7",
-  labelOpacity = "1",
+  label = 'Admin',
+  color = 'var(--text-primary)',
+  iconOpacity = '0.7',
+  labelOpacity = '1'
 }: {
-  cx: number;
-  y: number;
-  size?: number;
-  label?: string | null;
-  color?: string;
-  iconOpacity?: string;
-  labelOpacity?: string;
+  cx: number
+  y: number
+  size?: number
+  label?: string | null
+  color?: string
+  iconOpacity?: string
+  labelOpacity?: string
 }): React.ReactNode {
   return (
     <g>
-      <svg
-        x={cx - size / 2}
-        y={y}
-        width={size}
-        height={size}
-        viewBox="0 0 256 256"
-      >
+      <svg x={cx - size / 2} y={y} width={size} height={size} viewBox="0 0 256 256">
         <path d={ADMIN_PATH} fill={color} fillOpacity={iconOpacity} />
       </svg>
       {label !== null && (
@@ -55,5 +49,5 @@ export function AdminFigure({
         </text>
       )}
     </g>
-  );
+  )
 }

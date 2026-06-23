@@ -1,40 +1,40 @@
 /** Skeleton loading placeholders with shimmer animation. */
 
 interface SkeletonBaseProps {
-  className?: string;
+  className?: string
 }
 
 /** Single-line text placeholder. */
-export function SkeletonText({ className = "" }: SkeletonBaseProps) {
+export function SkeletonText({ className = '' }: SkeletonBaseProps) {
   return (
     <div
       className={`h-4 rounded bg-[var(--bg-overlay)] skeleton-shimmer ${className}`}
       role="status"
       aria-label="Loading"
     />
-  );
+  )
 }
 
 /** Rectangular card/block placeholder. */
-export function SkeletonRect({ className = "" }: SkeletonBaseProps) {
+export function SkeletonRect({ className = '' }: SkeletonBaseProps) {
   return (
     <div
       className={`rounded-lg bg-[var(--bg-overlay)] skeleton-shimmer ${className}`}
       role="status"
       aria-label="Loading"
     />
-  );
+  )
 }
 
 /** Circular avatar placeholder. */
-export function SkeletonCircle({ className = "" }: SkeletonBaseProps) {
+export function SkeletonCircle({ className = '' }: SkeletonBaseProps) {
   return (
     <div
       className={`rounded-full bg-[var(--bg-overlay)] skeleton-shimmer ${className}`}
       role="status"
       aria-label="Loading"
     />
-  );
+  )
 }
 
 /** Composite page skeleton: header area + content rows. */
@@ -54,5 +54,5 @@ export function PageSkeleton() {
         <SkeletonRect className="h-20" />
       </div>
     </div>
-  );
+  )
 }

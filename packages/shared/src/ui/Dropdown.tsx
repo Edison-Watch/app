@@ -1,116 +1,101 @@
-import {
-  type ReactNode,
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 
 export interface DropdownItem {
-  key: string;
-  label: ReactNode;
-  disabled?: boolean;
-  danger?: boolean;
+  key: string
+  label: ReactNode
+  disabled?: boolean
+  danger?: boolean
   /** Render a non-interactive separator row instead of a menu item. */
-  divider?: boolean;
+  divider?: boolean
 }
 
 interface DropdownProps {
-  trigger: ReactNode;
-  items: DropdownItem[];
-  onSelect: (key: string) => void;
-  align?: "left" | "right";
+  trigger: ReactNode
+  items: DropdownItem[]
+  onSelect: (key: string) => void
+  align?: 'left' | 'right'
   /** Cap the menu height (px) and show a scrollbar when items overflow. */
-  maxHeight?: number;
+  maxHeight?: number
 }
 
 export default function Dropdown({
   trigger,
   items,
   onSelect,
-  align = "left",
-  maxHeight,
+  align = 'left',
+  maxHeight
 }: DropdownProps) {
-  const [open, setOpen] = useState(false);
-  const [focusedIndex, setFocusedIndex] = useState(-1);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false)
+  const [focusedIndex, setFocusedIndex] = useState(-1)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
 
   const close = useCallback(() => {
-    setOpen(false);
-    setFocusedIndex(-1);
-  }, []);
+    setOpen(false)
+    setFocusedIndex(-1)
+  }, [])
 
-  const enabledItems = items.filter((i) => !i.disabled && !i.divider);
+  const enabledItems = items.filter((i) => !i.disabled && !i.divider)
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (!open) {
-        if (e.key === "Enter" || e.key === " " || e.key === "ArrowDown") {
-          e.preventDefault();
-          setOpen(true);
-          setFocusedIndex(0);
+        if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown') {
+          e.preventDefault()
+          setOpen(true)
+          setFocusedIndex(0)
         }
-        return;
+        return
       }
 
       switch (e.key) {
-        case "Escape":
-          e.preventDefault();
-          close();
-          break;
-        case "ArrowDown":
-          e.preventDefault();
-          setFocusedIndex((i) => (i + 1) % enabledItems.length);
-          break;
-        case "ArrowUp":
-          e.preventDefault();
-          setFocusedIndex(
-            (i) => (i - 1 + enabledItems.length) % enabledItems.length,
-          );
-          break;
-        case "Enter":
-        case " ":
-          e.preventDefault();
+        case 'Escape':
+          e.preventDefault()
+          close()
+          break
+        case 'ArrowDown':
+          e.preventDefault()
+          setFocusedIndex((i) => (i + 1) % enabledItems.length)
+          break
+        case 'ArrowUp':
+          e.preventDefault()
+          setFocusedIndex((i) => (i - 1 + enabledItems.length) % enabledItems.length)
+          break
+        case 'Enter':
+        case ' ':
+          e.preventDefault()
           if (focusedIndex >= 0 && focusedIndex < enabledItems.length) {
-            onSelect(enabledItems[focusedIndex]!.key);
-            close();
+            onSelect(enabledItems[focusedIndex]!.key)
+            close()
           }
-          break;
+          break
       }
     },
-    [open, close, enabledItems, focusedIndex, onSelect],
-  );
+    [open, close, enabledItems, focusedIndex, onSelect]
+  )
 
   // Close on outside click
   useEffect(() => {
-    if (!open) return;
+    if (!open) return
     const handler = (e: MouseEvent) => {
-      if (
-        containerRef.current &&
-        !containerRef.current.contains(e.target as Node)
-      ) {
-        close();
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        close()
       }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [open, close]);
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open, close])
 
   return (
-    <div
-      ref={containerRef}
-      className="relative inline-block"
-      onKeyDown={handleKeyDown}
-    >
+    <div ref={containerRef} className="relative inline-block" onKeyDown={handleKeyDown}>
       <div
         role="button"
         tabIndex={0}
         aria-haspopup="true"
         aria-expanded={open}
         onClick={() => {
-          setOpen((o) => !o);
-          if (!open) setFocusedIndex(0);
+          setOpen((o) => !o)
+          if (!open) setFocusedIndex(0)
         }}
       >
         {trigger}
@@ -120,10 +105,10 @@ export default function Dropdown({
         <div
           ref={menuRef}
           role="menu"
-          style={maxHeight ? { maxHeight, overflowY: "scroll" } : undefined}
+          style={maxHeight ? { maxHeight, overflowY: 'scroll' } : undefined}
           className={`absolute z-50 mt-1 min-w-[10rem] rounded-md border border-[var(--border)] bg-[var(--bg-raised)] shadow-lg py-1 ${
-            maxHeight ? "scrollbar-stable" : ""
-          } ${align === "right" ? "right-0" : "left-0"}`}
+            maxHeight ? 'scrollbar-stable' : ''
+          } ${align === 'right' ? 'right-0' : 'left-0'}`}
         >
           {items.map((item) => {
             if (item.divider) {
@@ -133,10 +118,10 @@ export default function Dropdown({
                   role="separator"
                   className="my-1 border-t border-[var(--border)]"
                 />
-              );
+              )
             }
-            const enabledIdx = enabledItems.indexOf(item);
-            const isFocused = enabledIdx === focusedIndex;
+            const enabledIdx = enabledItems.indexOf(item)
+            const isFocused = enabledIdx === focusedIndex
             return (
               <button
                 key={item.key}
@@ -145,23 +130,23 @@ export default function Dropdown({
                 tabIndex={-1}
                 className={`w-full text-left px-3 py-2 text-sm transition-colors ${
                   item.disabled
-                    ? "text-[var(--text-muted)] cursor-not-allowed"
+                    ? 'text-[var(--text-muted)] cursor-not-allowed'
                     : item.danger
-                      ? "text-[var(--danger)] hover:bg-red-500/10"
-                      : "text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
-                } ${isFocused && !item.disabled ? "bg-[var(--bg-hover)]" : ""}`}
+                      ? 'text-[var(--danger)] hover:bg-red-500/10'
+                      : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
+                } ${isFocused && !item.disabled ? 'bg-[var(--bg-hover)]' : ''}`}
                 onClick={() => {
-                  if (item.disabled) return;
-                  onSelect(item.key);
-                  close();
+                  if (item.disabled) return
+                  onSelect(item.key)
+                  close()
                 }}
               >
                 {item.label}
               </button>
-            );
+            )
           })}
         </div>
       )}
     </div>
-  );
+  )
 }

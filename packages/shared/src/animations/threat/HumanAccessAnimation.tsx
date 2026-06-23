@@ -14,14 +14,9 @@
  * paired with {@link AgentBypassPathAnimation}.
  */
 
-import { useId } from "react";
-import { ProgressBar } from "../_shared";
-import {
-  DataCylinder,
-  GREEN,
-  MeshWall,
-  PERSON_PATH,
-} from "./_agentBypassParts";
+import { useId } from 'react'
+import { ProgressBar } from '../_shared'
+import { DataCylinder, GREEN, MeshWall, PERSON_PATH } from './_agentBypassParts'
 
 const CSS = `
 .hac-anim { color: var(--text-primary); }
@@ -134,17 +129,17 @@ const CSS = `
   .hac-anim .hac-glow-good { fill-opacity: 0.1; }
   .hac-anim .hac-progress { transform: scaleX(1); }
 }
-`;
+`
 
 export default function HumanAccessAnimation(): React.ReactNode {
-  const id = useId();
+  const id = useId()
   return (
     <div className="flex justify-center">
       <style>{CSS}</style>
       <svg
         className="hac-anim"
         viewBox="0 0 340 230"
-        style={{ width: "100%", maxWidth: 400, height: "auto" }}
+        style={{ width: '100%', maxWidth: 400, height: 'auto' }}
         xmlns="http://www.w3.org/2000/svg"
         role="presentation"
         aria-hidden="true"
@@ -212,14 +207,7 @@ export default function HumanAccessAnimation(): React.ReactNode {
         </text>
 
         {/* Mesh wall (SSO/RBAC) */}
-        <MeshWall
-          x={150}
-          y={50}
-          width={70}
-          height={130}
-          label="SSO/RBAC"
-          color="var(--accent)"
-        />
+        <MeshWall x={150} y={50} width={70} height={130} label="SSO/RBAC" color="var(--accent)" />
 
         {/* Radar scan overlay clipped to the wall */}
         <g clipPath={`url(#${id}-wallClip)`}>
@@ -289,7 +277,7 @@ export default function HumanAccessAnimation(): React.ReactNode {
         </g>
 
         {/* Scan-approved checkmark */}
-        <g className="hac-check" style={{ transformOrigin: "185px 96px" }}>
+        <g className="hac-check" style={{ transformOrigin: '185px 96px' }}>
           <circle
             cx="185"
             cy="96"
@@ -361,5 +349,5 @@ export default function HumanAccessAnimation(): React.ReactNode {
         <ProgressBar y={222} width={300} className="hac-progress" />
       </svg>
     </div>
-  );
+  )
 }

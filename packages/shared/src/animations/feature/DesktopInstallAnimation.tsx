@@ -11,11 +11,11 @@
  * 10s loop. Pure SVG + CSS. Respects `prefers-reduced-motion`.
  */
 
-import { EdisonLogo, ProgressBar } from "../_shared";
+import { EdisonLogo, ProgressBar } from '../_shared'
 
-const fg = "var(--text-primary)";
-const muted = "var(--text-muted)";
-const accent = "var(--accent)";
+const fg = 'var(--text-primary)'
+const muted = 'var(--text-muted)'
+const accent = 'var(--accent)'
 
 const CSS = `
 .di-anim { color: ${fg}; }
@@ -231,7 +231,7 @@ const CSS = `
   .di-anim .di-done { opacity: 1; transform: scale(1); }
   .di-anim .di-progress { animation: none; transform: scaleX(1); }
 }
-`;
+`
 
 export default function DesktopInstallAnimation(): React.ReactNode {
   return (
@@ -377,23 +377,8 @@ export default function DesktopInstallAnimation(): React.ReactNode {
             strokeWidth="1"
           />
           {/* Title bar */}
-          <rect
-            x={170}
-            y={26}
-            width={160}
-            height={16}
-            rx={5}
-            fill={accent}
-            fillOpacity="0.06"
-          />
-          <rect
-            x={170}
-            y={37}
-            width={160}
-            height={5}
-            fill={accent}
-            fillOpacity="0.06"
-          />
+          <rect x={170} y={26} width={160} height={16} rx={5} fill={accent} fillOpacity="0.06" />
+          <rect x={170} y={37} width={160} height={5} fill={accent} fillOpacity="0.06" />
           {/* Edison logo in title bar */}
           <EdisonLogo x={174} y={28} w={12} h={12} />
           <text
@@ -427,59 +412,14 @@ export default function DesktopInstallAnimation(): React.ReactNode {
             </text>
 
             {/* Step dots */}
-            <circle
-              className="di-dot1"
-              cx={234}
-              cy={62}
-              r={3}
-              fill={muted}
-              fillOpacity="0.2"
-            />
-            <circle
-              className="di-dot2"
-              cx={250}
-              cy={62}
-              r={3}
-              fill={muted}
-              fillOpacity="0.2"
-            />
-            <circle
-              className="di-dot3"
-              cx={266}
-              cy={62}
-              r={3}
-              fill={muted}
-              fillOpacity="0.2"
-            />
+            <circle className="di-dot1" cx={234} cy={62} r={3} fill={muted} fillOpacity="0.2" />
+            <circle className="di-dot2" cx={250} cy={62} r={3} fill={muted} fillOpacity="0.2" />
+            <circle className="di-dot3" cx={266} cy={62} r={3} fill={muted} fillOpacity="0.2" />
 
             {/* Content placeholder lines */}
-            <rect
-              x={200}
-              y={74}
-              width={100}
-              height={3}
-              rx={1.5}
-              fill={muted}
-              fillOpacity="0.12"
-            />
-            <rect
-              x={200}
-              y={82}
-              width={76}
-              height={3}
-              rx={1.5}
-              fill={muted}
-              fillOpacity="0.08"
-            />
-            <rect
-              x={200}
-              y={90}
-              width={88}
-              height={3}
-              rx={1.5}
-              fill={muted}
-              fillOpacity="0.06"
-            />
+            <rect x={200} y={74} width={100} height={3} rx={1.5} fill={muted} fillOpacity="0.12" />
+            <rect x={200} y={82} width={76} height={3} rx={1.5} fill={muted} fillOpacity="0.08" />
+            <rect x={200} y={90} width={88} height={3} rx={1.5} fill={muted} fillOpacity="0.06" />
 
             {/* Right arrow button */}
             <circle
@@ -609,5 +549,5 @@ export default function DesktopInstallAnimation(): React.ReactNode {
         <ProgressBar y={188} width={460} className="di-progress" />
       </svg>
     </div>
-  );
+  )
 }

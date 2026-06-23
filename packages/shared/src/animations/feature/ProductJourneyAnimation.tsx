@@ -14,7 +14,7 @@
  * 20s loop. Progressive accumulation: each phase adds new elements while
  * prior elements persist. Pure SVG + CSS. Respects `prefers-reduced-motion`.
  */
-import { AGENT_REGISTRY } from "../../agent-registry/index";
+import { AGENT_REGISTRY } from '../../agent-registry/index'
 import {
   ADMIN_PATH,
   AgentIcon,
@@ -26,31 +26,31 @@ import {
   McpPacket,
   ORANGE as O,
   ProgressBar,
-  SHIELD_CHECK_PATH,
-} from "../_shared";
+  SHIELD_CHECK_PATH
+} from '../_shared'
 
-const CLAUDE = AGENT_REGISTRY["claude-code"];
-const CURSOR = AGENT_REGISTRY["cursor"];
-const CODEX = AGENT_REGISTRY["codex"];
-const CLAUDE_DESKTOP = AGENT_REGISTRY["claude-desktop"];
-const M365_COPILOT = AGENT_REGISTRY["m365-copilot"];
-const CLAUDE_COWORK = AGENT_REGISTRY["claude-cowork"];
-const CHATGPT = AGENT_REGISTRY["chatgpt"];
+const CLAUDE = AGENT_REGISTRY['claude-code']
+const CURSOR = AGENT_REGISTRY['cursor']
+const CODEX = AGENT_REGISTRY['codex']
+const CLAUDE_DESKTOP = AGENT_REGISTRY['claude-desktop']
+const M365_COPILOT = AGENT_REGISTRY['m365-copilot']
+const CLAUDE_COWORK = AGENT_REGISTRY['claude-cowork']
+const CHATGPT = AGENT_REGISTRY['chatgpt']
 
 const SCALES_PATH =
-  "M239.43,133l-32-80h0a8,8,0,0,0-9.16-4.84L136,62V40a8,8,0,0,0-16,0V65.58L54.26,80.19A8,8,0,0,0,48.57,85h0v.06L16.57,165a7.92,7.92,0,0,0-.57,3c0,23.31,24.54,32,40,32s40-8.69,40-32a7.92,7.92,0,0,0-.57-3L66.92,93.77,120,82V208H104a8,8,0,0,0,0,16h48a8,8,0,0,0,0-16H136V78.42L187,67.1,160.57,133a7.92,7.92,0,0,0-.57,3c0,23.31,24.54,32,40,32s40-8.69,40-32A7.92,7.92,0,0,0,239.43,133ZM56,184c-7.53,0-22.76-3.61-23.93-14.64L56,109.54l23.93,59.82C78.76,180.39,63.53,184,56,184Zm144-32c-7.53,0-22.76-3.61-23.93-14.64L200,77.54l23.93,59.82C222.76,148.39,207.53,152,200,152Z";
+  'M239.43,133l-32-80h0a8,8,0,0,0-9.16-4.84L136,62V40a8,8,0,0,0-16,0V65.58L54.26,80.19A8,8,0,0,0,48.57,85h0v.06L16.57,165a7.92,7.92,0,0,0-.57,3c0,23.31,24.54,32,40,32s40-8.69,40-32a7.92,7.92,0,0,0-.57-3L66.92,93.77,120,82V208H104a8,8,0,0,0,0,16h48a8,8,0,0,0,0-16H136V78.42L187,67.1,160.57,133a7.92,7.92,0,0,0-.57,3c0,23.31,24.54,32,40,32s40-8.69,40-32A7.92,7.92,0,0,0,239.43,133ZM56,184c-7.53,0-22.76-3.61-23.93-14.64L56,109.54l23.93,59.82C78.76,180.39,63.53,184,56,184Zm144-32c-7.53,0-22.76-3.61-23.93-14.64L200,77.54l23.93,59.82C222.76,148.39,207.53,152,200,152Z'
 
-const fg = "var(--text-primary)";
-const muted = "var(--text-muted)";
-const accent = "var(--accent)";
+const fg = 'var(--text-primary)'
+const muted = 'var(--text-muted)'
+const accent = 'var(--accent)'
 
 const DEPTS = [
-  { label: "Engineering", agent: CURSOR, pips: 5, y: 50 },
-  { label: "Sales", agent: CLAUDE_DESKTOP, pips: 4, y: 90 },
-  { label: "Finance", agent: M365_COPILOT, pips: 3, y: 130 },
-  { label: "Legal", agent: CLAUDE_COWORK, pips: 3, y: 170 },
-  { label: "HR & Ops", agent: CHATGPT, pips: 4, y: 210 },
-];
+  { label: 'Engineering', agent: CURSOR, pips: 5, y: 50 },
+  { label: 'Sales', agent: CLAUDE_DESKTOP, pips: 4, y: 90 },
+  { label: 'Finance', agent: M365_COPILOT, pips: 3, y: 130 },
+  { label: 'Legal', agent: CLAUDE_COWORK, pips: 3, y: 170 },
+  { label: 'HR & Ops', agent: CHATGPT, pips: 4, y: 210 }
+]
 
 const CSS = `
 .pj { color: var(--text-primary); }
@@ -311,7 +311,7 @@ const CSS = `
   .pj .pj-va, .pj .pj-vd { opacity:0; transform:scale(1); }
   .pj .pj-progress { animation:none; transform:scaleX(1); }
 }
-`;
+`
 
 export default function ProductJourneyAnimation(): React.ReactNode {
   return (
@@ -789,15 +789,7 @@ export default function ProductJourneyAnimation(): React.ReactNode {
               strokeOpacity="0.5"
               strokeWidth="1.5"
             />
-            <rect
-              x={14}
-              y={50}
-              width={136}
-              height={3}
-              rx={1}
-              fill={accent}
-              fillOpacity="0.06"
-            />
+            <rect x={14} y={50} width={136} height={3} rx={1} fill={accent} fillOpacity="0.06" />
           </g>
         </g>
 
@@ -867,14 +859,7 @@ export default function ProductJourneyAnimation(): React.ReactNode {
             strokeDasharray="4 3"
           />
           {[78, 153, 228].map((ly) => (
-            <svg
-              key={ly}
-              x={162}
-              y={ly - 10}
-              width={20}
-              height={20}
-              viewBox="0 0 256 256"
-            >
+            <svg key={ly} x={162} y={ly - 10} width={20} height={20} viewBox="0 0 256 256">
               <path d={EYE_SLASH_PATH} fill={DANGER} fillOpacity="0.5" />
             </svg>
           ))}
@@ -930,14 +915,7 @@ export default function ProductJourneyAnimation(): React.ReactNode {
               strokeDasharray="4 3"
             />
             {[78, 153, 228].map((ly) => (
-              <svg
-                key={ly}
-                x={162}
-                y={ly - 10}
-                width={20}
-                height={20}
-                viewBox="0 0 256 256"
-              >
+              <svg key={ly} x={162} y={ly - 10} width={20} height={20} viewBox="0 0 256 256">
                 <path d={EYE_PATH} fill={accent} fillOpacity="0.65" />
               </svg>
             ))}
@@ -1225,7 +1203,7 @@ export default function ProductJourneyAnimation(): React.ReactNode {
         </g>
 
         {/* ══ VERDICT BADGES (Phase 3+) ══ */}
-        <g className="pj-vd" style={{ transformOrigin: "320px 168px" }}>
+        <g className="pj-vd" style={{ transformOrigin: '320px 168px' }}>
           <circle
             cx={320}
             cy={168}
@@ -1255,7 +1233,7 @@ export default function ProductJourneyAnimation(): React.ReactNode {
             strokeLinecap="round"
           />
         </g>
-        <g className="pj-va" style={{ transformOrigin: "320px 138px" }}>
+        <g className="pj-va" style={{ transformOrigin: '320px 138px' }}>
           <circle
             cx={320}
             cy={138}
@@ -1280,7 +1258,7 @@ export default function ProductJourneyAnimation(): React.ReactNode {
         <g className="pj-p4">
           {/* 5 department rows replace the 3 laptops */}
           {DEPTS.map((dept) => {
-            const y = dept.y;
+            const y = dept.y
             return (
               <g key={dept.label}>
                 {/* Row pill */}
@@ -1311,8 +1289,8 @@ export default function ProductJourneyAnimation(): React.ReactNode {
                 <AgentIcon agent={dept.agent} x={82} y={y + 4} size={20} />
                 {/* Headcount pips */}
                 {Array.from({ length: dept.pips }).map((_, i) => {
-                  const px = 106 + i * 15;
-                  const py = y + 8;
+                  const px = 106 + i * 15
+                  const py = y + 8
                   return (
                     <g key={i}>
                       <rect
@@ -1327,13 +1305,7 @@ export default function ProductJourneyAnimation(): React.ReactNode {
                         strokeOpacity="0.45"
                         strokeWidth="0.8"
                       />
-                      <circle
-                        cx={px + 6}
-                        cy={py + 4}
-                        r="2.2"
-                        fill={accent}
-                        fillOpacity="0.7"
-                      />
+                      <circle cx={px + 6} cy={py + 4} r="2.2" fill={accent} fillOpacity="0.7" />
                       <path
                         d={`M ${px + 2} ${py + 10} Q ${px + 6} ${py + 7} ${px + 10} ${py + 10}`}
                         fill="none"
@@ -1342,10 +1314,10 @@ export default function ProductJourneyAnimation(): React.ReactNode {
                         strokeWidth="1"
                       />
                     </g>
-                  );
+                  )
                 })}
               </g>
-            );
+            )
           })}
 
           {/* Connection lines: all 5 dept rows → Edison */}
@@ -1400,5 +1372,5 @@ export default function ProductJourneyAnimation(): React.ReactNode {
         <ProgressBar y={292} width={660} className="pj-progress" />
       </svg>
     </div>
-  );
+  )
 }

@@ -30,12 +30,12 @@ import {
   EdisonLogo,
   McpIcon,
   ProgressBar,
-  VerdictBadge,
-} from "../_shared";
+  VerdictBadge
+} from '../_shared'
 
-const fg = "var(--text-primary)";
-const muted = "var(--text-muted)";
-const accent = "var(--accent)";
+const fg = 'var(--text-primary)'
+const muted = 'var(--text-muted)'
+const accent = 'var(--accent)'
 
 const CSS = `
 .smd-anim { color: ${fg}; }
@@ -126,20 +126,20 @@ const CSS = `
   .smd-anim .smd-eye { opacity: 1; }
   .smd-anim .smd-progress { animation: none; transform: scaleX(1); }
 }
-`;
+`
 
-const CELL_W = 108;
-const CELL_H = 56;
+const CELL_W = 108
+const CELL_H = 56
 
 /** Dark, unknown connector - faint paperclip + "?" badge, no name. */
 function DarkConnector({
   cx,
   cy,
-  col,
+  col
 }: {
-  cx: number;
-  cy: number;
-  col: 1 | 2 | 3;
+  cx: number
+  cy: number
+  col: 1 | 2 | 3
 }): React.ReactNode {
   return (
     <g className={`smd-d${col}`}>
@@ -170,7 +170,7 @@ function DarkConnector({
         ?
       </text>
     </g>
-  );
+  )
 }
 
 /** Illuminated connector - bright paperclip + name + verdict badge. */
@@ -179,15 +179,15 @@ function LitConnector({
   cy,
   col,
   name,
-  blocked,
+  blocked
 }: {
-  cx: number;
-  cy: number;
-  col: 1 | 2 | 3;
-  name: string;
-  blocked?: boolean;
+  cx: number
+  cy: number
+  col: 1 | 2 | 3
+  name: string
+  blocked?: boolean
 }): React.ReactNode {
-  const c = blocked ? DANGER : accent;
+  const c = blocked ? DANGER : accent
   return (
     <g className={`smd-r${col}`}>
       <rect
@@ -214,38 +214,33 @@ function LitConnector({
       >
         {name}
       </text>
-      <VerdictBadge
-        cx={cx + 90}
-        cy={cy + 16}
-        r={8}
-        variant={blocked ? "deny" : "allow"}
-      />
+      <VerdictBadge cx={cx + 90} cy={cy + 16} r={8} variant={blocked ? 'deny' : 'allow'} />
     </g>
-  );
+  )
 }
 
 /** A connector cell: dark layer + lit layer stacked at the same spot. */
 function Connector(props: {
-  cx: number;
-  cy: number;
-  col: 1 | 2 | 3;
-  name: string;
-  blocked?: boolean;
+  cx: number
+  cy: number
+  col: 1 | 2 | 3
+  name: string
+  blocked?: boolean
 }): React.ReactNode {
   return (
     <>
       <DarkConnector cx={props.cx} cy={props.cy} col={props.col} />
       <LitConnector {...props} />
     </>
-  );
+  )
 }
 
 export default function ShadowMCPDiscoveryAnimation(): React.ReactNode {
   // Column x / row y origins for the aligned 3x2 connector grid.
-  const COL = [168, 296, 424] as const;
-  const ROW = [44, 116] as const;
+  const COL = [168, 296, 424] as const
+  const ROW = [44, 116] as const
   return (
-    <div style={{ display: "flex", justifyContent: "center" }}>
+    <div style={{ display: 'flex', justifyContent: 'center' }}>
       <style>{CSS}</style>
       <svg
         className="smd-anim"
@@ -283,13 +278,7 @@ export default function ShadowMCPDiscoveryAnimation(): React.ReactNode {
         </text>
 
         {/* Ambient illumination from Edison */}
-        <circle
-          className="smd-glow"
-          cx={58}
-          cy={100}
-          r={300}
-          fill="url(#smd-glow-grad)"
-        />
+        <circle className="smd-glow" cx={58} cy={100} r={300} fill="url(#smd-glow-grad)" />
 
         {/* Admin persona (always present, watching the fleet) */}
         <svg x={45} y={12} width={26} height={26} viewBox="0 0 256 256">
@@ -331,7 +320,7 @@ export default function ShadowMCPDiscoveryAnimation(): React.ReactNode {
               [424, 72],
               [168, 144],
               [296, 144],
-              [424, 144],
+              [424, 144]
             ] as const
           ).map(([rx, ry]) => (
             <line
@@ -405,18 +394,12 @@ export default function ShadowMCPDiscoveryAnimation(): React.ReactNode {
 
         {/* Sweeping light beam (travels across the grid) */}
         <g className="smd-beam">
-          <rect
-            x={0}
-            y={36}
-            width={44}
-            height={146}
-            fill="url(#smd-beam-grad)"
-          />
+          <rect x={0} y={36} width={44} height={146} fill="url(#smd-beam-grad)" />
         </g>
 
         {/* Progress bar */}
         <ProgressBar y={214} width={520} className="smd-progress" />
       </svg>
     </div>
-  );
+  )
 }

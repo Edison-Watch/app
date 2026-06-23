@@ -1,21 +1,17 @@
-export { MCP_ICON_PATHS, MCP_ICON_VIEWBOX } from "./mcp-svg";
+export { MCP_ICON_PATHS, MCP_ICON_VIEWBOX } from './mcp-svg'
 export {
   EDISON_E_PATH,
   EDISON_FRAME_PATH,
   EDISON_LOGO_VIEWBOX,
   EDISON_WATCH_FILL_PATH,
-  EDISON_WATCH_STROKE_PATH,
-} from "./edison-logo-svg";
+  EDISON_WATCH_STROKE_PATH
+} from './edison-logo-svg'
 export {
   OUTLOOK_SVG,
   OUTLOOK_SVG_VIEWBOX,
   SLACK_SVG,
   SLACK_SVG_VIEWBOX,
   GCAL_SVG,
-  GCAL_SVG_VIEWBOX,
-} from "./app-icons-svg";
-export {
-  ATTACKER_BODY_PATHS,
-  ATTACKER_HIGHLIGHT_PATHS,
-  ATTACKER_SVG_VIEWBOX,
-} from "./attacker-svg";
+  GCAL_SVG_VIEWBOX
+} from './app-icons-svg'
+export { ATTACKER_BODY_PATHS, ATTACKER_HIGHLIGHT_PATHS, ATTACKER_SVG_VIEWBOX } from './attacker-svg'

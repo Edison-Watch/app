@@ -20,11 +20,11 @@ import {
   ProgressBar,
   RED as R,
   RobotIcon,
-  SHIELD_CHECK_PATH,
-} from "../_shared";
-import { StdioVirusContent } from "./StdioVirusAnimation";
+  SHIELD_CHECK_PATH
+} from '../_shared'
+import { StdioVirusContent } from './StdioVirusAnimation'
 
-const G = "#3ddc84";
+const G = '#3ddc84'
 
 const CSS = `
 .sh-anim { color: var(--text-primary); }
@@ -78,7 +78,7 @@ const CSS = `
   .sh-anim .sh-fpulse { transform:scale(1); opacity:.8; }
   .sh-anim .sh-progress { transform:scaleX(1); }
 }
-`;
+`
 
 export default function StdioVsHttpAnimation(): React.ReactNode {
   return (
@@ -87,7 +87,7 @@ export default function StdioVsHttpAnimation(): React.ReactNode {
       <svg
         className="sh-anim"
         viewBox="0 0 530 172"
-        style={{ width: "100%", maxWidth: 530, height: "auto" }}
+        style={{ width: '100%', maxWidth: 530, height: 'auto' }}
         xmlns="http://www.w3.org/2000/svg"
         role="presentation"
         aria-hidden="true"
@@ -102,11 +102,7 @@ export default function StdioVsHttpAnimation(): React.ReactNode {
             markerHeight="5"
             orient="auto"
           >
-            <path
-              d="M0 1 L9 5 L0 9 Z"
-              fill="var(--text-muted)"
-              fillOpacity={0.6}
-            />
+            <path d="M0 1 L9 5 L0 9 Z" fill="var(--text-muted)" fillOpacity={0.6} />
           </marker>
         </defs>
 
@@ -224,13 +220,7 @@ export default function StdioVsHttpAnimation(): React.ReactNode {
         />
 
         {/* Robot */}
-        <RobotIcon
-          x={302}
-          y={52}
-          size={22}
-          fill="var(--text-muted)"
-          fillOpacity="0.55"
-        />
+        <RobotIcon x={302} y={52} size={22} fill="var(--text-muted)" fillOpacity="0.55" />
 
         {/* Request arrow */}
         <g className="sh-hreq">
@@ -278,13 +268,7 @@ export default function StdioVsHttpAnimation(): React.ReactNode {
           strokeOpacity="0.25"
           strokeWidth="1"
         />
-        <McpIcon
-          x={463}
-          y={62}
-          size={14}
-          color="var(--text-muted)"
-          opacity="0.5"
-        />
+        <McpIcon x={463} y={62} size={14} color="var(--text-muted)" opacity="0.5" />
         <text
           x="489"
           y="73"
@@ -391,5 +375,5 @@ export default function StdioVsHttpAnimation(): React.ReactNode {
         <ProgressBar y={168} width={490} className="sh-progress" />
       </svg>
     </div>
-  );
+  )
 }

@@ -10,18 +10,12 @@
  *
  * Requires CSS custom properties: --text-primary, --accent, --text-muted.
  */
-import { AGENT_REGISTRY } from "../../agent-registry/index";
-import {
-  EdisonLogo,
-  McpIcon,
-  McpPacket,
-  ORANGE as O,
-  ProgressBar,
-} from "../_shared";
+import { AGENT_REGISTRY } from '../../agent-registry/index'
+import { EdisonLogo, McpIcon, McpPacket, ORANGE as O, ProgressBar } from '../_shared'
 
-const CLAUDE_SPRITE = AGENT_REGISTRY["claude-code"];
-const CURSOR_SPRITE = AGENT_REGISTRY["cursor"];
-const VSCODE_SPRITE = AGENT_REGISTRY["vscode"];
+const CLAUDE_SPRITE = AGENT_REGISTRY['claude-code']
+const CURSOR_SPRITE = AGENT_REGISTRY['cursor']
+const VSCODE_SPRITE = AGENT_REGISTRY['vscode']
 
 const CSS = `
 .ew-anim { color: var(--text-primary); }
@@ -120,7 +114,7 @@ const CSS = `
   .ew-anim .ew-routed { opacity:1; }
   .ew-anim .ew-local-wrap { animation:none; opacity:1; }
 }
-`;
+`
 
 function McpServer({ x, y }: { x: number; y: number }): React.ReactNode {
   return (
@@ -137,20 +131,8 @@ function McpServer({ x, y }: { x: number; y: number }): React.ReactNode {
         strokeOpacity="0.35"
         strokeWidth="1"
       />
-      <McpIcon
-        x={x + 16}
-        y={y + 6}
-        size={24}
-        color="var(--text-muted)"
-        opacity="0.6"
-      />
-      <circle
-        cx={x + 28}
-        cy={y + 38}
-        r="1.5"
-        fill="var(--text-muted)"
-        fillOpacity="0.35"
-      />
+      <McpIcon x={x + 16} y={y + 6} size={24} color="var(--text-muted)" opacity="0.6" />
+      <circle cx={x + 28} cy={y + 38} r="1.5" fill="var(--text-muted)" fillOpacity="0.35" />
       <line
         x1={x + 34}
         y1={y + 38}
@@ -162,7 +144,7 @@ function McpServer({ x, y }: { x: number; y: number }): React.ReactNode {
         strokeDasharray="2 2"
       />
     </g>
-  );
+  )
 }
 
 export default function EdisonMCPProxyAnimation(): React.ReactNode {
@@ -305,25 +287,11 @@ export default function EdisonMCPProxyAnimation(): React.ReactNode {
         />
 
         {/* AI agent icons (row inside laptop) */}
-        <rect
-          x="41"
-          y="35"
-          width="30"
-          height="30"
-          rx="7"
-          fill={CURSOR_SPRITE.brandColor}
-        />
+        <rect x="41" y="35" width="30" height="30" rx="7" fill={CURSOR_SPRITE.brandColor} />
         <svg x="45" y="39" width="22" height="22" viewBox="0 0 24 24">
           <path d={CURSOR_SPRITE.svgPath} fill="#fff" />
         </svg>
-        <rect
-          x="73"
-          y="35"
-          width="30"
-          height="30"
-          rx="7"
-          fill={CLAUDE_SPRITE.brandColor}
-        />
+        <rect x="73" y="35" width="30" height="30" rx="7" fill={CLAUDE_SPRITE.brandColor} />
         <svg
           x="77"
           y="39"
@@ -331,16 +299,9 @@ export default function EdisonMCPProxyAnimation(): React.ReactNode {
           height="22"
           viewBox="0 -20 90 90"
           shapeRendering="crispEdges"
-          dangerouslySetInnerHTML={{ __html: CLAUDE_SPRITE.customSvg ?? "" }}
+          dangerouslySetInnerHTML={{ __html: CLAUDE_SPRITE.customSvg ?? '' }}
         />
-        <rect
-          x="105"
-          y="35"
-          width="30"
-          height="30"
-          rx="7"
-          fill={VSCODE_SPRITE.brandColor}
-        />
+        <rect x="105" y="35" width="30" height="30" rx="7" fill={VSCODE_SPRITE.brandColor} />
         <svg x="109" y="39" width="22" height="22" viewBox="0 0 24 24">
           <path d={VSCODE_SPRITE.svgPath} fill="#fff" />
         </svg>
@@ -433,5 +394,5 @@ export default function EdisonMCPProxyAnimation(): React.ReactNode {
         <ProgressBar y={188} width={460} className="ew-progress" />
       </svg>
     </div>
-  );
+  )
 }

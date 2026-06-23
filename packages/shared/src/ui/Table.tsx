@@ -1,19 +1,19 @@
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useState } from 'react'
 
 interface Column<T> {
-  key: string;
-  header: string;
-  sortable?: boolean;
-  numeric?: boolean;
-  render: (row: T) => ReactNode;
+  key: string
+  header: string
+  sortable?: boolean
+  numeric?: boolean
+  render: (row: T) => ReactNode
 }
 
 interface TableProps<T> {
-  columns: Column<T>[];
-  data: T[];
-  loading?: boolean;
-  onRowClick?: (row: T) => void;
-  getRowKey: (row: T) => string;
+  columns: Column<T>[]
+  data: T[]
+  loading?: boolean
+  onRowClick?: (row: T) => void
+  getRowKey: (row: T) => string
 }
 
 function SkeletonRow({ cols }: { cols: number }) {
@@ -25,7 +25,7 @@ function SkeletonRow({ cols }: { cols: number }) {
         </td>
       ))}
     </tr>
-  );
+  )
 }
 
 export default function Table<T>({
@@ -33,30 +33,30 @@ export default function Table<T>({
   data,
   loading = false,
   onRowClick,
-  getRowKey,
+  getRowKey
 }: TableProps<T>) {
-  const [sortKey, setSortKey] = useState<string | null>(null);
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [sortKey, setSortKey] = useState<string | null>(null)
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
 
   function handleSort(key: string) {
     if (sortKey === key) {
-      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
     } else {
-      setSortKey(key);
-      setSortDir("asc");
+      setSortKey(key)
+      setSortDir('asc')
     }
   }
 
   const sortedData = sortKey
     ? [...data].sort((a, b) => {
-        const col = columns.find((c) => c.key === sortKey);
-        if (!col) return 0;
-        const aVal = String(col.render(a));
-        const bVal = String(col.render(b));
-        const cmp = aVal.localeCompare(bVal, undefined, { numeric: true });
-        return sortDir === "asc" ? cmp : -cmp;
+        const col = columns.find((c) => c.key === sortKey)
+        if (!col) return 0
+        const aVal = String(col.render(a))
+        const bVal = String(col.render(b))
+        const cmp = aVal.localeCompare(bVal, undefined, { numeric: true })
+        return sortDir === 'asc' ? cmp : -cmp
       })
-    : data;
+    : data
 
   return (
     <div className="overflow-x-auto rounded-lg border border-[var(--border)]">
@@ -67,23 +67,15 @@ export default function Table<T>({
               <th
                 key={col.key}
                 className={`px-4 py-3 font-medium text-[var(--text-secondary)] ${
-                  col.sortable
-                    ? "cursor-pointer select-none hover:text-[var(--text-primary)]"
-                    : ""
-                } ${col.numeric ? "tabular-nums text-right" : ""}`}
+                  col.sortable ? 'cursor-pointer select-none hover:text-[var(--text-primary)]' : ''
+                } ${col.numeric ? 'tabular-nums text-right' : ''}`}
                 onClick={col.sortable ? () => handleSort(col.key) : undefined}
               >
                 <span className="inline-flex items-center gap-1">
                   {col.header}
                   {col.sortable && sortKey === col.key && (
-                    <span
-                      aria-label={
-                        sortDir === "asc"
-                          ? "sorted ascending"
-                          : "sorted descending"
-                      }
-                    >
-                      {sortDir === "asc" ? "↑" : "↓"}
+                    <span aria-label={sortDir === 'asc' ? 'sorted ascending' : 'sorted descending'}>
+                      {sortDir === 'asc' ? '↑' : '↓'}
                     </span>
                   )}
                 </span>
@@ -93,17 +85,13 @@ export default function Table<T>({
         </thead>
         <tbody>
           {loading &&
-            Array.from({ length: 5 }, (_, i) => (
-              <SkeletonRow key={i} cols={columns.length} />
-            ))}
+            Array.from({ length: 5 }, (_, i) => <SkeletonRow key={i} cols={columns.length} />)}
           {!loading &&
             sortedData.map((row) => (
               <tr
                 key={getRowKey(row)}
                 className={`border-b border-[var(--border)] last:border-0 ${
-                  onRowClick
-                    ? "cursor-pointer hover:bg-[var(--bg-hover)] transition-colors"
-                    : ""
+                  onRowClick ? 'cursor-pointer hover:bg-[var(--bg-hover)] transition-colors' : ''
                 }`}
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
               >
@@ -111,7 +99,7 @@ export default function Table<T>({
                   <td
                     key={col.key}
                     className={`px-4 py-3 text-[var(--text-primary)] ${
-                      col.numeric ? "tabular-nums text-right" : ""
+                      col.numeric ? 'tabular-nums text-right' : ''
                     }`}
                   >
                     {col.render(row)}
@@ -122,5 +110,5 @@ export default function Table<T>({
         </tbody>
       </table>
     </div>
-  );
+  )
 }

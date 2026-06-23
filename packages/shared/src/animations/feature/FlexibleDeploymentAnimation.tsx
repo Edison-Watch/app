@@ -14,7 +14,7 @@
  *
  * Requires CSS custom properties: --text-primary, --accent, --text-muted.
  */
-import { AGENT_REGISTRY } from "../../agent-registry/index";
+import { AGENT_REGISTRY } from '../../agent-registry/index'
 import {
   AgentIcon,
   DANGER,
@@ -23,30 +23,30 @@ import {
   McpPacket,
   ORANGE as O,
   ProgressBar,
-  SHIELD_CHECK_PATH,
-} from "../_shared";
+  SHIELD_CHECK_PATH
+} from '../_shared'
 
-const CURSOR = AGENT_REGISTRY["cursor"];
-const CLAUDE_CODE = AGENT_REGISTRY["claude-code"];
+const CURSOR = AGENT_REGISTRY['cursor']
+const CLAUDE_CODE = AGENT_REGISTRY['claude-code']
 
 const SLACK_SVG =
-  '<g clip-rule="evenodd" fill-rule="evenodd"><path d="m897.4 0c-135.3.1-244.8 109.9-244.7 245.2-.1 135.3 109.5 245.1 244.8 245.2h244.8v-245.1c.1-135.3-109.5-245.1-244.9-245.3.1 0 .1 0 0 0m0 654h-652.6c-135.3.1-244.9 109.9-244.8 245.2-.2 135.3 109.4 245.1 244.7 245.3h652.7c135.3-.1 244.9-109.9 244.8-245.2.1-135.4-109.5-245.2-244.8-245.3z" fill="#36c5f0"/><path d="m2447.6 899.2c.1-135.3-109.5-245.1-244.8-245.2-135.3.1-244.9 109.9-244.8 245.2v245.3h244.8c135.3-.1 244.9-109.9 244.8-245.3zm-652.7 0v-654c.1-135.2-109.4-245-244.7-245.2-135.3.1-244.9 109.9-244.8 245.2v654c-.2 135.3 109.4 245.1 244.7 245.3 135.3-.1 244.9-109.9 244.8-245.3z" fill="#2eb67d"/><path d="m1550.1 2452.5c135.3-.1 244.9-109.9 244.8-245.2.1-135.3-109.5-245.1-244.8-245.2h-244.8v245.2c-.1 135.2 109.5 245 244.8 245.2zm0-654.1h652.7c135.3-.1 244.9-109.9 244.8-245.2.2-135.3-109.4-245.1-244.7-245.3h-652.7c-135.3.1-244.9 109.9-244.8 245.2-.1 135.4 109.4 245.2 244.7 245.3z" fill="#ecb22e"/><path d="m0 1553.2c-.1 135.3 109.5 245.1 244.8 245.2 135.3-.1 244.9-109.9 244.8-245.2v-245.2h-244.8c-135.3.1-244.9 109.9-244.8 245.2zm652.7 0v654c-.2 135.3 109.4 245.1 244.7 245.3 135.3-.1 244.9-109.9 244.8-245.2v-653.9c.2-135.3-109.4-245.1-244.7-245.3-135.4 0-244.9 109.8-244.8 245.1 0 0 0 .1 0 0" fill="#e01e5a"/></g>';
+  '<g clip-rule="evenodd" fill-rule="evenodd"><path d="m897.4 0c-135.3.1-244.8 109.9-244.7 245.2-.1 135.3 109.5 245.1 244.8 245.2h244.8v-245.1c.1-135.3-109.5-245.1-244.9-245.3.1 0 .1 0 0 0m0 654h-652.6c-135.3.1-244.9 109.9-244.8 245.2-.2 135.3 109.4 245.1 244.7 245.3h652.7c135.3-.1 244.9-109.9 244.8-245.2.1-135.4-109.5-245.2-244.8-245.3z" fill="#36c5f0"/><path d="m2447.6 899.2c.1-135.3-109.5-245.1-244.8-245.2-135.3.1-244.9 109.9-244.8 245.2v245.3h244.8c135.3-.1 244.9-109.9 244.8-245.3zm-652.7 0v-654c.1-135.2-109.4-245-244.7-245.2-135.3.1-244.9 109.9-244.8 245.2v654c-.2 135.3 109.4 245.1 244.7 245.3 135.3-.1 244.9-109.9 244.8-245.3z" fill="#2eb67d"/><path d="m1550.1 2452.5c135.3-.1 244.9-109.9 244.8-245.2.1-135.3-109.5-245.1-244.8-245.2h-244.8v245.2c-.1 135.2 109.5 245 244.8 245.2zm0-654.1h652.7c135.3-.1 244.9-109.9 244.8-245.2.2-135.3-109.4-245.1-244.7-245.3h-652.7c-135.3.1-244.9 109.9-244.8 245.2-.1 135.4 109.4 245.2 244.7 245.3z" fill="#ecb22e"/><path d="m0 1553.2c-.1 135.3 109.5 245.1 244.8 245.2 135.3-.1 244.9-109.9 244.8-245.2v-245.2h-244.8c-135.3.1-244.9 109.9-244.8 245.2zm652.7 0v654c-.2 135.3 109.4 245.1 244.7 245.3 135.3-.1 244.9-109.9 244.8-245.2v-653.9c.2-135.3-109.4-245.1-244.7-245.3-135.4 0-244.9 109.8-244.8 245.1 0 0 0 .1 0 0" fill="#e01e5a"/></g>'
 const GITHUB_SVG =
-  '<path fill-rule="evenodd" clip-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8C0 11.54 2.29 14.53 5.47 15.59C5.87 15.66 6.02 15.42 6.02 15.21C6.02 15.02 6.01 14.39 6.01 13.72C4 14.09 3.48 13.23 3.32 12.78C3.23 12.55 2.84 11.84 2.5 11.65C2.22 11.5 1.82 11.13 2.49 11.12C3.12 11.11 3.57 11.7 3.72 11.94C4.44 13.15 5.59 12.81 6.05 12.6C6.12 12.08 6.33 11.73 6.56 11.53C4.78 11.33 2.92 10.64 2.92 7.58C2.92 6.71 3.23 5.99 3.74 5.43C3.66 5.23 3.38 4.41 3.82 3.31C3.82 3.31 4.49 3.1 6.02 4.13C6.66 3.95 7.34 3.86 8.02 3.86C8.7 3.86 9.38 3.95 10.02 4.13C11.55 3.09 12.22 3.31 12.22 3.31C12.66 4.41 12.38 5.23 12.3 5.43C12.81 5.99 13.12 6.7 13.12 7.58C13.12 10.65 11.25 11.33 9.47 11.53C9.76 11.78 10.01 12.26 10.01 13.01C10.01 14.08 10 14.94 10 15.21C10 15.42 10.15 15.67 10.55 15.59C13.71 14.53 16 11.53 16 8C16 3.58 12.42 0 8 0Z" transform="scale(64)" fill="var(--text-primary)"/>';
+  '<path fill-rule="evenodd" clip-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8C0 11.54 2.29 14.53 5.47 15.59C5.87 15.66 6.02 15.42 6.02 15.21C6.02 15.02 6.01 14.39 6.01 13.72C4 14.09 3.48 13.23 3.32 12.78C3.23 12.55 2.84 11.84 2.5 11.65C2.22 11.5 1.82 11.13 2.49 11.12C3.12 11.11 3.57 11.7 3.72 11.94C4.44 13.15 5.59 12.81 6.05 12.6C6.12 12.08 6.33 11.73 6.56 11.53C4.78 11.33 2.92 10.64 2.92 7.58C2.92 6.71 3.23 5.99 3.74 5.43C3.66 5.23 3.38 4.41 3.82 3.31C3.82 3.31 4.49 3.1 6.02 4.13C6.66 3.95 7.34 3.86 8.02 3.86C8.7 3.86 9.38 3.95 10.02 4.13C11.55 3.09 12.22 3.31 12.22 3.31C12.66 4.41 12.38 5.23 12.3 5.43C12.81 5.99 13.12 6.7 13.12 7.58C13.12 10.65 11.25 11.33 9.47 11.53C9.76 11.78 10.01 12.26 10.01 13.01C10.01 14.08 10 14.94 10 15.21C10 15.42 10.15 15.67 10.55 15.59C13.71 14.53 16 11.53 16 8C16 3.58 12.42 0 8 0Z" transform="scale(64)" fill="var(--text-primary)"/>'
 const JIRA_SVG =
-  '<path d="M11.571 11.513H0a5.218 5.218 0 0 0 5.232 5.215h2.13v2.057A5.215 5.215 0 0 0 12.575 24V12.518a1.005 1.005 0 0 0-1.005-1.005zm5.723-5.756H5.736a5.215 5.215 0 0 0 5.215 5.214h2.129v2.058a5.218 5.218 0 0 0 5.215 5.214V6.762a1.001 1.001 0 0 0-1.001-1.005zM23.013 0H11.455a5.215 5.215 0 0 0 5.215 5.215h2.129v2.057A5.215 5.215 0 0 0 24 12.483V1.005A1.001 1.001 0 0 0 23.013 0z" fill="#2684FF"/>';
+  '<path d="M11.571 11.513H0a5.218 5.218 0 0 0 5.232 5.215h2.13v2.057A5.215 5.215 0 0 0 12.575 24V12.518a1.005 1.005 0 0 0-1.005-1.005zm5.723-5.756H5.736a5.215 5.215 0 0 0 5.215 5.214h2.129v2.058a5.218 5.218 0 0 0 5.215 5.214V6.762a1.001 1.001 0 0 0-1.001-1.005zM23.013 0H11.455a5.215 5.215 0 0 0 5.215 5.215h2.129v2.057A5.215 5.215 0 0 0 24 12.483V1.005A1.001 1.001 0 0 0 23.013 0z" fill="#2684FF"/>'
 
 /* Server icon path (Phosphor, viewBox 0 0 256 256) */
 const SERVER_PATH =
-  "M208,40H48A16,16,0,0,0,32,56v48a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V56A16,16,0,0,0,208,40Zm0,64H48V56H208v48Zm0,32H48a16,16,0,0,0-16,16v48a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V152A16,16,0,0,0,208,136Zm0,64H48V152H208v48ZM184,72a12,12,0,1,1-12-12A12,12,0,0,1,184,72Zm0,96a12,12,0,1,1-12-12A12,12,0,0,1,184,168Z";
+  'M208,40H48A16,16,0,0,0,32,56v48a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V56A16,16,0,0,0,208,40Zm0,64H48V56H208v48Zm0,32H48a16,16,0,0,0-16,16v48a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V152A16,16,0,0,0,208,136Zm0,64H48V152H208v48ZM184,72a12,12,0,1,1-12-12A12,12,0,0,1,184,72Zm0,96a12,12,0,1,1-12-12A12,12,0,0,1,184,168Z'
 
 /* Globe icon path (Phosphor, viewBox 0 0 256 256) */
 const GLOBE_PATH =
-  "M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm-8-136v48h16V80ZM104,64h48v8H104Z";
+  'M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm-8-136v48h16V80ZM104,64h48v8H104Z'
 
 /* Database icon path (Phosphor, viewBox 0 0 256 256) */
 const DATABASE_PATH =
-  "M128,24C74.17,24,32,48.6,32,80v96c0,31.4,42.17,56,96,56s96-24.6,96-56V80C224,48.6,181.83,24,128,24Zm80,152c0,18.75-33.83,40-80,40s-80-21.25-80-40V132.22C66.69,145.73,94.94,152,128,152s61.31-6.27,80-19.78Zm0-96c0,18.75-33.83,40-80,40S48,98.75,48,80s33.83-40,80-40S208,61.25,208,80Z";
+  'M128,24C74.17,24,32,48.6,32,80v96c0,31.4,42.17,56,96,56s96-24.6,96-56V80C224,48.6,181.83,24,128,24Zm80,152c0,18.75-33.83,40-80,40s-80-21.25-80-40V132.22C66.69,145.73,94.94,152,128,152s61.31-6.27,80-19.78Zm0-96c0,18.75-33.83,40-80,40S48,98.75,48,80s33.83-40,80-40S208,61.25,208,80Z'
 
 /* ──────────────────────────────────────────────────────────────────────
  * Animation timing / cycle: 12s
@@ -243,18 +243,18 @@ const CSS = `
   .fd .fd-sh-boundary { stroke-opacity:0.6; }
   .fd .fd-v-h1, .fd .fd-v-deny, .fd .fd-v-s1, .fd .fd-v-s2 { opacity:1; transform:scale(1); }
 }
-`;
+`
 
 function ToolBox({
   x,
   y,
   iconSvg,
-  iconViewBox,
+  iconViewBox
 }: {
-  x: number;
-  y: number;
-  iconSvg?: string;
-  iconViewBox?: string;
+  x: number
+  y: number
+  iconSvg?: string
+  iconViewBox?: string
 }): React.ReactNode {
   return (
     <g>
@@ -276,19 +276,13 @@ function ToolBox({
           y={y + 7}
           width={22}
           height={22}
-          viewBox={iconViewBox || "0 0 24 24"}
+          viewBox={iconViewBox || '0 0 24 24'}
           dangerouslySetInnerHTML={{ __html: iconSvg }}
         />
       ) : null}
-      <McpIcon
-        x={x + 28}
-        y={y + 9}
-        size={16}
-        color="var(--text-muted)"
-        opacity="0.45"
-      />
+      <McpIcon x={x + 28} y={y + 9} size={16} color="var(--text-muted)" opacity="0.45" />
     </g>
-  );
+  )
 }
 
 export default function FlexibleDeploymentAnimation(): React.ReactNode {
@@ -399,13 +393,7 @@ export default function FlexibleDeploymentAnimation(): React.ReactNode {
             strokeWidth="1"
           />
           <AgentIcon agent={CLAUDE_CODE} x={61} y={68} size={18} />
-          <McpIcon
-            x={64}
-            y={90}
-            size={11}
-            color="var(--text-muted)"
-            opacity="0.4"
-          />
+          <McpIcon x={64} y={90} size={11} color="var(--text-muted)" opacity="0.4" />
           {/* Laptop 2 */}
           <rect
             x={130}
@@ -432,13 +420,7 @@ export default function FlexibleDeploymentAnimation(): React.ReactNode {
             strokeWidth="1"
           />
           <AgentIcon agent={CURSOR} x={141} y={68} size={18} />
-          <McpIcon
-            x={144}
-            y={90}
-            size={11}
-            color="var(--text-muted)"
-            opacity="0.4"
-          />
+          <McpIcon x={144} y={90} size={11} color="var(--text-muted)" opacity="0.4" />
         </g>
 
         {/* ── Edison On-Prem inside boundary ── */}
@@ -507,30 +489,14 @@ export default function FlexibleDeploymentAnimation(): React.ReactNode {
           </text>
           {/* DB + MCP icon */}
           <svg x={205} y={204} width={16} height={16} viewBox="0 0 256 256">
-            <path
-              d={DATABASE_PATH}
-              fill="var(--text-muted)"
-              fillOpacity="0.5"
-            />
+            <path d={DATABASE_PATH} fill="var(--text-muted)" fillOpacity="0.5" />
           </svg>
-          <McpIcon
-            x={223}
-            y={205}
-            size={13}
-            color="var(--text-muted)"
-            opacity="0.4"
-          />
+          <McpIcon x={223} y={205} size={13} color="var(--text-muted)" opacity="0.4" />
           {/* Server + MCP icon */}
           <svg x={250} y={204} width={16} height={16} viewBox="0 0 256 256">
             <path d={SERVER_PATH} fill="var(--text-muted)" fillOpacity="0.5" />
           </svg>
-          <McpIcon
-            x={268}
-            y={205}
-            size={13}
-            color="var(--text-muted)"
-            opacity="0.4"
-          />
+          <McpIcon x={268} y={205} size={13} color="var(--text-muted)" opacity="0.4" />
           {/* Wiki + MCP icon */}
           <svg x={290} y={204} width={16} height={16} viewBox="0 0 256 256">
             <path d={GLOBE_PATH} fill="var(--text-muted)" fillOpacity="0.5" />
@@ -605,7 +571,7 @@ export default function FlexibleDeploymentAnimation(): React.ReactNode {
         </g>
 
         {/* Self-hosted verdict badge - right of Edison box */}
-        <g className="fd-v-h1" style={{ transformOrigin: "233px 135px" }}>
+        <g className="fd-v-h1" style={{ transformOrigin: '233px 135px' }}>
           <circle
             cx="233"
             cy="135"
@@ -617,28 +583,14 @@ export default function FlexibleDeploymentAnimation(): React.ReactNode {
             strokeWidth="1"
           />
           <svg x={226.5} y={128.5} width={13} height={13} viewBox="0 0 256 256">
-            <path
-              d={SHIELD_CHECK_PATH}
-              fill="var(--accent)"
-              fillOpacity="0.8"
-            />
+            <path d={SHIELD_CHECK_PATH} fill="var(--accent)" fillOpacity="0.8" />
           </svg>
         </g>
 
         {/* ── 3rd-party MCP servers (outside boundary, self-hosted side) ── */}
         <g className="fd-sh-glow">
-          <ToolBox
-            x={60}
-            y={275}
-            iconSvg={SLACK_SVG}
-            iconViewBox="0 0 2447.6 2452.5"
-          />
-          <ToolBox
-            x={130}
-            y={275}
-            iconSvg={GITHUB_SVG}
-            iconViewBox="0 0 1024 1024"
-          />
+          <ToolBox x={60} y={275} iconSvg={SLACK_SVG} iconViewBox="0 0 2447.6 2452.5" />
+          <ToolBox x={130} y={275} iconSvg={GITHUB_SVG} iconViewBox="0 0 1024 1024" />
           <text
             x={200}
             y={300}
@@ -667,7 +619,7 @@ export default function FlexibleDeploymentAnimation(): React.ReactNode {
         </text>
 
         {/* Denied verdict badge (red X) below Edison on self-hosted side */}
-        <g className="fd-v-deny" style={{ transformOrigin: "155px 185px" }}>
+        <g className="fd-v-deny" style={{ transformOrigin: '155px 185px' }}>
           <circle
             cx="155"
             cy="185"
@@ -742,13 +694,7 @@ export default function FlexibleDeploymentAnimation(): React.ReactNode {
             strokeWidth="1"
           />
           <AgentIcon agent={CLAUDE_CODE} x={464} y={50} size={20} />
-          <McpIcon
-            x={468}
-            y={74}
-            size={12}
-            color="var(--text-muted)"
-            opacity="0.4"
-          />
+          <McpIcon x={468} y={74} size={12} color="var(--text-muted)" opacity="0.4" />
           {/* Laptop 2 */}
           <rect
             x={548}
@@ -775,13 +721,7 @@ export default function FlexibleDeploymentAnimation(): React.ReactNode {
             strokeWidth="1"
           />
           <AgentIcon agent={CURSOR} x={562} y={50} size={20} />
-          <McpIcon
-            x={566}
-            y={74}
-            size={12}
-            color="var(--text-muted)"
-            opacity="0.4"
-          />
+          <McpIcon x={566} y={74} size={12} color="var(--text-muted)" opacity="0.4" />
         </g>
 
         {/* ── Edison Cloud box ── */}
@@ -877,18 +817,8 @@ export default function FlexibleDeploymentAnimation(): React.ReactNode {
 
         {/* ── 3rd-party MCP servers (SaaS side) ── */}
         <g className="fd-saas-glow">
-          <ToolBox
-            x={455}
-            y={260}
-            iconSvg={SLACK_SVG}
-            iconViewBox="0 0 2447.6 2452.5"
-          />
-          <ToolBox
-            x={525}
-            y={260}
-            iconSvg={GITHUB_SVG}
-            iconViewBox="0 0 1024 1024"
-          />
+          <ToolBox x={455} y={260} iconSvg={SLACK_SVG} iconViewBox="0 0 2447.6 2452.5" />
+          <ToolBox x={525} y={260} iconSvg={GITHUB_SVG} iconViewBox="0 0 1024 1024" />
           <ToolBox x={595} y={260} iconSvg={JIRA_SVG} iconViewBox="0 0 24 24" />
           <text
             x={665}
@@ -903,7 +833,7 @@ export default function FlexibleDeploymentAnimation(): React.ReactNode {
         </g>
 
         {/* SaaS verdict badges */}
-        <g className="fd-v-s1" style={{ transformOrigin: "508px 228px" }}>
+        <g className="fd-v-s1" style={{ transformOrigin: '508px 228px' }}>
           <circle
             cx="508"
             cy="228"
@@ -923,7 +853,7 @@ export default function FlexibleDeploymentAnimation(): React.ReactNode {
             strokeLinejoin="round"
           />
         </g>
-        <g className="fd-v-s2" style={{ transformOrigin: "598px 228px" }}>
+        <g className="fd-v-s2" style={{ transformOrigin: '598px 228px' }}>
           <circle
             cx="598"
             cy="228"
@@ -968,5 +898,5 @@ export default function FlexibleDeploymentAnimation(): React.ReactNode {
         <ProgressBar y={345} width={700} className="fd-progress" />
       </svg>
     </div>
-  );
+  )
 }
