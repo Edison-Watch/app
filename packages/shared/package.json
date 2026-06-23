@@ -2,57 +2,78 @@
   "name": "@edison/shared",
   "version": "0.1.0",
   "private": true,
+  "description": "Shared React components, design tokens, and client utilities for Edison Watch.",
+  "license": "AGPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Edison-Watch/shared.git"
+  },
+  "homepage": "https://github.com/Edison-Watch/shared#readme",
+  "bugs": {
+    "url": "https://github.com/Edison-Watch/shared/issues"
+  },
+  "keywords": [
+    "edison-watch",
+    "react",
+    "design-system",
+    "mcp",
+    "security"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
   "type": "module",
-  "main": "./src/index.ts",
-  "types": "./src/index.ts",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./src/index.ts",
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
     },
     "./auth": {
-      "types": "./src/auth/index.ts",
+      "types": "./dist/auth/index.d.ts",
       "import": "./dist/auth/index.js",
       "require": "./dist/auth/index.cjs"
     },
     "./crypto": {
-      "types": "./src/crypto/index.ts",
+      "types": "./dist/crypto/index.d.ts",
       "import": "./dist/crypto/index.js",
       "require": "./dist/crypto/index.cjs"
     },
     "./config": {
-      "types": "./src/config/index.ts",
+      "types": "./dist/config/index.d.ts",
       "import": "./dist/config/index.js",
       "require": "./dist/config/index.cjs"
     },
     "./ui": {
-      "types": "./src/ui/index.ts",
+      "types": "./dist/ui/index.d.ts",
       "import": "./dist/ui/index.js",
       "require": "./dist/ui/index.cjs"
     },
     "./ui/*": {
-      "types": "./src/ui/*.tsx",
+      "types": "./dist/ui/*.d.ts",
       "import": "./dist/ui/*.js",
       "require": "./dist/ui/*.cjs"
     },
     "./hooks/*": {
-      "types": "./src/hooks/*.ts",
+      "types": "./dist/hooks/*.d.ts",
       "import": "./dist/hooks/*.js",
       "require": "./dist/hooks/*.cjs"
     },
     "./agent-registry": {
-      "types": "./src/agent-registry/index.ts",
+      "types": "./dist/agent-registry/index.d.ts",
       "import": "./dist/agent-registry/index.js",
       "require": "./dist/agent-registry/index.cjs"
     },
     "./animations": {
-      "types": "./src/animations/index.ts",
+      "types": "./dist/animations/index.d.ts",
       "import": "./dist/animations/index.js",
       "require": "./dist/animations/index.cjs"
     },
     "./svg": {
-      "types": "./src/svg/index.ts",
+      "types": "./dist/svg/index.d.ts",
       "import": "./dist/svg/index.js",
       "require": "./dist/svg/index.cjs"
     },
@@ -60,7 +81,7 @@
   },
   "files": [
     "dist",
-    "src"
+    "src/theme/tokens.css"
   ],
   "scripts": {
     "build": "tsup",
