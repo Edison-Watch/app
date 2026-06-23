@@ -55,14 +55,8 @@ When you intentionally change a component's appearance:
 
 ### CI workflow
 
-The GitHub Actions workflow (`.github/workflows/visual-regression-shared.yaml`) runs automatically on PRs that modify:
-
-- `packages/shared/src/ui/**` - component source
-- `packages/shared/src/theme/**` - design tokens
-- `packages/shared/.storybook/**` - Storybook config
-- `packages/shared/visual-tests/**` - test files and baselines
-
-If a visual diff is detected, the workflow fails and uploads diff artifacts for review.
+Visual regression tests are run manually for now. Run `npm run build-storybook` followed by
+`npm run test:visual` before merging UI changes, and commit updated baselines when appropriate.
 
 ### Test coverage
 
