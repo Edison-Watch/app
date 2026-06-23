@@ -23,7 +23,6 @@ export {
   ProgressBar,
 } from "./icons";
 export { VerdictBadge } from "./badges";
-export type { VerdictVariant } from "./badges";
 export { FlowLine } from "./flow";
 export { EdisonGateway } from "./gateway";
 export { AdminFigure } from "./admin";
