@@ -12,10 +12,20 @@
  *   `stroke-dashoffset` over 2s) is still declared per-animation.
  */
 export function FlowLine({
-  x1, y1, x2, y2, stroke, strokeOpacity = 0.5,
-  strokeWidth = 1.5, strokeDasharray = '3 3', className,
+  x1,
+  y1,
+  x2,
+  y2,
+  stroke,
+  strokeOpacity = 0.5,
+  strokeWidth = 1.5,
+  strokeDasharray = '3 3',
+  className
 }: {
-  x1: number; y1: number; x2: number; y2: number
+  x1: number
+  y1: number
+  x2: number
+  y2: number
   /**
    * Stroke color. Pass `var(--text-muted)` for "before Edison" / inert,
    * `var(--accent)` for "via Edison", or a `DANGER`/`RED`/`GREEN`
@@ -28,9 +38,16 @@ export function FlowLine({
   className?: string
 }): React.ReactNode {
   return (
-    <line className={className}
-      x1={x1} y1={y1} x2={x2} y2={y2}
-      stroke={stroke} strokeOpacity={strokeOpacity}
-      strokeWidth={strokeWidth} strokeDasharray={strokeDasharray} />
+    <line
+      className={className}
+      x1={x1}
+      y1={y1}
+      x2={x2}
+      y2={y2}
+      stroke={stroke}
+      strokeOpacity={strokeOpacity}
+      strokeWidth={strokeWidth}
+      strokeDasharray={strokeDasharray}
+    />
   )
 }

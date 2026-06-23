@@ -5,8 +5,8 @@ const meta: Meta<typeof CodeModeSecurityAnimation> = {
   title: 'Animations/CodeModeSecurityAnimation',
   component: CodeModeSecurityAnimation,
   parameters: {
-    layout: 'centered',
-  },
+    layout: 'centered'
+  }
 }
 
 export default meta
@@ -15,11 +15,17 @@ type Story = StoryObj<typeof meta>
 export const Default: Story = {
   decorators: [
     (Story) => (
-      <div style={{ padding: '24px', width: '780px', background: 'var(--bg-base)' }}>
+      <div
+        style={{
+          padding: '24px',
+          width: '780px',
+          background: 'var(--bg-base)'
+        }}
+      >
         <Story />
       </div>
-    ),
-  ],
+    )
+  ]
 }
 
 export const LightTheme: Story = {
@@ -28,6 +34,6 @@ export const LightTheme: Story = {
       <div data-theme="light" style={{ padding: '24px', width: '780px', background: '#f8fafc' }}>
         <Story />
       </div>
-    ),
-  ],
+    )
+  ]
 }

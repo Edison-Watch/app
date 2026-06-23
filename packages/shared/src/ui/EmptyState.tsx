@@ -1,16 +1,16 @@
-import type { ReactNode } from "react";
+import type { ReactNode } from 'react'
 
-import Button from "./Button";
+import Button from './Button'
 
 interface EmptyStateProps {
-  icon?: string;
-  title: string;
-  description?: string;
+  icon?: string
+  title: string
+  description?: string
   action?: {
-    label: string;
-    onClick: () => void;
-  };
-  children?: ReactNode;
+    label: string
+    onClick: () => void
+  }
+  children?: ReactNode
 }
 
 export default function EmptyState({
@@ -18,7 +18,7 @@ export default function EmptyState({
   title,
   description,
   action,
-  children,
+  children
 }: EmptyStateProps) {
   return (
     <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
@@ -34,5 +34,5 @@ export default function EmptyState({
       )}
       {children}
     </div>
-  );
+  )
 }

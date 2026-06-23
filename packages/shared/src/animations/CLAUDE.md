@@ -37,13 +37,13 @@ Canonical implementations - copy from these.
 - **D. Encryption.** Orange open padlock + plaintext → accent closed
   padlock + `$EDISON$1$…` cipher. `feature/KeyEncryptionAnimation.tsx`.
 - **E. Visibility.** Eye-slash (`DANGER`) ↔ eye (`var(--accent)`) swap
-  + dashed vision rays.
-  `admin/AdminFleetBlindAnimation.tsx#AdminNoVisibilityOverlay`.
+  - dashed vision rays.
+    `admin/AdminFleetBlindAnimation.tsx#AdminNoVisibilityOverlay`.
 - **F. Quarantine / shadow MCPs.** Orange-glowing rows labeled
   `NEW`/`QUARANTINED`, ending in a deny badge.
   `feature/DesktopClientAnimation.tsx:67-82`.
 - **G. Boundary / sandbox.** Dashed rounded rect labeled `Your
-  Infrastructure` / `Deno Sandbox`.
+Infrastructure` / `Deno Sandbox`.
   `feature/FlexibleDeploymentAnimation.tsx:290-297`.
 - **H. Org as row stack.** Department row = label + agent + headcount
   pips. `admin/ScalePilotAnimation.tsx:214-271`. Department names -
@@ -67,23 +67,23 @@ Banlist for labels and captions - plain-English replacement on the
 right. Internal codenames (metaphor C, etc.) may still use the
 jargon; **user-visible text may not**.
 
-| Don't write | Write instead |
-|---|---|
-| Lethal trifecta | "Three-way risk" or label the three corners (private data / outside content / outbound channel) |
-| MCP / MCP server | "Connector" or the tool name ("Slack connector") |
-| MCP proxy | "Edison Gateway" (canonical) |
-| Prompt injection | "Hidden instructions in content" / "poisoned content" |
-| Jailbreak | "Bypasses the agent's rules" |
-| Tool call / tool-use | Name the action: "send email", "read file" |
-| Agentic / A2A | "AI agent" / "one AI talking to another" |
-| Scope (OAuth-style) | "Permission" or "what the agent can touch" |
-| Shadow MCP / MCP sprawl | "Unapproved connector" / "no connector inventory" |
-| Tool poisoning | "Booby-trapped connector" |
-| RAG / embeddings / fine-tuning / system prompt | Skip, or "the agent's rulebook" |
-| HKDF / AES-256-GCM | "AES-256 encryption" - drop the primitive |
-| Zero-knowledge encryption | "Keys never leave you" |
-| Exfiltration | "Data leaving the company" |
-| PII / IP / confidential data | Name the data: "customer list", "source code", "salary file" |
+| Don't write                                    | Write instead                                                                                   |
+| ---------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| Lethal trifecta                                | "Three-way risk" or label the three corners (private data / outside content / outbound channel) |
+| MCP / MCP server                               | "Connector" or the tool name ("Slack connector")                                                |
+| MCP proxy                                      | "Edison Gateway" (canonical)                                                                    |
+| Prompt injection                               | "Hidden instructions in content" / "poisoned content"                                           |
+| Jailbreak                                      | "Bypasses the agent's rules"                                                                    |
+| Tool call / tool-use                           | Name the action: "send email", "read file"                                                      |
+| Agentic / A2A                                  | "AI agent" / "one AI talking to another"                                                        |
+| Scope (OAuth-style)                            | "Permission" or "what the agent can touch"                                                      |
+| Shadow MCP / MCP sprawl                        | "Unapproved connector" / "no connector inventory"                                               |
+| Tool poisoning                                 | "Booby-trapped connector"                                                                       |
+| RAG / embeddings / fine-tuning / system prompt | Skip, or "the agent's rulebook"                                                                 |
+| HKDF / AES-256-GCM                             | "AES-256 encryption" - drop the primitive                                                       |
+| Zero-knowledge encryption                      | "Keys never leave you"                                                                          |
+| Exfiltration                                   | "Data leaving the company"                                                                      |
+| PII / IP / confidential data                   | Name the data: "customer list", "source code", "salary file"                                    |
 
 Rules:
 
@@ -94,8 +94,8 @@ Rules:
    "proxy", "broker", "shim" (same rule as the metaphors section).
 4. **Outcomes, not implementations.** "Sent to IT" beats "Routed via
    webhook"; "Blocked" beats "Policy denied tool-call".
-5. **Answer at least one of:** *who acted?* / *were they allowed?* /
-   *can I prove it after?* That's the buyer's mental model.
+5. **Answer at least one of:** _who acted?_ / _were they allowed?_ /
+   _can I prove it after?_ That's the buyer's mental model.
 
 When in doubt, read the label out loud to a CFO. If they ask "what's
 an MCP?", rewrite.

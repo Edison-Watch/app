@@ -4,7 +4,7 @@ import DesktopInstallAnimation from './DesktopInstallAnimation'
 const meta: Meta<typeof DesktopInstallAnimation> = {
   title: 'Animations/DesktopInstallAnimation',
   component: DesktopInstallAnimation,
-  parameters: { layout: 'centered' },
+  parameters: { layout: 'centered' }
 }
 
 export default meta
@@ -16,8 +16,8 @@ export const Default: Story = {
       <div style={{ padding: '24px', background: 'var(--bg-base)' }}>
         <Story />
       </div>
-    ),
-  ],
+    )
+  ]
 }
 
 export const LightTheme: Story = {
@@ -26,6 +26,6 @@ export const LightTheme: Story = {
       <div data-theme="light" style={{ padding: '24px', background: '#f8fafc' }}>
         <Story />
       </div>
-    ),
-  ],
+    )
+  ]
 }

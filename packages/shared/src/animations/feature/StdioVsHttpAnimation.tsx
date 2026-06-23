@@ -20,7 +20,7 @@ import {
   ProgressBar,
   RED as R,
   RobotIcon,
-  SHIELD_CHECK_PATH,
+  SHIELD_CHECK_PATH
 } from '../_shared'
 import { StdioVirusContent } from './StdioVirusAnimation'
 
@@ -93,23 +93,54 @@ export default function StdioVsHttpAnimation(): React.ReactNode {
         aria-hidden="true"
       >
         <defs>
-          <marker id="sh-arrM" viewBox="0 0 10 10" refX="9" refY="5"
-            markerWidth="5" markerHeight="5" orient="auto">
+          <marker
+            id="sh-arrM"
+            viewBox="0 0 10 10"
+            refX="9"
+            refY="5"
+            markerWidth="5"
+            markerHeight="5"
+            orient="auto"
+          >
             <path d="M0 1 L9 5 L0 9 Z" fill="var(--text-muted)" fillOpacity={0.6} />
           </marker>
         </defs>
 
         {/* Divider */}
-        <line x1="265" y1="4" x2="265" y2="160"
-          stroke="var(--text-muted)" strokeOpacity="0.15" strokeWidth="1" strokeDasharray="4 4" />
+        <line
+          x1="265"
+          y1="4"
+          x2="265"
+          y2="160"
+          stroke="var(--text-muted)"
+          strokeOpacity="0.15"
+          strokeWidth="1"
+          strokeDasharray="4 4"
+        />
 
         {/* Headers */}
-        <text x="130" y="13" textAnchor="middle"
-          fill={R} fontSize="9" fontWeight="bold" fontFamily="system-ui,sans-serif" opacity="0.85">
+        <text
+          x="130"
+          y="13"
+          textAnchor="middle"
+          fill={R}
+          fontSize="9"
+          fontWeight="bold"
+          fontFamily="system-ui,sans-serif"
+          opacity="0.85"
+        >
           STDIO
         </text>
-        <text x="398" y="13" textAnchor="middle"
-          fill={G} fontSize="9" fontWeight="bold" fontFamily="system-ui,sans-serif" opacity="0.85">
+        <text
+          x="398"
+          y="13"
+          textAnchor="middle"
+          fill={G}
+          fontSize="9"
+          fontWeight="bold"
+          fontFamily="system-ui,sans-serif"
+          opacity="0.85"
+        >
           HTTP
         </text>
 
@@ -126,14 +157,36 @@ export default function StdioVsHttpAnimation(): React.ReactNode {
           <svg x="218" y="68" width="20" height="20" viewBox="0 0 256 256">
             <path d={EYE_SLASH_PATH} fill={R} fillOpacity="0.5" />
           </svg>
-          <line x1="188" y1="62" x2="188" y2="108"
-            stroke={R} strokeOpacity="0.15" strokeWidth="0.8" strokeDasharray="3 2" />
-          <text x="214" y="100" textAnchor="middle"
-            fill={R} fontSize="5.5" fontFamily="system-ui,sans-serif" opacity="0.6">
+          <line
+            x1="188"
+            y1="62"
+            x2="188"
+            y2="108"
+            stroke={R}
+            strokeOpacity="0.15"
+            strokeWidth="0.8"
+            strokeDasharray="3 2"
+          />
+          <text
+            x="214"
+            y="100"
+            textAnchor="middle"
+            fill={R}
+            fontSize="5.5"
+            fontFamily="system-ui,sans-serif"
+            opacity="0.6"
+          >
             No visibility
           </text>
-          <text x="214" y="110" textAnchor="middle"
-            fill={R} fontSize="5" fontFamily="system-ui,sans-serif" opacity="0.45">
+          <text
+            x="214"
+            y="110"
+            textAnchor="middle"
+            fill={R}
+            fontSize="5"
+            fontFamily="system-ui,sans-serif"
+            opacity="0.45"
+          >
             No policy enforcement
           </text>
         </g>
@@ -141,52 +194,122 @@ export default function StdioVsHttpAnimation(): React.ReactNode {
         {/* ===== RIGHT: HTTP ===== */}
 
         {/* Laptop (smaller) */}
-        <rect x="278" y="40" width="76" height="56" rx="5"
-          fill="var(--text-primary)" fillOpacity="0.03"
-          stroke="var(--text-muted)" strokeOpacity="0.35" strokeWidth="1.2" />
-        <rect x="274" y="98" width="84" height="5" rx="2.5"
-          fill="var(--text-primary)" fillOpacity="0.04"
-          stroke="var(--text-muted)" strokeOpacity="0.35" strokeWidth="1" />
+        <rect
+          x="278"
+          y="40"
+          width="76"
+          height="56"
+          rx="5"
+          fill="var(--text-primary)"
+          fillOpacity="0.03"
+          stroke="var(--text-muted)"
+          strokeOpacity="0.35"
+          strokeWidth="1.2"
+        />
+        <rect
+          x="274"
+          y="98"
+          width="84"
+          height="5"
+          rx="2.5"
+          fill="var(--text-primary)"
+          fillOpacity="0.04"
+          stroke="var(--text-muted)"
+          strokeOpacity="0.35"
+          strokeWidth="1"
+        />
 
         {/* Robot */}
         <RobotIcon x={302} y={52} size={22} fill="var(--text-muted)" fillOpacity="0.55" />
 
         {/* Request arrow */}
         <g className="sh-hreq">
-          <line className="sh-line" x1="354" y1="68" x2="404" y2="68"
-            stroke="var(--text-muted)" strokeOpacity="0.4" strokeWidth="1.2"
-            strokeDasharray="3 3" markerEnd="url(#sh-arrM)" />
+          <line
+            className="sh-line"
+            x1="354"
+            y1="68"
+            x2="404"
+            y2="68"
+            stroke="var(--text-muted)"
+            strokeOpacity="0.4"
+            strokeWidth="1.2"
+            strokeDasharray="3 3"
+            markerEnd="url(#sh-arrM)"
+          />
         </g>
 
         {/* Gateway */}
         <g className="sh-fpulse">
-          <circle cx="418" cy="72" r="16"
-            fill={G} fillOpacity="0.04" stroke={G} strokeOpacity="0.3" strokeWidth="1.2" />
+          <circle
+            cx="418"
+            cy="72"
+            r="16"
+            fill={G}
+            fillOpacity="0.04"
+            stroke={G}
+            strokeOpacity="0.3"
+            strokeWidth="1.2"
+          />
           <svg x="409" y="63" width="18" height="18" viewBox="0 0 256 256">
             <path d={SHIELD_CHECK_PATH} fill={G} fillOpacity="0.55" />
           </svg>
         </g>
 
         {/* MCP Server remote */}
-        <rect x="448" y="58" width="60" height="22" rx="4"
-          fill="var(--text-primary)" fillOpacity="0.03"
-          stroke="var(--text-muted)" strokeOpacity="0.25" strokeWidth="1" />
+        <rect
+          x="448"
+          y="58"
+          width="60"
+          height="22"
+          rx="4"
+          fill="var(--text-primary)"
+          fillOpacity="0.03"
+          stroke="var(--text-muted)"
+          strokeOpacity="0.25"
+          strokeWidth="1"
+        />
         <McpIcon x={463} y={62} size={14} color="var(--text-muted)" opacity="0.5" />
-        <text x="489" y="73" textAnchor="middle"
-          fill="var(--text-primary)" fontSize="6" fontWeight="600" fontFamily="system-ui,sans-serif" opacity="0.6">
+        <text
+          x="489"
+          y="73"
+          textAnchor="middle"
+          fill="var(--text-primary)"
+          fontSize="6"
+          fontWeight="600"
+          fontFamily="system-ui,sans-serif"
+          opacity="0.6"
+        >
           MCP
         </text>
 
         {/* Packet */}
         <g className="sh-hpkt">
-          <rect x="-5" y="-3" width="10" height="6" rx="1.5"
-            fill="var(--text-muted)" fillOpacity="0.3" stroke="var(--text-muted)" strokeOpacity="0.5" strokeWidth="0.6" />
+          <rect
+            x="-5"
+            y="-3"
+            width="10"
+            height="6"
+            rx="1.5"
+            fill="var(--text-muted)"
+            fillOpacity="0.3"
+            stroke="var(--text-muted)"
+            strokeOpacity="0.5"
+            strokeWidth="0.6"
+          />
         </g>
 
         {/* Gateway label */}
         <g className="sh-block">
-          <text x="418" y="98" textAnchor="middle"
-            fill={G} fontSize="6" fontWeight="600" fontFamily="system-ui,sans-serif" opacity="0.8">
+          <text
+            x="418"
+            y="98"
+            textAnchor="middle"
+            fill={G}
+            fontSize="6"
+            fontWeight="600"
+            fontFamily="system-ui,sans-serif"
+            opacity="0.8"
+          >
             MCP Gateway
           </text>
         </g>
@@ -199,21 +322,52 @@ export default function StdioVsHttpAnimation(): React.ReactNode {
           <svg x="336" y="116" width="20" height="20" viewBox="0 0 256 256">
             <path d={EYE_PATH} fill={G} fillOpacity="0.6" />
           </svg>
-          <line x1="360" y1="126" x2="418" y2="90"
-            stroke={G} strokeOpacity="0.25" strokeWidth="1" strokeDasharray="3 2" />
-          <text x="400" y="126" textAnchor="middle"
-            fill={G} fontSize="5.5" fontFamily="system-ui,sans-serif" opacity="0.7">
+          <line
+            x1="360"
+            y1="126"
+            x2="418"
+            y2="90"
+            stroke={G}
+            strokeOpacity="0.25"
+            strokeWidth="1"
+            strokeDasharray="3 2"
+          />
+          <text
+            x="400"
+            y="126"
+            textAnchor="middle"
+            fill={G}
+            fontSize="5.5"
+            fontFamily="system-ui,sans-serif"
+            opacity="0.7"
+          >
             Full visibility
           </text>
         </g>
 
         {/* Bottom labels */}
-        <text x="93" y="145" textAnchor="middle"
-          fill={R} fontSize="6.5" fontWeight="600" fontFamily="system-ui,sans-serif" opacity="0.7">
+        <text
+          x="93"
+          y="145"
+          textAnchor="middle"
+          fill={R}
+          fontSize="6.5"
+          fontWeight="600"
+          fontFamily="system-ui,sans-serif"
+          opacity="0.7"
+        >
           Executes locally on machine
         </text>
-        <text x="398" y="152" textAnchor="middle"
-          fill={G} fontSize="6.5" fontWeight="600" fontFamily="system-ui,sans-serif" opacity="0.7">
+        <text
+          x="398"
+          y="152"
+          textAnchor="middle"
+          fill={G}
+          fontSize="6.5"
+          fontWeight="600"
+          fontFamily="system-ui,sans-serif"
+          opacity="0.7"
+        >
           Easily governable through MCP gateway
         </text>
 

@@ -21,17 +21,19 @@ import { AgentIcon, McpIcon, PERSON_PATH, ProgressBar, RED as R } from '../_shar
 const WARN_Y = '#f59e0b'
 const DRIVE_GREEN = '#00ac47'
 
-const GDRIVE_SVG = '<path fill="#0066da" d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3L27.5 53H0c0 1.55.4 3.1 1.2 4.5z"/><path fill="#00ac47" d="M43.65 25 29.9 1.2c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44A9.06 9.06 0 0 0 0 53h27.5z"/><path fill="#ea4335" d="M73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75L86.1 57.5c.8-1.4 1.2-2.95 1.2-4.5H59.798l5.852 11.5z"/><path fill="#00832d" d="M43.65 25 57.4 1.2C56.05.4 54.5 0 52.9 0H34.4c-1.6 0-3.15.45-4.5 1.2z"/><path fill="#2684fc" d="M59.8 53H27.5L13.75 76.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z"/><path fill="#ffba00" d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3L43.65 25 59.8 53h27.45c0-1.55-.4-3.1-1.2-4.5z"/>'
+const GDRIVE_SVG =
+  '<path fill="#0066da" d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3L27.5 53H0c0 1.55.4 3.1 1.2 4.5z"/><path fill="#00ac47" d="M43.65 25 29.9 1.2c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44A9.06 9.06 0 0 0 0 53h27.5z"/><path fill="#ea4335" d="M73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75L86.1 57.5c.8-1.4 1.2-2.95 1.2-4.5H59.798l5.852 11.5z"/><path fill="#00832d" d="M43.65 25 57.4 1.2C56.05.4 54.5 0 52.9 0H34.4c-1.6 0-3.15.45-4.5 1.2z"/><path fill="#2684fc" d="M59.8 53H27.5L13.75 76.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z"/><path fill="#ffba00" d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3L43.65 25 59.8 53h27.45c0-1.55-.4-3.1-1.2-4.5z"/>'
 const GDRIVE_SVG_VIEWBOX = '0 0 87.3 78'
 
-const GMAIL_SVG = '<g fill="none" fill-rule="evenodd"><g fill-rule="nonzero"><path fill="#4285f4" d="M34.91 448.818h81.454V251L0 163.727V413.91c0 19.287 15.622 34.91 34.91 34.91z"/><path fill="#34a853" d="M395.636 448.818h81.455c19.287 0 34.909-15.622 34.909-34.909V163.727L395.636 251z"/><path fill="#fbbc04" d="M395.636 99.727V251L512 163.727v-46.545c0-43.142-49.25-67.782-83.782-41.891z"/></g><path fill="#ea4335" d="M116.364 251V99.727L256 204.455 395.636 99.727V251L256 355.727z"/><path fill="#c5221f" fill-rule="nonzero" d="M0 117.182v46.545L116.364 251V99.727L83.782 75.291C49.25 49.4 0 74.04 0 117.18z"/></g>'
+const GMAIL_SVG =
+  '<g fill="none" fill-rule="evenodd"><g fill-rule="nonzero"><path fill="#4285f4" d="M34.91 448.818h81.454V251L0 163.727V413.91c0 19.287 15.622 34.91 34.91 34.91z"/><path fill="#34a853" d="M395.636 448.818h81.455c19.287 0 34.909-15.622 34.909-34.909V163.727L395.636 251z"/><path fill="#fbbc04" d="M395.636 99.727V251L512 163.727v-46.545c0-43.142-49.25-67.782-83.782-41.891z"/></g><path fill="#ea4335" d="M116.364 251V99.727L256 204.455 395.636 99.727V251L256 355.727z"/><path fill="#c5221f" fill-rule="nonzero" d="M0 117.182v46.545L116.364 251V99.727L83.782 75.291C49.25 49.4 0 74.04 0 117.18z"/></g>'
 const GMAIL_SVG_VIEWBOX = '0 49.4 512 399.42'
 
 const AGENTS = [
   AGENT_REGISTRY['codex'],
   AGENT_REGISTRY['claude-desktop'],
   AGENT_REGISTRY['cursor'],
-  AGENT_REGISTRY['copilot'],
+  AGENT_REGISTRY['copilot']
 ]
 
 const CSS = `
@@ -163,19 +165,39 @@ export default function RBACViolationAnimation(): React.ReactNode {
         aria-hidden="true"
       >
         <defs>
-          <marker id={`${id}-arr`} viewBox="0 0 10 10" refX="9" refY="5"
-            markerWidth="5" markerHeight="5" orient="auto">
+          <marker
+            id={`${id}-arr`}
+            viewBox="0 0 10 10"
+            refX="9"
+            refY="5"
+            markerWidth="5"
+            markerHeight="5"
+            orient="auto"
+          >
             <path d="M0 1 L9 5 L0 9 Z" fill="var(--text-muted)" fillOpacity={0.5} />
           </marker>
-          <marker id={`${id}-arrR`} viewBox="0 0 10 10" refX="9" refY="5"
-            markerWidth="5" markerHeight="5" orient="auto">
+          <marker
+            id={`${id}-arrR`}
+            viewBox="0 0 10 10"
+            refX="9"
+            refY="5"
+            markerWidth="5"
+            markerHeight="5"
+            orient="auto"
+          >
             <path d="M0 1 L9 5 L0 9 Z" fill={R} fillOpacity={0.5} />
           </marker>
         </defs>
 
         {/* ===== GOOGLE DRIVE (top-left) ===== */}
-        <svg x="30" y="8" width="48" height="48" viewBox={GDRIVE_SVG_VIEWBOX}
-          dangerouslySetInnerHTML={{ __html: GDRIVE_SVG }} />
+        <svg
+          x="30"
+          y="8"
+          width="48"
+          height="48"
+          viewBox={GDRIVE_SVG_VIEWBOX}
+          dangerouslySetInnerHTML={{ __html: GDRIVE_SVG }}
+        />
 
         {/* MCP icon next to Drive */}
         <McpIcon x={84} y={18} size={16} color={DRIVE_GREEN} opacity="0.45" />
@@ -184,30 +206,71 @@ export default function RBACViolationAnimation(): React.ReactNode {
         <svg x="20" y="74" width="22" height="22" viewBox="0 0 256 256">
           <path d={PERSON_PATH} fill="var(--text-primary)" fillOpacity="0.55" />
         </svg>
-        <text x="31" y="106" textAnchor="middle"
-          fill="var(--text-primary)" fillOpacity="0.7" fontSize="9" fontWeight="bold"
-          fontFamily="system-ui,sans-serif">A</text>
+        <text
+          x="31"
+          y="106"
+          textAnchor="middle"
+          fill="var(--text-primary)"
+          fillOpacity="0.7"
+          fontSize="9"
+          fontWeight="bold"
+          fontFamily="system-ui,sans-serif"
+        >
+          A
+        </text>
 
         <svg x="58" y="74" width="22" height="22" viewBox="0 0 256 256">
           <path d={PERSON_PATH} fill="var(--text-primary)" fillOpacity="0.55" />
         </svg>
-        <text x="69" y="106" textAnchor="middle"
-          fill="var(--text-primary)" fillOpacity="0.7" fontSize="9" fontWeight="bold"
-          fontFamily="system-ui,sans-serif">B</text>
+        <text
+          x="69"
+          y="106"
+          textAnchor="middle"
+          fill="var(--text-primary)"
+          fillOpacity="0.7"
+          fontSize="9"
+          fontWeight="bold"
+          fontFamily="system-ui,sans-serif"
+        >
+          B
+        </text>
 
-        <text x="50" y="122" textAnchor="middle"
-          fill="var(--text-primary)" fillOpacity="0.5" fontSize="7.5"
-          fontFamily="system-ui,sans-serif">
+        <text
+          x="50"
+          y="122"
+          textAnchor="middle"
+          fill="var(--text-primary)"
+          fillOpacity="0.5"
+          fontSize="7.5"
+          fontFamily="system-ui,sans-serif"
+        >
           {'Input: Users { A, B }'}
         </text>
 
         {/* ===== AI AGENTS (center) ===== */}
-        <rect x="200" y="30" width="106" height="92" rx="6"
-          fill="var(--text-primary)" fillOpacity="0.02"
-          stroke="var(--text-muted)" strokeOpacity="0.2" strokeWidth="1"
-          strokeDasharray="4 3" />
-        <rect className="rbac-aglow" x="200" y="30" width="106" height="92" rx="6"
-          fill="var(--accent)" fillOpacity="0" />
+        <rect
+          x="200"
+          y="30"
+          width="106"
+          height="92"
+          rx="6"
+          fill="var(--text-primary)"
+          fillOpacity="0.02"
+          stroke="var(--text-muted)"
+          strokeOpacity="0.2"
+          strokeWidth="1"
+          strokeDasharray="4 3"
+        />
+        <rect
+          className="rbac-aglow"
+          x="200"
+          y="30"
+          width="106"
+          height="92"
+          rx="6"
+          fill="var(--accent)"
+          fillOpacity="0"
+        />
 
         {/* 2×2 agent grid */}
         <AgentIcon agent={AGENTS[0]!} x={208} y={38} size={30} />
@@ -215,24 +278,47 @@ export default function RBACViolationAnimation(): React.ReactNode {
         <AgentIcon agent={AGENTS[2]!} x={208} y={78} size={30} />
         <AgentIcon agent={AGENTS[3]!} x={248} y={78} size={30} />
 
-        <text x="253" y="138" textAnchor="middle"
-          fill="var(--text-primary)" fillOpacity="0.5" fontSize="8" fontWeight="bold"
-          fontFamily="system-ui,sans-serif">
+        <text
+          x="253"
+          y="138"
+          textAnchor="middle"
+          fill="var(--text-primary)"
+          fillOpacity="0.5"
+          fontSize="8"
+          fontWeight="bold"
+          fontFamily="system-ui,sans-serif"
+        >
           AI Agents
         </text>
 
         {/* ===== ARROW 1: Doc → Agents ===== */}
         <g className="rbac-arrow1">
-          <line className="rbac-line" x1="96" y1="36" x2="200" y2="64"
-            stroke="var(--text-muted)" strokeOpacity="0.45" strokeWidth="1.5"
-            strokeDasharray="3 3" markerEnd={`url(#${id}-arr)`} />
+          <line
+            className="rbac-line"
+            x1="96"
+            y1="36"
+            x2="200"
+            y2="64"
+            stroke="var(--text-muted)"
+            strokeOpacity="0.45"
+            strokeWidth="1.5"
+            strokeDasharray="3 3"
+            markerEnd={`url(#${id}-arr)`}
+          />
         </g>
 
         {/* Label: "Read on behalf of A" */}
         <g className="rbac-label1">
-          <text x="148" y="38" textAnchor="middle"
-            fill="var(--text-primary)" fillOpacity="0.65" fontSize="8" fontWeight="600"
-            fontFamily="system-ui,sans-serif">
+          <text
+            x="148"
+            y="38"
+            textAnchor="middle"
+            fill="var(--text-primary)"
+            fillOpacity="0.65"
+            fontSize="8"
+            fontWeight="600"
+            fontFamily="system-ui,sans-serif"
+          >
             Read on behalf of A
           </text>
         </g>
@@ -246,72 +332,154 @@ export default function RBACViolationAnimation(): React.ReactNode {
         {/* ===== GMAIL (bottom-right) ===== */}
         <McpIcon x={386} y={86} size={16} color="var(--text-muted)" opacity="0.4" />
 
-        <svg x="410" y="78" width="48" height="42" viewBox={GMAIL_SVG_VIEWBOX}
-          dangerouslySetInnerHTML={{ __html: GMAIL_SVG }} />
+        <svg
+          x="410"
+          y="78"
+          width="48"
+          height="42"
+          viewBox={GMAIL_SVG_VIEWBOX}
+          dangerouslySetInnerHTML={{ __html: GMAIL_SVG }}
+        />
 
         {/* Red flash on Gmail area */}
-        <rect className="rbac-flash" x="403" y="73" width="64" height="52" rx="5"
-          fill={R} fillOpacity="0" />
+        <rect
+          className="rbac-flash"
+          x="403"
+          y="73"
+          width="64"
+          height="52"
+          rx="5"
+          fill={R}
+          fillOpacity="0"
+        />
 
         {/* Output users A and C */}
         <g className="rbac-output">
           <svg x="400" y="130" width="20" height="20" viewBox="0 0 256 256">
             <path d={PERSON_PATH} fill="var(--text-primary)" fillOpacity="0.55" />
           </svg>
-          <text x="410" y="160" textAnchor="middle"
-            fill="var(--text-primary)" fillOpacity="0.7" fontSize="9" fontWeight="bold"
-            fontFamily="system-ui,sans-serif">A</text>
+          <text
+            x="410"
+            y="160"
+            textAnchor="middle"
+            fill="var(--text-primary)"
+            fillOpacity="0.7"
+            fontSize="9"
+            fontWeight="bold"
+            fontFamily="system-ui,sans-serif"
+          >
+            A
+          </text>
 
           <svg x="445" y="130" width="20" height="20" viewBox="0 0 256 256">
             <path d={PERSON_PATH} fill={R} fillOpacity="0.7" />
           </svg>
-          <text x="455" y="160" textAnchor="middle"
-            fill={R} fillOpacity="0.85" fontSize="9" fontWeight="bold"
-            fontFamily="system-ui,sans-serif">C</text>
+          <text
+            x="455"
+            y="160"
+            textAnchor="middle"
+            fill={R}
+            fillOpacity="0.85"
+            fontSize="9"
+            fontWeight="bold"
+            fontFamily="system-ui,sans-serif"
+          >
+            C
+          </text>
         </g>
 
         <g className="rbac-output">
-          <text x="432" y="176" textAnchor="middle"
-            fill="var(--text-primary)" fillOpacity="0.5" fontSize="7.5"
-            fontFamily="system-ui,sans-serif">
+          <text
+            x="432"
+            y="176"
+            textAnchor="middle"
+            fill="var(--text-primary)"
+            fillOpacity="0.5"
+            fontSize="7.5"
+            fontFamily="system-ui,sans-serif"
+          >
             {'Output: Users { A, C }'}
           </text>
         </g>
 
         {/* ===== ARROW 2: Agents → Gmail (red = violation) ===== */}
         <g className="rbac-arrow2">
-          <line className="rbac-line" x1="306" y1="88" x2="408" y2="98"
-            stroke={R} strokeOpacity="0.4" strokeWidth="1.5"
-            strokeDasharray="3 3" markerEnd={`url(#${id}-arrR)`} />
+          <line
+            className="rbac-line"
+            x1="306"
+            y1="88"
+            x2="408"
+            y2="98"
+            stroke={R}
+            strokeOpacity="0.4"
+            strokeWidth="1.5"
+            strokeDasharray="3 3"
+            markerEnd={`url(#${id}-arrR)`}
+          />
         </g>
 
         {/* Label: "Send to C" */}
         <g className="rbac-label2">
-          <text x="356" y="78" textAnchor="middle"
-            fill={R} fillOpacity="0.75" fontSize="8" fontWeight="600"
-            fontFamily="system-ui,sans-serif">
+          <text
+            x="356"
+            y="78"
+            textAnchor="middle"
+            fill={R}
+            fillOpacity="0.75"
+            fontSize="8"
+            fontWeight="600"
+            fontFamily="system-ui,sans-serif"
+          >
             Send to C
           </text>
         </g>
 
         {/* Packet 2: envelope shape */}
         <g className="rbac-pkt2">
-          <rect x="-8" y="-6" width="16" height="12" rx="2"
-            fill={R} fillOpacity="0.25" stroke={R} strokeOpacity="0.5" strokeWidth="0.8" />
-          <path d="M-8,-6 L0,2 L8,-6"
-            fill="none" stroke={R} strokeOpacity="0.6" strokeWidth="0.8" strokeLinejoin="round" />
+          <rect
+            x="-8"
+            y="-6"
+            width="16"
+            height="12"
+            rx="2"
+            fill={R}
+            fillOpacity="0.25"
+            stroke={R}
+            strokeOpacity="0.5"
+            strokeWidth="0.8"
+          />
+          <path
+            d="M-8,-6 L0,2 L8,-6"
+            fill="none"
+            stroke={R}
+            strokeOpacity="0.6"
+            strokeWidth="0.8"
+            strokeLinejoin="round"
+          />
         </g>
 
         {/* ===== WARNING ===== */}
         <g className="rbac-warn">
-          <text x="500" y="62" textAnchor="middle"
-            fill={WARN_Y} fontSize="8.5" fontWeight="bold"
-            fontFamily="system-ui,sans-serif">
+          <text
+            x="500"
+            y="62"
+            textAnchor="middle"
+            fill={WARN_Y}
+            fontSize="8.5"
+            fontWeight="bold"
+            fontFamily="system-ui,sans-serif"
+          >
             ⚠ Violates RBAC
           </text>
-          <text x="500" y="74" textAnchor="middle"
-            fill={R} fillOpacity="0.7" fontSize="7"
-            fontFamily="system-ui,sans-serif">
+          <text
+            x="500"
+            y="74"
+            textAnchor="middle"
+            fill={R}
+            fillOpacity="0.7"
+            fontSize="7"
+            fontFamily="system-ui,sans-serif"
+          >
             Now C can access the doc
           </text>
         </g>

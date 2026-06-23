@@ -1,80 +1,92 @@
-import { type ReactNode, useCallback, useEffect, useRef } from "react";
+import { type ReactNode, useCallback, useEffect, useRef } from 'react'
 
 interface SlideOverProps {
-  open: boolean;
-  onClose: () => void;
-  title?: string;
-  children: ReactNode;
-  footer?: ReactNode;
+  open: boolean
+  onClose: () => void
+  title?: string
+  children: ReactNode
+  footer?: ReactNode
   /** Use a wider panel (e.g. for two-column layouts) */
-  wide?: boolean;
+  wide?: boolean
 }
 
-export default function SlideOver({ open, onClose, title, children, footer, wide }: SlideOverProps) {
-  const panelRef = useRef<HTMLDivElement>(null);
-  const previousFocusRef = useRef<HTMLElement | null>(null);
+export default function SlideOver({
+  open,
+  onClose,
+  title,
+  children,
+  footer,
+  wide
+}: SlideOverProps) {
+  const panelRef = useRef<HTMLDivElement>(null)
+  const previousFocusRef = useRef<HTMLElement | null>(null)
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        onClose();
-        return;
+      if (e.key === 'Escape') {
+        onClose()
+        return
       }
 
       // Focus trap
-      if (e.key === "Tab" && panelRef.current) {
+      if (e.key === 'Tab' && panelRef.current) {
         const focusable = panelRef.current.querySelectorAll<HTMLElement>(
-          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
-        );
-        if (focusable.length === 0) return;
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        )
+        if (focusable.length === 0) return
 
-        const first = focusable[0]!;
-        const last = focusable[focusable.length - 1]!;
+        const first = focusable[0]!
+        const last = focusable[focusable.length - 1]!
 
         if (e.shiftKey && document.activeElement === first) {
-          e.preventDefault();
-          last.focus();
+          e.preventDefault()
+          last.focus()
         } else if (!e.shiftKey && document.activeElement === last) {
-          e.preventDefault();
-          first.focus();
+          e.preventDefault()
+          first.focus()
         }
       }
     },
-    [onClose],
-  );
+    [onClose]
+  )
 
   useEffect(() => {
     if (open) {
-      previousFocusRef.current = document.activeElement as HTMLElement;
-      document.body.style.overflow = "hidden";
-      document.addEventListener("keydown", handleKeyDown);
+      previousFocusRef.current = document.activeElement as HTMLElement
+      document.body.style.overflow = 'hidden'
+      document.addEventListener('keydown', handleKeyDown)
 
       requestAnimationFrame(() => {
         const focusable = panelRef.current?.querySelector<HTMLElement>(
-          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
-        );
-        focusable?.focus();
-      });
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        )
+        focusable?.focus()
+      })
     }
 
     return () => {
-      document.body.style.overflow = "";
-      document.removeEventListener("keydown", handleKeyDown);
-      previousFocusRef.current?.focus();
-    };
-  }, [open, handleKeyDown]);
+      document.body.style.overflow = ''
+      document.removeEventListener('keydown', handleKeyDown)
+      previousFocusRef.current?.focus()
+    }
+  }, [open, handleKeyDown])
 
-  if (!open) return null;
+  if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true" aria-label={title}>
+    <div
+      className="fixed inset-0 z-50 flex justify-end"
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+    >
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
 
       {/* Panel */}
       <div
         ref={panelRef}
-        className={`relative z-10 w-full ${wide ? "max-w-[900px]" : "max-w-[480px]"} bg-[var(--bg-raised)] border-l border-[var(--border)] shadow-2xl flex flex-col animate-in slide-in-from-right`}
+        className={`relative z-10 w-full ${wide ? 'max-w-[900px]' : 'max-w-[480px]'} bg-[var(--bg-raised)] border-l border-[var(--border)] shadow-2xl flex flex-col animate-in slide-in-from-right`}
       >
         {/* Header */}
         {title && (
@@ -99,5 +111,5 @@ export default function SlideOver({ open, onClose, title, children, footer, wide
         )}
       </div>
     </div>
-  );
+  )
 }

@@ -120,15 +120,28 @@ function McpServer({ x, y }: { x: number; y: number }): React.ReactNode {
   return (
     <g>
       <rect
-        x={x} y={y} width="56" height="48" rx="6"
-        fill="var(--text-primary)" fillOpacity="0.03"
-        stroke="var(--text-muted)" strokeOpacity="0.35" strokeWidth="1"
+        x={x}
+        y={y}
+        width="56"
+        height="48"
+        rx="6"
+        fill="var(--text-primary)"
+        fillOpacity="0.03"
+        stroke="var(--text-muted)"
+        strokeOpacity="0.35"
+        strokeWidth="1"
       />
       <McpIcon x={x + 16} y={y + 6} size={24} color="var(--text-muted)" opacity="0.6" />
       <circle cx={x + 28} cy={y + 38} r="1.5" fill="var(--text-muted)" fillOpacity="0.35" />
       <line
-        x1={x + 34} y1={y + 38} x2={x + 48} y2={y + 38}
-        stroke="var(--text-muted)" strokeOpacity="0.15" strokeWidth="1" strokeDasharray="2 2"
+        x1={x + 34}
+        y1={y + 38}
+        x2={x + 48}
+        y2={y + 38}
+        stroke="var(--text-muted)"
+        strokeOpacity="0.15"
+        strokeWidth="1"
+        strokeDasharray="2 2"
       />
     </g>
   )
@@ -149,40 +162,129 @@ export default function EdisonMCPProxyAnimation(): React.ReactNode {
       >
         {/* Phase 1: direct connector lines (laptop -> servers) */}
         <g className="ew-direct">
-          <line className="ew-line" x1="176" y1="93" x2="394" y2="38"
-            stroke="var(--text-muted)" strokeOpacity="0.5" strokeWidth="1.5" strokeDasharray="3 3" />
-          <line className="ew-line" x1="176" y1="93" x2="394" y2="93"
-            stroke="var(--text-muted)" strokeOpacity="0.5" strokeWidth="1.5" strokeDasharray="3 3" />
-          <line className="ew-line" x1="176" y1="93" x2="394" y2="148"
-            stroke="var(--text-muted)" strokeOpacity="0.5" strokeWidth="1.5" strokeDasharray="3 3" />
+          <line
+            className="ew-line"
+            x1="176"
+            y1="93"
+            x2="394"
+            y2="38"
+            stroke="var(--text-muted)"
+            strokeOpacity="0.5"
+            strokeWidth="1.5"
+            strokeDasharray="3 3"
+          />
+          <line
+            className="ew-line"
+            x1="176"
+            y1="93"
+            x2="394"
+            y2="93"
+            stroke="var(--text-muted)"
+            strokeOpacity="0.5"
+            strokeWidth="1.5"
+            strokeDasharray="3 3"
+          />
+          <line
+            className="ew-line"
+            x1="176"
+            y1="93"
+            x2="394"
+            y2="148"
+            stroke="var(--text-muted)"
+            strokeOpacity="0.5"
+            strokeWidth="1.5"
+            strokeDasharray="3 3"
+          />
         </g>
 
         {/* Edison gateway (fades in for phase 2) */}
         <g className="ew-edison">
-          <circle className="ew-pulse" cx="257" cy="93" r="30"
-            fill="none" stroke="var(--accent)" strokeOpacity="0.5" strokeWidth="1.5" />
+          <circle
+            className="ew-pulse"
+            cx="257"
+            cy="93"
+            r="30"
+            fill="none"
+            stroke="var(--accent)"
+            strokeOpacity="0.5"
+            strokeWidth="1.5"
+          />
           <EdisonLogo x={230} y={67} w={54} h={52.5} />
         </g>
 
         {/* Phase 2: routed connector lines (laptop -> Edison -> servers) */}
         <g className="ew-routed">
-          <line className="ew-line" x1="176" y1="93" x2="226" y2="93"
-            stroke="var(--text-muted)" strokeOpacity="0.5" strokeWidth="1.5" strokeDasharray="3 3" />
-          <line className="ew-line" x1="288" y1="93" x2="394" y2="38"
-            stroke="var(--accent)" strokeOpacity="0.5" strokeWidth="1.5" strokeDasharray="3 3" />
-          <line className="ew-line" x1="288" y1="93" x2="394" y2="93"
-            stroke="var(--accent)" strokeOpacity="0.5" strokeWidth="1.5" strokeDasharray="3 3" />
-          <line className="ew-line" x1="288" y1="93" x2="394" y2="148"
-            stroke="var(--accent)" strokeOpacity="0.5" strokeWidth="1.5" strokeDasharray="3 3" />
+          <line
+            className="ew-line"
+            x1="176"
+            y1="93"
+            x2="226"
+            y2="93"
+            stroke="var(--text-muted)"
+            strokeOpacity="0.5"
+            strokeWidth="1.5"
+            strokeDasharray="3 3"
+          />
+          <line
+            className="ew-line"
+            x1="288"
+            y1="93"
+            x2="394"
+            y2="38"
+            stroke="var(--accent)"
+            strokeOpacity="0.5"
+            strokeWidth="1.5"
+            strokeDasharray="3 3"
+          />
+          <line
+            className="ew-line"
+            x1="288"
+            y1="93"
+            x2="394"
+            y2="93"
+            stroke="var(--accent)"
+            strokeOpacity="0.5"
+            strokeWidth="1.5"
+            strokeDasharray="3 3"
+          />
+          <line
+            className="ew-line"
+            x1="288"
+            y1="93"
+            x2="394"
+            y2="148"
+            stroke="var(--accent)"
+            strokeOpacity="0.5"
+            strokeWidth="1.5"
+            strokeDasharray="3 3"
+          />
         </g>
 
         {/* Laptop (always visible) */}
-        <rect x="4" y="23" width="168" height="96" rx="7"
-          fill="var(--text-primary)" fillOpacity="0.03"
-          stroke="var(--text-muted)" strokeOpacity="0.35" strokeWidth="1.5" />
-        <rect x="0" y="121" width="176" height="8" rx="4"
-          fill="var(--text-primary)" fillOpacity="0.04"
-          stroke="var(--text-muted)" strokeOpacity="0.35" strokeWidth="1" />
+        <rect
+          x="4"
+          y="23"
+          width="168"
+          height="96"
+          rx="7"
+          fill="var(--text-primary)"
+          fillOpacity="0.03"
+          stroke="var(--text-muted)"
+          strokeOpacity="0.35"
+          strokeWidth="1.5"
+        />
+        <rect
+          x="0"
+          y="121"
+          width="176"
+          height="8"
+          rx="4"
+          fill="var(--text-primary)"
+          fillOpacity="0.04"
+          stroke="var(--text-muted)"
+          strokeOpacity="0.35"
+          strokeWidth="1"
+        />
 
         {/* AI agent icons (row inside laptop) */}
         <rect x="41" y="35" width="30" height="30" rx="7" fill={CURSOR_SPRITE.brandColor} />
@@ -190,9 +292,15 @@ export default function EdisonMCPProxyAnimation(): React.ReactNode {
           <path d={CURSOR_SPRITE.svgPath} fill="#fff" />
         </svg>
         <rect x="73" y="35" width="30" height="30" rx="7" fill={CLAUDE_SPRITE.brandColor} />
-        <svg x="77" y="39" width="22" height="22" viewBox="0 -20 90 90"
+        <svg
+          x="77"
+          y="39"
+          width="22"
+          height="22"
+          viewBox="0 -20 90 90"
           shapeRendering="crispEdges"
-          dangerouslySetInnerHTML={{ __html: CLAUDE_SPRITE.customSvg ?? '' }} />
+          dangerouslySetInnerHTML={{ __html: CLAUDE_SPRITE.customSvg ?? '' }}
+        />
         <rect x="105" y="35" width="30" height="30" rx="7" fill={VSCODE_SPRITE.brandColor} />
         <svg x="109" y="39" width="22" height="22" viewBox="0 0 24 24">
           <path d={VSCODE_SPRITE.svgPath} fill="#fff" />
@@ -201,9 +309,18 @@ export default function EdisonMCPProxyAnimation(): React.ReactNode {
         {/* 3 MCP icons (row below Claude inside laptop) */}
         {[38, 74, 110].map((mx) => (
           <g key={mx}>
-            <rect x={mx} y="79" width="28" height="28" rx="6"
-              fill="var(--text-primary)" fillOpacity="0.04"
-              stroke="var(--text-muted)" strokeOpacity="0.3" strokeWidth="1" />
+            <rect
+              x={mx}
+              y="79"
+              width="28"
+              height="28"
+              rx="6"
+              fill="var(--text-primary)"
+              fillOpacity="0.04"
+              stroke="var(--text-muted)"
+              strokeOpacity="0.3"
+              strokeWidth="1"
+            />
             <McpIcon x={mx + 2} y={81} size={24} color="var(--text-primary)" />
           </g>
         ))}
@@ -232,23 +349,46 @@ export default function EdisonMCPProxyAnimation(): React.ReactNode {
         <McpServer x={398} y={124} />
 
         {/* Labels */}
-        <text x="88" y="145" textAnchor="middle"
-          fill="var(--text-primary)" fontSize="9" fontWeight="bold" fontFamily="system-ui,sans-serif">
+        <text
+          x="88"
+          y="145"
+          textAnchor="middle"
+          fill="var(--text-primary)"
+          fontSize="9"
+          fontWeight="bold"
+          fontFamily="system-ui,sans-serif"
+        >
           Local
         </text>
         <g className="ew-edison">
-          <text x="257" y="135" textAnchor="middle"
-            fill="var(--text-primary)" fontSize="9" fontWeight="bold" fontFamily="system-ui,sans-serif">
+          <text
+            x="257"
+            y="135"
+            textAnchor="middle"
+            fill="var(--text-primary)"
+            fontSize="9"
+            fontWeight="bold"
+            fontFamily="system-ui,sans-serif"
+          >
             Edison Gateway
           </text>
         </g>
-        <text x="426" y="184" textAnchor="middle"
-          fill="var(--text-primary)" fontSize="9" fontWeight="bold" fontFamily="system-ui,sans-serif">
+        <text
+          x="426"
+          y="184"
+          textAnchor="middle"
+          fill="var(--text-primary)"
+          fontSize="9"
+          fontWeight="bold"
+          fontFamily="system-ui,sans-serif"
+        >
           MCP Servers
         </text>
 
         {/* 3 Packets (each animates direct -> hidden -> routed) */}
-        <g className="ew-pkt ew-pkt-main"><McpPacket /></g>
+        <g className="ew-pkt ew-pkt-main">
+          <McpPacket />
+        </g>
 
         {/* Progress bar */}
         <ProgressBar y={188} width={460} className="ew-progress" />

@@ -16,11 +16,11 @@
  */
 
 import {
-  ATTACKER_BODY_PATHS, ATTACKER_HIGHLIGHT_PATHS, ATTACKER_SVG_VIEWBOX,
+  ATTACKER_BODY_PATHS,
+  ATTACKER_HIGHLIGHT_PATHS,
+  ATTACKER_SVG_VIEWBOX
 } from '../../svg/attacker-svg'
-import {
-  EdisonLogo, McpIcon, ProgressBar, RED, RobotIcon, VerdictBadge,
-} from '../_shared'
+import { EdisonLogo, McpIcon, ProgressBar, RED, RobotIcon, VerdictBadge } from '../_shared'
 
 const CSS = `
 .dp-anim { color: var(--text-primary); }
@@ -140,11 +140,25 @@ function McpServer({ x, y, bad }: { x: number; y: number; bad?: boolean }): Reac
   return (
     <g>
       {bad && <circle cx={x + w / 2} cy={y + h / 2} r="34" fill={RED} fillOpacity="0.07" />}
-      <rect x={x} y={y} width={w} height={h} rx="6"
-        fill={bad ? RED : 'var(--text-primary)'} fillOpacity={bad ? 0.06 : 0.03}
-        stroke={bad ? RED : 'var(--text-muted)'} strokeOpacity={bad ? 0.5 : 0.35} strokeWidth="1" />
-      <McpIcon x={x + 17} y={y + 7} size={24}
-        color={bad ? RED : 'var(--text-primary)'} opacity={bad ? '0.8' : '0.65'} />
+      <rect
+        x={x}
+        y={y}
+        width={w}
+        height={h}
+        rx="6"
+        fill={bad ? RED : 'var(--text-primary)'}
+        fillOpacity={bad ? 0.06 : 0.03}
+        stroke={bad ? RED : 'var(--text-muted)'}
+        strokeOpacity={bad ? 0.5 : 0.35}
+        strokeWidth="1"
+      />
+      <McpIcon
+        x={x + 17}
+        y={y + 7}
+        size={24}
+        color={bad ? RED : 'var(--text-primary)'}
+        opacity={bad ? '0.8' : '0.65'}
+      />
     </g>
   )
 }
@@ -152,8 +166,8 @@ function McpServer({ x, y, bad }: { x: number; y: number; bad?: boolean }): Reac
 export default function DependencyPinningAnimation(): React.ReactNode {
   // Edison gateway right edge -> each server's left-middle connection point.
   const lines: Array<[number, number, string]> = [
-    [372, 37, 'dp-line'],   // top server
-    [372, 149, 'dp-line'],  // bottom server
+    [372, 37, 'dp-line'], // top server
+    [372, 149, 'dp-line'] // bottom server
   ]
   return (
     <div className="flex justify-center">
@@ -168,43 +182,128 @@ export default function DependencyPinningAnimation(): React.ReactNode {
         aria-hidden="true"
       >
         {/* agent -> Edison */}
-        <line className="dp-line" x1="134" y1="93" x2="205" y2="93"
-          stroke="var(--accent)" strokeOpacity="0.5" strokeWidth="1.5" strokeDasharray="3 3" />
+        <line
+          className="dp-line"
+          x1="134"
+          y1="93"
+          x2="205"
+          y2="93"
+          stroke="var(--accent)"
+          strokeOpacity="0.5"
+          strokeWidth="1.5"
+          strokeDasharray="3 3"
+        />
         {/* Edison -> top + bottom servers */}
         {lines.map(([sx, sy, cls], i) => (
-          <line key={i} className={cls} x1="259" y1="93" x2={sx} y2={sy}
-            stroke="var(--accent)" strokeOpacity="0.5" strokeWidth="1.5" strokeDasharray="3 3" />
+          <line
+            key={i}
+            className={cls}
+            x1="259"
+            y1="93"
+            x2={sx}
+            y2={sy}
+            stroke="var(--accent)"
+            strokeOpacity="0.5"
+            strokeWidth="1.5"
+            strokeDasharray="3 3"
+          />
         ))}
         {/* Edison -> middle server: two stubs that snap apart when severed */}
-        <line className="dp-line dp-cut-l" x1="259" y1="93" x2="316" y2="93"
-          stroke="var(--accent)" strokeOpacity="0.5" strokeWidth="1.5" strokeDasharray="3 3" />
-        <line className="dp-line dp-cut-r" x1="316" y1="93" x2="372" y2="93"
-          stroke="var(--accent)" strokeOpacity="0.5" strokeWidth="1.5" strokeDasharray="3 3" />
+        <line
+          className="dp-line dp-cut-l"
+          x1="259"
+          y1="93"
+          x2="316"
+          y2="93"
+          stroke="var(--accent)"
+          strokeOpacity="0.5"
+          strokeWidth="1.5"
+          strokeDasharray="3 3"
+        />
+        <line
+          className="dp-line dp-cut-r"
+          x1="316"
+          y1="93"
+          x2="372"
+          y2="93"
+          stroke="var(--accent)"
+          strokeOpacity="0.5"
+          strokeWidth="1.5"
+          strokeDasharray="3 3"
+        />
 
         {/* AI agent */}
-        <rect x="16" y="64" width="116" height="58" rx="7"
-          fill="var(--text-primary)" fillOpacity="0.03"
-          stroke="var(--text-muted)" strokeOpacity="0.35" strokeWidth="1.2" />
+        <rect
+          x="16"
+          y="64"
+          width="116"
+          height="58"
+          rx="7"
+          fill="var(--text-primary)"
+          fillOpacity="0.03"
+          stroke="var(--text-muted)"
+          strokeOpacity="0.35"
+          strokeWidth="1.2"
+        />
         <RobotIcon x={54} y={72} size={42} fill="var(--text-primary)" fillOpacity="0.6" />
-        <text x="74" y="138" textAnchor="middle" fill="var(--text-primary)"
-          fontSize="9" fontWeight="bold" fontFamily="system-ui,sans-serif">AI agent</text>
+        <text
+          x="74"
+          y="138"
+          textAnchor="middle"
+          fill="var(--text-primary)"
+          fontSize="9"
+          fontWeight="bold"
+          fontFamily="system-ui,sans-serif"
+        >
+          AI agent
+        </text>
 
         {/* Edison gateway + detection pulse */}
         <g className="dp-detect-w">
-          <circle className="dp-detect" cx="232" cy="93" r="27"
-            fill="none" stroke="var(--accent)" strokeOpacity="0.5" strokeWidth="1.5" />
+          <circle
+            className="dp-detect"
+            cx="232"
+            cy="93"
+            r="27"
+            fill="none"
+            stroke="var(--accent)"
+            strokeOpacity="0.5"
+            strokeWidth="1.5"
+          />
         </g>
         <EdisonLogo x={205} y={67} w={54} h={52.5} />
-        <text x="232" y="138" textAnchor="middle" fill="var(--text-primary)"
-          fontSize="9" fontWeight="bold" fontFamily="system-ui,sans-serif">Edison Gateway</text>
+        <text
+          x="232"
+          y="138"
+          textAnchor="middle"
+          fill="var(--text-primary)"
+          fontSize="9"
+          fontWeight="bold"
+          fontFamily="system-ui,sans-serif"
+        >
+          Edison Gateway
+        </text>
 
         {/* warning: pops above the gateway when Edison flags the compromise */}
         <g className="dp-warn">
-          <path d="M232 19 L253 56 L211 56 Z"
-            fill={RED} fillOpacity="0.16" stroke={RED} strokeOpacity="0.85"
-            strokeWidth="2.5" strokeLinejoin="round" />
-          <line x1="232" y1="33" x2="232" y2="45"
-            stroke={RED} strokeWidth="3.2" strokeLinecap="round" />
+          <path
+            d="M232 19 L253 56 L211 56 Z"
+            fill={RED}
+            fillOpacity="0.16"
+            stroke={RED}
+            strokeOpacity="0.85"
+            strokeWidth="2.5"
+            strokeLinejoin="round"
+          />
+          <line
+            x1="232"
+            y1="33"
+            x2="232"
+            y2="45"
+            stroke={RED}
+            strokeWidth="3.2"
+            strokeLinecap="round"
+          />
           <circle cx="232" cy="51" r="1.9" fill={RED} />
         </g>
 
@@ -212,18 +311,38 @@ export default function DependencyPinningAnimation(): React.ReactNode {
         <McpServer x={372} y={14} />
         <McpServer x={372} y={126} />
         {/* middle server: healthy -> compromised */}
-        <g className="dp-srv-ok"><McpServer x={372} y={70} /></g>
+        <g className="dp-srv-ok">
+          <McpServer x={372} y={70} />
+        </g>
         <g className="dp-srv-bad">
           <McpServer x={372} y={70} bad />
         </g>
-        <text x="401" y="186" textAnchor="middle" fill="var(--text-primary)"
-          fontSize="8.5" fontWeight="bold" fontFamily="system-ui,sans-serif" opacity="0.85">MCP servers</text>
+        <text
+          x="401"
+          y="186"
+          textAnchor="middle"
+          fill="var(--text-primary)"
+          fontSize="8.5"
+          fontWeight="bold"
+          fontFamily="system-ui,sans-serif"
+          opacity="0.85"
+        >
+          MCP servers
+        </text>
 
         {/* attacker (right of the middle server) - only appears as it strikes */}
         <g className="dp-atk-show">
           <g className="dp-atk-ring">
-            <circle className="dp-atk-pulse" cx="468" cy="93" r="24"
-              fill="none" stroke={RED} strokeOpacity="0.5" strokeWidth="1.5" />
+            <circle
+              className="dp-atk-pulse"
+              cx="468"
+              cy="93"
+              r="24"
+              fill="none"
+              stroke={RED}
+              strokeOpacity="0.5"
+              strokeWidth="1.5"
+            />
           </g>
           <svg x="446" y="71" width="44" height="44" viewBox={ATTACKER_SVG_VIEWBOX}>
             {ATTACKER_BODY_PATHS.map((d, i) => (
@@ -233,26 +352,54 @@ export default function DependencyPinningAnimation(): React.ReactNode {
               <path key={`h${i}`} d={d} fill="#fff" />
             ))}
           </svg>
-          <text x="468" y="64" textAnchor="middle" fill={RED}
-            fontSize="8.5" fontWeight="bold" fontFamily="system-ui,sans-serif" opacity="0.9">Attacker</text>
+          <text
+            x="468"
+            y="64"
+            textAnchor="middle"
+            fill={RED}
+            fontSize="8.5"
+            fontWeight="bold"
+            fontFamily="system-ui,sans-serif"
+            opacity="0.9"
+          >
+            Attacker
+          </text>
         </g>
 
         {/* attack bolt: attacker -> middle server */}
-        <g className="dp-pkt dp-atk" style={{ color: RED }}><Pkt /></g>
+        <g className="dp-pkt dp-atk" style={{ color: RED }}>
+          <Pkt />
+        </g>
 
         {/* Edison severs the compromised route */}
         <VerdictBadge cx={316} cy={93} r={9} variant="deny" className="dp-deny" />
 
         {/* captions */}
         <g className="dp-cap2">
-          <text x="232" y="178" textAnchor="middle" fill={RED}
-            fontSize="9" fontWeight="600" fontFamily="system-ui,sans-serif" opacity="0.9">
+          <text
+            x="232"
+            y="178"
+            textAnchor="middle"
+            fill={RED}
+            fontSize="9"
+            fontWeight="600"
+            fontFamily="system-ui,sans-serif"
+            opacity="0.9"
+          >
             An attacker compromises one MCP server
           </text>
         </g>
         <g className="dp-cap3">
-          <text x="232" y="178" textAnchor="middle" fill="var(--accent)"
-            fontSize="9" fontWeight="600" fontFamily="system-ui,sans-serif" opacity="0.9">
+          <text
+            x="232"
+            y="178"
+            textAnchor="middle"
+            fill="var(--accent)"
+            fontSize="9"
+            fontWeight="600"
+            fontFamily="system-ui,sans-serif"
+            opacity="0.9"
+          >
             Blocked the moment the compromise is reported
           </text>
         </g>

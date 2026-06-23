@@ -20,8 +20,12 @@ export type VerdictVariant = 'allow' | 'deny'
  * @param className the animation-owned wrapper class driving pop-in
  */
 export function VerdictBadge({
-  cx, cy, r = 8, variant, className,
-  strokeWidth,
+  cx,
+  cy,
+  r = 8,
+  variant,
+  className,
+  strokeWidth
 }: {
   cx: number
   cy: number
@@ -36,22 +40,45 @@ export function VerdictBadge({
   const transformOrigin = `${cx}px ${cy}px`
   return (
     <g className={className} style={{ transformOrigin }}>
-      <circle cx={cx} cy={cy} r={r}
-        fill={color} fillOpacity="0.12"
-        stroke={color} strokeOpacity="0.5" strokeWidth="1" />
+      <circle
+        cx={cx}
+        cy={cy}
+        r={r}
+        fill={color}
+        fillOpacity="0.12"
+        stroke={color}
+        strokeOpacity="0.5"
+        strokeWidth="1"
+      />
       {variant === 'allow' ? (
         <polyline
           points={`${cx - r * 0.55},${cy} ${cx - r * 0.22},${cy + r * 0.33} ${cx + r * 0.55},${cy - r * 0.44}`}
-          fill="none" stroke={color} strokeWidth={sw}
-          strokeLinecap="round" strokeLinejoin="round" />
+          fill="none"
+          stroke={color}
+          strokeWidth={sw}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
       ) : (
         <>
-          <line x1={cx - r * 0.44} y1={cy - r * 0.44}
-            x2={cx + r * 0.44} y2={cy + r * 0.44}
-            stroke={color} strokeWidth={sw} strokeLinecap="round" />
-          <line x1={cx + r * 0.44} y1={cy - r * 0.44}
-            x2={cx - r * 0.44} y2={cy + r * 0.44}
-            stroke={color} strokeWidth={sw} strokeLinecap="round" />
+          <line
+            x1={cx - r * 0.44}
+            y1={cy - r * 0.44}
+            x2={cx + r * 0.44}
+            y2={cy + r * 0.44}
+            stroke={color}
+            strokeWidth={sw}
+            strokeLinecap="round"
+          />
+          <line
+            x1={cx + r * 0.44}
+            y1={cy - r * 0.44}
+            x2={cx - r * 0.44}
+            y2={cy + r * 0.44}
+            stroke={color}
+            strokeWidth={sw}
+            strokeLinecap="round"
+          />
         </>
       )}
     </g>

@@ -5,53 +5,55 @@
  * verifying, and caching the user's edison_secret_key.
  */
 
-const EDISON_SECRET_KEY_STORAGE = "edison_secret_key";
+const EDISON_SECRET_KEY_STORAGE = 'edison_secret_key'
 
 /**
  * Create authorization headers for API requests.
  * Accepts a getApiKey function to decouple from specific storage implementations.
  */
 function createHeaders(getApiKey?: () => string | null): Record<string, string> {
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  const apiKey = getApiKey?.();
-  if (apiKey) headers["Authorization"] = `Bearer ${apiKey}`;
-  return headers;
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json'
+  }
+  const apiKey = getApiKey?.()
+  if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`
+  return headers
 }
 
 /** Generate a cryptographically random 32-byte base64-encoded secret key. */
 export function generateSecretKey(): string {
-  const bytes = new Uint8Array(32);
-  crypto.getRandomValues(bytes);
-  return btoa(String.fromCharCode(...bytes));
+  const bytes = new Uint8Array(32)
+  crypto.getRandomValues(bytes)
+  return btoa(String.fromCharCode(...bytes))
 }
 
 /** Compute SHA-256 hex hash of a string. */
 export async function hashSecretKey(key: string): Promise<string> {
-  const data = new TextEncoder().encode(key);
-  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  const data = new TextEncoder().encode(key)
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data)
   return Array.from(new Uint8Array(hashBuffer))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
 }
 
 /** Register a new composite secret key hash with the backend. */
 export async function registerSecretKey(
   userKeyHash: string,
   domainKeyHash?: string,
-  getApiKey?: () => string | null,
+  getApiKey?: () => string | null
 ): Promise<void> {
-  const body: Record<string, string> = { user_key_hash: userKeyHash };
-  if (domainKeyHash) body.domain_key_hash = domainKeyHash;
+  const body: Record<string, string> = { user_key_hash: userKeyHash }
+  if (domainKeyHash) body.domain_key_hash = domainKeyHash
 
-  const response = await fetch("/api/v1/user/secret-key/register", {
-    method: "POST",
+  const response = await fetch('/api/v1/user/secret-key/register', {
+    method: 'POST',
     headers: createHeaders(getApiKey),
-    body: JSON.stringify(body),
-  });
+    body: JSON.stringify(body)
+  })
 
   if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Failed to register secret key: ${response.status} ${text}`);
+    const text = await response.text()
+    throw new Error(`Failed to register secret key: ${response.status} ${text}`)
   }
 }
 
@@ -60,51 +62,55 @@ export async function rollSecretKey(
   oldKey: string,
   newUserPart: string,
   newUserPartHash: string,
-  getApiKey?: () => string | null,
-): Promise<{ success: boolean; re_encrypted: number; new_composite_key: string }> {
-  const response = await fetch("/api/v1/user/secret-key/roll", {
-    method: "POST",
+  getApiKey?: () => string | null
+): Promise<{
+  success: boolean
+  re_encrypted: number
+  new_composite_key: string
+}> {
+  const response = await fetch('/api/v1/user/secret-key/roll', {
+    method: 'POST',
     headers: createHeaders(getApiKey),
     body: JSON.stringify({
       old_key: oldKey,
       new_user_part: newUserPart,
-      new_user_part_hash: newUserPartHash,
-    }),
-  });
+      new_user_part_hash: newUserPartHash
+    })
+  })
 
   if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Failed to roll secret key: ${response.status} ${text}`);
+    const text = await response.text()
+    throw new Error(`Failed to roll secret key: ${response.status} ${text}`)
   }
 
-  return response.json();
+  return response.json()
 }
 
 /** Reset the secret key: delete all encrypted values and register a new key. */
 export async function resetSecretKey(
   newKeyHash: string,
-  getApiKey?: () => string | null,
+  getApiKey?: () => string | null
 ): Promise<{ success: boolean; deleted: number }> {
-  const response = await fetch("/api/v1/user/secret-key/reset", {
-    method: "POST",
+  const response = await fetch('/api/v1/user/secret-key/reset', {
+    method: 'POST',
     headers: createHeaders(getApiKey),
-    body: JSON.stringify({ new_key_hash: newKeyHash, confirm: true }),
-  });
+    body: JSON.stringify({ new_key_hash: newKeyHash, confirm: true })
+  })
 
   if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Failed to reset secret key: ${response.status} ${text}`);
+    const text = await response.text()
+    throw new Error(`Failed to reset secret key: ${response.status} ${text}`)
   }
 
-  return response.json();
+  return response.json()
 }
 
 export interface VerifySecretKeyResult {
-  valid: boolean;
-  domainValid: boolean | null;
-  expiresAt: string | null;
-  daysRemaining: number | null;
-  expired: boolean;
+  valid: boolean
+  domainValid: boolean | null
+  expiresAt: string | null
+  daysRemaining: number | null
+  expired: boolean
 }
 
 /**
@@ -117,43 +123,43 @@ export interface VerifySecretKeyResult {
  */
 export async function verifySecretKey(
   key: string,
-  getApiKey?: () => string | null,
+  getApiKey?: () => string | null
 ): Promise<VerifySecretKeyResult> {
   // If the key doesn't look like a composite key (no "user:" prefix),
   // wrap it so the backend can parse it. This handles users who copied
   // the raw base64 key instead of the full composite format.
-  const normalizedKey = key.includes(":") ? key : `user:${key}`;
-  const response = await fetch("/api/v1/user/secret-key/verify", {
-    method: "POST",
+  const normalizedKey = key.includes(':') ? key : `user:${key}`
+  const response = await fetch('/api/v1/user/secret-key/verify', {
+    method: 'POST',
     headers: createHeaders(getApiKey),
-    body: JSON.stringify({ key: normalizedKey }),
-  });
+    body: JSON.stringify({ key: normalizedKey })
+  })
   if (!response.ok) {
-    throw new Error(`verifySecretKey failed: HTTP ${response.status}`);
+    throw new Error(`verifySecretKey failed: HTTP ${response.status}`)
   }
-  const data = await response.json();
+  const data = await response.json()
   return {
     valid: data.valid === true,
     domainValid: data.domain_valid ?? null,
     expiresAt: data.expires_at ?? null,
     daysRemaining: data.days_remaining ?? null,
-    expired: data.expired === true,
-  };
+    expired: data.expired === true
+  }
 }
 
 /** Get cached secret key from localStorage. */
 export function getCachedSecretKey(): string | null {
   try {
-    return localStorage.getItem(EDISON_SECRET_KEY_STORAGE);
+    return localStorage.getItem(EDISON_SECRET_KEY_STORAGE)
   } catch {
-    return null;
+    return null
   }
 }
 
 /** Cache secret key in localStorage. */
 export function cacheSecretKey(key: string): void {
   try {
-    localStorage.setItem(EDISON_SECRET_KEY_STORAGE, key);
+    localStorage.setItem(EDISON_SECRET_KEY_STORAGE, key)
   } catch {
     /* ignore */
   }
@@ -162,7 +168,7 @@ export function cacheSecretKey(key: string): void {
 /** Clear cached secret key from localStorage. */
 export function clearCachedSecretKey(): void {
   try {
-    localStorage.removeItem(EDISON_SECRET_KEY_STORAGE);
+    localStorage.removeItem(EDISON_SECRET_KEY_STORAGE)
   } catch {
     /* ignore */
   }

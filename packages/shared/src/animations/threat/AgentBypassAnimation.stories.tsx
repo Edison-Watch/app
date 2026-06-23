@@ -5,8 +5,8 @@ const meta: Meta<typeof AgentBypassAnimation> = {
   title: 'Animations/AgentBypassAnimation',
   component: AgentBypassAnimation,
   parameters: {
-    layout: 'centered',
-  },
+    layout: 'centered'
+  }
 }
 
 export default meta
@@ -18,8 +18,8 @@ export const Default: Story = {
       <div style={{ padding: '24px', background: 'var(--bg-base)', width: 800 }}>
         <Story />
       </div>
-    ),
-  ],
+    )
+  ]
 }
 
 export const LightTheme: Story = {
@@ -28,6 +28,6 @@ export const LightTheme: Story = {
       <div data-theme="light" style={{ padding: '24px', background: '#f8fafc', width: 800 }}>
         <Story />
       </div>
-    ),
-  ],
+    )
+  ]
 }

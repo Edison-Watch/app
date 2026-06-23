@@ -23,8 +23,14 @@
  * Requires CSS custom properties: --text-primary, --text-muted, --accent.
  */
 import {
-  ADMIN_PATH, DANGER, EYE_PATH, EYE_SLASH_PATH, EdisonLogo, McpIcon,
-  ProgressBar, VerdictBadge,
+  ADMIN_PATH,
+  DANGER,
+  EYE_PATH,
+  EYE_SLASH_PATH,
+  EdisonLogo,
+  McpIcon,
+  ProgressBar,
+  VerdictBadge
 } from '../_shared'
 
 const fg = 'var(--text-primary)'
@@ -126,41 +132,101 @@ const CELL_W = 108
 const CELL_H = 56
 
 /** Dark, unknown connector - faint paperclip + "?" badge, no name. */
-function DarkConnector({ cx, cy, col }: { cx: number; cy: number; col: 1 | 2 | 3 }): React.ReactNode {
+function DarkConnector({
+  cx,
+  cy,
+  col
+}: {
+  cx: number
+  cy: number
+  col: 1 | 2 | 3
+}): React.ReactNode {
   return (
     <g className={`smd-d${col}`}>
-      <rect x={cx} y={cy} width={CELL_W} height={CELL_H} rx={6}
-        fill={fg} fillOpacity="0.015"
-        stroke={muted} strokeOpacity="0.18" strokeWidth="1" strokeDasharray="3 3" />
+      <rect
+        x={cx}
+        y={cy}
+        width={CELL_W}
+        height={CELL_H}
+        rx={6}
+        fill={fg}
+        fillOpacity="0.015"
+        stroke={muted}
+        strokeOpacity="0.18"
+        strokeWidth="1"
+        strokeDasharray="3 3"
+      />
       <McpIcon x={cx + 12} y={cy + 18} size={20} color={muted} opacity="0.16" />
-      <text x={cx + 78} y={cy + 35} textAnchor="middle"
-        fill={muted} fillOpacity="0.3" fontSize="18" fontWeight="bold" fontFamily="system-ui,sans-serif">?</text>
+      <text
+        x={cx + 78}
+        y={cy + 35}
+        textAnchor="middle"
+        fill={muted}
+        fillOpacity="0.3"
+        fontSize="18"
+        fontWeight="bold"
+        fontFamily="system-ui,sans-serif"
+      >
+        ?
+      </text>
     </g>
   )
 }
 
 /** Illuminated connector - bright paperclip + name + verdict badge. */
 function LitConnector({
-  cx, cy, col, name, blocked,
+  cx,
+  cy,
+  col,
+  name,
+  blocked
 }: {
-  cx: number; cy: number; col: 1 | 2 | 3; name: string; blocked?: boolean
+  cx: number
+  cy: number
+  col: 1 | 2 | 3
+  name: string
+  blocked?: boolean
 }): React.ReactNode {
   const c = blocked ? DANGER : accent
   return (
     <g className={`smd-r${col}`}>
-      <rect x={cx} y={cy} width={CELL_W} height={CELL_H} rx={6}
-        fill={c} fillOpacity="0.04"
-        stroke={c} strokeOpacity="0.4" strokeWidth="1.2" />
+      <rect
+        x={cx}
+        y={cy}
+        width={CELL_W}
+        height={CELL_H}
+        rx={6}
+        fill={c}
+        fillOpacity="0.04"
+        stroke={c}
+        strokeOpacity="0.4"
+        strokeWidth="1.2"
+      />
       <McpIcon x={cx + 12} y={cy + 11} size={20} color={c} opacity="0.7" />
-      <text x={cx + 12} y={cy + 47} fill={c} fillOpacity="0.85"
-        fontSize="8.5" fontWeight="600" fontFamily="ui-monospace,monospace">{name}</text>
+      <text
+        x={cx + 12}
+        y={cy + 47}
+        fill={c}
+        fillOpacity="0.85"
+        fontSize="8.5"
+        fontWeight="600"
+        fontFamily="ui-monospace,monospace"
+      >
+        {name}
+      </text>
       <VerdictBadge cx={cx + 90} cy={cy + 16} r={8} variant={blocked ? 'deny' : 'allow'} />
     </g>
   )
 }
 
 /** A connector cell: dark layer + lit layer stacked at the same spot. */
-function Connector(props: { cx: number; cy: number; col: 1 | 2 | 3; name: string; blocked?: boolean }): React.ReactNode {
+function Connector(props: {
+  cx: number
+  cy: number
+  col: 1 | 2 | 3
+  name: string
+  blocked?: boolean
+}): React.ReactNode {
   return (
     <>
       <DarkConnector cx={props.cx} cy={props.cy} col={props.col} />
@@ -199,7 +265,15 @@ export default function ShadowMCPDiscoveryAnimation(): React.ReactNode {
         </defs>
 
         {/* Title */}
-        <text x={350} y={15} textAnchor="middle" fill={fg} fontSize="10" fontWeight="bold" fontFamily="system-ui,sans-serif">
+        <text
+          x={350}
+          y={15}
+          textAnchor="middle"
+          fill={fg}
+          fontSize="10"
+          fontWeight="bold"
+          fontFamily="system-ui,sans-serif"
+        >
           Connector inventory
         </text>
 
@@ -210,7 +284,15 @@ export default function ShadowMCPDiscoveryAnimation(): React.ReactNode {
         <svg x={45} y={12} width={26} height={26} viewBox="0 0 256 256">
           <path d={ADMIN_PATH} fill={fg} fillOpacity="0.7" />
         </svg>
-        <text x={58} y={50} textAnchor="middle" fill={fg} fontSize="8" fontWeight="bold" fontFamily="system-ui,sans-serif">
+        <text
+          x={58}
+          y={50}
+          textAnchor="middle"
+          fill={fg}
+          fontSize="8"
+          fontWeight="bold"
+          fontFamily="system-ui,sans-serif"
+        >
           Admin
         </text>
 
@@ -219,15 +301,40 @@ export default function ShadowMCPDiscoveryAnimation(): React.ReactNode {
           <svg x={75} y={12} width={24} height={24} viewBox="0 0 256 256">
             <path d={EYE_SLASH_PATH} fill={DANGER} fillOpacity="0.7" />
           </svg>
-          <text x={58} y={66} textAnchor="middle" fill={DANGER} fillOpacity="0.65"
-            fontSize="8" fontFamily="system-ui,sans-serif">No visibility</text>
+          <text
+            x={58}
+            y={66}
+            textAnchor="middle"
+            fill={DANGER}
+            fillOpacity="0.65"
+            fontSize="8"
+            fontFamily="system-ui,sans-serif"
+          >
+            No visibility
+          </text>
           {/* Dashed blind rays reaching toward the (unseen) connectors */}
-          {([[168, 72], [296, 72], [424, 72], [168, 144], [296, 144], [424, 144]] as const).map(
-            ([rx, ry]) => (
-              <line key={`${rx}-${ry}`} x1={92} y1={40} x2={rx} y2={ry}
-                stroke={DANGER} strokeOpacity="0.45" strokeWidth="1.2" strokeDasharray="4 3" />
-            ),
-          )}
+          {(
+            [
+              [168, 72],
+              [296, 72],
+              [424, 72],
+              [168, 144],
+              [296, 144],
+              [424, 144]
+            ] as const
+          ).map(([rx, ry]) => (
+            <line
+              key={`${rx}-${ry}`}
+              x1={92}
+              y1={40}
+              x2={rx}
+              y2={ry}
+              stroke={DANGER}
+              strokeOpacity="0.45"
+              strokeWidth="1.2"
+              strokeDasharray="4 3"
+            />
+          ))}
         </g>
 
         {/* AFTER: Edison restores sight - eye opens, "Full visibility" */}
@@ -235,17 +342,43 @@ export default function ShadowMCPDiscoveryAnimation(): React.ReactNode {
           <svg x={75} y={12} width={24} height={24} viewBox="0 0 256 256">
             <path d={EYE_PATH} fill={accent} fillOpacity="0.8" />
           </svg>
-          <text x={58} y={66} textAnchor="middle" fill={accent} fillOpacity="0.8"
-            fontSize="8" fontWeight="bold" fontFamily="system-ui,sans-serif">Full visibility</text>
+          <text
+            x={58}
+            y={66}
+            textAnchor="middle"
+            fill={accent}
+            fillOpacity="0.8"
+            fontSize="8"
+            fontWeight="bold"
+            fontFamily="system-ui,sans-serif"
+          >
+            Full visibility
+          </text>
         </g>
 
         {/* Edison light source (left) - only appears once it switches on */}
         <g className="smd-edison">
           <g className="smd-pulse">
-            <circle cx={58} cy={100} r={22} fill="none" stroke={accent} strokeOpacity="0.5" strokeWidth="1.5" />
+            <circle
+              cx={58}
+              cy={100}
+              r={22}
+              fill="none"
+              stroke={accent}
+              strokeOpacity="0.5"
+              strokeWidth="1.5"
+            />
           </g>
           <EdisonLogo x={44} y={86} w={28} h={27} />
-          <text x={58} y={134} textAnchor="middle" fill={fg} fontSize="8" fontWeight="bold" fontFamily="system-ui,sans-serif">
+          <text
+            x={58}
+            y={134}
+            textAnchor="middle"
+            fill={fg}
+            fontSize="8"
+            fontWeight="bold"
+            fontFamily="system-ui,sans-serif"
+          >
             Edison
           </text>
         </g>

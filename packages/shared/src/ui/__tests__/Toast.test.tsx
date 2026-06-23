@@ -1,35 +1,35 @@
-import { act, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { act, render, screen } from '@testing-library/react'
+import { describe, expect, it, vi } from 'vitest'
 
-import { ToastProvider, useToast } from "../Toast";
+import { ToastProvider, useToast } from '../Toast'
 
 function ToastTrigger() {
-  const { addToast } = useToast();
-  return <button onClick={() => addToast("Test message", "success")}>Show</button>;
+  const { addToast } = useToast()
+  return <button onClick={() => addToast('Test message', 'success')}>Show</button>
 }
 
-describe("Toast", () => {
-  it("auto-dismisses after 5 seconds", () => {
-    vi.useFakeTimers();
+describe('Toast', () => {
+  it('auto-dismisses after 5 seconds', () => {
+    vi.useFakeTimers()
 
     render(
       <ToastProvider>
         <ToastTrigger />
-      </ToastProvider>,
-    );
+      </ToastProvider>
+    )
 
     act(() => {
-      screen.getByText("Show").click();
-    });
+      screen.getByText('Show').click()
+    })
 
-    expect(screen.getByRole("alert")).toHaveTextContent("Test message");
+    expect(screen.getByRole('alert')).toHaveTextContent('Test message')
 
     act(() => {
-      vi.advanceTimersByTime(5000);
-    });
+      vi.advanceTimersByTime(5000)
+    })
 
-    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull()
 
-    vi.useRealTimers();
-  });
-});
+    vi.useRealTimers()
+  })
+})

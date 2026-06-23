@@ -85,38 +85,88 @@ export function StdioVirusContent(): React.ReactNode {
       <style>{STDIO_VIRUS_CSS}</style>
       <g className="sv-anim">
         <defs>
-          <marker id="sv-arrM" viewBox="0 0 10 10" refX="9" refY="5"
-            markerWidth="5" markerHeight="5" orient="auto">
+          <marker
+            id="sv-arrM"
+            viewBox="0 0 10 10"
+            refX="9"
+            refY="5"
+            markerWidth="5"
+            markerHeight="5"
+            orient="auto"
+          >
             <path d="M0 1 L9 5 L0 9 Z" fill="var(--text-muted)" fillOpacity={0.6} />
           </marker>
         </defs>
 
         {/* Laptop */}
-        <rect x="8" y="22" width="170" height="100" rx="6"
-          fill="var(--text-primary)" fillOpacity="0.03"
-          stroke="var(--text-muted)" strokeOpacity="0.35" strokeWidth="1.5" />
-        <rect x="4" y="124" width="178" height="6" rx="3"
-          fill="var(--text-primary)" fillOpacity="0.04"
-          stroke="var(--text-muted)" strokeOpacity="0.35" strokeWidth="1" />
+        <rect
+          x="8"
+          y="22"
+          width="170"
+          height="100"
+          rx="6"
+          fill="var(--text-primary)"
+          fillOpacity="0.03"
+          stroke="var(--text-muted)"
+          strokeOpacity="0.35"
+          strokeWidth="1.5"
+        />
+        <rect
+          x="4"
+          y="124"
+          width="178"
+          height="6"
+          rx="3"
+          fill="var(--text-primary)"
+          fillOpacity="0.04"
+          stroke="var(--text-muted)"
+          strokeOpacity="0.35"
+          strokeWidth="1"
+        />
 
         {/* Robot */}
         <RobotIcon x={14} y={28} size={24} fill="var(--text-muted)" fillOpacity="0.55" />
 
         {/* Spawn arrow */}
         <g className="sv-spawn">
-          <line className="sv-line" x1="40" y1="40" x2="58" y2="37"
-            stroke="var(--text-muted)" strokeOpacity="0.5" strokeWidth="1"
-            strokeDasharray="3 3" markerEnd="url(#sv-arrM)" />
+          <line
+            className="sv-line"
+            x1="40"
+            y1="40"
+            x2="58"
+            y2="37"
+            stroke="var(--text-muted)"
+            strokeOpacity="0.5"
+            strokeWidth="1"
+            strokeDasharray="3 3"
+            markerEnd="url(#sv-arrM)"
+          />
         </g>
 
         {/* MCP process INSIDE laptop  -  always visible */}
         <g>
-          <rect x="62" y="26" width="62" height="22" rx="4"
-            fill={R} fillOpacity="0.05"
-            stroke={R} strokeOpacity="0.4" strokeWidth="1.2" />
+          <rect
+            x="62"
+            y="26"
+            width="62"
+            height="22"
+            rx="4"
+            fill={R}
+            fillOpacity="0.05"
+            stroke={R}
+            strokeOpacity="0.4"
+            strokeWidth="1.2"
+          />
           <McpIcon x={78} y={30} size={14} color={R} opacity="0.7" />
-          <text x="104" y="41" textAnchor="middle"
-            fill={R} fontSize="6" fontWeight="bold" fontFamily="system-ui,sans-serif">
+          <text
+            x="104"
+            y="41"
+            textAnchor="middle"
+            fill={R}
+            fontSize="6"
+            fontWeight="bold"
+            fontFamily="system-ui,sans-serif"
+          >
             MCP
           </text>
         </g>

@@ -16,8 +16,17 @@
  */
 import { AGENT_REGISTRY } from '../../agent-registry/index'
 import {
-  ADMIN_PATH, AgentIcon, DANGER, EdisonLogo, EYE_PATH, EYE_SLASH_PATH,
-  McpIcon, McpPacket, ORANGE as O, ProgressBar, SHIELD_CHECK_PATH,
+  ADMIN_PATH,
+  AgentIcon,
+  DANGER,
+  EdisonLogo,
+  EYE_PATH,
+  EYE_SLASH_PATH,
+  McpIcon,
+  McpPacket,
+  ORANGE as O,
+  ProgressBar,
+  SHIELD_CHECK_PATH
 } from '../_shared'
 
 const CLAUDE = AGENT_REGISTRY['claude-code']
@@ -28,18 +37,19 @@ const M365_COPILOT = AGENT_REGISTRY['m365-copilot']
 const CLAUDE_COWORK = AGENT_REGISTRY['claude-cowork']
 const CHATGPT = AGENT_REGISTRY['chatgpt']
 
-const SCALES_PATH = 'M239.43,133l-32-80h0a8,8,0,0,0-9.16-4.84L136,62V40a8,8,0,0,0-16,0V65.58L54.26,80.19A8,8,0,0,0,48.57,85h0v.06L16.57,165a7.92,7.92,0,0,0-.57,3c0,23.31,24.54,32,40,32s40-8.69,40-32a7.92,7.92,0,0,0-.57-3L66.92,93.77,120,82V208H104a8,8,0,0,0,0,16h48a8,8,0,0,0,0-16H136V78.42L187,67.1,160.57,133a7.92,7.92,0,0,0-.57,3c0,23.31,24.54,32,40,32s40-8.69,40-32A7.92,7.92,0,0,0,239.43,133ZM56,184c-7.53,0-22.76-3.61-23.93-14.64L56,109.54l23.93,59.82C78.76,180.39,63.53,184,56,184Zm144-32c-7.53,0-22.76-3.61-23.93-14.64L200,77.54l23.93,59.82C222.76,148.39,207.53,152,200,152Z'
+const SCALES_PATH =
+  'M239.43,133l-32-80h0a8,8,0,0,0-9.16-4.84L136,62V40a8,8,0,0,0-16,0V65.58L54.26,80.19A8,8,0,0,0,48.57,85h0v.06L16.57,165a7.92,7.92,0,0,0-.57,3c0,23.31,24.54,32,40,32s40-8.69,40-32a7.92,7.92,0,0,0-.57-3L66.92,93.77,120,82V208H104a8,8,0,0,0,0,16h48a8,8,0,0,0,0-16H136V78.42L187,67.1,160.57,133a7.92,7.92,0,0,0-.57,3c0,23.31,24.54,32,40,32s40-8.69,40-32A7.92,7.92,0,0,0,239.43,133ZM56,184c-7.53,0-22.76-3.61-23.93-14.64L56,109.54l23.93,59.82C78.76,180.39,63.53,184,56,184Zm144-32c-7.53,0-22.76-3.61-23.93-14.64L200,77.54l23.93,59.82C222.76,148.39,207.53,152,200,152Z'
 
 const fg = 'var(--text-primary)'
 const muted = 'var(--text-muted)'
 const accent = 'var(--accent)'
 
 const DEPTS = [
-  { label: 'Engineering', agent: CURSOR,         pips: 5, y: 50  },
-  { label: 'Sales',       agent: CLAUDE_DESKTOP, pips: 4, y: 90  },
-  { label: 'Finance',     agent: M365_COPILOT,   pips: 3, y: 130 },
-  { label: 'Legal',       agent: CLAUDE_COWORK,  pips: 3, y: 170 },
-  { label: 'HR & Ops',    agent: CHATGPT,        pips: 4, y: 210 },
+  { label: 'Engineering', agent: CURSOR, pips: 5, y: 50 },
+  { label: 'Sales', agent: CLAUDE_DESKTOP, pips: 4, y: 90 },
+  { label: 'Finance', agent: M365_COPILOT, pips: 3, y: 130 },
+  { label: 'Legal', agent: CLAUDE_COWORK, pips: 3, y: 170 },
+  { label: 'HR & Ops', agent: CHATGPT, pips: 4, y: 210 }
 ]
 
 const CSS = `
@@ -316,58 +326,165 @@ export default function ProductJourneyAnimation(): React.ReactNode {
         role="presentation"
         aria-hidden="true"
       >
-
         {/* ══ TOP: Step indicator dots ══ */}
-        <circle className="pj-s1" cx={323} cy={8} r={3.5}
-          fill={accent} stroke={accent} strokeOpacity="0.4" strokeWidth="0.8" />
-        <circle className="pj-s2" cx={339} cy={8} r={3.5}
-          fill={accent} stroke={accent} strokeOpacity="0.4" strokeWidth="0.8" />
-        <circle className="pj-s3" cx={355} cy={8} r={3.5}
-          fill={accent} stroke={accent} strokeOpacity="0.4" strokeWidth="0.8" />
-        <circle className="pj-s4" cx={371} cy={8} r={3.5}
-          fill={accent} stroke={accent} strokeOpacity="0.4" strokeWidth="0.8" />
-        <line x1={327} y1={8} x2={335} y2={8} stroke={accent} strokeOpacity="0.2" strokeWidth="0.8" />
-        <line x1={343} y1={8} x2={351} y2={8} stroke={accent} strokeOpacity="0.2" strokeWidth="0.8" />
-        <line x1={359} y1={8} x2={367} y2={8} stroke={accent} strokeOpacity="0.2" strokeWidth="0.8" />
+        <circle
+          className="pj-s1"
+          cx={323}
+          cy={8}
+          r={3.5}
+          fill={accent}
+          stroke={accent}
+          strokeOpacity="0.4"
+          strokeWidth="0.8"
+        />
+        <circle
+          className="pj-s2"
+          cx={339}
+          cy={8}
+          r={3.5}
+          fill={accent}
+          stroke={accent}
+          strokeOpacity="0.4"
+          strokeWidth="0.8"
+        />
+        <circle
+          className="pj-s3"
+          cx={355}
+          cy={8}
+          r={3.5}
+          fill={accent}
+          stroke={accent}
+          strokeOpacity="0.4"
+          strokeWidth="0.8"
+        />
+        <circle
+          className="pj-s4"
+          cx={371}
+          cy={8}
+          r={3.5}
+          fill={accent}
+          stroke={accent}
+          strokeOpacity="0.4"
+          strokeWidth="0.8"
+        />
+        <line
+          x1={327}
+          y1={8}
+          x2={335}
+          y2={8}
+          stroke={accent}
+          strokeOpacity="0.2"
+          strokeWidth="0.8"
+        />
+        <line
+          x1={343}
+          y1={8}
+          x2={351}
+          y2={8}
+          stroke={accent}
+          strokeOpacity="0.2"
+          strokeWidth="0.8"
+        />
+        <line
+          x1={359}
+          y1={8}
+          x2={367}
+          y2={8}
+          stroke={accent}
+          strokeOpacity="0.2"
+          strokeWidth="0.8"
+        />
 
         {/* ══ TOP: Phase labels (swap each phase) ══ */}
         <g className="pj-l1">
-          <text x="347" y="28" textAnchor="middle" fill={accent}
-            fontSize="11" fontWeight="bold" fontFamily="system-ui,sans-serif">
+          <text
+            x="347"
+            y="28"
+            textAnchor="middle"
+            fill={accent}
+            fontSize="11"
+            fontWeight="bold"
+            fontFamily="system-ui,sans-serif"
+          >
             1. Onboard
           </text>
-          <text x="347" y="40" textAnchor="middle" fill={muted}
-            fontSize="7.5" fontFamily="system-ui,sans-serif">
+          <text
+            x="347"
+            y="40"
+            textAnchor="middle"
+            fill={muted}
+            fontSize="7.5"
+            fontFamily="system-ui,sans-serif"
+          >
             Install Edison &middot; Discover shadow agents
           </text>
         </g>
         <g className="pj-l2">
-          <text x="347" y="28" textAnchor="middle" fill={accent}
-            fontSize="11" fontWeight="bold" fontFamily="system-ui,sans-serif">
+          <text
+            x="347"
+            y="28"
+            textAnchor="middle"
+            fill={accent}
+            fontSize="11"
+            fontWeight="bold"
+            fontFamily="system-ui,sans-serif"
+          >
             2. Observe
           </text>
-          <text x="347" y="40" textAnchor="middle" fill={muted}
-            fontSize="7.5" fontFamily="system-ui,sans-serif">
+          <text
+            x="347"
+            y="40"
+            textAnchor="middle"
+            fill={muted}
+            fontSize="7.5"
+            fontFamily="system-ui,sans-serif"
+          >
             Monitor all agentic actions &middot; RBAC controls
           </text>
         </g>
         <g className="pj-l3">
-          <text x="347" y="28" textAnchor="middle" fill={accent}
-            fontSize="11" fontWeight="bold" fontFamily="system-ui,sans-serif">
+          <text
+            x="347"
+            y="28"
+            textAnchor="middle"
+            fill={accent}
+            fontSize="11"
+            fontWeight="bold"
+            fontFamily="system-ui,sans-serif"
+          >
             3. Enforce
           </text>
-          <text x="347" y="40" textAnchor="middle" fill={muted}
-            fontSize="7.5" fontFamily="system-ui,sans-serif">
+          <text
+            x="347"
+            y="40"
+            textAnchor="middle"
+            fill={muted}
+            fontSize="7.5"
+            fontFamily="system-ui,sans-serif"
+          >
             Block policy violations &middot; Prevent exfiltration
           </text>
         </g>
         <g className="pj-l4">
-          <text x="347" y="28" textAnchor="middle" fill={accent}
-            fontSize="11" fontWeight="bold" fontFamily="system-ui,sans-serif">
+          <text
+            x="347"
+            y="28"
+            textAnchor="middle"
+            fill={accent}
+            fontSize="11"
+            fontWeight="bold"
+            fontFamily="system-ui,sans-serif"
+          >
             4. Unify
           </text>
-          <text x="347" y="40" textAnchor="middle" fill={muted}
-            fontSize="7.5" fontFamily="system-ui,sans-serif">
+          <text
+            x="347"
+            y="40"
+            textAnchor="middle"
+            fill={muted}
+            fontSize="7.5"
+            fontFamily="system-ui,sans-serif"
+          >
             Scale AI across the entire organization
           </text>
         </g>
@@ -376,81 +493,196 @@ export default function ProductJourneyAnimation(): React.ReactNode {
         <g className="pj-pre4">
           <g className="pj-p1">
             {/* Laptop 1 - Claude Code */}
-            <rect x={12} y={50} width={140} height={55} rx={6}
-              fill={fg} fillOpacity="0.03"
-              stroke={muted} strokeOpacity="0.35" strokeWidth="1.5" />
-            <rect x={8} y={107} width={148} height={6} rx={3}
-              fill={fg} fillOpacity="0.04"
-              stroke={muted} strokeOpacity="0.35" strokeWidth="1" />
+            <rect
+              x={12}
+              y={50}
+              width={140}
+              height={55}
+              rx={6}
+              fill={fg}
+              fillOpacity="0.03"
+              stroke={muted}
+              strokeOpacity="0.35"
+              strokeWidth="1.5"
+            />
+            <rect
+              x={8}
+              y={107}
+              width={148}
+              height={6}
+              rx={3}
+              fill={fg}
+              fillOpacity="0.04"
+              stroke={muted}
+              strokeOpacity="0.35"
+              strokeWidth="1"
+            />
             <AgentIcon agent={CLAUDE} x={20} y={58} size={22} />
             <McpIcon x={52} y={60} size={16} color={muted} opacity="0.45" />
             <McpIcon x={74} y={60} size={16} color={muted} opacity="0.45" />
             <McpIcon x={96} y={60} size={16} color={muted} opacity="0.45" />
 
             {/* Laptop 2 - Cursor */}
-            <rect x={12} y={125} width={140} height={55} rx={6}
-              fill={fg} fillOpacity="0.03"
-              stroke={muted} strokeOpacity="0.35" strokeWidth="1.5" />
-            <rect x={8} y={182} width={148} height={6} rx={3}
-              fill={fg} fillOpacity="0.04"
-              stroke={muted} strokeOpacity="0.35" strokeWidth="1" />
+            <rect
+              x={12}
+              y={125}
+              width={140}
+              height={55}
+              rx={6}
+              fill={fg}
+              fillOpacity="0.03"
+              stroke={muted}
+              strokeOpacity="0.35"
+              strokeWidth="1.5"
+            />
+            <rect
+              x={8}
+              y={182}
+              width={148}
+              height={6}
+              rx={3}
+              fill={fg}
+              fillOpacity="0.04"
+              stroke={muted}
+              strokeOpacity="0.35"
+              strokeWidth="1"
+            />
             <AgentIcon agent={CURSOR} x={20} y={133} size={22} />
             <McpIcon x={52} y={135} size={16} color={muted} opacity="0.45" />
             <McpIcon x={74} y={135} size={16} color={muted} opacity="0.45" />
 
             {/* Laptop 3 - Codex */}
-            <rect x={12} y={200} width={140} height={55} rx={6}
-              fill={fg} fillOpacity="0.03"
-              stroke={muted} strokeOpacity="0.35" strokeWidth="1.5" />
-            <rect x={8} y={257} width={148} height={6} rx={3}
-              fill={fg} fillOpacity="0.04"
-              stroke={muted} strokeOpacity="0.35" strokeWidth="1" />
+            <rect
+              x={12}
+              y={200}
+              width={140}
+              height={55}
+              rx={6}
+              fill={fg}
+              fillOpacity="0.03"
+              stroke={muted}
+              strokeOpacity="0.35"
+              strokeWidth="1.5"
+            />
+            <rect
+              x={8}
+              y={257}
+              width={148}
+              height={6}
+              rx={3}
+              fill={fg}
+              fillOpacity="0.04"
+              stroke={muted}
+              strokeOpacity="0.35"
+              strokeWidth="1"
+            />
             <AgentIcon agent={CODEX} x={20} y={208} size={22} />
             <McpIcon x={52} y={210} size={16} color={muted} opacity="0.45" />
             <McpIcon x={74} y={210} size={16} color={muted} opacity="0.45" />
 
             {/* Label */}
-            <text x="82" y="278" textAnchor="middle" fill={fg}
-              fontSize="8" fontWeight="bold" fontFamily="system-ui,sans-serif">
+            <text
+              x="82"
+              y="278"
+              textAnchor="middle"
+              fill={fg}
+              fontSize="8"
+              fontWeight="bold"
+              fontFamily="system-ui,sans-serif"
+            >
               Employee Laptops
             </text>
           </g>
 
           {/* Edison client wrapping local MCPs (staggered install) */}
           <g className="pj-iglow1">
-            <rect x={10} y={48} width={144} height={59} rx={8}
-              fill="none" stroke={accent} strokeOpacity="0.6" strokeWidth="2" />
+            <rect
+              x={10}
+              y={48}
+              width={144}
+              height={59}
+              rx={8}
+              fill="none"
+              stroke={accent}
+              strokeOpacity="0.6"
+              strokeWidth="2"
+            />
           </g>
           <g className="pj-inst1">
-            <rect x={48} y={56} width={72} height={24} rx={4}
-              fill={accent} fillOpacity="0.03"
-              stroke={accent} strokeOpacity="0.5" strokeWidth="1.5" />
+            <rect
+              x={48}
+              y={56}
+              width={72}
+              height={24}
+              rx={4}
+              fill={accent}
+              fillOpacity="0.03"
+              stroke={accent}
+              strokeOpacity="0.5"
+              strokeWidth="1.5"
+            />
             <EdisonLogo x={36} y={49} w={16} h={15.5} />
             <svg x={122} y={57} width={14} height={14} viewBox="0 0 256 256">
               <path d={SHIELD_CHECK_PATH} fill={accent} fillOpacity="0.7" />
             </svg>
           </g>
           <g className="pj-iglow2">
-            <rect x={10} y={123} width={144} height={59} rx={8}
-              fill="none" stroke={accent} strokeOpacity="0.6" strokeWidth="2" />
+            <rect
+              x={10}
+              y={123}
+              width={144}
+              height={59}
+              rx={8}
+              fill="none"
+              stroke={accent}
+              strokeOpacity="0.6"
+              strokeWidth="2"
+            />
           </g>
           <g className="pj-inst2">
-            <rect x={48} y={131} width={72} height={24} rx={4}
-              fill={accent} fillOpacity="0.03"
-              stroke={accent} strokeOpacity="0.5" strokeWidth="1.5" />
+            <rect
+              x={48}
+              y={131}
+              width={72}
+              height={24}
+              rx={4}
+              fill={accent}
+              fillOpacity="0.03"
+              stroke={accent}
+              strokeOpacity="0.5"
+              strokeWidth="1.5"
+            />
             <EdisonLogo x={36} y={124} w={16} h={15.5} />
             <svg x={122} y={132} width={14} height={14} viewBox="0 0 256 256">
               <path d={SHIELD_CHECK_PATH} fill={accent} fillOpacity="0.7" />
             </svg>
           </g>
           <g className="pj-iglow3">
-            <rect x={10} y={198} width={144} height={59} rx={8}
-              fill="none" stroke={accent} strokeOpacity="0.6" strokeWidth="2" />
+            <rect
+              x={10}
+              y={198}
+              width={144}
+              height={59}
+              rx={8}
+              fill="none"
+              stroke={accent}
+              strokeOpacity="0.6"
+              strokeWidth="2"
+            />
           </g>
           <g className="pj-inst3">
-            <rect x={48} y={206} width={72} height={24} rx={4}
-              fill={accent} fillOpacity="0.03"
-              stroke={accent} strokeOpacity="0.5" strokeWidth="1.5" />
+            <rect
+              x={48}
+              y={206}
+              width={72}
+              height={24}
+              rx={4}
+              fill={accent}
+              fillOpacity="0.03"
+              stroke={accent}
+              strokeOpacity="0.5"
+              strokeWidth="1.5"
+            />
             <EdisonLogo x={36} y={199} w={16} h={15.5} />
             <svg x={122} y={207} width={14} height={14} viewBox="0 0 256 256">
               <path d={SHIELD_CHECK_PATH} fill={accent} fillOpacity="0.7" />
@@ -460,41 +692,104 @@ export default function ProductJourneyAnimation(): React.ReactNode {
           {/* Shadow MCP reveal - per laptop, fades as Edison installs */}
           <g className="pj-shad1">
             {[52, 74, 96].map((mx) => (
-              <rect key={`s1-${mx}`} className="pj-sglow" x={mx - 2} y={56} width={20} height={20} rx={3}
-                fill={O} fillOpacity="0.08" stroke={O} strokeOpacity="0.5" strokeWidth="1" />
+              <rect
+                key={`s1-${mx}`}
+                className="pj-sglow"
+                x={mx - 2}
+                y={56}
+                width={20}
+                height={20}
+                rx={3}
+                fill={O}
+                fillOpacity="0.08"
+                stroke={O}
+                strokeOpacity="0.5"
+                strokeWidth="1"
+              />
             ))}
-            <text x={52} y={88} fill={O} fontSize="6.5" fontWeight="bold"
-              fontFamily="ui-monospace,monospace" fillOpacity="0.8">
+            <text
+              x={52}
+              y={88}
+              fill={O}
+              fontSize="6.5"
+              fontWeight="bold"
+              fontFamily="ui-monospace,monospace"
+              fillOpacity="0.8"
+            >
               shadow MCPs
             </text>
           </g>
           <g className="pj-shad2">
             {[52, 74].map((mx) => (
-              <rect key={`s2-${mx}`} className="pj-sglow" x={mx - 2} y={131} width={20} height={20} rx={3}
-                fill={O} fillOpacity="0.08" stroke={O} strokeOpacity="0.5" strokeWidth="1" />
+              <rect
+                key={`s2-${mx}`}
+                className="pj-sglow"
+                x={mx - 2}
+                y={131}
+                width={20}
+                height={20}
+                rx={3}
+                fill={O}
+                fillOpacity="0.08"
+                stroke={O}
+                strokeOpacity="0.5"
+                strokeWidth="1"
+              />
             ))}
-            <text x={52} y={163} fill={O} fontSize="6.5" fontWeight="bold"
-              fontFamily="ui-monospace,monospace" fillOpacity="0.8">
+            <text
+              x={52}
+              y={163}
+              fill={O}
+              fontSize="6.5"
+              fontWeight="bold"
+              fontFamily="ui-monospace,monospace"
+              fillOpacity="0.8"
+            >
               shadow MCPs
             </text>
           </g>
           <g className="pj-shad3">
             {[52, 74].map((mx) => (
-              <rect key={`s3-${mx}`} className="pj-sglow" x={mx - 2} y={206} width={20} height={20} rx={3}
-                fill={O} fillOpacity="0.08" stroke={O} strokeOpacity="0.5" strokeWidth="1" />
+              <rect
+                key={`s3-${mx}`}
+                className="pj-sglow"
+                x={mx - 2}
+                y={206}
+                width={20}
+                height={20}
+                rx={3}
+                fill={O}
+                fillOpacity="0.08"
+                stroke={O}
+                strokeOpacity="0.5"
+                strokeWidth="1"
+              />
             ))}
-            <text x={52} y={238} fill={O} fontSize="6.5" fontWeight="bold"
-              fontFamily="ui-monospace,monospace" fillOpacity="0.8">
+            <text
+              x={52}
+              y={238}
+              fill={O}
+              fontSize="6.5"
+              fontWeight="bold"
+              fontFamily="ui-monospace,monospace"
+              fillOpacity="0.8"
+            >
               shadow MCPs
             </text>
           </g>
 
           {/* Scan line (phase 1 - after installs) */}
           <g className="pj-scan">
-            <line x1={14} y1={50} x2={150} y2={50}
-              stroke={accent} strokeOpacity="0.5" strokeWidth="1.5" />
-            <rect x={14} y={50} width={136} height={3} rx={1}
-              fill={accent} fillOpacity="0.06" />
+            <line
+              x1={14}
+              y1={50}
+              x2={150}
+              y2={50}
+              stroke={accent}
+              strokeOpacity="0.5"
+              strokeWidth="1.5"
+            />
+            <rect x={14} y={50} width={136} height={3} rx={1} fill={accent} fillOpacity="0.06" />
           </g>
         </g>
 
@@ -503,9 +798,16 @@ export default function ProductJourneyAnimation(): React.ReactNode {
           <svg x={337} y={52} width={24} height={24} viewBox="0 0 256 256">
             <path d={ADMIN_PATH} fill={fg} fillOpacity="0.7" />
           </svg>
-          <text x="350" y="78" textAnchor="middle"
-            fill={fg} fillOpacity="0.7" fontSize="8" fontWeight="bold"
-            fontFamily="system-ui,sans-serif">
+          <text
+            x="350"
+            y="78"
+            textAnchor="middle"
+            fill={fg}
+            fillOpacity="0.7"
+            fontSize="8"
+            fontWeight="bold"
+            fontFamily="system-ui,sans-serif"
+          >
             Admin
           </text>
         </g>
@@ -515,17 +817,47 @@ export default function ProductJourneyAnimation(): React.ReactNode {
           <svg x={338} y={82} width={22} height={22} viewBox="0 0 256 256">
             <path d={EYE_SLASH_PATH} fill={DANGER} fillOpacity="0.7" />
           </svg>
-          <text x="350" y="112" textAnchor="middle"
-            fill={DANGER} fillOpacity="0.6" fontSize="8"
-            fontFamily="system-ui,sans-serif">
+          <text
+            x="350"
+            y="112"
+            textAnchor="middle"
+            fill={DANGER}
+            fillOpacity="0.6"
+            fontSize="8"
+            fontFamily="system-ui,sans-serif"
+          >
             No visibility
           </text>
-          <line x1="335" y1="70" x2="160" y2="78"
-            stroke={DANGER} strokeOpacity="0.5" strokeWidth="1.5" strokeDasharray="4 3" />
-          <line x1="335" y1="70" x2="160" y2="153"
-            stroke={DANGER} strokeOpacity="0.5" strokeWidth="1.5" strokeDasharray="4 3" />
-          <line x1="335" y1="70" x2="160" y2="228"
-            stroke={DANGER} strokeOpacity="0.5" strokeWidth="1.5" strokeDasharray="4 3" />
+          <line
+            x1="335"
+            y1="70"
+            x2="160"
+            y2="78"
+            stroke={DANGER}
+            strokeOpacity="0.5"
+            strokeWidth="1.5"
+            strokeDasharray="4 3"
+          />
+          <line
+            x1="335"
+            y1="70"
+            x2="160"
+            y2="153"
+            stroke={DANGER}
+            strokeOpacity="0.5"
+            strokeWidth="1.5"
+            strokeDasharray="4 3"
+          />
+          <line
+            x1="335"
+            y1="70"
+            x2="160"
+            y2="228"
+            stroke={DANGER}
+            strokeOpacity="0.5"
+            strokeWidth="1.5"
+            strokeDasharray="4 3"
+          />
           {[78, 153, 228].map((ly) => (
             <svg key={ly} x={162} y={ly - 10} width={20} height={20} viewBox="0 0 256 256">
               <path d={EYE_SLASH_PATH} fill={DANGER} fillOpacity="0.5" />
@@ -538,19 +870,50 @@ export default function ProductJourneyAnimation(): React.ReactNode {
           <svg x={338} y={82} width={22} height={22} viewBox="0 0 256 256">
             <path d={EYE_PATH} fill={accent} fillOpacity="0.85" />
           </svg>
-          <text x="350" y="112" textAnchor="middle"
-            fill={accent} fillOpacity="0.85" fontSize="8" fontWeight="bold"
-            fontFamily="system-ui,sans-serif">
+          <text
+            x="350"
+            y="112"
+            textAnchor="middle"
+            fill={accent}
+            fillOpacity="0.85"
+            fontSize="8"
+            fontWeight="bold"
+            fontFamily="system-ui,sans-serif"
+          >
             Full visibility
           </text>
           {/* Lines + eye icons to laptops: hidden in Phase 4 with laptops */}
           <g className="pj-pre4">
-            <line x1="335" y1="95" x2="160" y2="78"
-              stroke={accent} strokeOpacity="0.4" strokeWidth="1.5" strokeDasharray="4 3" />
-            <line x1="335" y1="95" x2="160" y2="153"
-              stroke={accent} strokeOpacity="0.4" strokeWidth="1.5" strokeDasharray="4 3" />
-            <line x1="335" y1="95" x2="160" y2="228"
-              stroke={accent} strokeOpacity="0.4" strokeWidth="1.5" strokeDasharray="4 3" />
+            <line
+              x1="335"
+              y1="95"
+              x2="160"
+              y2="78"
+              stroke={accent}
+              strokeOpacity="0.4"
+              strokeWidth="1.5"
+              strokeDasharray="4 3"
+            />
+            <line
+              x1="335"
+              y1="95"
+              x2="160"
+              y2="153"
+              stroke={accent}
+              strokeOpacity="0.4"
+              strokeWidth="1.5"
+              strokeDasharray="4 3"
+            />
+            <line
+              x1="335"
+              y1="95"
+              x2="160"
+              y2="228"
+              stroke={accent}
+              strokeOpacity="0.4"
+              strokeWidth="1.5"
+              strokeDasharray="4 3"
+            />
             {[78, 153, 228].map((ly) => (
               <svg key={ly} x={162} y={ly - 10} width={20} height={20} viewBox="0 0 256 256">
                 <path d={EYE_PATH} fill={accent} fillOpacity="0.65" />
@@ -561,27 +924,96 @@ export default function ProductJourneyAnimation(): React.ReactNode {
 
         {/* ══ PHASE 1: Direct connections to tools (unmonitored) ══ */}
         <g className="pj-blind">
-          <line className="pj-line" x1="158" y1="78" x2="540" y2="78"
-            stroke={muted} strokeOpacity="0.5" strokeWidth="1.5" strokeDasharray="3 3" />
-          <line className="pj-line" x1="158" y1="78" x2="540" y2="153"
-            stroke={muted} strokeOpacity="0.5" strokeWidth="1.5" strokeDasharray="3 3" />
-          <line className="pj-line" x1="158" y1="153" x2="540" y2="153"
-            stroke={muted} strokeOpacity="0.5" strokeWidth="1.5" strokeDasharray="3 3" />
-          <line className="pj-line" x1="158" y1="153" x2="540" y2="228"
-            stroke={muted} strokeOpacity="0.5" strokeWidth="1.5" strokeDasharray="3 3" />
-          <line className="pj-line" x1="158" y1="228" x2="540" y2="153"
-            stroke={muted} strokeOpacity="0.5" strokeWidth="1.5" strokeDasharray="3 3" />
-          <line className="pj-line" x1="158" y1="228" x2="540" y2="228"
-            stroke={muted} strokeOpacity="0.5" strokeWidth="1.5" strokeDasharray="3 3" />
+          <line
+            className="pj-line"
+            x1="158"
+            y1="78"
+            x2="540"
+            y2="78"
+            stroke={muted}
+            strokeOpacity="0.5"
+            strokeWidth="1.5"
+            strokeDasharray="3 3"
+          />
+          <line
+            className="pj-line"
+            x1="158"
+            y1="78"
+            x2="540"
+            y2="153"
+            stroke={muted}
+            strokeOpacity="0.5"
+            strokeWidth="1.5"
+            strokeDasharray="3 3"
+          />
+          <line
+            className="pj-line"
+            x1="158"
+            y1="153"
+            x2="540"
+            y2="153"
+            stroke={muted}
+            strokeOpacity="0.5"
+            strokeWidth="1.5"
+            strokeDasharray="3 3"
+          />
+          <line
+            className="pj-line"
+            x1="158"
+            y1="153"
+            x2="540"
+            y2="228"
+            stroke={muted}
+            strokeOpacity="0.5"
+            strokeWidth="1.5"
+            strokeDasharray="3 3"
+          />
+          <line
+            className="pj-line"
+            x1="158"
+            y1="228"
+            x2="540"
+            y2="153"
+            stroke={muted}
+            strokeOpacity="0.5"
+            strokeWidth="1.5"
+            strokeDasharray="3 3"
+          />
+          <line
+            className="pj-line"
+            x1="158"
+            y1="228"
+            x2="540"
+            y2="228"
+            stroke={muted}
+            strokeOpacity="0.5"
+            strokeWidth="1.5"
+            strokeDasharray="3 3"
+          />
         </g>
 
         {/* ══ CENTER: Edison Gateway (Phase 2+) ══ */}
         <g className="pj-edison">
-          <circle className="pj-pulse" cx={350} cy={153} r={28}
-            fill="none" stroke={accent} strokeOpacity="0.5" strokeWidth="1.5" />
+          <circle
+            className="pj-pulse"
+            cx={350}
+            cy={153}
+            r={28}
+            fill="none"
+            stroke={accent}
+            strokeOpacity="0.5"
+            strokeWidth="1.5"
+          />
           <EdisonLogo x={323} y={127} w={54} h={52.5} />
-          <text x="350" y="195" textAnchor="middle" fill={fg}
-            fontSize="9" fontWeight="bold" fontFamily="system-ui,sans-serif">
+          <text
+            x="350"
+            y="195"
+            textAnchor="middle"
+            fill={fg}
+            fontSize="9"
+            fontWeight="bold"
+            fontFamily="system-ui,sans-serif"
+          >
             Edison Gateway
           </text>
         </g>
@@ -595,8 +1027,16 @@ export default function ProductJourneyAnimation(): React.ReactNode {
           <svg x={339} y={198} width={22} height={22} viewBox="0 0 256 256">
             <path d={SCALES_PATH} fill={accent} fillOpacity="0.8" />
           </svg>
-          <text x="350" y="228" textAnchor="middle" fill={accent} fillOpacity="0.8"
-            fontSize="7.5" fontWeight="bold" fontFamily="system-ui,sans-serif">
+          <text
+            x="350"
+            y="228"
+            textAnchor="middle"
+            fill={accent}
+            fillOpacity="0.8"
+            fontSize="7.5"
+            fontWeight="bold"
+            fontFamily="system-ui,sans-serif"
+          >
             Policy Engine
           </text>
         </g>
@@ -605,68 +1045,213 @@ export default function ProductJourneyAnimation(): React.ReactNode {
         <g className="pj-p2">
           {/* Laptop → Edison lines: hidden in Phase 4 with laptops */}
           <g className="pj-pre4">
-            <line className="pj-line" x1="158" y1="78" x2="322" y2="153"
-              stroke={muted} strokeOpacity="0.4" strokeWidth="1.5" strokeDasharray="3 3" />
-            <line className="pj-line" x1="158" y1="153" x2="322" y2="153"
-              stroke={muted} strokeOpacity="0.4" strokeWidth="1.5" strokeDasharray="3 3" />
-            <line className="pj-line" x1="158" y1="228" x2="322" y2="153"
-              stroke={muted} strokeOpacity="0.4" strokeWidth="1.5" strokeDasharray="3 3" />
+            <line
+              className="pj-line"
+              x1="158"
+              y1="78"
+              x2="322"
+              y2="153"
+              stroke={muted}
+              strokeOpacity="0.4"
+              strokeWidth="1.5"
+              strokeDasharray="3 3"
+            />
+            <line
+              className="pj-line"
+              x1="158"
+              y1="153"
+              x2="322"
+              y2="153"
+              stroke={muted}
+              strokeOpacity="0.4"
+              strokeWidth="1.5"
+              strokeDasharray="3 3"
+            />
+            <line
+              className="pj-line"
+              x1="158"
+              y1="228"
+              x2="322"
+              y2="153"
+              stroke={muted}
+              strokeOpacity="0.4"
+              strokeWidth="1.5"
+              strokeDasharray="3 3"
+            />
           </g>
           {/* Edison → Tools lines: persist through Phase 4 */}
-          <line className="pj-line" x1="378" y1="153" x2="540" y2="78"
-            stroke={accent} strokeOpacity="0.4" strokeWidth="1.5" strokeDasharray="3 3" />
-          <line className="pj-line" x1="378" y1="153" x2="540" y2="153"
-            stroke={accent} strokeOpacity="0.4" strokeWidth="1.5" strokeDasharray="3 3" />
-          <line className="pj-line" x1="378" y1="153" x2="540" y2="228"
-            stroke={accent} strokeOpacity="0.4" strokeWidth="1.5" strokeDasharray="3 3" />
+          <line
+            className="pj-line"
+            x1="378"
+            y1="153"
+            x2="540"
+            y2="78"
+            stroke={accent}
+            strokeOpacity="0.4"
+            strokeWidth="1.5"
+            strokeDasharray="3 3"
+          />
+          <line
+            className="pj-line"
+            x1="378"
+            y1="153"
+            x2="540"
+            y2="153"
+            stroke={accent}
+            strokeOpacity="0.4"
+            strokeWidth="1.5"
+            strokeDasharray="3 3"
+          />
+          <line
+            className="pj-line"
+            x1="378"
+            y1="153"
+            x2="540"
+            y2="228"
+            stroke={accent}
+            strokeOpacity="0.4"
+            strokeWidth="1.5"
+            strokeDasharray="3 3"
+          />
         </g>
 
         {/* ══ RIGHT: Enterprise Tools (Phase 1+) ══ */}
         <g className="pj-p1">
-          <rect x={540} y={56} width={56} height={44} rx={6}
-            fill={fg} fillOpacity="0.03"
-            stroke={muted} strokeOpacity="0.35" strokeWidth="1" />
+          <rect
+            x={540}
+            y={56}
+            width={56}
+            height={44}
+            rx={6}
+            fill={fg}
+            fillOpacity="0.03"
+            stroke={muted}
+            strokeOpacity="0.35"
+            strokeWidth="1"
+          />
           <McpIcon x={556} y={66} size={24} color={muted} opacity="0.6" />
-          <text x={568} y={112} textAnchor="middle" fill={muted}
-            fontSize="7.5" fontFamily="system-ui,sans-serif">Email</text>
+          <text
+            x={568}
+            y={112}
+            textAnchor="middle"
+            fill={muted}
+            fontSize="7.5"
+            fontFamily="system-ui,sans-serif"
+          >
+            Email
+          </text>
 
-          <rect x={540} y={131} width={56} height={44} rx={6}
-            fill={fg} fillOpacity="0.03"
-            stroke={muted} strokeOpacity="0.35" strokeWidth="1" />
+          <rect
+            x={540}
+            y={131}
+            width={56}
+            height={44}
+            rx={6}
+            fill={fg}
+            fillOpacity="0.03"
+            stroke={muted}
+            strokeOpacity="0.35"
+            strokeWidth="1"
+          />
           <McpIcon x={556} y={141} size={24} color={muted} opacity="0.6" />
-          <text x={568} y={187} textAnchor="middle" fill={muted}
-            fontSize="7.5" fontFamily="system-ui,sans-serif">Docs</text>
+          <text
+            x={568}
+            y={187}
+            textAnchor="middle"
+            fill={muted}
+            fontSize="7.5"
+            fontFamily="system-ui,sans-serif"
+          >
+            Docs
+          </text>
 
-          <rect x={540} y={206} width={56} height={44} rx={6}
-            fill={fg} fillOpacity="0.03"
-            stroke={muted} strokeOpacity="0.35" strokeWidth="1" />
+          <rect
+            x={540}
+            y={206}
+            width={56}
+            height={44}
+            rx={6}
+            fill={fg}
+            fillOpacity="0.03"
+            stroke={muted}
+            strokeOpacity="0.35"
+            strokeWidth="1"
+          />
           <McpIcon x={556} y={216} size={24} color={muted} opacity="0.6" />
-          <text x={568} y={262} textAnchor="middle" fill={muted}
-            fontSize="7.5" fontFamily="system-ui,sans-serif">Data</text>
+          <text
+            x={568}
+            y={262}
+            textAnchor="middle"
+            fill={muted}
+            fontSize="7.5"
+            fontFamily="system-ui,sans-serif"
+          >
+            Data
+          </text>
 
-          <text x="568" y="278" textAnchor="middle" fill={fg}
-            fontSize="8" fontWeight="bold" fontFamily="system-ui,sans-serif">
+          <text
+            x="568"
+            y="278"
+            textAnchor="middle"
+            fill={fg}
+            fontSize="8"
+            fontWeight="bold"
+            fontFamily="system-ui,sans-serif"
+          >
             Enterprise Tools
           </text>
         </g>
 
         {/* ══ VERDICT BADGES (Phase 3+) ══ */}
         <g className="pj-vd" style={{ transformOrigin: '320px 168px' }}>
-          <circle cx={320} cy={168} r={8}
-            fill={DANGER} fillOpacity="0.12"
-            stroke={DANGER} strokeOpacity="0.5" strokeWidth="1" />
-          <line x1={316.5} y1={164.5} x2={323.5} y2={171.5}
-            stroke={DANGER} strokeWidth="1.6" strokeLinecap="round" />
-          <line x1={323.5} y1={164.5} x2={316.5} y2={171.5}
-            stroke={DANGER} strokeWidth="1.6" strokeLinecap="round" />
+          <circle
+            cx={320}
+            cy={168}
+            r={8}
+            fill={DANGER}
+            fillOpacity="0.12"
+            stroke={DANGER}
+            strokeOpacity="0.5"
+            strokeWidth="1"
+          />
+          <line
+            x1={316.5}
+            y1={164.5}
+            x2={323.5}
+            y2={171.5}
+            stroke={DANGER}
+            strokeWidth="1.6"
+            strokeLinecap="round"
+          />
+          <line
+            x1={323.5}
+            y1={164.5}
+            x2={316.5}
+            y2={171.5}
+            stroke={DANGER}
+            strokeWidth="1.6"
+            strokeLinecap="round"
+          />
         </g>
         <g className="pj-va" style={{ transformOrigin: '320px 138px' }}>
-          <circle cx={320} cy={138} r={8}
-            fill={accent} fillOpacity="0.12"
-            stroke={accent} strokeOpacity="0.5" strokeWidth="1" />
-          <polyline points="315.5,138 318,140.5 324.5,134"
-            fill="none" stroke={accent} strokeWidth="1.6"
-            strokeLinecap="round" strokeLinejoin="round" />
+          <circle
+            cx={320}
+            cy={138}
+            r={8}
+            fill={accent}
+            fillOpacity="0.12"
+            stroke={accent}
+            strokeOpacity="0.5"
+            strokeWidth="1"
+          />
+          <polyline
+            points="315.5,138 318,140.5 324.5,134"
+            fill="none"
+            stroke={accent}
+            strokeWidth="1.6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
         </g>
 
         {/* ══ PHASE 4: Department rows (ScalePilot-style org-wide) ══ */}
@@ -677,12 +1262,27 @@ export default function ProductJourneyAnimation(): React.ReactNode {
             return (
               <g key={dept.label}>
                 {/* Row pill */}
-                <rect x={8} y={y} width={180} height={28} rx={6}
-                  fill={fg} fillOpacity="0.03"
-                  stroke={accent} strokeOpacity="0.35" strokeWidth="1" />
+                <rect
+                  x={8}
+                  y={y}
+                  width={180}
+                  height={28}
+                  rx={6}
+                  fill={fg}
+                  fillOpacity="0.03"
+                  stroke={accent}
+                  strokeOpacity="0.35"
+                  strokeWidth="1"
+                />
                 {/* Dept label */}
-                <text x={16} y={y + 18} fill={fg}
-                  fontSize="8" fontWeight="bold" fontFamily="system-ui,sans-serif">
+                <text
+                  x={16}
+                  y={y + 18}
+                  fill={fg}
+                  fontSize="8"
+                  fontWeight="bold"
+                  fontFamily="system-ui,sans-serif"
+                >
                   {dept.label}
                 </text>
                 {/* Agent icon */}
@@ -693,14 +1293,26 @@ export default function ProductJourneyAnimation(): React.ReactNode {
                   const py = y + 8
                   return (
                     <g key={i}>
-                      <rect x={px} y={py} width={12} height={12} rx={3}
-                        fill={accent} fillOpacity="0.12"
-                        stroke={accent} strokeOpacity="0.45" strokeWidth="0.8" />
-                      <circle cx={px + 6} cy={py + 4} r="2.2"
-                        fill={accent} fillOpacity="0.7" />
+                      <rect
+                        x={px}
+                        y={py}
+                        width={12}
+                        height={12}
+                        rx={3}
+                        fill={accent}
+                        fillOpacity="0.12"
+                        stroke={accent}
+                        strokeOpacity="0.45"
+                        strokeWidth="0.8"
+                      />
+                      <circle cx={px + 6} cy={py + 4} r="2.2" fill={accent} fillOpacity="0.7" />
                       <path
                         d={`M ${px + 2} ${py + 10} Q ${px + 6} ${py + 7} ${px + 10} ${py + 10}`}
-                        fill="none" stroke={accent} strokeOpacity="0.7" strokeWidth="1" />
+                        fill="none"
+                        stroke={accent}
+                        strokeOpacity="0.7"
+                        strokeWidth="1"
+                      />
                     </g>
                   )
                 })}
@@ -710,23 +1322,51 @@ export default function ProductJourneyAnimation(): React.ReactNode {
 
           {/* Connection lines: all 5 dept rows → Edison */}
           {DEPTS.map((dept) => (
-            <line key={dept.label} className="pj-line" x1="190" y1={dept.y + 14} x2="322" y2="153"
-              stroke={accent} strokeOpacity="0.6" strokeWidth="1.5" strokeDasharray="3 3" />
+            <line
+              key={dept.label}
+              className="pj-line"
+              x1="190"
+              y1={dept.y + 14}
+              x2="322"
+              y2="153"
+              stroke={accent}
+              strokeOpacity="0.6"
+              strokeWidth="1.5"
+              strokeDasharray="3 3"
+            />
           ))}
 
           {/* Label */}
-          <text x="85" y="252" textAnchor="middle" fill={accent} fillOpacity="0.85"
-            fontSize="8" fontWeight="bold" fontFamily="system-ui,sans-serif">
+          <text
+            x="85"
+            y="252"
+            textAnchor="middle"
+            fill={accent}
+            fillOpacity="0.85"
+            fontSize="8"
+            fontWeight="bold"
+            fontFamily="system-ui,sans-serif"
+          >
             Every team, every tool
           </text>
         </g>
 
         {/* ══ PACKETS ══ */}
-        <g className="pj-pkt pj-pkt0"><McpPacket /></g>
-        <g className="pj-pkt pj-pkt1"><McpPacket /></g>
-        <g className="pj-pkt pj-pkt2"><McpPacket /></g>
-        <g className="pj-pkt pj-pkt3"><McpPacket /></g>
-        <g className="pj-pkt pj-pkt4"><McpPacket /></g>
+        <g className="pj-pkt pj-pkt0">
+          <McpPacket />
+        </g>
+        <g className="pj-pkt pj-pkt1">
+          <McpPacket />
+        </g>
+        <g className="pj-pkt pj-pkt2">
+          <McpPacket />
+        </g>
+        <g className="pj-pkt pj-pkt3">
+          <McpPacket />
+        </g>
+        <g className="pj-pkt pj-pkt4">
+          <McpPacket />
+        </g>
 
         {/* ══ PROGRESS BAR ══ */}
         <ProgressBar y={292} width={660} className="pj-progress" />

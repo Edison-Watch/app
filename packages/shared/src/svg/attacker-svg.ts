@@ -23,7 +23,7 @@ export const ATTACKER_BODY_PATHS = [
   // Webcam dot on the screen
   'M234 395 a6 6 0 1 0 12 0 a6 6 0 1 0 -12 0 Z',
   // Keyboard base
-  'M85 455 L395 455 L395 478 L85 478 Z',
+  'M85 455 L395 455 L395 478 L85 478 Z'
 ] as const
 
 /** Highlight paths - rendered in a contrasting color (typically white). */
@@ -37,7 +37,7 @@ export const ATTACKER_HIGHLIGHT_PATHS = [
   // Trapezoid laptop screen (inner / display surface)
   'M78 348 L402 348 L380 442 L100 442 Z',
   // Space bar
-  'M223 463 H257 a3 3 0 0 1 3 3 v1 a3 3 0 0 1 -3 3 H223 a3 3 0 0 1 -3 -3 v-1 a3 3 0 0 1 3 -3 Z',
+  'M223 463 H257 a3 3 0 0 1 3 3 v1 a3 3 0 0 1 -3 3 H223 a3 3 0 0 1 -3 -3 v-1 a3 3 0 0 1 3 -3 Z'
 ] as const
 
 export const ATTACKER_SVG_VIEWBOX = '0 0 480 480'

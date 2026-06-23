@@ -247,48 +247,116 @@ export default function DesktopInstallAnimation(): React.ReactNode {
         aria-hidden="true"
       >
         {/* Laptop shell (always visible) */}
-        <rect x={160} y={20} width={180} height={120} rx={7}
-          fill={fg} fillOpacity="0.03"
-          stroke={muted} strokeOpacity="0.35" strokeWidth="1.5" />
-        <rect x={155} y={142} width={190} height={8} rx={4}
-          fill={fg} fillOpacity="0.04"
-          stroke={muted} strokeOpacity="0.35" strokeWidth="1" />
+        <rect
+          x={160}
+          y={20}
+          width={180}
+          height={120}
+          rx={7}
+          fill={fg}
+          fillOpacity="0.03"
+          stroke={muted}
+          strokeOpacity="0.35"
+          strokeWidth="1.5"
+        />
+        <rect
+          x={155}
+          y={142}
+          width={190}
+          height={8}
+          rx={4}
+          fill={fg}
+          fillOpacity="0.04"
+          stroke={muted}
+          strokeOpacity="0.35"
+          strokeWidth="1"
+        />
 
         {/* ===== PHASE 1: Download + app icon ===== */}
         <g className="di-p1">
           {/* Download arrow */}
           <g className="di-arrow">
-            <line x1={250} y1={40} x2={250} y2={68}
-              stroke={accent} strokeWidth="2.5" strokeLinecap="round" strokeOpacity="0.7" />
-            <path d="M242 62 L250 72 L258 62"
-              fill="none" stroke={accent} strokeWidth="2.5"
-              strokeLinecap="round" strokeLinejoin="round" strokeOpacity="0.7" />
+            <line
+              x1={250}
+              y1={40}
+              x2={250}
+              y2={68}
+              stroke={accent}
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeOpacity="0.7"
+            />
+            <path
+              d="M242 62 L250 72 L258 62"
+              fill="none"
+              stroke={accent}
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeOpacity="0.7"
+            />
           </g>
 
           {/* Edison app icon (pops in after arrow lands) */}
           <g className="di-icon">
-            <rect x={226} y={52} width={48} height={48} rx={12}
-              fill={accent} fillOpacity="0.08"
-              stroke={accent} strokeOpacity="0.35" strokeWidth="1.5" />
+            <rect
+              x={226}
+              y={52}
+              width={48}
+              height={48}
+              rx={12}
+              fill={accent}
+              fillOpacity="0.08"
+              stroke={accent}
+              strokeOpacity="0.35"
+              strokeWidth="1.5"
+            />
             <EdisonLogo x={233} y={57} w={34} h={33} />
-            <text x={250} y={116} textAnchor="middle"
-              fill={fg} fontSize="8" fontWeight="600"
-              fontFamily="system-ui,sans-serif" fillOpacity="0.5">
+            <text
+              x={250}
+              y={116}
+              textAnchor="middle"
+              fill={fg}
+              fontSize="8"
+              fontWeight="600"
+              fontFamily="system-ui,sans-serif"
+              fillOpacity="0.5"
+            >
               Edison Watch
             </text>
           </g>
 
           {/* Click ripples */}
-          <circle className="di-rip1" cx={268} cy={94} r={22}
-            fill="none" stroke={accent} strokeWidth="1.5" />
-          <circle className="di-rip2" cx={268} cy={94} r={22}
-            fill="none" stroke={accent} strokeWidth="1.5" />
+          <circle
+            className="di-rip1"
+            cx={268}
+            cy={94}
+            r={22}
+            fill="none"
+            stroke={accent}
+            strokeWidth="1.5"
+          />
+          <circle
+            className="di-rip2"
+            cx={268}
+            cy={94}
+            r={22}
+            fill="none"
+            stroke={accent}
+            strokeWidth="1.5"
+          />
 
           {/* Cursor double-click on app icon */}
           <g className="di-cursor">
             <g className="di-click">
-              <path d="M268 94 L268 108 L272 104 L276 110 L278 109 L274 103 L279 102 Z"
-                fill={fg} fillOpacity="0.7" stroke={fg} strokeOpacity="0.3" strokeWidth="0.5" />
+              <path
+                d="M268 94 L268 108 L272 104 L276 110 L278 109 L274 103 L279 102 Z"
+                fill={fg}
+                fillOpacity="0.7"
+                stroke={fg}
+                strokeOpacity="0.3"
+                strokeWidth="0.5"
+              />
             </g>
           </g>
         </g>
@@ -296,18 +364,32 @@ export default function DesktopInstallAnimation(): React.ReactNode {
         {/* ===== PHASE 2: Onboarding wizard ===== */}
         <g className="di-p2">
           {/* App window outline */}
-          <rect x={170} y={26} width={160} height={108} rx={5}
-            fill={fg} fillOpacity="0.02"
-            stroke={accent} strokeOpacity="0.25" strokeWidth="1" />
+          <rect
+            x={170}
+            y={26}
+            width={160}
+            height={108}
+            rx={5}
+            fill={fg}
+            fillOpacity="0.02"
+            stroke={accent}
+            strokeOpacity="0.25"
+            strokeWidth="1"
+          />
           {/* Title bar */}
-          <rect x={170} y={26} width={160} height={16} rx={5}
-            fill={accent} fillOpacity="0.06" />
-          <rect x={170} y={37} width={160} height={5}
-            fill={accent} fillOpacity="0.06" />
+          <rect x={170} y={26} width={160} height={16} rx={5} fill={accent} fillOpacity="0.06" />
+          <rect x={170} y={37} width={160} height={5} fill={accent} fillOpacity="0.06" />
           {/* Edison logo in title bar */}
           <EdisonLogo x={174} y={28} w={12} h={12} />
-          <text x={190} y={37} fill={fg} fontSize="6.5" fontWeight="600"
-            fontFamily="system-ui,sans-serif" fillOpacity="0.5">
+          <text
+            x={190}
+            y={37}
+            fill={fg}
+            fontSize="6.5"
+            fontWeight="600"
+            fontFamily="system-ui,sans-serif"
+            fillOpacity="0.5"
+          >
             Edison Watch
           </text>
           {/* Window dots */}
@@ -316,74 +398,150 @@ export default function DesktopInstallAnimation(): React.ReactNode {
 
           {/* Wizard steps - fades out before checkmark */}
           <g className="di-wiz">
-            <text x={250} y={54} textAnchor="middle"
-              fill={fg} fontSize="8" fontWeight="bold"
-              fontFamily="system-ui,sans-serif" fillOpacity="0.6">
+            <text
+              x={250}
+              y={54}
+              textAnchor="middle"
+              fill={fg}
+              fontSize="8"
+              fontWeight="bold"
+              fontFamily="system-ui,sans-serif"
+              fillOpacity="0.6"
+            >
               Setup Wizard
             </text>
 
             {/* Step dots */}
-            <circle className="di-dot1" cx={234} cy={62} r={3}
-              fill={muted} fillOpacity="0.2" />
-            <circle className="di-dot2" cx={250} cy={62} r={3}
-              fill={muted} fillOpacity="0.2" />
-            <circle className="di-dot3" cx={266} cy={62} r={3}
-              fill={muted} fillOpacity="0.2" />
+            <circle className="di-dot1" cx={234} cy={62} r={3} fill={muted} fillOpacity="0.2" />
+            <circle className="di-dot2" cx={250} cy={62} r={3} fill={muted} fillOpacity="0.2" />
+            <circle className="di-dot3" cx={266} cy={62} r={3} fill={muted} fillOpacity="0.2" />
 
             {/* Content placeholder lines */}
-            <rect x={200} y={74} width={100} height={3} rx={1.5}
-              fill={muted} fillOpacity="0.12" />
-            <rect x={200} y={82} width={76} height={3} rx={1.5}
-              fill={muted} fillOpacity="0.08" />
-            <rect x={200} y={90} width={88} height={3} rx={1.5}
-              fill={muted} fillOpacity="0.06" />
+            <rect x={200} y={74} width={100} height={3} rx={1.5} fill={muted} fillOpacity="0.12" />
+            <rect x={200} y={82} width={76} height={3} rx={1.5} fill={muted} fillOpacity="0.08" />
+            <rect x={200} y={90} width={88} height={3} rx={1.5} fill={muted} fillOpacity="0.06" />
 
             {/* Right arrow button */}
-            <circle cx={250} cy={118} r={8}
-              fill={accent} fillOpacity="0.1"
-              stroke={accent} strokeOpacity="0.25" strokeWidth="0.8" />
-            <line x1={245} y1={118} x2={254} y2={118}
-              stroke={accent} strokeWidth="1.5" strokeLinecap="round" strokeOpacity="0.5" />
-            <path d="M251 115 L255 118 L251 121"
-              fill="none" stroke={accent} strokeWidth="1.5"
-              strokeLinecap="round" strokeLinejoin="round" strokeOpacity="0.5" />
+            <circle
+              cx={250}
+              cy={118}
+              r={8}
+              fill={accent}
+              fillOpacity="0.1"
+              stroke={accent}
+              strokeOpacity="0.25"
+              strokeWidth="0.8"
+            />
+            <line
+              x1={245}
+              y1={118}
+              x2={254}
+              y2={118}
+              stroke={accent}
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeOpacity="0.5"
+            />
+            <path
+              d="M251 115 L255 118 L251 121"
+              fill="none"
+              stroke={accent}
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeOpacity="0.5"
+            />
 
             {/* Click ripples on button */}
-            <circle className="di-wrip1" cx={250} cy={118} r={18}
-              fill="none" stroke={accent} strokeWidth="1.5" />
-            <circle className="di-wrip2" cx={250} cy={118} r={18}
-              fill="none" stroke={accent} strokeWidth="1.5" />
-            <circle className="di-wrip3" cx={250} cy={118} r={18}
-              fill="none" stroke={accent} strokeWidth="1.5" />
+            <circle
+              className="di-wrip1"
+              cx={250}
+              cy={118}
+              r={18}
+              fill="none"
+              stroke={accent}
+              strokeWidth="1.5"
+            />
+            <circle
+              className="di-wrip2"
+              cx={250}
+              cy={118}
+              r={18}
+              fill="none"
+              stroke={accent}
+              strokeWidth="1.5"
+            />
+            <circle
+              className="di-wrip3"
+              cx={250}
+              cy={118}
+              r={18}
+              fill="none"
+              stroke={accent}
+              strokeWidth="1.5"
+            />
 
             {/* Cursor clicking arrow button */}
             <g className="di-wcur">
               <g className="di-wclk">
-                <path d="M256 118 L256 132 L260 128 L264 134 L266 133 L262 127 L267 126 Z"
-                  fill={fg} fillOpacity="0.7" stroke={fg} strokeOpacity="0.3" strokeWidth="0.5" />
+                <path
+                  d="M256 118 L256 132 L260 128 L264 134 L266 133 L262 127 L267 126 Z"
+                  fill={fg}
+                  fillOpacity="0.7"
+                  stroke={fg}
+                  strokeOpacity="0.3"
+                  strokeWidth="0.5"
+                />
               </g>
             </g>
           </g>
 
           {/* Completion checkmark (appears on clean screen) */}
           <g className="di-done">
-            <circle cx={250} cy={85} r={18}
-              fill={accent} fillOpacity="0.06"
-              stroke={accent} strokeOpacity="0.35" strokeWidth="1.5" />
-            <path d="M241 85 L247 91 L260 78"
-              fill="none" stroke={accent} strokeWidth="2.5"
-              strokeLinecap="round" strokeLinejoin="round" strokeOpacity="0.7" />
-            <text x={250} y={112} textAnchor="middle"
-              fill={accent} fontSize="7" fontWeight="bold"
-              fontFamily="system-ui,sans-serif" fillOpacity="0.7">
+            <circle
+              cx={250}
+              cy={85}
+              r={18}
+              fill={accent}
+              fillOpacity="0.06"
+              stroke={accent}
+              strokeOpacity="0.35"
+              strokeWidth="1.5"
+            />
+            <path
+              d="M241 85 L247 91 L260 78"
+              fill="none"
+              stroke={accent}
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeOpacity="0.7"
+            />
+            <text
+              x={250}
+              y={112}
+              textAnchor="middle"
+              fill={accent}
+              fontSize="7"
+              fontWeight="bold"
+              fontFamily="system-ui,sans-serif"
+              fillOpacity="0.7"
+            >
               All set!
             </text>
           </g>
         </g>
 
         {/* Label */}
-        <text x={250} y={168} textAnchor="middle"
-          fill={fg} fontSize="9" fontWeight="bold" fontFamily="system-ui,sans-serif">
+        <text
+          x={250}
+          y={168}
+          textAnchor="middle"
+          fill={fg}
+          fontSize="9"
+          fontWeight="bold"
+          fontFamily="system-ui,sans-serif"
+        >
           Your Laptop
         </text>
 

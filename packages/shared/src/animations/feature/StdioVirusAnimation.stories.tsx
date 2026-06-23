@@ -5,8 +5,8 @@ const meta: Meta<typeof StdioVirusAnimation> = {
   title: 'Animations/StdioVirusAnimation',
   component: StdioVirusAnimation,
   parameters: {
-    layout: 'centered',
-  },
+    layout: 'centered'
+  }
 }
 
 export default meta
@@ -17,10 +17,12 @@ export const Default: Story = {
     (Story: React.ComponentType) => (
       <div style={{ padding: '24px', width: 500, background: 'var(--bg-base)' }}>
         <style>{'[data-story] svg { max-width: none !important; }'}</style>
-        <div data-story><Story /></div>
+        <div data-story>
+          <Story />
+        </div>
       </div>
-    ),
-  ],
+    )
+  ]
 }
 
 export const LightTheme: Story = {
@@ -28,8 +30,10 @@ export const LightTheme: Story = {
     (Story: React.ComponentType) => (
       <div data-theme="light" style={{ padding: '24px', width: 500, background: '#f8fafc' }}>
         <style>{'[data-story] svg { max-width: none !important; }'}</style>
-        <div data-story><Story /></div>
+        <div data-story>
+          <Story />
+        </div>
       </div>
-    ),
-  ],
+    )
+  ]
 }

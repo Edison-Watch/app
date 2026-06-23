@@ -5,40 +5,41 @@
  * Import this file to get all Edison design tokens as CSS custom properties.
  */
 
-:root, [data-theme="dark"] {
-  --bg-base: #0B0E14;
+:root,
+[data-theme='dark'] {
+  --bg-base: #0b0e14;
   --bg-raised: #141820;
-  --bg-overlay: #1A1F2B;
-  --bg-input: #0F1219;
-  --accent: #7DFFF6;
-  --accent-muted: #5CC8C0;
-  --accent-dim: #2A4A48;
-  --text-primary: #E8ECF2;
-  --text-secondary: #8B95A8;
-  --text-muted: #5A6478;
-  --border: #1E2432;
-  --border-active: #7DFFF6;
-  --success: #34D399;
-  --warning: #FBBF24;
-  --danger: #F87171;
-  --info: #60A5FA;
+  --bg-overlay: #1a1f2b;
+  --bg-input: #0f1219;
+  --accent: #7dfff6;
+  --accent-muted: #5cc8c0;
+  --accent-dim: #2a4a48;
+  --text-primary: #e8ecf2;
+  --text-secondary: #8b95a8;
+  --text-muted: #5a6478;
+  --border: #1e2432;
+  --border-active: #7dfff6;
+  --success: #34d399;
+  --warning: #fbbf24;
+  --danger: #f87171;
+  --info: #60a5fa;
 }
 
-[data-theme="light"] {
-  --bg-base: #F4F5F7;
-  --bg-raised: #FFFFFF;
-  --bg-overlay: #FFFFFF;
-  --bg-input: #F0F1F3;
-  --accent: #0D9488;
-  --accent-muted: #14B8A6;
-  --accent-dim: #CCFBF1;
-  --text-primary: #1E293B;
+[data-theme='light'] {
+  --bg-base: #f4f5f7;
+  --bg-raised: #ffffff;
+  --bg-overlay: #ffffff;
+  --bg-input: #f0f1f3;
+  --accent: #0d9488;
+  --accent-muted: #14b8a6;
+  --accent-dim: #ccfbf1;
+  --text-primary: #1e293b;
   --text-secondary: #475569;
-  --text-muted: #94A3B8;
-  --border: #E2E8F0;
-  --border-active: #0D9488;
-  --success: #16A34A;
-  --warning: #D97706;
-  --danger: #DC2626;
-  --info: #2563EB;
+  --text-muted: #94a3b8;
+  --border: #e2e8f0;
+  --border-active: #0d9488;
+  --success: #16a34a;
+  --warning: #d97706;
+  --danger: #dc2626;
+  --info: #2563eb;
 }

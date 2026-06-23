@@ -19,8 +19,12 @@ import { EdisonLogo } from './icons'
  * @param pulseClassName  the per-animation class driving the pulse keyframe
  */
 export function EdisonGateway({
-  cx, cy, r = 30, logoW, label,
-  pulseClassName,
+  cx,
+  cy,
+  r = 30,
+  logoW,
+  label,
+  pulseClassName
 }: {
   cx: number
   cy: number
@@ -33,13 +37,27 @@ export function EdisonGateway({
   const h = w * 0.975
   return (
     <>
-      <circle className={pulseClassName} cx={cx} cy={cy} r={r}
-        fill="none" stroke="var(--accent)" strokeOpacity="0.5" strokeWidth="1.5" />
+      <circle
+        className={pulseClassName}
+        cx={cx}
+        cy={cy}
+        r={r}
+        fill="none"
+        stroke="var(--accent)"
+        strokeOpacity="0.5"
+        strokeWidth="1.5"
+      />
       <EdisonLogo x={cx - w / 2} y={cy - h / 2} w={w} h={h} />
       {label !== undefined && (
-        <text x={cx} y={cy + r + 15} textAnchor="middle"
-          fill="var(--text-primary)" fontSize="9" fontWeight="bold"
-          fontFamily="system-ui,sans-serif">
+        <text
+          x={cx}
+          y={cy + r + 15}
+          textAnchor="middle"
+          fill="var(--text-primary)"
+          fontSize="9"
+          fontWeight="bold"
+          fontFamily="system-ui,sans-serif"
+        >
           {label}
         </text>
       )}

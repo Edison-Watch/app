@@ -1,6 +1,1 @@
-export {
-  supabase,
-  getSessionState,
-  fetchApiKey,
-  type ApiKeyResponse,
-} from "./supabase";
+export { supabase, getSessionState, fetchApiKey, type ApiKeyResponse } from './supabase'

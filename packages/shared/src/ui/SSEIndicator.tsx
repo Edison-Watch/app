@@ -1,19 +1,19 @@
-export type SSEStatus = "connected" | "reconnecting" | "disconnected";
+export type SSEStatus = 'connected' | 'reconnecting' | 'disconnected'
 
 const STATUS_CONFIG = {
-  connected: { color: "bg-[var(--success)]", label: "Connected" },
-  reconnecting: { color: "bg-[var(--warning)]", label: "Reconnecting..." },
-  disconnected: { color: "bg-[var(--danger)]", label: "Disconnected" },
-} as const;
+  connected: { color: 'bg-[var(--success)]', label: 'Connected' },
+  reconnecting: { color: 'bg-[var(--warning)]', label: 'Reconnecting...' },
+  disconnected: { color: 'bg-[var(--danger)]', label: 'Disconnected' }
+} as const
 
 export default function SSEIndicator({ status }: { status: SSEStatus }) {
-  const config = STATUS_CONFIG[status];
+  const config = STATUS_CONFIG[status]
 
   return (
     <div className="relative group inline-flex items-center">
       <span
         className={`inline-block w-2 h-2 rounded-full ${config.color} ${
-          status === "reconnecting" ? "animate-pulse" : ""
+          status === 'reconnecting' ? 'animate-pulse' : ''
         }`}
         aria-label={config.label}
       />
@@ -21,5 +21,5 @@ export default function SSEIndicator({ status }: { status: SSEStatus }) {
         {config.label}
       </span>
     </div>
-  );
+  )
 }

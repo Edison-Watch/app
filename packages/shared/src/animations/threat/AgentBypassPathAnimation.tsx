@@ -23,7 +23,7 @@ const AGENTS = [
   AGENT_REGISTRY['claude-code'],
   AGENT_REGISTRY['cursor'],
   AGENT_REGISTRY['codex'],
-  AGENT_REGISTRY['copilot'],
+  AGENT_REGISTRY['copilot']
 ]
 
 const CSS = `
@@ -119,70 +119,131 @@ export default function AgentBypassPathAnimation(): React.ReactNode {
         aria-hidden="true"
       >
         <defs>
-          <marker id={`${id}-arrR`} viewBox="0 0 10 10" refX="9" refY="5"
-            markerWidth="5" markerHeight="5" orient="auto">
+          <marker
+            id={`${id}-arrR`}
+            viewBox="0 0 10 10"
+            refX="9"
+            refY="5"
+            markerWidth="5"
+            markerHeight="5"
+            orient="auto"
+          >
             <path d="M0 1 L9 5 L0 9 Z" fill={R} fillOpacity={0.8} />
           </marker>
         </defs>
 
         {/* Panel frame */}
-        <rect x="6" y="6" width="328" height="208" rx="14"
-          fill="var(--text-primary)" fillOpacity="0.015"
-          stroke="var(--text-muted)" strokeOpacity="0.18" strokeWidth="1" />
+        <rect
+          x="6"
+          y="6"
+          width="328"
+          height="208"
+          rx="14"
+          fill="var(--text-primary)"
+          fillOpacity="0.015"
+          stroke="var(--text-muted)"
+          strokeOpacity="0.18"
+          strokeWidth="1"
+        />
 
         {/* "Agent Bypass" label */}
-        <text x="64" y="28" textAnchor="middle"
-          fill={R} fillOpacity="0.9"
-          fontSize="11" fontWeight="700"
-          fontFamily="system-ui,sans-serif">
+        <text
+          x="64"
+          y="28"
+          textAnchor="middle"
+          fill={R}
+          fillOpacity="0.9"
+          fontSize="11"
+          fontWeight="700"
+          fontFamily="system-ui,sans-serif"
+        >
           Agent Bypass
         </text>
 
         {/* Agents box: 2x2 grid */}
-        <rect x="26" y="50" width="78" height="78" rx="8"
-          fill="var(--text-primary)" fillOpacity="0.03"
-          stroke={R} strokeOpacity="0.35" strokeWidth="1"
-          strokeDasharray="4 3" />
+        <rect
+          x="26"
+          y="50"
+          width="78"
+          height="78"
+          rx="8"
+          fill="var(--text-primary)"
+          fillOpacity="0.03"
+          stroke={R}
+          strokeOpacity="0.35"
+          strokeWidth="1"
+          strokeDasharray="4 3"
+        />
         <AgentIcon agent={AGENTS[0]!} x={34} y={58} size={28} />
         <AgentIcon agent={AGENTS[1]!} x={68} y={58} size={28} />
         <AgentIcon agent={AGENTS[2]!} x={34} y={92} size={28} />
         <AgentIcon agent={AGENTS[3]!} x={68} y={92} size={28} />
 
-        <text x="65" y="146" textAnchor="middle"
-          fill="var(--text-primary)" fillOpacity="0.55"
-          fontSize="10" fontWeight="500"
-          fontFamily="system-ui,sans-serif">
+        <text
+          x="65"
+          y="146"
+          textAnchor="middle"
+          fill="var(--text-primary)"
+          fillOpacity="0.55"
+          fontSize="10"
+          fontWeight="500"
+          fontFamily="system-ui,sans-serif"
+        >
           Agents
         </text>
 
         {/* Mesh wall (still present, but bypassed) */}
-        <MeshWall x={154} y={50} width={70} height={130}
-          color="var(--text-muted)" />
+        <MeshWall x={154} y={50} width={70} height={130} color="var(--text-muted)" />
         {/* Red flash on the wall when bypass succeeds */}
-        <rect className="abp-wall-bad-flash"
-          x="154" y="50" width="70" height="130" rx="2"
-          fill={R} fillOpacity="0.18" />
+        <rect
+          className="abp-wall-bad-flash"
+          x="154"
+          y="50"
+          width="70"
+          height="130"
+          rx="2"
+          fill={R}
+          fillOpacity="0.18"
+        />
 
         {/* "Data" label */}
-        <text x="289" y="42" textAnchor="middle"
-          fill="var(--text-primary)" fillOpacity="0.85"
-          fontSize="11" fontWeight="600"
-          fontFamily="system-ui,sans-serif">
+        <text
+          x="289"
+          y="42"
+          textAnchor="middle"
+          fill="var(--text-primary)"
+          fillOpacity="0.85"
+          fontSize="11"
+          fontWeight="600"
+          fontFamily="system-ui,sans-serif"
+        >
           Data
         </text>
 
         {/* Data cube */}
         <DataCylinder cx={289} cy={120} size={42} />
-        <rect className="abp-glow-bad"
-          x="261" y="62" width="56" height="116" rx="6"
-          fill={R} fillOpacity="0" />
+        <rect
+          className="abp-glow-bad"
+          x="261"
+          y="62"
+          width="56"
+          height="116"
+          rx="6"
+          fill={R}
+          fillOpacity="0"
+        />
 
         {/* Bypass arc (red, going OVER the wall) */}
-        <path className="abp-line"
+        <path
+          className="abp-line"
           d="M 89 96 C 92 28, 284 28, 286 96"
           fill="none"
-          stroke={R} strokeOpacity="0.55" strokeWidth="1.5"
-          strokeDasharray="3 3" markerEnd={`url(#${id}-arrR)`} />
+          stroke={R}
+          strokeOpacity="0.55"
+          strokeWidth="1.5"
+          strokeDasharray="3 3"
+          markerEnd={`url(#${id}-arrR)`}
+        />
 
         {/* Red packet (rides arc via translate waypoints) */}
         <g className="abp-pkt-bad">
@@ -192,10 +253,16 @@ export default function AgentBypassPathAnimation(): React.ReactNode {
 
         {/* Warning text near the apex */}
         <g className="abp-warn">
-          <text x="154" y="200" textAnchor="middle"
-            fill={R} fillOpacity="0.85"
-            fontSize="9" fontWeight="600"
-            fontFamily="system-ui,sans-serif">
+          <text
+            x="154"
+            y="200"
+            textAnchor="middle"
+            fill={R}
+            fillOpacity="0.85"
+            fontSize="9"
+            fontWeight="600"
+            fontFamily="system-ui,sans-serif"
+          >
             ⚠ Agents are overprivileged by default
           </text>
         </g>
