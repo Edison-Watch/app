@@ -21,7 +21,7 @@ updates:
           - jsdom
       build:
         patterns:
-          - tsup
+          - tsdown
           - typescript
 
   - package-ecosystem: github-actions
