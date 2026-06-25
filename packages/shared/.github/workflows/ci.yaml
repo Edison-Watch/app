@@ -15,6 +15,15 @@ permissions:
   id-token: write
 
 jobs:
+  ai-writing:
+    name: AI Writing Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+      - run: bun scripts/check-ai-writing.ts
+
   quality:
     runs-on: ubuntu-latest
     timeout-minutes: 10

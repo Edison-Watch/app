@@ -6,3 +6,6 @@ test-results/
 playwright-report/
 *.tsbuildinfo
 
+# bun is only a runtime for scripts/check-ai-writing.ts; npm manages deps
+bun.lock
+
