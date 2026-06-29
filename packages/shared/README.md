@@ -70,18 +70,18 @@ TLDR: import the subpath you need; see [`package.json`](package.json) `exports` 
 
 Each entrypoint is independently tree-shakeable.
 
-| Entrypoint | Contents |
-|------------|----------|
-| `@edison/shared` | Root barrel re-exporting the public surface |
-| `@edison/shared/ui` and `@edison/shared/ui/*` | React UI components |
-| `@edison/shared/hooks/*` | React hooks |
-| `@edison/shared/theme/tokens.css` | Edison design tokens (CSS custom properties) |
-| `@edison/shared/animations` | Product and security SVG animations |
-| `@edison/shared/svg` | SVG asset path/string exports |
-| `@edison/shared/auth` | Browser auth and Supabase client |
-| `@edison/shared/config` | Client/runtime environment configuration |
-| `@edison/shared/crypto` | Client-side crypto utilities |
-| `@edison/shared/agent-registry` | Canonical agent icon and metadata registry |
+| Entrypoint                                    | Contents                                     |
+| --------------------------------------------- | -------------------------------------------- |
+| `@edison/shared`                              | Root barrel re-exporting the public surface  |
+| `@edison/shared/ui` and `@edison/shared/ui/*` | React UI components                          |
+| `@edison/shared/hooks/*`                      | React hooks                                  |
+| `@edison/shared/theme/tokens.css`             | Edison design tokens (CSS custom properties) |
+| `@edison/shared/animations`                   | Product and security SVG animations          |
+| `@edison/shared/svg`                          | SVG asset path/string exports                |
+| `@edison/shared/auth`                         | Browser auth and Supabase client             |
+| `@edison/shared/config`                       | Client/runtime environment configuration     |
+| `@edison/shared/crypto`                       | Client-side crypto utilities                 |
+| `@edison/shared/agent-registry`               | Canonical agent icon and metadata registry   |
 
 </details>
 
@@ -110,16 +110,16 @@ The client configuration in [`src/config/env-config.ts`](src/config/env-config.t
 
 ```ts
 export interface EnvConfig {
-  SUPABASE_URL: string             // GoTrue / Supabase auth origin (supabase-js base URL)
-  SUPABASE_ANON_KEY: string        // Publishable anon key (safe in client bundles)
-  FUNCTIONS_URL: string            // Base URL for Supabase edge functions
-  SENTRY_DSN: string               // Error reporting DSN
-  POSTHOG_API_KEY: string          // Product analytics key
+  SUPABASE_URL: string // GoTrue / Supabase auth origin (supabase-js base URL)
+  SUPABASE_ANON_KEY: string // Publishable anon key (safe in client bundles)
+  FUNCTIONS_URL: string // Base URL for Supabase edge functions
+  SENTRY_DSN: string // Error reporting DSN
+  POSTHOG_API_KEY: string // Product analytics key
   POSTHOG_FEEDBACK_SURVEY_ID: string
-  DEPLOY_ENV: string               // "demo" | "release" | "local"
-  API_BASE_URL: string             // Default API server base URL
-  MCP_BASE_URL: string             // Default MCP server base URL
-  RELEASES_BASE_URL: string        // Desktop release bucket (electron-updater feed)
+  DEPLOY_ENV: string // "demo" | "release" | "local"
+  API_BASE_URL: string // Default API server base URL
+  MCP_BASE_URL: string // Default MCP server base URL
+  RELEASES_BASE_URL: string // Desktop release bucket (electron-updater feed)
 }
 ```
 
