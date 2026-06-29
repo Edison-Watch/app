@@ -175,11 +175,6 @@ Baselines live in [`visual-tests/`](visual-tests). The build is verified in CI (
 
 Issues and focused contributions are welcome. Please open an issue with a clear description, expected behavior, and a minimal reproduction where possible. Broader organization-level contribution and security policies will be published separately.
 
-Two repository conventions worth noting before you open a PR:
-
-- **Plain prose only.** CI runs [`scripts/check-ai-writing.ts`](scripts/check-ai-writing.ts), which rejects em dashes (U+2014) and contrastive parallelism. Use hyphens and direct phrasing.
-- **Folder and file size limits** are enforced by [`scripts/check_folder_sizes.sh`](scripts/check_folder_sizes.sh) and [`scripts/check_large_files.sh`](scripts/check_large_files.sh).
-
 ## Credits
 
 This package is built with:
