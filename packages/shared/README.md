@@ -26,7 +26,7 @@
 This repository is public so that the shared client code used across Edison Watch can be audited and evaluated. It is intentionally an Edison Watch package, not a generic component library or a hosted service SDK.
 
 <p align="center">
-  <img src="docs/architecture.svg" alt="Architecture: Edison Watch apps consume @edison/shared, which groups UI and client-service entrypoints over a React and Supabase peer-dependency foundation, built by tsdown to dist/." width="900" />
+  <img src="docs/architecture.svg" alt="Architecture: Edison Watch applications share @edison/shared, which provides a design-system domain and a client-services domain, shipped as standard JS modules and running on the host application's React runtime and backend platform." width="900" />
 </p>
 
 > [!NOTE]
@@ -113,32 +113,29 @@ Only values that are safe to expose in browser applications belong in this repos
 
 ## Architecture
 
-The SVG above is the at-a-glance view. The text diagram below renders everywhere and shows how a consuming app resolves an import down to built output.
+The SVG above is the at-a-glance view. The text diagram below renders everywhere and captures the same durable shape: two capability domains shared by every client, sitting on a host-provided runtime.
 
 <details>
-<summary>Module and build layout</summary>
+<summary>Conceptual layout</summary>
 
 ```
-Edison Watch app (web / desktop / Electron)
-        │  import { Button } from '@edison/shared/ui'
-        ▼
-   ┌──────────────────────── @edison/shared ────────────────────────┐
-   │                                                                 │
-   │   Design system                  Client services                │
-   │   ├─ ui/            (components)  ├─ auth/     (Supabase)        │
-   │   ├─ hooks/         (React)       ├─ config/   (env switching)   │
-   │   ├─ animations/    (SVG+CSS)     ├─ crypto/   (client crypto)   │
-   │   ├─ svg/           (asset paths) └─ agent-registry/ (icon data) │
-   │   └─ theme/tokens.css                                           │
-   │                                                                 │
-   └────────────────────────────┬────────────────────────────────────┘
-                                 │  tsdown build
+   Edison Watch applications (web / desktop clients)
+                          │  share one source of truth
+                          ▼
+   ┌──────────────────── @edison/shared ────────────────────┐
+   │                                                         │
+   │   Design system                Client services          │
+   │   (look and feel)              (behavior)                │
+   │   ├─ Reusable UI components    ├─ Authentication         │
+   │   ├─ Design tokens & theming   ├─ Runtime configuration  │
+   │   └─ Motion & illustration     ├─ Client-side crypto     │
+   │                                └─ Canonical reference    │
+   │                                                         │
+   └────────────────────────────┬────────────────────────────┘
+                                 │  shipped as standard JS modules
                                  ▼
-                  dist/  (ESM .mjs + CJS .cjs + .d.ts)
-                                 │
-                                 ▼
-        Peer deps provided by consumer:
-        React · React DOM · React Router · Supabase JS
+        Host runtime (provided by the consuming app):
+        React UI runtime · application data & auth platform
 ```
 
 </details>
