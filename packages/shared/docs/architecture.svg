@@ -1,85 +1,89 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="960" height="560" viewBox="0 0 960 560" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" role="img" aria-label="@edison/shared architecture diagram">
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="600" viewBox="0 0 960 600" font-family="'Archivo', 'Helvetica Neue', Arial, sans-serif" role="img" aria-label="@edison/shared architecture diagram in the Edison Hackbox style">
   <defs>
     <style>
-      .title { font-size: 22px; font-weight: 700; fill: #0f172a; }
-      .subtitle { font-size: 13px; fill: #64748b; }
-      .layer-label { font-size: 13px; font-weight: 700; letter-spacing: 0.04em; }
-      .cluster-title { font-size: 15px; font-weight: 700; }
-      .tile-title { font-size: 13.5px; font-weight: 700; }
-      .note { font-size: 12px; fill: #475569; }
-      .foot { font-size: 13px; font-weight: 600; fill: #ffffff; }
+      .title    { font-size: 26px; font-weight: 800; fill: #FFFFFF; letter-spacing: 0.5px; }
+      .subtitle { font-size: 13px; font-weight: 400; fill: #9BA4A6; letter-spacing: 0.3px; }
+      .tag-text { font-size: 12px; font-weight: 700; fill: #000000; letter-spacing: 1px; }
+      .body     { font-size: 14px; font-weight: 600; fill: #FFFFFF; }
+      .item     { font-size: 13.5px; font-weight: 400; fill: #F9F9F9; }
+      .caption  { font-size: 11.5px; font-weight: 400; fill: #9BA4A6; letter-spacing: 1px; }
+      .foot     { font-size: 12px; font-weight: 400; fill: #9BA4A6; letter-spacing: 0.3px; }
     </style>
-    <marker id="arrow" markerWidth="10" markerHeight="10" refX="7" refY="5" orient="auto" markerUnits="userSpaceOnUse">
-      <path d="M0,1 L8,5 L0,9 Z" fill="#94a3b8"/>
+    <marker id="cy-arrow" markerWidth="12" markerHeight="12" refX="7" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,1 L9,5 L0,9 Z" fill="#C3FFFD"/>
     </marker>
   </defs>
 
-  <!-- background -->
-  <rect x="0" y="0" width="960" height="560" fill="#f8fafc"/>
+  <!-- void black background -->
+  <rect x="0" y="0" width="960" height="600" fill="#000000"/>
+
+  <!-- grid-marker dashes (technical-precision accents) -->
+  <g stroke="#C3FFFD" stroke-width="2" opacity="0.55">
+    <line x1="34" y1="40" x2="46" y2="40"/>
+    <line x1="914" y1="40" x2="926" y2="40"/>
+    <line x1="34" y1="300" x2="46" y2="300"/>
+    <line x1="914" y1="300" x2="926" y2="300"/>
+    <line x1="34" y1="566" x2="46" y2="566"/>
+    <line x1="914" y1="566" x2="926" y2="566"/>
+  </g>
 
   <!-- header -->
-  <text x="40" y="44" class="title">@edison/shared</text>
-  <text x="40" y="66" class="subtitle">One shared client foundation for the Edison Watch applications</text>
+  <text x="80" y="48" class="title">@edison/shared</text>
+  <text x="80" y="72" class="subtitle">One shared client foundation for the Edison Watch applications</text>
 
-  <!-- Consumers layer -->
-  <rect x="40" y="84" width="880" height="58" rx="12" fill="#eef2ff" stroke="#c7d2fe" stroke-width="1.5"/>
-  <text x="60" y="108" class="layer-label" fill="#4338ca">CONSUMING APPLICATIONS</text>
-  <text x="60" y="128" class="note" fill="#3730a3">Edison Watch web and desktop clients, sharing one source of truth</text>
+  <!-- ============ CONSUMERS (horizontal box) ============ -->
+  <rect x="80" y="92" width="800" height="64" fill="none" stroke="#C3FFFD" stroke-width="2"/>
+  <rect x="80" y="92" width="320" height="26" fill="#C3FFFD"/>
+  <text x="240" y="110" text-anchor="middle" class="tag-text">CONSUMING APPLICATIONS</text>
+  <text x="480" y="142" text-anchor="middle" class="body">Edison Watch web and desktop clients, sharing one source of truth</text>
 
-  <!-- arrow consumers -> package -->
-  <line x1="480" y1="142" x2="480" y2="172" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow)"/>
+  <!-- arrow down -->
+  <line x1="480" y1="156" x2="480" y2="186" stroke="#C3FFFD" stroke-width="2" marker-end="url(#cy-arrow)"/>
 
-  <!-- Package box -->
-  <rect x="40" y="176" width="880" height="262" rx="16" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
-  <text x="60" y="204" class="layer-label" fill="#0f172a">@edison/shared</text>
+  <!-- ============ @edison/shared container ============ -->
+  <rect x="80" y="190" width="800" height="276" fill="none" stroke="#C3FFFD" stroke-width="2"/>
+  <rect x="80" y="190" width="320" height="26" fill="#C3FFFD"/>
+  <text x="240" y="208" text-anchor="middle" class="tag-text">@EDISON/SHARED</text>
 
-  <!-- Design system cluster -->
-  <rect x="60" y="218" width="500" height="204" rx="12" fill="#f0f9ff" stroke="#bae6fd" stroke-width="1.5"/>
-  <rect x="60" y="218" width="500" height="34" rx="12" fill="#0ea5e9"/>
-  <rect x="60" y="238" width="500" height="14" fill="#0ea5e9"/>
-  <text x="78" y="240" class="cluster-title" fill="#ffffff">Design system</text>
-  <text x="540" y="240" text-anchor="end" font-size="12px" fill="#e0f2fe">look and feel</text>
+  <!-- Design system box (tag top-left) -->
+  <rect x="112" y="240" width="352" height="200" fill="none" stroke="#C3FFFD" stroke-width="2"/>
+  <rect x="112" y="240" width="141" height="24" fill="#C3FFFD"/>
+  <text x="182" y="257" text-anchor="middle" class="tag-text">DESIGN SYSTEM</text>
+  <g>
+    <rect x="130" y="294" width="6" height="6" fill="#C3FFFD"/>
+    <text x="146" y="301" class="item">Reusable UI components</text>
+    <rect x="130" y="328" width="6" height="6" fill="#C3FFFD"/>
+    <text x="146" y="335" class="item">Design tokens and theming</text>
+    <rect x="130" y="362" width="6" height="6" fill="#C3FFFD"/>
+    <text x="146" y="369" class="item">Motion and illustration</text>
+  </g>
+  <text x="130" y="424" class="caption">LOOK AND FEEL</text>
 
-  <rect x="78" y="262" width="464" height="48" rx="9" fill="#ffffff" stroke="#7dd3fc" stroke-width="1.3"/>
-  <text x="92" y="285" class="tile-title" fill="#0369a1">Reusable UI components</text>
-  <text x="92" y="302" class="note">Accessible, themeable interface building blocks</text>
+  <!-- Client services box (tag bottom-right, for rhythm) -->
+  <rect x="496" y="240" width="352" height="200" fill="none" stroke="#C3FFFD" stroke-width="2"/>
+  <rect x="707" y="416" width="141" height="24" fill="#C3FFFD"/>
+  <text x="777" y="433" text-anchor="middle" class="tag-text">CLIENT SERVICES</text>
+  <text x="514" y="280" class="caption">BEHAVIOR</text>
+  <g>
+    <rect x="514" y="300" width="6" height="6" fill="#C3FFFD"/>
+    <text x="530" y="307" class="item">Authentication and identity</text>
+    <rect x="514" y="330" width="6" height="6" fill="#C3FFFD"/>
+    <text x="530" y="337" class="item">Runtime configuration</text>
+    <rect x="514" y="360" width="6" height="6" fill="#C3FFFD"/>
+    <text x="530" y="367" class="item">Client-side cryptography</text>
+    <rect x="514" y="390" width="6" height="6" fill="#C3FFFD"/>
+    <text x="530" y="397" class="item">Canonical reference data</text>
+  </g>
 
-  <rect x="78" y="318" width="464" height="48" rx="9" fill="#ffffff" stroke="#7dd3fc" stroke-width="1.3"/>
-  <text x="92" y="341" class="tile-title" fill="#0369a1">Design tokens and theming</text>
-  <text x="92" y="358" class="note">The shared visual language across clients</text>
+  <!-- arrow down -->
+  <line x1="480" y1="466" x2="480" y2="496" stroke="#C3FFFD" stroke-width="2" marker-end="url(#cy-arrow)"/>
 
-  <rect x="78" y="374" width="464" height="48" rx="9" fill="#ffffff" stroke="#7dd3fc" stroke-width="1.3"/>
-  <text x="92" y="397" class="tile-title" fill="#0369a1">Motion and illustration</text>
-  <text x="92" y="414" class="note">Product and security explainer graphics</text>
+  <!-- ============ HOST RUNTIME (horizontal box) ============ -->
+  <rect x="80" y="500" width="800" height="64" fill="none" stroke="#C3FFFD" stroke-width="2"/>
+  <rect x="80" y="500" width="320" height="26" fill="#C3FFFD"/>
+  <text x="240" y="518" text-anchor="middle" class="tag-text">HOST RUNTIME</text>
+  <text x="480" y="550" text-anchor="middle" class="body">React UI runtime  ·  application data and auth platform</text>
 
-  <!-- Client services cluster -->
-  <rect x="580" y="218" width="320" height="204" rx="12" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5"/>
-  <rect x="580" y="218" width="320" height="34" rx="12" fill="#16a34a"/>
-  <rect x="580" y="238" width="320" height="14" fill="#16a34a"/>
-  <text x="598" y="240" class="cluster-title" fill="#ffffff">Client services</text>
-  <text x="880" y="240" text-anchor="end" font-size="12px" fill="#dcfce7">behavior</text>
-
-  <rect x="598" y="262" width="284" height="36" rx="9" fill="#ffffff" stroke="#86efac" stroke-width="1.3"/>
-  <text x="612" y="285" class="tile-title" fill="#15803d">Authentication and identity</text>
-
-  <rect x="598" y="304" width="284" height="36" rx="9" fill="#ffffff" stroke="#86efac" stroke-width="1.3"/>
-  <text x="612" y="327" class="tile-title" fill="#15803d">Runtime configuration</text>
-
-  <rect x="598" y="346" width="284" height="36" rx="9" fill="#ffffff" stroke="#86efac" stroke-width="1.3"/>
-  <text x="612" y="369" class="tile-title" fill="#15803d">Client-side cryptography</text>
-
-  <rect x="598" y="388" width="284" height="36" rx="9" fill="#ffffff" stroke="#86efac" stroke-width="1.3"/>
-  <text x="612" y="411" class="tile-title" fill="#15803d">Canonical reference data</text>
-
-  <!-- arrow package -> runtime -->
-  <line x1="480" y1="438" x2="480" y2="468" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow)"/>
-
-  <!-- Host runtime foundation -->
-  <rect x="40" y="472" width="880" height="54" rx="12" fill="#1e293b"/>
-  <text x="60" y="495" class="layer-label" fill="#94a3b8">HOST RUNTIME  (provided by the consuming application)</text>
-  <text x="60" y="515" class="foot">React UI runtime  ·  application data and auth platform</text>
-  <text x="900" y="515" text-anchor="end" font-size="12px" fill="#cbd5e1">shipped as standard JS modules</text>
-
-  <!-- footer note -->
-  <text x="40" y="550" class="note">Built once from a single source and consumed by every Edison Watch client.</text>
+  <!-- footer -->
+  <text x="80" y="588" class="foot">Built once from a single source, consumed by every Edison Watch client. Shipped as standard JS modules.</text>
 </svg>
