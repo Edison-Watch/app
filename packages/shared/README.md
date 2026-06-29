@@ -18,7 +18,10 @@
 
 ## What is this
 
-`@edison/shared` is a TypeScript package of React UI components, design tokens, and browser-side utilities for the Edison Watch web and desktop clients. It bundles the shared design system (UI primitives, theme tokens, animations, and SVG assets) together with client-side auth, configuration, crypto, and agent-registry helpers, built with [tsdown](https://tsdown.dev) into ESM, CommonJS, and TypeScript declarations. The repository is public so the shared client code can be audited; it is intentionally an Edison Watch package rather than a generic component library or a hosted service SDK.
+- React UI components and Edison design tokens
+- Product and security animations used in the Edison Watch clients
+- Agent registry data and SVG assets
+- Browser-side authentication, configuration, and crypto utilities
 
 <p align="center">
   <img src="docs/architecture.svg" alt="Architecture: Edison Watch apps consume @edison/shared, which groups UI and client-service entrypoints over a React and Supabase peer-dependency foundation, built by tsdown to dist/." width="900" />
