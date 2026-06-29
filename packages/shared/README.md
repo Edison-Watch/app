@@ -23,6 +23,8 @@
 - Agent registry data and SVG assets
 - Browser-side authentication, configuration, and crypto utilities
 
+This repository is public so that the shared client code used across Edison Watch can be audited and evaluated. It is intentionally an Edison Watch package, not a generic component library or a hosted service SDK.
+
 <p align="center">
   <img src="docs/architecture.svg" alt="Architecture: Edison Watch apps consume @edison/shared, which groups UI and client-service entrypoints over a React and Supabase peer-dependency foundation, built by tsdown to dist/." width="900" />
 </p>
