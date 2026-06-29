@@ -12,7 +12,6 @@
 <a href="#package-entrypoints">Entrypoints</a> •
 <a href="#modules">Modules</a> •
 <a href="#configuration-scope">Configuration</a> •
-<a href="#architecture">Architecture</a> •
 <a href="#contributing">Contributing</a> •
 <a href="#license">License</a>
 
@@ -124,35 +123,6 @@ export interface EnvConfig {
 ```
 
 Only values that are safe to expose in browser applications belong in this repository. Do not add server credentials, private keys, privileged API tokens, or other secrets.
-
-## Architecture
-
-The SVG above is the at-a-glance view. The text diagram below renders everywhere and captures the same durable shape: two capability domains shared by every client, sitting on a host-provided runtime.
-
-<details>
-<summary>Conceptual layout</summary>
-
-```
-   Edison Watch applications (web / desktop clients)
-                          │  share one source of truth
-                          ▼
-   ┌──────────────────── @edison/shared ────────────────────┐
-   │                                                         │
-   │   Design system                Client services          │
-   │   (look and feel)              (behavior)                │
-   │   ├─ Reusable UI components    ├─ Authentication         │
-   │   ├─ Design tokens & theming   ├─ Runtime configuration  │
-   │   └─ Motion & illustration     ├─ Client-side crypto     │
-   │                                └─ Canonical reference    │
-   │                                                         │
-   └────────────────────────────┬────────────────────────────┘
-                                 │  shipped as standard JS modules
-                                 ▼
-        Host runtime (provided by the consuming app):
-        React UI runtime · application data & auth platform
-```
-
-</details>
 
 ## Visual regression tests
 
