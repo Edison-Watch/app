@@ -63,7 +63,12 @@ Consumers of the UI and auth modules must provide the declared peer dependencies
 
 ## Package entrypoints
 
-Import only the subpath you need; each is independently tree-shakeable.
+TLDR: import the subpath you need; see [`package.json`](package.json) `exports` for the full list.
+
+<details>
+<summary>Entrypoints</summary>
+
+Each entrypoint is independently tree-shakeable.
 
 | Entrypoint | Contents |
 |------------|----------|
@@ -78,7 +83,14 @@ Import only the subpath you need; each is independently tree-shakeable.
 | `@edison/shared/crypto` | Client-side crypto utilities |
 | `@edison/shared/agent-registry` | Canonical agent icon and metadata registry |
 
+</details>
+
 ## Modules
+
+TLDR: a design-system half and a client-services half; browse [`src/`](src) for the source.
+
+<details>
+<summary>What lives where</summary>
 
 - **UI components** ([`src/ui/`](src/ui)): Badge, Button, Card, Dialog, Dropdown, EmptyState, ErrorBoundary, Input, Select, Skeleton, SlideOver, SSEIndicator, Switch, Table, Tabs, Toast, and Tooltip. Each ships a matching `*.stories.tsx`.
 - **Design tokens** ([`src/theme/tokens.css`](src/theme/tokens.css)): theme color, spacing, and typography custom properties shared across clients.
@@ -89,6 +101,8 @@ Import only the subpath you need; each is independently tree-shakeable.
 - **Config** ([`src/config/`](src/config)): runtime environment configuration with demo/release/local switching.
 - **Crypto** ([`src/crypto/`](src/crypto)): client-side encryption and secret-key API helpers.
 - **Agent registry** ([`src/agent-registry/`](src/agent-registry)): display names, brand colors, and icon data for supported coding agents.
+
+</details>
 
 ## Configuration scope
 
