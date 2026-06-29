@@ -25,7 +25,7 @@
 This repository is public so that the shared client code used across Edison Watch can be audited and evaluated. It is intentionally an Edison Watch package, not a generic component library or a hosted service SDK.
 
 <p align="center">
-  <img src="docs/architecture.svg" alt="Architecture: Edison Watch applications share @edison/shared, which provides a design-system domain and a client-services domain, shipped as standard JS modules and running on the host application's React runtime and backend platform." width="900" />
+  <img src="docs/architecture.svg" alt="Architecture: Edison Watch applications share @edison/shared, which provides a design-system domain and a client-services domain, shipped as standard JS modules." width="900" />
 </p>
 
 > [!NOTE]

@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="960" height="600" viewBox="0 0 960 600" font-family="'Archivo', 'Helvetica Neue', Arial, sans-serif" role="img" aria-label="@edison/shared architecture diagram in the Edison Hackbox style">
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="508" viewBox="0 0 960 508" font-family="'Archivo', 'Helvetica Neue', Arial, sans-serif" role="img" aria-label="@edison/shared architecture diagram in the Edison Hackbox style">
   <defs>
     <style>
       .title    { font-size: 26px; font-weight: 800; fill: #FFFFFF; letter-spacing: 0.5px; }
@@ -15,16 +15,16 @@
   </defs>
 
   <!-- void black background -->
-  <rect x="0" y="0" width="960" height="600" fill="#000000"/>
+  <rect x="0" y="0" width="960" height="508" fill="#000000"/>
 
   <!-- grid-marker dashes (technical-precision accents) -->
   <g stroke="#C3FFFD" stroke-width="2" opacity="0.55">
     <line x1="34" y1="40" x2="46" y2="40"/>
     <line x1="914" y1="40" x2="926" y2="40"/>
-    <line x1="34" y1="300" x2="46" y2="300"/>
-    <line x1="914" y1="300" x2="926" y2="300"/>
-    <line x1="34" y1="566" x2="46" y2="566"/>
-    <line x1="914" y1="566" x2="926" y2="566"/>
+    <line x1="34" y1="270" x2="46" y2="270"/>
+    <line x1="914" y1="270" x2="926" y2="270"/>
+    <line x1="34" y1="474" x2="46" y2="474"/>
+    <line x1="914" y1="474" x2="926" y2="474"/>
   </g>
 
   <!-- header -->
@@ -75,15 +75,6 @@
     <text x="530" y="397" class="item">Canonical reference data</text>
   </g>
 
-  <!-- arrow down -->
-  <line x1="480" y1="466" x2="480" y2="496" stroke="#C3FFFD" stroke-width="2" marker-end="url(#cy-arrow)"/>
-
-  <!-- ============ HOST RUNTIME (horizontal box) ============ -->
-  <rect x="80" y="500" width="800" height="64" fill="none" stroke="#C3FFFD" stroke-width="2"/>
-  <rect x="80" y="500" width="320" height="26" fill="#C3FFFD"/>
-  <text x="240" y="518" text-anchor="middle" class="tag-text">HOST RUNTIME</text>
-  <text x="480" y="550" text-anchor="middle" class="body">React UI runtime  ·  application data and auth platform</text>
-
   <!-- footer -->
-  <text x="80" y="588" class="foot">Built once from a single source, consumed by every Edison Watch client. Shipped as standard JS modules.</text>
+  <text x="80" y="494" class="foot">Built once from a single source, consumed by every Edison Watch client. Shipped as standard JS modules.</text>
 </svg>
