@@ -1,0 +1,101 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="640" viewBox="0 0 960 640" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" role="img" aria-label="@edison/shared architecture diagram">
+  <defs>
+    <style>
+      .title { font-size: 22px; font-weight: 700; fill: #0f172a; }
+      .subtitle { font-size: 13px; fill: #64748b; }
+      .layer-label { font-size: 13px; font-weight: 700; letter-spacing: 0.04em; }
+      .cluster-title { font-size: 15px; font-weight: 700; fill: #0f172a; }
+      .pill { font-size: 12.5px; fill: #1e293b; }
+      .note { font-size: 12px; fill: #475569; }
+      .foot { font-size: 13px; font-weight: 600; fill: #ffffff; }
+    </style>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="7" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,1 L8,5 L0,9 Z" fill="#94a3b8"/>
+    </marker>
+  </defs>
+
+  <!-- background -->
+  <rect x="0" y="0" width="960" height="640" fill="#f8fafc"/>
+
+  <!-- header -->
+  <text x="40" y="44" class="title">@edison/shared</text>
+  <text x="40" y="66" class="subtitle">Shared React components, design tokens &amp; client utilities for Edison Watch apps</text>
+
+  <!-- Consumers layer -->
+  <rect x="40" y="84" width="880" height="58" rx="12" fill="#eef2ff" stroke="#c7d2fe" stroke-width="1.5"/>
+  <text x="60" y="108" class="layer-label" fill="#4338ca">CONSUMERS</text>
+  <text x="60" y="128" class="pill" fill="#3730a3">Edison Watch apps  ·  import from source (incl. Git submodules)</text>
+
+  <!-- arrow consumers -> package -->
+  <line x1="480" y1="142" x2="480" y2="172" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Package box -->
+  <rect x="40" y="176" width="880" height="318" rx="16" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="60" y="204" class="layer-label" fill="#0f172a">@edison/shared  ·  PACKAGE ENTRYPOINTS</text>
+
+  <!-- UI layer cluster -->
+  <rect x="60" y="220" width="500" height="256" rx="12" fill="#f0f9ff" stroke="#bae6fd" stroke-width="1.5"/>
+  <rect x="60" y="220" width="500" height="34" rx="12" fill="#0ea5e9"/>
+  <rect x="60" y="240" width="500" height="14" fill="#0ea5e9"/>
+  <text x="78" y="242" class="cluster-title" style="fill:#ffffff">UI layer</text>
+  <text x="540" y="242" text-anchor="end" font-size="12px" fill="#e0f2fe">presentation</text>
+
+  <!-- ui pill (big, with component list) -->
+  <rect x="78" y="270" width="464" height="92" rx="9" fill="#ffffff" stroke="#7dd3fc" stroke-width="1.3"/>
+  <text x="92" y="290" class="pill" font-weight="700" fill="#0369a1">@edison/shared/ui  ·  /ui/*</text>
+  <text x="92" y="310" class="note">Button · Badge · Card · Dialog · Dropdown · EmptyState</text>
+  <text x="92" y="328" class="note">ErrorBoundary · Input · Select · Skeleton · SlideOver · Switch</text>
+  <text x="92" y="346" class="note">SSEIndicator · Table · Tabs · Toast · Tooltip</text>
+
+  <!-- smaller ui pills row -->
+  <rect x="78" y="372" width="148" height="40" rx="9" fill="#ffffff" stroke="#7dd3fc" stroke-width="1.3"/>
+  <text x="152" y="390" text-anchor="middle" class="pill" font-weight="700" fill="#0369a1">/hooks/*</text>
+  <text x="152" y="405" text-anchor="middle" class="note">useAnimatedHeight</text>
+
+  <rect x="236" y="372" width="148" height="40" rx="9" fill="#ffffff" stroke="#7dd3fc" stroke-width="1.3"/>
+  <text x="310" y="390" text-anchor="middle" class="pill" font-weight="700" fill="#0369a1">/animations</text>
+  <text x="310" y="405" text-anchor="middle" class="note">product · security</text>
+
+  <rect x="394" y="372" width="148" height="40" rx="9" fill="#ffffff" stroke="#7dd3fc" stroke-width="1.3"/>
+  <text x="468" y="390" text-anchor="middle" class="pill" font-weight="700" fill="#0369a1">/svg</text>
+  <text x="468" y="405" text-anchor="middle" class="note">asset strings</text>
+
+  <rect x="78" y="422" width="464" height="40" rx="9" fill="#ffffff" stroke="#7dd3fc" stroke-width="1.3"/>
+  <text x="92" y="442" class="pill" font-weight="700" fill="#0369a1">/theme/tokens.css</text>
+  <text x="92" y="455" class="note">design tokens: colors, spacing, typography</text>
+
+  <!-- Client services cluster -->
+  <rect x="580" y="220" width="320" height="256" rx="12" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5"/>
+  <rect x="580" y="220" width="320" height="34" rx="12" fill="#16a34a"/>
+  <rect x="580" y="240" width="320" height="14" fill="#16a34a"/>
+  <text x="598" y="242" class="cluster-title" style="fill:#ffffff">Client services</text>
+  <text x="880" y="242" text-anchor="end" font-size="12px" fill="#dcfce7">logic</text>
+
+  <rect x="598" y="270" width="284" height="42" rx="9" fill="#ffffff" stroke="#86efac" stroke-width="1.3"/>
+  <text x="612" y="289" class="pill" font-weight="700" fill="#15803d">/auth</text>
+  <text x="612" y="305" class="note">browser auth + Supabase client</text>
+
+  <rect x="598" y="320" width="284" height="42" rx="9" fill="#ffffff" stroke="#86efac" stroke-width="1.3"/>
+  <text x="612" y="339" class="pill" font-weight="700" fill="#15803d">/config</text>
+  <text x="612" y="355" class="note">client / env configuration</text>
+
+  <rect x="598" y="370" width="284" height="42" rx="9" fill="#ffffff" stroke="#86efac" stroke-width="1.3"/>
+  <text x="612" y="389" class="pill" font-weight="700" fill="#15803d">/crypto</text>
+  <text x="612" y="405" class="note">client-side crypto utilities</text>
+
+  <rect x="598" y="420" width="284" height="42" rx="9" fill="#ffffff" stroke="#86efac" stroke-width="1.3"/>
+  <text x="612" y="439" class="pill" font-weight="700" fill="#15803d">/agent-registry</text>
+  <text x="612" y="455" class="note">agent registry data</text>
+
+  <!-- arrow package -> peer deps -->
+  <line x1="480" y1="494" x2="480" y2="524" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Peer deps foundation -->
+  <rect x="40" y="528" width="880" height="54" rx="12" fill="#1e293b"/>
+  <text x="60" y="551" class="layer-label" fill="#94a3b8">PEER DEPENDENCIES  (provided by consumers)</text>
+  <text x="60" y="571" class="foot">React  ·  React DOM  ·  React Router  ·  Supabase JS</text>
+
+  <!-- build note -->
+  <text x="920" y="571" text-anchor="end" font-size="12px" fill="#cbd5e1">tsdown → dist/  (ESM · CJS · .d.ts)</text>
+  <text x="40" y="610" class="note">Build: tsdown emits ESM + CJS bundles and TypeScript declarations to dist/.</text>
+</svg>
