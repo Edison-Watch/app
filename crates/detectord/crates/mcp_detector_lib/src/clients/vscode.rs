@@ -1,4 +1,4 @@
-//! VSCode [`Client`] implementation. Watches four sources:
+//! VSCode [`Agent`](crate::Agent) implementation. Watches four sources:
 //!
 //! 1. **User-level `Code/User/mcp.json`** — the file users edit by hand.
 //! 2. **Per-workspace `<workspace>/.vscode/mcp.json`** for every workspace
@@ -21,13 +21,19 @@
 use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
 
-use rusqlite::OptionalExtension;
 use serde::Deserialize;
 
-use crate::client::Client;
-use crate::clients::detect_transport;
+use crate::agent::Agent;
+use crate::clients::common::file_uri_to_path;
+use crate::clients::statedb::read_state_db_value;
+use crate::clients::{detect_transport, server_config_from_value};
 use crate::error::{Error, Result};
-use crate::types::{McpServer, Scope, Transport};
+use crate::types::{
+    ConfigLocation, DiscoveredServer, EdisonInstall, EdisonStyle, HookBinding, HookInstall,
+    HookScriptKind, HookStyle, HttpKind, LocationExtra, OpaqueReason, Scope, ServerConfig,
+    SourceKind, StateShape, Transport,
+};
+use crate::watch::WatchTargets;
 
 const CLIENT_NAME: &str = "vscode";
 
@@ -131,31 +137,42 @@ impl VsCode {
     }
 }
 
-impl Client for VsCode {
+impl Agent for VsCode {
     fn name(&self) -> &'static str {
         CLIENT_NAME
     }
 
-    fn watch_paths(&self) -> Vec<PathBuf> {
-        let mut v = Vec::new();
+    fn is_installed(&self) -> bool {
+        self.global_config.as_ref().is_some_and(|p| p.exists())
+            || self.state_db.as_ref().is_some_and(|p| p.exists())
+    }
+
+    fn watch_targets(&self) -> WatchTargets {
+        let mut files = Vec::new();
         if let Some(p) = &self.global_config {
-            v.push(p.clone());
+            files.push(p.clone());
         }
         if let Some(p) = &self.state_db {
-            v.push(p.clone());
+            files.push(p.clone());
         }
         if let Some(d) = &self.extensions_dir {
             // Watch the extensions index file. Its parent dir contains every
             // extension subdir, so install/uninstall events fire there too.
-            v.push(d.join("extensions.json"));
+            files.push(d.join("extensions.json"));
         }
         for (_, cfg) in &self.project_configs {
-            v.push(cfg.clone());
+            files.push(cfg.clone());
         }
-        v
+        WatchTargets {
+            files,
+            dirs: Vec::new(),
+            // state.vscdb and extension-API registrations change without
+            // firing fs events on the files we watch.
+            needs_periodic_rescan: true,
+        }
     }
 
-    fn parse_all(&self) -> Result<Vec<McpServer>> {
+    fn discover(&self) -> Result<Vec<DiscoveredServer>> {
         let mut out = Vec::new();
         if let Some(p) = &self.global_config
             && p.exists()
@@ -179,6 +196,52 @@ impl Client for VsCode {
         }
         Ok(out)
     }
+
+    fn edison_installs(&self, home: &Path) -> Vec<EdisonInstall> {
+        // VSCode uses the `servers` key (not `mcpServers`).
+        vec![EdisonInstall {
+            path: vscode_user_dir_in(home).join("mcp.json"),
+            key_path: vec!["servers".into()],
+            style: EdisonStyle::Http,
+            client_id: "vscode".into(),
+            prefer_cli: false,
+        }]
+    }
+
+    fn hook_install(&self, home: &Path) -> Option<HookInstall> {
+        // The Copilot hooks file is entirely Edison-owned.
+        Some(HookInstall {
+            path: home.join(".copilot/hooks/edison-watch.json"),
+            style: HookStyle::CopilotFile,
+            client_id: "vscode".into(),
+            events: vec![
+                HookBinding::new("SessionStart", None, HookScriptKind::SessionStart, false),
+                HookBinding::new("UserPromptSubmit", None, HookScriptKind::Registration, true),
+                HookBinding::new("PreToolUse", None, HookScriptKind::SessionHook, false),
+                HookBinding::new("Stop", None, HookScriptKind::SessionEnd, false),
+            ],
+        })
+    }
+
+    fn hook_workspace_targets(&self, _home: &Path) -> Vec<PathBuf> {
+        // Each enumerated workspace's `<proj>/.vscode/tasks.json` (sibling of the
+        // workspace `mcp.json` we track). These come from discovery, so they're
+        // already absolute — `home` doesn't reshape them.
+        self.project_configs
+            .iter()
+            .filter_map(|(_, mcp)| mcp.parent().map(|d| d.join("tasks.json")))
+            .collect()
+    }
+}
+
+/// The VSCode `Code/User` dir under `home` (platform-specific).
+fn vscode_user_dir_in(home: &Path) -> PathBuf {
+    if cfg!(target_os = "macos") {
+        home.join("Library/Application Support/Code/User")
+    } else {
+        // Linux: ~/.config/Code/User (Windows uses %APPDATA%, handled elsewhere).
+        home.join(".config/Code/User")
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -187,7 +250,7 @@ struct McpFile {
     servers: BTreeMap<String, serde_json::Value>,
 }
 
-fn parse_file(path: &Path, scope: Scope) -> Vec<McpServer> {
+fn parse_file(path: &Path, scope: Scope) -> Vec<DiscoveredServer> {
     let text = match std::fs::read_to_string(path) {
         Ok(t) => t,
         Err(e) => {
@@ -211,12 +274,22 @@ fn parse_file(path: &Path, scope: Scope) -> Vec<McpServer> {
     parsed
         .servers
         .into_iter()
-        .map(|(name, val)| McpServer {
-            client: CLIENT_NAME,
-            name,
-            transport: detect_transport(&val),
-            scope: scope.clone(),
-            source: path.to_path_buf(),
+        .filter_map(|(name, val)| {
+            let config = server_config_from_value(&val)?;
+            Some(DiscoveredServer {
+                client: CLIENT_NAME,
+                transport: detect_transport(&val),
+                scope: scope.clone(),
+                config,
+                location: ConfigLocation {
+                    kind: SourceKind::Jsonc,
+                    path: path.to_path_buf(),
+                    key_path: vec!["servers".into()],
+                    server_key: name.clone(),
+                    extra: LocationExtra::None,
+                },
+                name,
+            })
         })
         .collect()
 }
@@ -243,7 +316,7 @@ struct ExtensionServer {
 /// Read the `mcpToolCache` row out of `state.vscdb` and emit one [`McpServer`]
 /// per extension-registered MCP server. Mirrors edison-watch's
 /// `client_2/src/main/clients/vscode/discovery.ts:82-142`.
-fn parse_mcp_tool_cache(db_path: &Path) -> Vec<McpServer> {
+fn parse_mcp_tool_cache(db_path: &Path) -> Vec<DiscoveredServer> {
     let raw = match read_state_db_value(db_path, "mcpToolCache") {
         Ok(Some(s)) => s,
         Ok(None) => return Vec::new(),
@@ -264,63 +337,77 @@ fn parse_mcp_tool_cache(db_path: &Path) -> Vec<McpServer> {
     let mut seen_ids: HashSet<String> = HashSet::new();
 
     for srv in cache.extension_servers {
-        let transport = if srv.server_url.is_some() {
-            Transport::Remote
-        } else {
-            Transport::Stdio
-        };
         seen_ids.insert(srv.id.clone());
-        out.push(McpServer {
+        // A serverUrl makes it an actionable Http server; without one it is an
+        // extension-registered server with no resolvable launch config —
+        // report-only (unfingerprint-able, skipped by enforcement).
+        let (transport, config) = match &srv.server_url {
+            Some(url) => (
+                Transport::Remote,
+                ServerConfig::Http {
+                    url: url.clone(),
+                    headers: BTreeMap::new(),
+                    kind: HttpKind::Http,
+                },
+            ),
+            None => (
+                Transport::Stdio,
+                // Removable from the state DB even without a launch config.
+                ServerConfig::Opaque {
+                    removable: true,
+                    reason: OpaqueReason::ExtensionServer,
+                },
+            ),
+        };
+        out.push(DiscoveredServer {
             client: CLIENT_NAME,
-            name: srv.id,
             transport,
             scope: Scope::Global,
-            source: db_path.to_path_buf(),
+            config,
+            location: state_db_location(db_path, &srv.id, "extensionServers"),
+            name: srv.id,
         });
     }
 
     // serverTools entries that aren't already in extensionServers and don't
     // start with "mcp.config." (those come from file parsing and we cover
-    // them via parse_file).
+    // them via parse_file). No launch config is available here, so they are
+    // report-only.
     for (id, _tool) in cache.server_tools {
         if seen_ids.contains(&id) || id.starts_with("mcp.config.") {
             continue;
         }
-        out.push(McpServer {
+        out.push(DiscoveredServer {
             client: CLIENT_NAME,
-            name: id,
             transport: Transport::Stdio,
             scope: Scope::Global,
-            source: db_path.to_path_buf(),
+            config: ServerConfig::Opaque {
+                removable: true,
+                reason: OpaqueReason::ExtensionServer,
+            },
+            location: state_db_location(db_path, &id, "serverTools"),
+            name: id,
         });
     }
 
     out
 }
 
-/// Open `state.vscdb` read-only and return the value of a single
-/// `ItemTable` row, or `None` if the key is absent.
-fn read_state_db_value(db_path: &Path, key: &str) -> Result<Option<String>> {
-    // `immutable=1` tells SQLite the file won't change on disk so it can skip
-    // the WAL and locking; this lets us read safely while VSCode is running.
-    let uri = format!("file:{}?mode=ro&immutable=1", db_path.to_string_lossy());
-    let conn = rusqlite::Connection::open_with_flags(
-        &uri,
-        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_URI,
-    )
-    .map_err(|source| Error::Sqlite {
+/// Build a [`ConfigLocation`] for an entry in the `mcpToolCache` row, embedded
+/// as an element of the given array, matched by its `id`.
+fn state_db_location(db_path: &Path, id: &str, array_key: &str) -> ConfigLocation {
+    ConfigLocation {
+        kind: SourceKind::SqliteState,
         path: db_path.to_path_buf(),
-        source,
-    })?;
-
-    conn.query_row("SELECT value FROM ItemTable WHERE key = ?1", [key], |r| {
-        r.get::<_, String>(0)
-    })
-    .optional()
-    .map_err(|source| Error::Sqlite {
-        path: db_path.to_path_buf(),
-        source,
-    })
+        key_path: Vec::new(),
+        server_key: id.to_string(),
+        extra: LocationExtra::StateDb {
+            item_key: "mcpToolCache".to_string(),
+            shape: StateShape::ArrayById {
+                array_key: array_key.to_string(),
+            },
+        },
+    }
 }
 
 fn global_mcp_path() -> Option<PathBuf> {
@@ -388,7 +475,7 @@ struct McpServerProviderContribution {
 /// - We can't tell whether the extension is enabled in any given workspace
 ///   (per-workspace enable/disable lives in `state.vscdb`); we assume
 ///   "installed implies in use", same model as how `mcp.json` works.
-fn parse_extension_providers(extensions_dir: &Path) -> Vec<McpServer> {
+fn parse_extension_providers(extensions_dir: &Path) -> Vec<DiscoveredServer> {
     let index_path = extensions_dir.join("extensions.json");
     if !index_path.exists() {
         return Vec::new();
@@ -430,12 +517,24 @@ fn parse_extension_providers(extensions_dir: &Path) -> Vec<McpServer> {
             .map(|c| c.mcp_server_definition_providers)
             .unwrap_or_default();
         for p in providers {
-            out.push(McpServer {
+            out.push(DiscoveredServer {
                 client: CLIENT_NAME,
-                name: p.id,
                 transport: Transport::Stdio,
                 scope: Scope::Global,
-                source: pkg_path.clone(),
+                // Untouchable: contributed by an installed extension's
+                // package.json — nothing of ours to remove.
+                config: ServerConfig::Opaque {
+                    removable: false,
+                    reason: OpaqueReason::ExtensionProvider,
+                },
+                location: ConfigLocation {
+                    kind: SourceKind::Json,
+                    path: pkg_path.clone(),
+                    key_path: Vec::new(),
+                    server_key: p.id.clone(),
+                    extra: LocationExtra::None,
+                },
+                name: p.id,
             });
         }
     }
@@ -473,39 +572,6 @@ fn discover_workspaces(db_path: &Path) -> Result<Vec<PathBuf>> {
         .filter_map(|e| e.folder_uri)
         .filter_map(|u| file_uri_to_path(&u))
         .collect())
-}
-
-fn file_uri_to_path(uri: &str) -> Option<PathBuf> {
-    let stripped = uri.strip_prefix("file://")?;
-    Some(PathBuf::from(percent_decode(stripped)))
-}
-
-fn percent_decode(s: &str) -> String {
-    let bytes = s.as_bytes();
-    let mut out = Vec::with_capacity(bytes.len());
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == b'%'
-            && i + 2 < bytes.len()
-            && let (Some(h), Some(l)) = (hex(bytes[i + 1]), hex(bytes[i + 2]))
-        {
-            out.push((h << 4) | l);
-            i += 3;
-            continue;
-        }
-        out.push(bytes[i]);
-        i += 1;
-    }
-    String::from_utf8_lossy(&out).into_owned()
-}
-
-fn hex(b: u8) -> Option<u8> {
-    match b {
-        b'0'..=b'9' => Some(b - b'0'),
-        b'a'..=b'f' => Some(b - b'a' + 10),
-        b'A'..=b'F' => Some(b - b'A' + 10),
-        _ => None,
-    }
 }
 
 #[cfg(test)]
@@ -638,7 +704,7 @@ mod tests {
             Some(state_db.clone()),
             [proj_a.clone(), proj_b.clone()],
         );
-        let watched = v.watch_paths();
+        let watched = v.watch_targets().files;
         assert!(watched.contains(&global));
         assert!(watched.contains(&state_db));
         assert!(watched.contains(&proj_a.join(".vscode").join("mcp.json")));
@@ -659,7 +725,7 @@ mod tests {
         .unwrap();
 
         let v = VsCode::from_paths(Some(global.clone()), None, [proj.clone()]);
-        let servers = v.parse_all().unwrap();
+        let servers = v.discover().unwrap();
 
         assert_eq!(servers.len(), 2);
         let by_name: BTreeMap<_, _> = servers.iter().map(|s| (s.name.clone(), s)).collect();
@@ -690,7 +756,7 @@ mod tests {
         assert_eq!(by_name["ext.bar"].transport, Transport::Stdio);
         for s in &servers {
             assert_eq!(s.scope, Scope::Global);
-            assert_eq!(s.source, db);
+            assert_eq!(s.location.path, db);
             assert_eq!(s.client, CLIENT_NAME);
         }
     }
@@ -798,7 +864,7 @@ mod tests {
         assert_eq!(servers[0].name, "context7");
         assert_eq!(servers[0].transport, Transport::Stdio);
         assert_eq!(servers[0].scope, Scope::Global);
-        assert!(servers[0].source.ends_with("package.json"));
+        assert!(servers[0].location.path.ends_with("package.json"));
     }
 
     #[test]
@@ -860,7 +926,7 @@ mod tests {
         std::fs::create_dir_all(&ext_dir).unwrap();
         let v = VsCode::from_paths(None, None, std::iter::empty::<PathBuf>())
             .with_extensions_dir(Some(ext_dir.clone()));
-        assert!(v.watch_paths().contains(&ext_dir.join("extensions.json")));
+        assert!(v.watch_targets().files.contains(&ext_dir.join("extensions.json")));
     }
 
     #[test]
@@ -878,7 +944,7 @@ mod tests {
         make_test_vscdb(&db, &[("mcpToolCache", &value)]);
 
         let v = VsCode::from_paths(Some(global), Some(db), std::iter::empty::<PathBuf>());
-        let names: HashSet<String> = v.parse_all().unwrap().into_iter().map(|s| s.name).collect();
+        let names: HashSet<String> = v.discover().unwrap().into_iter().map(|s| s.name).collect();
         assert!(names.contains("file-srv"));
         assert!(names.contains("ext-srv"));
     }

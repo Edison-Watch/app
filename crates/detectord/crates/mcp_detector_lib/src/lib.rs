@@ -5,7 +5,7 @@
 //! VSCode, Cursor, Claude Desktop, ...), often across several files per
 //! client - a global user-level file, per-project files, and sometimes
 //! application state stored in a SQLite database. This crate unifies those
-//! sources behind a single [`Client`] trait, watches them via an event-driven
+//! sources behind a single [`Agent`] trait, watches them via an event-driven
 //! filesystem watcher, and emits a [`ChangeEvent`] whenever a server appears
 //! or disappears.
 //!
@@ -16,10 +16,10 @@
 //!
 //! ```no_run
 //! use std::sync::Arc;
-//! use mcp_detector_lib::{Client, Result, Watcher, clients::{ClaudeCode, VsCode}};
+//! use mcp_detector_lib::{Agent, Result, Watcher, clients::{ClaudeCode, VsCode}};
 //!
 //! fn main() -> Result<()> {
-//!     let clients: Vec<Arc<dyn Client>> = vec![
+//!     let clients: Vec<Arc<dyn Agent>> = vec![
 //!         Arc::new(VsCode::discover()?),
 //!         Arc::new(ClaudeCode::discover()?),
 //!     ];
@@ -47,22 +47,32 @@
 //! - Subsequent removals emit [`ChangeEvent::Removed`].
 //! - In-place edits (same name, different command/url/args) are not reported.
 //!
-//! # Adding a new client
+//! # Adding a new agent
 //!
-//! Implement [`Client`] for a new struct, gate it behind a cargo feature, and
+//! Implement [`Agent`] for a new struct, gate it behind a cargo feature, and
 //! register an instance with [`Watcher::new`]. The trait surface is just
-//! three methods: [`Client::name`], [`Client::watch_paths`], and
-//! [`Client::parse_all`]. The watcher takes care of debounced filesystem
+//! four methods: [`Agent::name`], [`Agent::is_installed`],
+//! [`Agent::watch_targets`], and [`Agent::discover`]. The watcher takes care of
+//! debounced filesystem
 //! events, snapshot diffing, and event delivery.
 
-pub mod client;
+pub mod agent;
 pub mod clients;
 pub(crate) mod diff;
 pub mod error;
+pub mod fingerprint;
+pub mod secret_detection;
 pub mod types;
+pub mod watch;
 pub mod watcher;
 
-pub use client::Client;
+pub use agent::Agent;
 pub use error::{Error, Result};
-pub use types::{ChangeEvent, McpServer, Scope, Transport};
+pub use fingerprint::fingerprint;
+pub use types::{
+    ChangeEvent, ConfigLocation, DiscoveredServer, EdisonInstall, EdisonStyle, HookBinding,
+    HookInstall, HookScriptKind, HookStyle, HttpKind, LocationExtra, OpaqueReason, Scope,
+    ServerConfig, SourceKind, StateShape, Transport,
+};
+pub use watch::{WatchDir, WatchTargets};
 pub use watcher::{Watcher, WatcherHandle};

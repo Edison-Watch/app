@@ -12,7 +12,7 @@ use std::time::Duration;
 use notify::RecursiveMode;
 use notify_debouncer_full::{DebounceEventResult, new_debouncer};
 
-use crate::client::Client;
+use crate::agent::Agent;
 use crate::diff::Snapshot;
 use crate::error::{Error, Result};
 use crate::types::ChangeEvent;
@@ -30,13 +30,13 @@ const STOP_CHECK_INTERVAL: Duration = Duration::from_millis(250);
 /// Both methods take an initial snapshot silently - only changes after that
 /// point produce events.
 pub struct Watcher {
-    clients: Vec<Arc<dyn Client>>,
+    clients: Vec<Arc<dyn Agent>>,
 }
 
 impl Watcher {
     /// Create a watcher over the given clients. The list is fixed for the
     /// lifetime of the watcher; clients added later will not be observed.
-    pub fn new(clients: Vec<Arc<dyn Client>>) -> Self {
+    pub fn new(clients: Vec<Arc<dyn Agent>>) -> Self {
         Self { clients }
     }
 
@@ -89,7 +89,7 @@ impl Watcher {
     fn run_inner(self, stop: Arc<AtomicBool>, on_event: &mut dyn FnMut(ChangeEvent)) -> Result<()> {
         let mut dirs: HashSet<PathBuf> = HashSet::new();
         for c in &self.clients {
-            for p in c.watch_paths() {
+            for p in c.watch_targets().files {
                 if let Some(parent) = p.parent() {
                     dirs.insert(parent.to_path_buf());
                 }
@@ -99,7 +99,7 @@ impl Watcher {
         let mut snapshots: Vec<Snapshot> = Vec::with_capacity(self.clients.len());
         for c in &self.clients {
             let mut snap = Snapshot::new();
-            match c.parse_all() {
+            match c.discover() {
                 Ok(servers) => {
                     tracing::info!(client = c.name(), count = servers.len(), "initial snapshot");
                     snap.prime(&servers);
@@ -135,7 +135,7 @@ impl Watcher {
                         tracing::debug!(paths = ?e.paths, kind = ?e.kind, "  event");
                     }
                     for (c, snap) in self.clients.iter().zip(snapshots.iter_mut()) {
-                        match c.parse_all() {
+                        match c.discover() {
                             Ok(current) => {
                                 tracing::debug!(
                                     client = c.name(),
