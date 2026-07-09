@@ -164,8 +164,13 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "http-server": "^14.1.1",
     "jsdom": "^29.1.1",
+<<<<<<< HEAD
+    "knip": "^6.24.0",
+    "prettier": "^3.8.4",
+=======
     "knip": "^6.18.0",
     "prettier": "^3.9.4",
+>>>>>>> origin/main
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-router": "^8.1.0",
