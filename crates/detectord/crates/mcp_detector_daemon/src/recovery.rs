@@ -47,7 +47,13 @@ pub fn recover() -> (usize, usize) {
 }
 
 /// Recursively collect `disabled_*.json` files and `ew-disabled-*` dirs.
-fn collect(dir: &Path, depth: usize, max: usize, sidecars: &mut Vec<PathBuf>, dirs: &mut Vec<PathBuf>) {
+fn collect(
+    dir: &Path,
+    depth: usize,
+    max: usize,
+    sidecars: &mut Vec<PathBuf>,
+    dirs: &mut Vec<PathBuf>,
+) {
     if depth > max {
         return;
     }
@@ -121,7 +127,10 @@ fn restore_sidecar(store: &FileConfigStore, sidecar: &Path) -> usize {
 /// Restore one `ew-disabled-<name>` plugin dir (rename back, or drop if the live
 /// dir already exists).
 fn restore_dir(store: &FileConfigStore, disabled: &Path) -> bool {
-    let Some(name) = disabled.file_name().map(|n| n.to_string_lossy().into_owned()) else {
+    let Some(name) = disabled
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+    else {
         return false;
     };
     let orig = name.strip_prefix("ew-disabled-").unwrap_or(&name);

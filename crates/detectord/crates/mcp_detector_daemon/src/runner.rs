@@ -56,11 +56,7 @@ pub async fn run(enforce: bool) -> anyhow::Result<()> {
 /// on its own cadence. Loops until the task is dropped/aborted. When `events` is
 /// set, publishes what it quarantines. The supervisor spawns one per enrolled
 /// user.
-pub async fn worker(
-    user: String,
-    enforce: bool,
-    events: Option<EventTx>,
-) -> anyhow::Result<()> {
+pub async fn worker(user: String, enforce: bool, events: Option<EventTx>) -> anyhow::Result<()> {
     paths::ensure_user_dir(&user)?;
     let mut enrollment = Enrollment::load_for(&user)?
         .ok_or_else(|| anyhow::anyhow!("not enrolled; run `enroll` first"))?;
@@ -149,8 +145,12 @@ pub async fn worker(
 fn start_watcher(
     agents: &[Arc<dyn Agent>],
     tx: tokio::sync::mpsc::UnboundedSender<()>,
-) -> Option<notify_debouncer_full::Debouncer<notify::RecommendedWatcher, notify_debouncer_full::RecommendedCache>>
-{
+) -> Option<
+    notify_debouncer_full::Debouncer<
+        notify::RecommendedWatcher,
+        notify_debouncer_full::RecommendedCache,
+    >,
+> {
     // Files → watch their parent dir non-recursively (editors write via atomic
     // rename); dirs (workspace storage, plugin caches) → recursively.
     let mut file_dirs = HashSet::new();
@@ -191,7 +191,10 @@ fn start_watcher(
 /// Publish a `Quarantined` event for `user` (no-op when there's no channel).
 fn publish(events: Option<&EventTx>, user: &str, server: &DiscoveredServer, state: &str) {
     if let Some(tx) = events {
-        let _ = tx.send((user.to_string(), Event::Quarantined(event_view(server, state))));
+        let _ = tx.send((
+            user.to_string(),
+            Event::Quarantined(event_view(server, state)),
+        ));
     }
 }
 
@@ -263,7 +266,9 @@ pub async fn refresh(
             let _ = seen.prune_backend(&synced);
         }
         Ok(_) => tracing::warn!("fingerprints org mismatch; skipping sync"),
-        Err(e) => tracing::warn!(error = %e, "fingerprints refresh failed; keeping last-known-good"),
+        Err(e) => {
+            tracing::warn!(error = %e, "fingerprints refresh failed; keeping last-known-good")
+        }
     }
 }
 
@@ -289,9 +294,20 @@ fn reconcile_once(
         for s in &observed {
             let report_only = !is_edison_entry(s)
                 && (!quarantine
-                    || matches!(&s.config, ServerConfig::Opaque { removable: false, .. }));
+                    || matches!(
+                        &s.config,
+                        ServerConfig::Opaque {
+                            removable: false,
+                            ..
+                        }
+                    ));
             if report_only {
-                let key = format!("{}\u{1f}{}\u{1f}{}", s.client, s.name, s.location.path.display());
+                let key = format!(
+                    "{}\u{1f}{}\u{1f}{}",
+                    s.client,
+                    s.name,
+                    s.location.path.display()
+                );
                 if reported.insert(key) {
                     let _ = tx.send((user.to_string(), Event::Discovered(event_view(s, "report"))));
                 }
@@ -338,8 +354,12 @@ fn reconcile_once(
     }
 
     let actions = plan(&observed, seen, Policy { quarantine });
-    let known = count(&actions, |a| matches!(a, ReconcileAction::SilentQuarantine { .. }));
-    let opaque = count(&actions, |a| matches!(a, ReconcileAction::RemoveOpaque { .. }));
+    let known = count(&actions, |a| {
+        matches!(a, ReconcileAction::SilentQuarantine { .. })
+    });
+    let opaque = count(&actions, |a| {
+        matches!(a, ReconcileAction::RemoveOpaque { .. })
+    });
     tracing::info!(
         discovered = observed.len(),
         will_quarantine = actions.len(),
@@ -373,7 +393,9 @@ fn reconcile_once(
                     });
                     let _ = qstate.save_for(user);
                 }
-                Err(e) => tracing::warn!(server = %server.name, error = %e, "opaque removal failed"),
+                Err(e) => {
+                    tracing::warn!(server = %server.name, error = %e, "opaque removal failed")
+                }
             }
             continue;
         }
@@ -399,7 +421,11 @@ fn reconcile_once(
                 chown_new_files(&record, user);
                 // Known servers are neutralised silently; new (unknown) ones need
                 // the UI to prompt (send to EW / keep quarantined).
-                let state = if known { "quarantined" } else { "quarantine-prompt" };
+                let state = if known {
+                    "quarantined"
+                } else {
+                    "quarantine-prompt"
+                };
                 publish(events, user, &server, state);
                 tracing::info!(server = %server.name, agent = server.client, known, fingerprint = %fp, "quarantined");
                 let _ = seen.mark(&fp, &server.name, SeenAction::Quarantined);

@@ -926,7 +926,11 @@ mod tests {
         std::fs::create_dir_all(&ext_dir).unwrap();
         let v = VsCode::from_paths(None, None, std::iter::empty::<PathBuf>())
             .with_extensions_dir(Some(ext_dir.clone()));
-        assert!(v.watch_targets().files.contains(&ext_dir.join("extensions.json")));
+        assert!(
+            v.watch_targets()
+                .files
+                .contains(&ext_dir.join("extensions.json"))
+        );
     }
 
     #[test]

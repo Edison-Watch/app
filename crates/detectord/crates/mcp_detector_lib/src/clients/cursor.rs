@@ -53,7 +53,9 @@ impl Cursor {
         let plugins_cache = home.as_ref().map(|h| h.join(".cursor/plugins/cache"));
         let projects_dir = home.as_ref().map(|h| h.join(".cursor/projects"));
         let user_dir = cursor_user_dir();
-        let state_db = user_dir.as_ref().map(|d| d.join("globalStorage/state.vscdb"));
+        let state_db = user_dir
+            .as_ref()
+            .map(|d| d.join("globalStorage/state.vscdb"));
         let workspace_storage = user_dir.as_ref().map(|d| d.join("workspaceStorage"));
 
         let project_configs = workspace_storage
@@ -184,7 +186,12 @@ impl Agent for Cursor {
             client_id: "cursor".into(),
             events: vec![
                 HookBinding::new("sessionStart", None, HookScriptKind::Registration, true),
-                HookBinding::new("beforeMCPExecution", None, HookScriptKind::SessionHook, false),
+                HookBinding::new(
+                    "beforeMCPExecution",
+                    None,
+                    HookScriptKind::SessionHook,
+                    false,
+                ),
                 HookBinding::new("sessionEnd", None, HookScriptKind::SessionEnd, false),
             ],
         })
@@ -210,7 +217,14 @@ fn parse_jsonc_servers(path: &Path, scope: Scope) -> Vec<DiscoveredServer> {
             return Vec::new();
         }
     };
-    servers_from_map(&root, "mcpServers", CLIENT_NAME, scope, SourceKind::Jsonc, path)
+    servers_from_map(
+        &root,
+        "mcpServers",
+        CLIENT_NAME,
+        scope,
+        SourceKind::Jsonc,
+        path,
+    )
 }
 
 /// Read Cursor's marketplace OAuth MCP servers from `state.vscdb`.
@@ -286,7 +300,11 @@ fn scan_server_metadata(projects_dir: &Path) -> Vec<DiscoveredServer> {
     let mut out = Vec::new();
     for project in subdirs(projects_dir) {
         for plugin in subdirs(&project.join("mcps")) {
-            let dir_name = plugin.file_name().unwrap_or_default().to_string_lossy().into_owned();
+            let dir_name = plugin
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .into_owned();
             if !dir_name.starts_with("plugin-") {
                 continue;
             }
@@ -356,10 +374,7 @@ fn enumerate_projects(workspace_storage: &Path) -> Vec<PathBuf> {
         .flatten()
         .filter_map(|e| {
             let wj = e.path().join("workspace.json");
-            let folder = read_strict_json(&wj)?
-                .get("folder")?
-                .as_str()?
-                .to_string();
+            let folder = read_strict_json(&wj)?.get("folder")?.as_str()?.to_string();
             file_uri_to_path(&folder)
         })
         .collect()
@@ -380,8 +395,11 @@ mod tests {
 
     fn make_state_db(path: &Path, rows: &[(&str, &str)]) {
         let conn = rusqlite::Connection::open(path).unwrap();
-        conn.execute("CREATE TABLE ItemTable (key TEXT PRIMARY KEY, value BLOB)", [])
-            .unwrap();
+        conn.execute(
+            "CREATE TABLE ItemTable (key TEXT PRIMARY KEY, value BLOB)",
+            [],
+        )
+        .unwrap();
         for (k, v) in rows {
             conn.execute(
                 "INSERT INTO ItemTable (key, value) VALUES (?1, ?2)",

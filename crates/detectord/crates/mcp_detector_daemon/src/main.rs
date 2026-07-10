@@ -261,7 +261,17 @@ async fn cmd_enroll(
     // CLI enroll always applies the install and arms enforcement (the
     // operator's explicit intent; no onboarding gate for the dev/admin path).
     print_status(
-        &ops::enroll(&cli_user(), url, key, mcp_url, agents, secret, true, Some(true)).await?,
+        &ops::enroll(
+            &cli_user(),
+            url,
+            key,
+            mcp_url,
+            agents,
+            secret,
+            true,
+            Some(true),
+        )
+        .await?,
     );
     Ok(())
 }
@@ -351,7 +361,10 @@ fn print_list_deduped(servers: &[ServerView]) {
     }
 
     println!("Discovered across host apps ({} unique):\n", order.len());
-    println!("  {:<22} {:<12} {:<7} {:<7} FINGERPRINT", "NAME", "AGENT", "TYPE", "STATE");
+    println!(
+        "  {:<22} {:<12} {:<7} {:<7} FINGERPRINT",
+        "NAME", "AGENT", "TYPE", "STATE"
+    );
     for key in &order {
         let (kind, state, count) = &info[key];
         let (name, agent, id) = key;
@@ -391,7 +404,11 @@ async fn cmd_send_to_ew(name: String, agent: Option<String>) -> anyhow::Result<(
 async fn cmd_verify_secret(key: String) -> anyhow::Result<()> {
     let r = ops::verify_secret(&cli_user(), key).await?;
     if r.valid {
-        let warn = if r.expired { " (WARNING: key has expired)" } else { "" };
+        let warn = if r.expired {
+            " (WARNING: key has expired)"
+        } else {
+            ""
+        };
         println!("Key is valid — adopted and installed into selected agents.{warn}");
     } else {
         println!("Key does NOT match the registered key. Nothing installed.");
@@ -461,7 +478,10 @@ fn cmd_restore(needle: Option<String>, all: bool) -> anyhow::Result<()> {
 
     q.save_for(&user)?;
     if all {
-        println!("Restored {restored}/{} quarantined server(s).", targets.len());
+        println!(
+            "Restored {restored}/{} quarantined server(s).",
+            targets.len()
+        );
     }
     Ok(())
 }

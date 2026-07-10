@@ -47,9 +47,13 @@ impl Agent for ClaudeDesktop {
 
     fn discover(&self) -> Result<Vec<DiscoveredServer>> {
         Ok(match self.config.as_ref().filter(|p| p.exists()) {
-            Some(p) => {
-                parse_json_servers_map(p, "mcpServers", CLIENT_NAME, Scope::Global, SourceKind::Json)
-            }
+            Some(p) => parse_json_servers_map(
+                p,
+                "mcpServers",
+                CLIENT_NAME,
+                Scope::Global,
+                SourceKind::Json,
+            ),
             None => Vec::new(),
         })
     }

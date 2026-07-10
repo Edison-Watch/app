@@ -94,8 +94,8 @@ fn normalize_placeholders(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::BTreeMap;
     use crate::types::HttpKind;
+    use std::collections::BTreeMap;
 
     fn stdio(command: &str, args: &[&str]) -> ServerConfig {
         ServerConfig::Stdio {
@@ -149,7 +149,10 @@ mod tests {
 
     #[test]
     fn golden_stdio_no_args() {
-        assert_eq!(fingerprint("bare", &stdio("node", &[])).unwrap(), "7de4c89d590bc157");
+        assert_eq!(
+            fingerprint("bare", &stdio("node", &[])).unwrap(),
+            "7de4c89d590bc157"
+        );
     }
 
     #[test]

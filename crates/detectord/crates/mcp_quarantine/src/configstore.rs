@@ -233,8 +233,8 @@ fn quarantine_sqlite(loc: &ConfigLocation) -> Result<QuarantineRecord> {
         return Err(Error::UnsupportedKind(loc.kind));
     };
 
-    let raw = read_row(&loc.path, item_key)?
-        .ok_or_else(|| Error::NotFound(loc.server_key.clone()))?;
+    let raw =
+        read_row(&loc.path, item_key)?.ok_or_else(|| Error::NotFound(loc.server_key.clone()))?;
     let mut blob: Value = serde_json::from_str(&raw).map_err(json_err(&loc.path))?;
 
     // Capture + remove the server's raw value (restore re-inserts it exactly).
@@ -558,7 +558,11 @@ fn ensure_parent(path: &Path) -> Result<()> {
 fn install_json(inst: &EdisonInstall, entry: Value) -> Result<()> {
     ensure_parent(&inst.path)?;
     let existed = inst.path.exists();
-    let raw = if existed { read(&inst.path)? } else { String::new() };
+    let raw = if existed {
+        read(&inst.path)?
+    } else {
+        String::new()
+    };
     let mut root = if raw.trim().is_empty() {
         Value::Object(Map::new())
     } else {
@@ -591,7 +595,11 @@ fn uninstall_json(inst: &EdisonInstall) -> Result<()> {
 fn install_toml(inst: &EdisonInstall, url: &str, secret: Option<&str>) -> Result<()> {
     ensure_parent(&inst.path)?;
     let existed = inst.path.exists();
-    let raw = if existed { read(&inst.path)? } else { String::new() };
+    let raw = if existed {
+        read(&inst.path)?
+    } else {
+        String::new()
+    };
     let mut root: toml::Value = if raw.trim().is_empty() {
         toml::Value::Table(toml::Table::new())
     } else {
@@ -607,7 +615,10 @@ fn install_toml(inst: &EdisonInstall, url: &str, secret: Option<&str>) -> Result
     entry.insert("url".into(), toml::Value::String(url.to_string()));
     if let Some(s) = secret {
         let mut headers = toml::Table::new();
-        headers.insert(EDISON_SECRET_HEADER.into(), toml::Value::String(s.to_string()));
+        headers.insert(
+            EDISON_SECRET_HEADER.into(),
+            toml::Value::String(s.to_string()),
+        );
         entry.insert("http_headers".into(), toml::Value::Table(headers));
     }
 
@@ -687,10 +698,7 @@ fn finalize_sidecar(rec: &QuarantineRecord, disabled: &Value) -> Result<()> {
 fn build_disabled_entry(cfg: &ServerConfig, original: &Path, key_path: &[String]) -> Result<Value> {
     let mut entry = config_to_value(cfg).ok_or(Error::NotActionable)?;
     if let Value::Object(m) = &mut entry {
-        m.insert(
-            META_ORIGINAL_FILE.into(),
-            json!(original.to_string_lossy()),
-        );
+        m.insert(META_ORIGINAL_FILE.into(), json!(original.to_string_lossy()));
         m.insert(META_KEY_PATH.into(), json!(key_path));
     }
     Ok(entry)
@@ -753,8 +761,8 @@ mod tests {
     }
 
     fn servers_in(path: &Path, key_path: &[&str]) -> Vec<String> {
-        let mut root: Value = serde_json_lenient::from_str(&std::fs::read_to_string(path).unwrap())
-            .unwrap();
+        let mut root: Value =
+            serde_json_lenient::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
         let kp: Vec<String> = key_path.iter().map(|s| s.to_string()).collect();
         nav_mut(&mut root, &kp)
             .map(|m| m.keys().cloned().collect())
@@ -780,7 +788,11 @@ mod tests {
         assert_eq!(servers_in(&cfg, &["servers"]), vec!["keep".to_string()]);
         // Backup is the verbatim original (still has evil).
         assert!(rec.backup_path.exists());
-        assert!(std::fs::read_to_string(&rec.backup_path).unwrap().contains("evil"));
+        assert!(
+            std::fs::read_to_string(&rec.backup_path)
+                .unwrap()
+                .contains("evil")
+        );
         // Sidecar holds evil + restore metadata.
         let disabled: Value =
             serde_json::from_str(&std::fs::read_to_string(&rec.disabled_path).unwrap()).unwrap();
@@ -789,7 +801,12 @@ mod tests {
         assert_eq!(entry[META_KEY_PATH], json!(["servers"]));
     }
 
-    fn edison(path: &std::path::Path, key: &[&str], style: EdisonStyle, client: &str) -> EdisonInstall {
+    fn edison(
+        path: &std::path::Path,
+        key: &[&str],
+        style: EdisonStyle,
+        client: &str,
+    ) -> EdisonInstall {
         EdisonInstall {
             path: path.to_path_buf(),
             key_path: key.iter().map(|s| s.to_string()).collect(),
@@ -856,7 +873,13 @@ mod tests {
             r#"{"mcpServers":{"zebra":{"command":"z"},"apple":{"command":"a"},"mango":{"command":"m"}}}"#,
         )
         .unwrap();
-        install_edison(&edison(&cfg, &["mcpServers"], EdisonStyle::Http, "cursor"), "http://h", "K", None).unwrap();
+        install_edison(
+            &edison(&cfg, &["mcpServers"], EdisonStyle::Http, "cursor"),
+            "http://h",
+            "K",
+            None,
+        )
+        .unwrap();
         let text = std::fs::read_to_string(&cfg).unwrap();
         let (z, a, m, e) = (
             text.find("zebra").unwrap(),
@@ -864,7 +887,10 @@ mod tests {
             text.find("mango").unwrap(),
             text.find("edison-watch").unwrap(),
         );
-        assert!(z < a && a < m && m < e, "original order kept, edison appended:\n{text}");
+        assert!(
+            z < a && a < m && m < e,
+            "original order kept, edison appended:\n{text}"
+        );
     }
 
     #[test]
@@ -884,11 +910,19 @@ mod tests {
     fn install_edison_stdio_shim() {
         let dir = tempdir().unwrap();
         let cfg = dir.path().join("claude_desktop_config.json");
-        let inst = edison(&cfg, &["mcpServers"], EdisonStyle::StdioShim, "claude-desktop");
+        let inst = edison(
+            &cfg,
+            &["mcpServers"],
+            EdisonStyle::StdioShim,
+            "claude-desktop",
+        );
         install_edison(&inst, "http://localhost:3000", "K", None).unwrap();
         let v: Value = serde_json::from_str(&std::fs::read_to_string(&cfg).unwrap()).unwrap();
         assert_eq!(v["mcpServers"]["edison-watch"]["command"], "npx");
-        assert_eq!(v["mcpServers"]["edison-watch"]["args"][2], "http://localhost:3000/mcp/K/?client=claude-desktop");
+        assert_eq!(
+            v["mcpServers"]["edison-watch"]["args"][2],
+            "http://localhost:3000/mcp/K/?client=claude-desktop"
+        );
     }
 
     #[test]
@@ -947,7 +981,11 @@ mod tests {
     fn restore_round_trips() {
         let dir = tempdir().unwrap();
         let cfg = dir.path().join("mcp.json");
-        std::fs::write(&cfg, r#"{"servers":{"evil":{"command":"x","args":["--bad"]}}}"#).unwrap();
+        std::fs::write(
+            &cfg,
+            r#"{"servers":{"evil":{"command":"x","args":["--bad"]}}}"#,
+        )
+        .unwrap();
 
         let store = FileConfigStore;
         let rec = store
@@ -1049,8 +1087,11 @@ mod tests {
 
     fn make_state_db(db: &std::path::Path, key: &str, value: &Value) {
         let conn = rusqlite::Connection::open(db).unwrap();
-        conn.execute("CREATE TABLE ItemTable (key TEXT PRIMARY KEY, value BLOB)", [])
-            .unwrap();
+        conn.execute(
+            "CREATE TABLE ItemTable (key TEXT PRIMARY KEY, value BLOB)",
+            [],
+        )
+        .unwrap();
         conn.execute(
             "INSERT INTO ItemTable (key, value) VALUES (?1, ?2)",
             rusqlite::params![key, value.to_string()],
@@ -1061,7 +1102,9 @@ mod tests {
     fn read_row(db: &std::path::Path, key: &str) -> Value {
         let conn = rusqlite::Connection::open(db).unwrap();
         let raw: String = conn
-            .query_row("SELECT value FROM ItemTable WHERE key = ?1", [key], |r| r.get(0))
+            .query_row("SELECT value FROM ItemTable WHERE key = ?1", [key], |r| {
+                r.get(0)
+            })
             .unwrap();
         serde_json::from_str(&raw).unwrap()
     }
@@ -1165,7 +1208,13 @@ mod tests {
         let rec = store.quarantine(&loc, &stdio("unused", &[])).unwrap();
         assert!(!plugin.exists());
         assert!(rec.disabled_path.exists());
-        assert!(rec.disabled_path.file_name().unwrap().to_string_lossy().starts_with("ew-disabled-"));
+        assert!(
+            rec.disabled_path
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .starts_with("ew-disabled-")
+        );
 
         store.restore(&rec).unwrap();
         assert!(plugin.exists());

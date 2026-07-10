@@ -206,9 +206,24 @@ impl Agent for ClaudeCode {
             style: HookStyle::ClaudeSettings,
             client_id: "claude-code".into(),
             events: vec![
-                HookBinding::new("UserPromptSubmit", Some("*"), HookScriptKind::Registration, true),
-                HookBinding::new("PreToolUse", Some("mcp__*"), HookScriptKind::SessionHook, false),
-                HookBinding::new("SessionStart", Some("*"), HookScriptKind::SessionStart, false),
+                HookBinding::new(
+                    "UserPromptSubmit",
+                    Some("*"),
+                    HookScriptKind::Registration,
+                    true,
+                ),
+                HookBinding::new(
+                    "PreToolUse",
+                    Some("mcp__*"),
+                    HookScriptKind::SessionHook,
+                    false,
+                ),
+                HookBinding::new(
+                    "SessionStart",
+                    Some("*"),
+                    HookScriptKind::SessionStart,
+                    false,
+                ),
                 HookBinding::new("SessionEnd", Some("*"), HookScriptKind::SessionEnd, false),
             ],
         })
@@ -222,9 +237,7 @@ fn managed_config_path() -> Option<PathBuf> {
             "/Library/Application Support/ClaudeCode/managed-mcp.json",
         ))
     } else if cfg!(target_os = "windows") {
-        Some(PathBuf::from(
-            r"C:\ProgramData\ClaudeCode\managed-mcp.json",
-        ))
+        Some(PathBuf::from(r"C:\ProgramData\ClaudeCode\managed-mcp.json"))
     } else {
         Some(PathBuf::from("/etc/claude-code/managed-mcp.json"))
     }
@@ -552,7 +565,11 @@ mod tests {
         assert_eq!(by["g"].location.key_path, vec!["mcpServers".to_string()]);
         assert_eq!(
             by["p"].location.key_path,
-            vec!["profiles".to_string(), "work".to_string(), "mcpServers".to_string()]
+            vec![
+                "profiles".to_string(),
+                "work".to_string(),
+                "mcpServers".to_string()
+            ]
         );
     }
 

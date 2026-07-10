@@ -13,7 +13,9 @@ fn filter() -> EnvFilter {
 
 /// Stdout only (CLI). Filter via `RUST_LOG` (default `info`). Idempotent.
 pub fn init_stdout() {
-    let _ = tracing_subscriber::fmt().with_env_filter(filter()).try_init();
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(filter())
+        .try_init();
 }
 
 /// Daily-rolling file under `log_dir` **plus** stdout (daemon mode). The

@@ -105,7 +105,14 @@ fn parse_codex_toml(path: &std::path::Path) -> Vec<DiscoveredServer> {
             return Vec::new();
         }
     };
-    servers_from_map(&json, SERVERS_KEY, CLIENT_NAME, Scope::Global, SourceKind::Toml, path)
+    servers_from_map(
+        &json,
+        SERVERS_KEY,
+        CLIENT_NAME,
+        Scope::Global,
+        SourceKind::Toml,
+        path,
+    )
 }
 
 #[cfg(test)]

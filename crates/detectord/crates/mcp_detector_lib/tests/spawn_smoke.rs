@@ -16,7 +16,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use mcp_detector_lib::clients::VsCode;
-use mcp_detector_lib::{ChangeEvent, Agent, Watcher};
+use mcp_detector_lib::{Agent, ChangeEvent, Watcher};
 use tempfile::tempdir;
 
 /// Wait up to `timeout` for an event matching `pred` to arrive on `events`.

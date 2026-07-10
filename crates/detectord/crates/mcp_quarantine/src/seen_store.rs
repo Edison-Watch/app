@@ -104,7 +104,13 @@ impl SeenStore {
         self.upsert(fingerprint, name, action, true)
     }
 
-    fn upsert(&mut self, fingerprint: &str, name: &str, action: Action, from_backend: bool) -> Result<()> {
+    fn upsert(
+        &mut self,
+        fingerprint: &str,
+        name: &str,
+        action: Action,
+        from_backend: bool,
+    ) -> Result<()> {
         self.data.servers.insert(
             self.key(fingerprint),
             SeenServer {

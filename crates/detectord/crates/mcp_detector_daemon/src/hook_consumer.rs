@@ -98,8 +98,14 @@ fn log_session_end(path: &Path) {
         && let Ok(v) = serde_json::from_str::<serde_json::Value>(&text)
         && v.get("event").and_then(|x| x.as_str()) == Some("session_end")
     {
-        let conv = v.get("conversation_id").and_then(|x| x.as_str()).unwrap_or("?");
-        let reason = v.get("reason").and_then(|x| x.as_str()).unwrap_or("unknown");
+        let conv = v
+            .get("conversation_id")
+            .and_then(|x| x.as_str())
+            .unwrap_or("?");
+        let reason = v
+            .get("reason")
+            .and_then(|x| x.as_str())
+            .unwrap_or("unknown");
         tracing::info!(conversation_id = conv, reason, "session ended");
     }
 }

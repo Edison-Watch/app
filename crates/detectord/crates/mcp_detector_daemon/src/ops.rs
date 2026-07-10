@@ -27,7 +27,10 @@ pub fn list_agents() -> Vec<AgentInfo> {
 }
 
 /// `(kind, state, fingerprint)` for one server — the shared classification.
-pub fn classify(s: &DiscoveredServer, seen: Option<&SeenStore>) -> (String, String, Option<String>) {
+pub fn classify(
+    s: &DiscoveredServer,
+    seen: Option<&SeenStore>,
+) -> (String, String, Option<String>) {
     let fp = fingerprint(&s.name, &s.config);
     let kind = match &s.config {
         ServerConfig::Stdio { .. } => "stdio",
@@ -38,8 +41,12 @@ pub fn classify(s: &DiscoveredServer, seen: Option<&SeenStore>) -> (String, Stri
         "edison"
     } else {
         match &s.config {
-            ServerConfig::Opaque { removable: true, .. } => "opaque",
-            ServerConfig::Opaque { removable: false, .. } => "report",
+            ServerConfig::Opaque {
+                removable: true, ..
+            } => "opaque",
+            ServerConfig::Opaque {
+                removable: false, ..
+            } => "report",
             _ => match &fp {
                 None => "report",
                 Some(f) => match seen {
@@ -247,7 +254,9 @@ pub fn apply_install(user: &str, e: &Enrollment) {
 fn install_edison_entries(user: &str, e: &Enrollment, home: &std::path::Path) {
     let Some(mcp_base) = e.mcp_base_url.as_deref() else {
         if !e.selected_agents.is_empty() {
-            tracing::warn!("agents selected but no mcp_base_url set — skipping edison-watch install");
+            tracing::warn!(
+                "agents selected but no mcp_base_url set — skipping edison-watch install"
+            );
         }
         return;
     };
@@ -259,19 +268,23 @@ fn install_edison_entries(user: &str, e: &Enrollment, home: &std::path::Path) {
         for inst in agent.edison_installs(home) {
             // Claude Code goes through its own CLI (as the user); the file write
             // is the fallback.
-            let done_via_cli = inst.prefer_cli && {
-                let url = mcp_quarantine::edison_url(mcp_base, &e.api_key, &inst.client_id);
-                match crate::claude_cli::install(user, &url, secret) {
-                    Ok(()) => {
-                        tracing::info!(agent = agent.name(), "installed edison-watch (via claude CLI)");
-                        true
+            let done_via_cli = inst.prefer_cli
+                && {
+                    let url = mcp_quarantine::edison_url(mcp_base, &e.api_key, &inst.client_id);
+                    match crate::claude_cli::install(user, &url, secret) {
+                        Ok(()) => {
+                            tracing::info!(
+                                agent = agent.name(),
+                                "installed edison-watch (via claude CLI)"
+                            );
+                            true
+                        }
+                        Err(err) => {
+                            tracing::warn!(agent = agent.name(), error = %err, "claude CLI failed; writing the file directly");
+                            false
+                        }
                     }
-                    Err(err) => {
-                        tracing::warn!(agent = agent.name(), error = %err, "claude CLI failed; writing the file directly");
-                        false
-                    }
-                }
-            };
+                };
             if !done_via_cli {
                 match mcp_quarantine::install_edison(&inst, mcp_base, &e.api_key, secret) {
                     Ok(()) => {
@@ -322,7 +335,10 @@ pub fn heal_edison_install(user: &str, e: &Enrollment) -> usize {
                 let _ = mcp_quarantine::install_edison(&inst, mcp_base, &e.api_key, secret);
             }
         }
-        tracing::info!(agent = agent.name(), "re-installed missing edison-watch entry (self-heal)");
+        tracing::info!(
+            agent = agent.name(),
+            "re-installed missing edison-watch entry (self-heal)"
+        );
         healed += 1;
     }
     healed

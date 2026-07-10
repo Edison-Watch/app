@@ -420,8 +420,16 @@ mod tests {
 
     #[test]
     fn policy_true_and_false_and_missing() {
-        assert!(parse_policy(r#"{"auto_quarantine_other_mcp_servers":true}"#).unwrap().quarantine);
-        assert!(!parse_policy(r#"{"auto_quarantine_other_mcp_servers":false}"#).unwrap().quarantine);
+        assert!(
+            parse_policy(r#"{"auto_quarantine_other_mcp_servers":true}"#)
+                .unwrap()
+                .quarantine
+        );
+        assert!(
+            !parse_policy(r#"{"auto_quarantine_other_mcp_servers":false}"#)
+                .unwrap()
+                .quarantine
+        );
         // Missing flag defaults to false (fail-closed caching is the daemon's job).
         assert!(!parse_policy(r#"{}"#).unwrap().quarantine);
     }
@@ -504,8 +512,7 @@ mod tests {
     #[test]
     fn user_part_hash_strips_prefix_and_ignores_org_segment() {
         // sha256("abc") — the hash is of the user part, not the composite.
-        const SHA256_ABC: &str =
-            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+        const SHA256_ABC: &str = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
         assert_eq!(user_part_hash("user:abc"), SHA256_ABC);
         // The `.admin:<…>` org segment is not part of the user hash.
         assert_eq!(user_part_hash("user:abc.admin:xyz"), SHA256_ABC);

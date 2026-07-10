@@ -44,7 +44,11 @@ pub(crate) fn server_config_from_value(v: &serde_json::Value) -> Option<ServerCo
         let args = obj
             .get("args")
             .and_then(|a| a.as_array())
-            .map(|arr| arr.iter().filter_map(|x| x.as_str().map(String::from)).collect())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|x| x.as_str().map(String::from))
+                    .collect()
+            })
             .unwrap_or_default();
         let env = string_map(obj.get("env"));
         return Some(ServerConfig::Stdio {

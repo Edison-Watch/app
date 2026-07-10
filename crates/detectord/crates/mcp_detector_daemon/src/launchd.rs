@@ -24,8 +24,7 @@ const LABEL: &str = "watch.edison.detectord";
 const PLIST_FILENAME: &str = "watch.edison.detectord.plist";
 /// launchd's per-user default PATH omits Homebrew and /usr/local/bin; without
 /// this every child spawn (`claude`, `npx`, …) fails to resolve.
-const CHILD_PATH: &str =
-    "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/local/sbin:/usr/bin:/bin:/usr/sbin:/sbin";
+const CHILD_PATH: &str = "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/local/sbin:/usr/bin:/bin:/usr/sbin:/sbin";
 
 fn plist_path() -> Result<PathBuf> {
     let home = dirs::home_dir().ok_or_else(|| anyhow!("HOME not set"))?;
@@ -142,13 +141,25 @@ pub fn install(enforce: bool) -> Result<()> {
     tracing::info!(path = %plist.display(), enforce, "wrote LaunchAgent plist");
 
     bootout_quiet()?; // pick up a moved binary / changed flags
-    let out = launchctl(&["bootstrap", &user_domain(), plist.to_string_lossy().as_ref()])?;
+    let out = launchctl(&[
+        "bootstrap",
+        &user_domain(),
+        plist.to_string_lossy().as_ref(),
+    ])?;
     if !out.status.success() {
         let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
         bail!("launchctl bootstrap failed: {}", stderr.trim());
     }
     println!("Installed LaunchAgent: {}", plist.display());
-    println!("Daemon running{}; socket: {}", if enforce { " (enforcing)" } else { " (report-only)" }, ipc::default_socket_path().display());
+    println!(
+        "Daemon running{}; socket: {}",
+        if enforce {
+            " (enforcing)"
+        } else {
+            " (report-only)"
+        },
+        ipc::default_socket_path().display()
+    );
     Ok(())
 }
 
@@ -207,7 +218,11 @@ mod tests {
 
     #[test]
     fn plist_has_label_program_and_path() {
-        let body = render_plist(Path::new("/opt/edison/detectord"), Path::new("/tmp/l.log"), true);
+        let body = render_plist(
+            Path::new("/opt/edison/detectord"),
+            Path::new("/tmp/l.log"),
+            true,
+        );
         assert!(body.contains("<string>watch.edison.detectord</string>"));
         assert!(body.contains("<string>/opt/edison/detectord</string>"));
         assert!(body.contains("<string>daemon</string>"));

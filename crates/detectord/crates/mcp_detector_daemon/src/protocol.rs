@@ -162,10 +162,8 @@ mod tests {
     #[test]
     fn enroll_armed_defaults_to_none_and_parses() {
         // Onboarding completion arms enforcement.
-        let r: Request = serde_json::from_str(
-            r#"{"op":"enroll","url":"u","key":"k","armed":true}"#,
-        )
-        .unwrap();
+        let r: Request =
+            serde_json::from_str(r#"{"op":"enroll","url":"u","key":"k","armed":true}"#).unwrap();
         match r {
             Request::Enroll { armed, install, .. } => {
                 assert_eq!(armed, Some(true));
@@ -174,8 +172,7 @@ mod tests {
             other => panic!("wrong variant: {other:?}"),
         }
         // A base enroll (onboarding not complete) can omit it → None (keep prior).
-        let r: Request =
-            serde_json::from_str(r#"{"op":"enroll","url":"u","key":"k"}"#).unwrap();
+        let r: Request = serde_json::from_str(r#"{"op":"enroll","url":"u","key":"k"}"#).unwrap();
         match r {
             Request::Enroll { armed, .. } => assert_eq!(armed, None),
             other => panic!("wrong variant: {other:?}"),
@@ -190,7 +187,12 @@ mod tests {
         )
         .unwrap();
         match r {
-            Request::Disposition { name, agent, choice, rename } => {
+            Request::Disposition {
+                name,
+                agent,
+                choice,
+                rename,
+            } => {
                 assert_eq!(name, "foo");
                 assert_eq!(agent.as_deref(), Some("cursor"));
                 assert!(matches!(choice, Choice::SendToEw));

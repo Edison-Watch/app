@@ -34,11 +34,23 @@ pub fn install(user: &str, url: &str, secret: Option<&str>) -> anyhow::Result<()
 pub fn remove(user: &str) -> anyhow::Result<()> {
     let _ = run_as(
         user,
-        &["mcp".into(), "remove".into(), "edison-watch".into(), "--scope".into(), "project".into()],
+        &[
+            "mcp".into(),
+            "remove".into(),
+            "edison-watch".into(),
+            "--scope".into(),
+            "project".into(),
+        ],
     );
     run_as(
         user,
-        &["mcp".into(), "remove".into(), "edison-watch".into(), "--scope".into(), "user".into()],
+        &[
+            "mcp".into(),
+            "remove".into(),
+            "edison-watch".into(),
+            "--scope".into(),
+            "user".into(),
+        ],
     )
 }
 

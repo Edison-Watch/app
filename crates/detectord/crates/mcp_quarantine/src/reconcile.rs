@@ -65,7 +65,11 @@ impl Action {
 /// `policy.quarantine` is false the pass is inert. Skipped: our own injected
 /// entry, and *untouchable* opaque servers (`removable == false`). A
 /// **removable** opaque server is removed with no disposition ([`Action::RemoveOpaque`]).
-pub fn plan(observed: &[DiscoveredServer], oracle: &dyn KnownOracle, policy: Policy) -> Vec<Action> {
+pub fn plan(
+    observed: &[DiscoveredServer],
+    oracle: &dyn KnownOracle,
+    policy: Policy,
+) -> Vec<Action> {
     if !policy.quarantine {
         return Vec::new();
     }

@@ -237,7 +237,9 @@ fn mkdirs(path: &Path) -> Result<()> {
 }
 
 fn write_script(path: &Path, content: &str) -> Result<()> {
-    let changed = std::fs::read_to_string(path).map(|c| c != content).unwrap_or(true);
+    let changed = std::fs::read_to_string(path)
+        .map(|c| c != content)
+        .unwrap_or(true);
     if changed {
         write(path, content)?;
     }
@@ -362,7 +364,10 @@ fn inject_claude(install: &HookInstall, scripts: &HookScripts) -> Result<bool> {
         if let Some(m) = &b.matcher {
             group.insert("matcher".into(), json!(m));
         }
-        group.insert("hooks".into(), json!([{ "type": "command", "command": cmd }]));
+        group.insert(
+            "hooks".into(),
+            json!([{ "type": "command", "command": cmd }]),
+        );
         arr.push(Value::Object(group));
         changed = true;
     }
@@ -377,7 +382,9 @@ fn inject_claude(install: &HookInstall, scripts: &HookScripts) -> Result<bool> {
 fn inject_cursor(install: &HookInstall, scripts: &HookScripts) -> Result<bool> {
     ensure_parent(&install.path)?;
     let (mut root, existed, raw) = read_json_or_empty(&install.path)?;
-    let obj = root.as_object_mut().ok_or_else(|| Error::NotAnObject(vec![]))?;
+    let obj = root
+        .as_object_mut()
+        .ok_or_else(|| Error::NotAnObject(vec![]))?;
     obj.entry("version").or_insert_with(|| json!(1));
     let hooks = obj
         .entry("hooks")
@@ -421,7 +428,11 @@ fn inject_copilot(install: &HookInstall, scripts: &HookScripts) -> Result<bool> 
     let desired = json!({ "hooks": hooks });
 
     let existed = install.path.exists();
-    let raw = if existed { read(&install.path)? } else { String::new() };
+    let raw = if existed {
+        read(&install.path)?
+    } else {
+        String::new()
+    };
     let current = if raw.trim().is_empty() {
         None
     } else {
@@ -439,7 +450,11 @@ fn inject_copilot(install: &HookInstall, scripts: &HookScripts) -> Result<bool> 
 fn inject_codex(install: &HookInstall, scripts: &HookScripts) -> Result<bool> {
     ensure_parent(&install.path)?;
     let existed = install.path.exists();
-    let text = if existed { read(&install.path)? } else { String::new() };
+    let text = if existed {
+        read(&install.path)?
+    } else {
+        String::new()
+    };
 
     let mut appended = String::new();
     for b in &install.events {
@@ -447,10 +462,7 @@ fn inject_codex(install: &HookInstall, scripts: &HookScripts) -> Result<bool> {
             continue;
         }
         let cmd = command_for(b, scripts, install);
-        appended.push_str(&format!(
-            "\n[[hooks.{}]]\ncommand = \"{cmd}\"\n",
-            b.event
-        ));
+        appended.push_str(&format!("\n[[hooks.{}]]\ncommand = \"{cmd}\"\n", b.event));
     }
     if appended.is_empty() {
         return Ok(false);
@@ -486,7 +498,11 @@ fn remove_claude(install: &HookInstall) -> Result<bool> {
     }
     let raw = read(&install.path)?;
     let mut root = parse(&raw, &install.path)?;
-    let Some(hooks) = root.as_object_mut().and_then(|o| o.get_mut("hooks")).and_then(Value::as_object_mut) else {
+    let Some(hooks) = root
+        .as_object_mut()
+        .and_then(|o| o.get_mut("hooks"))
+        .and_then(Value::as_object_mut)
+    else {
         return Ok(false);
     };
 
@@ -522,7 +538,11 @@ fn remove_cursor(install: &HookInstall) -> Result<bool> {
     }
     let raw = read(&install.path)?;
     let mut root = parse(&raw, &install.path)?;
-    let Some(hooks) = root.as_object_mut().and_then(|o| o.get_mut("hooks")).and_then(Value::as_object_mut) else {
+    let Some(hooks) = root
+        .as_object_mut()
+        .and_then(|o| o.get_mut("hooks"))
+        .and_then(Value::as_object_mut)
+    else {
         return Ok(false);
     };
 
@@ -602,7 +622,9 @@ const VSCODE_TASK_LABEL: &str = "Edison Watch Registration";
 pub fn inject_workspace_task(tasks_json: &Path, registration_script: &Path) -> Result<bool> {
     ensure_parent(tasks_json)?;
     let (mut root, existed, raw) = read_json_or_empty(tasks_json)?;
-    let obj = root.as_object_mut().ok_or_else(|| Error::NotAnObject(vec![]))?;
+    let obj = root
+        .as_object_mut()
+        .ok_or_else(|| Error::NotAnObject(vec![]))?;
     obj.entry("version").or_insert_with(|| json!("2.0.0"));
     let tasks = obj
         .entry("tasks")
@@ -679,7 +701,10 @@ mod tests {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let mode = std::fs::metadata(&s.registration).unwrap().permissions().mode();
+            let mode = std::fs::metadata(&s.registration)
+                .unwrap()
+                .permissions()
+                .mode();
             assert_eq!(mode & 0o111, 0o111, "scripts must be executable");
         }
     }
@@ -694,12 +719,25 @@ mod tests {
             style: HookStyle::ClaudeSettings,
             client_id: "claude-code".into(),
             events: vec![
-                HookBinding::new("UserPromptSubmit", Some("*"), HookScriptKind::Registration, true),
-                HookBinding::new("PreToolUse", Some("mcp__*"), HookScriptKind::SessionHook, false),
+                HookBinding::new(
+                    "UserPromptSubmit",
+                    Some("*"),
+                    HookScriptKind::Registration,
+                    true,
+                ),
+                HookBinding::new(
+                    "PreToolUse",
+                    Some("mcp__*"),
+                    HookScriptKind::SessionHook,
+                    false,
+                ),
             ],
         };
         assert!(inject_hooks(&install, &sc).unwrap());
-        assert!(!inject_hooks(&install, &sc).unwrap(), "second inject is a no-op");
+        assert!(
+            !inject_hooks(&install, &sc).unwrap(),
+            "second inject is a no-op"
+        );
 
         let v: Value = serde_json::from_str(&std::fs::read_to_string(&cfg).unwrap()).unwrap();
         assert_eq!(v["hooks"]["UserPromptSubmit"][0]["matcher"], "*");
@@ -760,7 +798,12 @@ mod tests {
             client_id: "cursor".into(),
             events: vec![
                 HookBinding::new("sessionStart", None, HookScriptKind::Registration, true),
-                HookBinding::new("beforeMCPExecution", None, HookScriptKind::SessionHook, false),
+                HookBinding::new(
+                    "beforeMCPExecution",
+                    None,
+                    HookScriptKind::SessionHook,
+                    false,
+                ),
             ],
         };
         assert!(inject_hooks(&install, &sc).unwrap());
@@ -768,10 +811,12 @@ mod tests {
         let v: Value = serde_json::from_str(&std::fs::read_to_string(&cfg).unwrap()).unwrap();
         assert_eq!(v["version"], 1);
         assert_eq!(v["hooks"]["sessionStart"][0]["type"], "command");
-        assert!(v["hooks"]["beforeMCPExecution"][0]["command"]
-            .as_str()
-            .unwrap()
-            .contains("edison-session-hook.py"));
+        assert!(
+            v["hooks"]["beforeMCPExecution"][0]["command"]
+                .as_str()
+                .unwrap()
+                .contains("edison-session-hook.py")
+        );
         assert!(remove_hooks(&install).unwrap());
         let v: Value = serde_json::from_str(&std::fs::read_to_string(&cfg).unwrap()).unwrap();
         assert!(v["hooks"].as_object().unwrap().is_empty());
@@ -795,7 +840,10 @@ mod tests {
         assert!(inject_hooks(&install, &sc).unwrap());
         assert!(!inject_hooks(&install, &sc).unwrap());
         let t: toml::Value = toml::from_str(&std::fs::read_to_string(&cfg).unwrap()).unwrap();
-        assert!(t["mcp_servers"].get("foo").is_some(), "existing config kept");
+        assert!(
+            t["mcp_servers"].get("foo").is_some(),
+            "existing config kept"
+        );
         let cmd = t["hooks"]["SessionStart"][0]["command"].as_str().unwrap();
         assert!(cmd.contains("edison-hook.sh") && cmd.ends_with("codex"));
         assert!(remove_hooks(&install).unwrap());
@@ -817,7 +865,10 @@ mod tests {
         let script = d.path().join("edison-hook.sh");
 
         assert!(inject_workspace_task(&tasks, &script).unwrap());
-        assert!(!inject_workspace_task(&tasks, &script).unwrap(), "idempotent");
+        assert!(
+            !inject_workspace_task(&tasks, &script).unwrap(),
+            "idempotent"
+        );
         let v: Value = serde_json::from_str(&std::fs::read_to_string(&tasks).unwrap()).unwrap();
         let arr = v["tasks"].as_array().unwrap();
         assert_eq!(arr.len(), 2, "user task kept, ours appended");
@@ -847,12 +898,17 @@ mod tests {
             ],
         };
         assert!(inject_hooks(&install, &sc).unwrap());
-        assert!(!inject_hooks(&install, &sc).unwrap(), "same content → no rewrite");
+        assert!(
+            !inject_hooks(&install, &sc).unwrap(),
+            "same content → no rewrite"
+        );
         let v: Value = serde_json::from_str(&std::fs::read_to_string(&cfg).unwrap()).unwrap();
-        assert!(v["hooks"]["UserPromptSubmit"][0]["command"]
-            .as_str()
-            .unwrap()
-            .ends_with("vscode"));
+        assert!(
+            v["hooks"]["UserPromptSubmit"][0]["command"]
+                .as_str()
+                .unwrap()
+                .ends_with("vscode")
+        );
         assert!(remove_hooks(&install).unwrap());
         assert!(!cfg.exists(), "Edison-owned file is deleted on removal");
     }

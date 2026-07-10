@@ -123,7 +123,8 @@ fn templatize_args(args: &[String]) -> Vec<String> {
             // `--flag=value`: scan both the flag name and the value.
             let (flag, rest) = arg.split_at(eq);
             let value = &rest[1..];
-            if !is_non_secret_flag(flag) && (is_sensitive_key_name(flag) || is_secret_value(value)) {
+            if !is_non_secret_flag(flag) && (is_sensitive_key_name(flag) || is_secret_value(value))
+            {
                 out.push(format!("{flag}={PLACEHOLDER}"));
             } else {
                 out.push(arg.clone());
@@ -169,7 +170,10 @@ fn templatize_url(url: &str) -> String {
     if let Some(scheme_end) = out.find("://") {
         let after = scheme_end + 3;
         if let Some(at_rel) = out[after..].find('@') {
-            let authority_end = out[after..].find('/').map(|s| after + s).unwrap_or(out.len());
+            let authority_end = out[after..]
+                .find('/')
+                .map(|s| after + s)
+                .unwrap_or(out.len());
             let at = after + at_rel;
             if at < authority_end {
                 out.replace_range(after..at, PLACEHOLDER);
@@ -207,7 +211,9 @@ fn templatize_auth_value(value: &str) -> Option<String> {
             let ws = rest.len() - trimmed.len();
             if ws > 0
                 && !trimmed.is_empty()
-                && (has_known_secret_prefix(trimmed) || looks_like_api_key(trimmed) || trimmed.len() >= 8)
+                && (has_known_secret_prefix(trimmed)
+                    || looks_like_api_key(trimmed)
+                    || trimmed.len() >= 8)
             {
                 return Some(format!("{}{PLACEHOLDER}", &value[..after + ws]));
             }
@@ -274,9 +280,13 @@ fn is_npm_scoped(v: &str) -> bool {
         return false;
     };
     !scope.is_empty()
-        && scope.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+        && scope
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
         && !name.is_empty()
-        && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '.' || c == '-')
+        && name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '.' || c == '-')
 }
 
 /// `^[a-z][\w.-]*$` — a bare lowercase package/identifier.
@@ -314,7 +324,10 @@ mod tests {
     #[test]
     fn templatizes_known_prefix_arg() {
         assert_eq!(
-            args_of(&stdio("server", &["--token", "sk-abc123def456ghi789jkl012mno345"])),
+            args_of(&stdio(
+                "server",
+                &["--token", "sk-abc123def456ghi789jkl012mno345"]
+            )),
             vec!["--token", "{SECRET}"]
         );
     }
@@ -322,15 +335,24 @@ mod tests {
     #[test]
     fn templatizes_flag_equals_value() {
         assert_eq!(
-            args_of(&stdio("server", &["--token=ghp_0123456789abcdefghijklmnopqrstuvwxyz"])),
+            args_of(&stdio(
+                "server",
+                &["--token=ghp_0123456789abcdefghijklmnopqrstuvwxyz"]
+            )),
             vec!["--token={SECRET}"]
         );
     }
 
     #[test]
     fn stripe_and_slack_prefixes() {
-        assert_eq!(args_of(&stdio("s", &["sk_live_0123456789abcdefXYZ"])), vec!["{SECRET}"]);
-        assert_eq!(args_of(&stdio("s", &["xapp-1-A-2-longtokenvalue"])), vec!["{SECRET}"]);
+        assert_eq!(
+            args_of(&stdio("s", &["sk_live_0123456789abcdefXYZ"])),
+            vec!["{SECRET}"]
+        );
+        assert_eq!(
+            args_of(&stdio("s", &["xapp-1-A-2-longtokenvalue"])),
+            vec!["{SECRET}"]
+        );
     }
 
     #[test]
@@ -344,23 +366,49 @@ mod tests {
     #[test]
     fn sensitive_flag_name_templatizes_short_value() {
         // Value isn't high-entropy, but the flag name is sensitive.
-        assert_eq!(args_of(&stdio("s", &["--api-key", "short"])), vec!["--api-key", "{SECRET}"]);
-        assert_eq!(args_of(&stdio("s", &["--password=hunter2"])), vec!["--password={SECRET}"]);
+        assert_eq!(
+            args_of(&stdio("s", &["--api-key", "short"])),
+            vec!["--api-key", "{SECRET}"]
+        );
+        assert_eq!(
+            args_of(&stdio("s", &["--password=hunter2"])),
+            vec!["--password={SECRET}"]
+        );
     }
 
     #[test]
     fn non_secret_flags_and_values_left_alone() {
         // A long path is high-entropy-ish but must not be templatized.
         assert_eq!(
-            args_of(&stdio("npx", &["-y", "ctx7-mcp", "--port", "8080", "--config", "/very/long/path/to/config/file.json"])),
-            vec!["-y", "ctx7-mcp", "--port", "8080", "--config", "/very/long/path/to/config/file.json"]
+            args_of(&stdio(
+                "npx",
+                &[
+                    "-y",
+                    "ctx7-mcp",
+                    "--port",
+                    "8080",
+                    "--config",
+                    "/very/long/path/to/config/file.json"
+                ]
+            )),
+            vec![
+                "-y",
+                "ctx7-mcp",
+                "--port",
+                "8080",
+                "--config",
+                "/very/long/path/to/config/file.json"
+            ]
         );
     }
 
     #[test]
     fn npm_scoped_package_not_secret() {
         assert_eq!(
-            args_of(&stdio("npx", &["-y", "@modelcontextprotocol/server-everything-and-more"])),
+            args_of(&stdio(
+                "npx",
+                &["-y", "@modelcontextprotocol/server-everything-and-more"]
+            )),
             vec!["-y", "@modelcontextprotocol/server-everything-and-more"]
         );
     }
@@ -368,7 +416,10 @@ mod tests {
     #[test]
     fn bearer_token_extraction() {
         assert_eq!(
-            args_of(&stdio("s", &["Authorization: Bearer sk-abc123def456ghi789jkl0"])),
+            args_of(&stdio(
+                "s",
+                &["Authorization: Bearer sk-abc123def456ghi789jkl0"]
+            )),
             vec!["Authorization: Bearer {SECRET}"]
         );
     }
@@ -376,7 +427,9 @@ mod tests {
     #[test]
     fn templatizes_url_query_and_userinfo() {
         let c = ServerConfig::Http {
-            url: "https://user:supersecretpasswordvalue1234@h.example/mcp?key=sk-abc123def456ghi789".into(),
+            url:
+                "https://user:supersecretpasswordvalue1234@h.example/mcp?key=sk-abc123def456ghi789"
+                    .into(),
             headers: BTreeMap::new(),
             kind: crate::types::HttpKind::Http,
         };

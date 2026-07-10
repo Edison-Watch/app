@@ -16,10 +16,10 @@ mod statedb;
 pub use configstore::{
     ConfigStore, FileConfigStore, QuarantineRecord, edison_url, install_edison, uninstall_edison,
 };
+pub use error::{Error, Result};
 pub use hooks::{
     HookScripts, ensure_scripts, inject_hooks, inject_workspace_task, remove_hooks,
     remove_workspace_task,
 };
-pub use error::{Error, Result};
 pub use reconcile::{Action as ReconcileAction, KnownOracle, Policy, is_edison_entry, plan};
 pub use seen_store::{Action, SeenStore};
