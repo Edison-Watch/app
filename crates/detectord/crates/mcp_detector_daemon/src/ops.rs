@@ -125,6 +125,7 @@ pub async fn refresh_policy(user: &str) -> anyhow::Result<Status> {
 /// the UI/CLI: `None`/unspecified keeps the previous value, so re-running
 /// `enroll` acts as an update. The selection diff uninstalls edison-watch from
 /// agents dropped from the set.
+#[allow(clippy::too_many_arguments)]
 pub async fn enroll(
     user: &str,
     url: String,
