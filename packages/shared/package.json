@@ -1,6 +1,6 @@
 {
   "name": "@edison/shared",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "description": "Shared React components, design tokens, and client utilities for Edison Watch.",
   "license": "AGPL-3.0-only",
