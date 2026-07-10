@@ -80,10 +80,31 @@ const LOCAL_CONFIG: EnvConfig = {
   RELEASES_BASE_URL: ''
 }
 
+// Railway-hosted instance of the offline local stack (edison-watch project,
+// demo environment, service "local-stack-backend"). Same TEST_AUTH_MODE=local
+// backend as LOCAL_CONFIG (GoTrue proxied at /auth/v1, edge functions
+// reimplemented at /functions/v1), but reached at a fixed public URL, so no
+// origin rewriting applies. MCP (FastMCP, container port 3000) has no public
+// Railway domain yet; MCP_BASE_URL stays empty until one is created, which
+// only disables MCP health checks and client-config rewrites.
+const TEMP_LOCAL_STACK_CONFIG: EnvConfig = {
+  SUPABASE_URL: 'https://local-stack-backend-demo.up.railway.app',
+  SUPABASE_ANON_KEY: 'local-anon-key',
+  FUNCTIONS_URL: 'https://local-stack-backend-demo.up.railway.app',
+  SENTRY_DSN: '',
+  POSTHOG_API_KEY: '',
+  POSTHOG_FEEDBACK_SURVEY_ID: '',
+  DEPLOY_ENV: 'temp-local-stack',
+  API_BASE_URL: 'https://local-stack-backend-demo.up.railway.app',
+  MCP_BASE_URL: '',
+  RELEASES_BASE_URL: ''
+}
+
 const CONFIGS: Record<string, EnvConfig> = {
   demo: DEMO_CONFIG,
   release: RELEASE_CONFIG,
-  local: LOCAL_CONFIG
+  local: LOCAL_CONFIG,
+  'temp-local-stack': TEMP_LOCAL_STACK_CONFIG
 }
 
 /** MCP gateway port (sibling of the dashboard); overridable at build time. */
