@@ -79,7 +79,9 @@ pub async fn serve(path: &Path, events: EventTx) -> anyhow::Result<()> {
     // connected instance and immediately create the next. `first_pipe_instance`
     // on the very first server refuses to bind if another process already owns
     // the name (anti-squat).
-    let mut server = ServerOptions::new().first_pipe_instance(true).create(name)?;
+    let mut server = ServerOptions::new()
+        .first_pipe_instance(true)
+        .create(name)?;
     loop {
         server.connect().await?;
         let connected = server;
