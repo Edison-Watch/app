@@ -1,4 +1,4 @@
-//! Claude Code [`Client`] implementation. Watches `~/.claude.json` (which
+//! Claude Code [`Agent`] implementation. Watches `~/.claude.json` (which
 //! contains both the global `mcpServers` map and a `projects` sub-map with
 //! per-project servers) plus a `.mcp.json` inside every project listed in
 //! that file.
@@ -8,10 +8,15 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
-use crate::client::Client;
-use crate::clients::detect_transport;
+use crate::agent::Agent;
+use crate::clients::common::{read_strict_json, servers_from_map};
+use crate::clients::{detect_transport, server_config_from_value};
 use crate::error::{Error, Result};
-use crate::types::{McpServer, Scope};
+use crate::types::{
+    ConfigLocation, DiscoveredServer, EdisonInstall, EdisonStyle, HookBinding, HookInstall,
+    HookScriptKind, HookStyle, LocationExtra, Scope, SourceKind,
+};
+use crate::watch::WatchTargets;
 
 const CLIENT_NAME: &str = "claude_code";
 
@@ -23,6 +28,16 @@ pub struct ClaudeCode {
     /// `~/.claude.json` - single user-level file that holds both global
     /// servers and a `projects` map with per-project servers.
     user_config: Option<PathBuf>,
+    /// `~/.claude/settings.json` - user settings, `mcpServers` + per-profile
+    /// `profiles.<name>.mcpServers`.
+    settings: Option<PathBuf>,
+    /// `~/.claude/settings.local.json` - local overrides, same shape.
+    settings_local: Option<PathBuf>,
+    /// `~/.claude/mcp_servers.json` - dedicated file, either `{mcpServers:{...}}`
+    /// or a direct name→config map.
+    dedicated: Option<PathBuf>,
+    /// Enterprise/managed config (`managed-mcp.json`), key `mcpServers`.
+    managed: Option<PathBuf>,
     /// (project_dir, path to `<project>/.mcp.json`) for each project CC knows
     /// about. `.mcp.json` is the committed, project-scoped servers file.
     project_configs: Vec<(PathBuf, PathBuf)>,
@@ -36,7 +51,14 @@ impl ClaudeCode {
     /// Returns `Ok` even if `~/.claude.json` is absent or unreadable - the
     /// resulting `ClaudeCode` simply has no paths to watch.
     pub fn discover() -> Result<Self> {
-        let user_config = dirs::home_dir().map(|h| h.join(".claude.json"));
+        let home = dirs::home_dir();
+        let user_config = home.as_ref().map(|h| h.join(".claude.json"));
+        let claude_dir = home.as_ref().map(|h| h.join(".claude"));
+        let settings = claude_dir.as_ref().map(|d| d.join("settings.json"));
+        let settings_local = claude_dir.as_ref().map(|d| d.join("settings.local.json"));
+        let dedicated = claude_dir.as_ref().map(|d| d.join("mcp_servers.json"));
+        let managed = managed_config_path();
+
         let mut project_configs: Vec<(PathBuf, PathBuf)> = Vec::new();
         if let Some(uc) = &user_config
             && uc.exists()
@@ -55,6 +77,10 @@ impl ClaudeCode {
         }
         Ok(Self {
             user_config,
+            settings,
+            settings_local,
+            dedicated,
+            managed,
             project_configs,
         })
     }
@@ -81,33 +107,77 @@ impl ClaudeCode {
             .collect();
         Self {
             user_config,
+            settings: None,
+            settings_local: None,
+            dedicated: None,
+            managed: None,
             project_configs,
         }
     }
 }
 
-impl Client for ClaudeCode {
+impl Agent for ClaudeCode {
     fn name(&self) -> &'static str {
         CLIENT_NAME
     }
 
-    fn watch_paths(&self) -> Vec<PathBuf> {
-        let mut v = Vec::new();
-        if let Some(p) = &self.user_config {
-            v.push(p.clone());
-        }
-        for (_, cfg) in &self.project_configs {
-            v.push(cfg.clone());
-        }
-        v
+    fn is_installed(&self) -> bool {
+        self.user_config.as_ref().is_some_and(|p| p.exists())
     }
 
-    fn parse_all(&self) -> Result<Vec<McpServer>> {
+    fn watch_targets(&self) -> WatchTargets {
+        let mut files = Vec::new();
+        for p in [
+            &self.user_config,
+            &self.settings,
+            &self.settings_local,
+            &self.dedicated,
+            &self.managed,
+        ]
+        .into_iter()
+        .flatten()
+        {
+            files.push(p.clone());
+        }
+        for (_, cfg) in &self.project_configs {
+            files.push(cfg.clone());
+        }
+        WatchTargets {
+            files,
+            dirs: Vec::new(),
+            needs_periodic_rescan: false,
+        }
+    }
+
+    fn discover(&self) -> Result<Vec<DiscoveredServer>> {
         let mut out = Vec::new();
         if let Some(uc) = &self.user_config
             && uc.exists()
         {
             out.extend(parse_user_config(uc));
+        }
+        // settings.json / settings.local.json: global `mcpServers` + profiles.
+        for p in [&self.settings, &self.settings_local].into_iter().flatten() {
+            if p.exists() {
+                out.extend(parse_settings(p));
+            }
+        }
+        if let Some(p) = &self.dedicated
+            && p.exists()
+        {
+            out.extend(parse_dedicated(p));
+        }
+        if let Some(p) = &self.managed
+            && p.exists()
+        {
+            out.extend(servers_from_map(
+                &read_strict_json(p).unwrap_or_default(),
+                "mcpServers",
+                CLIENT_NAME,
+                Scope::Global,
+                SourceKind::Jsonc,
+                p,
+            ));
         }
         for (project, cfg) in &self.project_configs {
             if cfg.exists() {
@@ -116,6 +186,145 @@ impl Client for ClaudeCode {
         }
         Ok(out)
     }
+
+    fn edison_installs(&self, home: &std::path::Path) -> Vec<EdisonInstall> {
+        // Prefer the `claude mcp add` CLI (Claude Code misbehaves without it);
+        // the file target is the fallback.
+        vec![EdisonInstall {
+            path: home.join(".claude.json"),
+            key_path: vec!["mcpServers".into()],
+            style: EdisonStyle::Http,
+            client_id: "claude-code".into(),
+            prefer_cli: true,
+        }]
+    }
+
+    fn hook_install(&self, home: &std::path::Path) -> Option<HookInstall> {
+        // Hooks live in ~/.claude/settings.json (not ~/.claude.json).
+        Some(HookInstall {
+            path: home.join(".claude/settings.json"),
+            style: HookStyle::ClaudeSettings,
+            client_id: "claude-code".into(),
+            events: vec![
+                HookBinding::new(
+                    "UserPromptSubmit",
+                    Some("*"),
+                    HookScriptKind::Registration,
+                    true,
+                ),
+                HookBinding::new(
+                    "PreToolUse",
+                    Some("mcp__*"),
+                    HookScriptKind::SessionHook,
+                    false,
+                ),
+                HookBinding::new(
+                    "SessionStart",
+                    Some("*"),
+                    HookScriptKind::SessionStart,
+                    false,
+                ),
+                HookBinding::new("SessionEnd", Some("*"), HookScriptKind::SessionEnd, false),
+            ],
+        })
+    }
+}
+
+/// Enterprise/managed config path (`managed-mcp.json`), per OS.
+fn managed_config_path() -> Option<PathBuf> {
+    if cfg!(target_os = "macos") {
+        Some(PathBuf::from(
+            "/Library/Application Support/ClaudeCode/managed-mcp.json",
+        ))
+    } else if cfg!(target_os = "windows") {
+        Some(PathBuf::from(r"C:\ProgramData\ClaudeCode\managed-mcp.json"))
+    } else {
+        Some(PathBuf::from("/etc/claude-code/managed-mcp.json"))
+    }
+}
+
+/// Parse `settings.json` / `settings.local.json`: top-level `mcpServers` plus
+/// per-profile `profiles.<name>.mcpServers`.
+fn parse_settings(path: &Path) -> Vec<DiscoveredServer> {
+    let Some(root) = read_strict_json(path) else {
+        return Vec::new();
+    };
+    let mut out = servers_from_map(
+        &root,
+        "mcpServers",
+        CLIENT_NAME,
+        Scope::Global,
+        SourceKind::Jsonc,
+        path,
+    );
+    if let Some(profiles) = root.get("profiles").and_then(|v| v.as_object()) {
+        for (profile, pval) in profiles {
+            let Some(map) = pval.get("mcpServers").and_then(|v| v.as_object()) else {
+                continue;
+            };
+            for (name, val) in map {
+                let Some(config) = server_config_from_value(val) else {
+                    continue;
+                };
+                out.push(DiscoveredServer {
+                    client: CLIENT_NAME,
+                    transport: detect_transport(val),
+                    scope: Scope::Global,
+                    config,
+                    location: ConfigLocation {
+                        kind: SourceKind::Jsonc,
+                        path: path.to_path_buf(),
+                        key_path: vec!["profiles".into(), profile.clone(), "mcpServers".into()],
+                        server_key: name.clone(),
+                        extra: LocationExtra::None,
+                    },
+                    name: name.clone(),
+                });
+            }
+        }
+    }
+    out
+}
+
+/// Parse `mcp_servers.json`: either `{ "mcpServers": {...} }` or a direct
+/// name→config map at the root.
+fn parse_dedicated(path: &Path) -> Vec<DiscoveredServer> {
+    let Some(root) = read_strict_json(path) else {
+        return Vec::new();
+    };
+    if root.get("mcpServers").is_some() {
+        return servers_from_map(
+            &root,
+            "mcpServers",
+            CLIENT_NAME,
+            Scope::Global,
+            SourceKind::Jsonc,
+            path,
+        );
+    }
+    // Direct map: each top-level key is a server (key_path empty).
+    let Some(map) = root.as_object() else {
+        return Vec::new();
+    };
+    map.iter()
+        .filter_map(|(name, val)| {
+            let config = server_config_from_value(val)?;
+            Some(DiscoveredServer {
+                client: CLIENT_NAME,
+                transport: detect_transport(val),
+                scope: Scope::Global,
+                config,
+                location: ConfigLocation {
+                    kind: SourceKind::Jsonc,
+                    path: path.to_path_buf(),
+                    key_path: Vec::new(),
+                    server_key: name.clone(),
+                    extra: LocationExtra::None,
+                },
+                name: name.clone(),
+            })
+        })
+        .collect()
 }
 
 #[derive(Debug, Deserialize)]
@@ -147,7 +356,7 @@ fn projects_from_user_config(path: &Path) -> Result<Vec<PathBuf>> {
     Ok(cfg.projects.keys().map(PathBuf::from).collect())
 }
 
-fn parse_user_config(path: &Path) -> Vec<McpServer> {
+fn parse_user_config(path: &Path) -> Vec<DiscoveredServer> {
     let text = match std::fs::read_to_string(path) {
         Ok(t) => t,
         Err(e) => {
@@ -168,23 +377,49 @@ fn parse_user_config(path: &Path) -> Vec<McpServer> {
 
     let mut out = Vec::new();
     for (name, val) in cfg.mcp_servers {
-        out.push(McpServer {
+        let Some(config) = server_config_from_value(&val) else {
+            continue;
+        };
+        out.push(DiscoveredServer {
             client: CLIENT_NAME,
-            name,
             transport: detect_transport(&val),
             scope: Scope::Global,
-            source: path.to_path_buf(),
+            config,
+            location: ConfigLocation {
+                kind: SourceKind::Jsonc,
+                path: path.to_path_buf(),
+                key_path: vec!["mcpServers".into()],
+                server_key: name.clone(),
+                extra: LocationExtra::None,
+            },
+            name,
         });
     }
     for (project_path_str, entry) in cfg.projects {
-        let project_path = PathBuf::from(project_path_str);
+        let project_path = PathBuf::from(&project_path_str);
         for (name, val) in entry.mcp_servers {
-            out.push(McpServer {
+            let Some(config) = server_config_from_value(&val) else {
+                continue;
+            };
+            // Project-scoped servers embedded in ~/.claude.json are removed via
+            // the `claude mcp remove` CLI, not by editing the file directly.
+            out.push(DiscoveredServer {
                 client: CLIENT_NAME,
-                name,
                 transport: detect_transport(&val),
                 scope: Scope::Project(project_path.clone()),
-                source: path.to_path_buf(),
+                config,
+                location: ConfigLocation {
+                    kind: SourceKind::ClaudeCli,
+                    path: path.to_path_buf(),
+                    key_path: vec![
+                        "projects".into(),
+                        project_path_str.clone(),
+                        "mcpServers".into(),
+                    ],
+                    server_key: name.clone(),
+                    extra: LocationExtra::ClaudeProjectDir(project_path.clone()),
+                },
+                name,
             });
         }
     }
@@ -197,7 +432,7 @@ struct ProjectMcpFile {
     mcp_servers: BTreeMap<String, serde_json::Value>,
 }
 
-fn parse_project_mcp(path: &Path, project: PathBuf) -> Vec<McpServer> {
+fn parse_project_mcp(path: &Path, project: PathBuf) -> Vec<DiscoveredServer> {
     let text = match std::fs::read_to_string(path) {
         Ok(t) => t,
         Err(e) => {
@@ -217,12 +452,22 @@ fn parse_project_mcp(path: &Path, project: PathBuf) -> Vec<McpServer> {
     };
     cfg.mcp_servers
         .into_iter()
-        .map(|(name, val)| McpServer {
-            client: CLIENT_NAME,
-            name,
-            transport: detect_transport(&val),
-            scope: Scope::Project(project.clone()),
-            source: path.to_path_buf(),
+        .filter_map(|(name, val)| {
+            let config = server_config_from_value(&val)?;
+            Some(DiscoveredServer {
+                client: CLIENT_NAME,
+                transport: detect_transport(&val),
+                scope: Scope::Project(project.clone()),
+                config,
+                location: ConfigLocation {
+                    kind: SourceKind::Jsonc,
+                    path: path.to_path_buf(),
+                    key_path: vec!["mcpServers".into()],
+                    server_key: name.clone(),
+                    extra: LocationExtra::None,
+                },
+                name,
+            })
         })
         .collect()
 }
@@ -300,6 +545,49 @@ mod tests {
     }
 
     #[test]
+    fn settings_parses_global_and_profile_servers() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("settings.json");
+        std::fs::write(
+            &path,
+            r#"{
+                "mcpServers": { "g": { "command": "node" } },
+                "profiles": {
+                    "work": { "mcpServers": { "p": { "type": "http", "url": "https://x" } } }
+                }
+            }"#,
+        )
+        .unwrap();
+
+        let servers = parse_settings(&path);
+        assert_eq!(servers.len(), 2);
+        let by: BTreeMap<_, _> = servers.iter().map(|s| (s.name.clone(), s)).collect();
+        assert_eq!(by["g"].location.key_path, vec!["mcpServers".to_string()]);
+        assert_eq!(
+            by["p"].location.key_path,
+            vec![
+                "profiles".to_string(),
+                "work".to_string(),
+                "mcpServers".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn dedicated_handles_both_shapes() {
+        let dir = tempdir().unwrap();
+        let wrapped = dir.path().join("a.json");
+        std::fs::write(&wrapped, r#"{"mcpServers":{"a":{"command":"x"}}}"#).unwrap();
+        assert_eq!(parse_dedicated(&wrapped).len(), 1);
+
+        let direct = dir.path().join("b.json");
+        std::fs::write(&direct, r#"{"b":{"command":"y"},"c":{"url":"https://z"}}"#).unwrap();
+        let servers = parse_dedicated(&direct);
+        assert_eq!(servers.len(), 2);
+        assert!(servers.iter().all(|s| s.location.key_path.is_empty()));
+    }
+
+    #[test]
     fn malformed_user_config_is_tolerated_by_parse() {
         let dir = tempdir().unwrap();
         let path = dir.path().join(".claude.json");
@@ -313,7 +601,7 @@ mod tests {
         let user = dir.path().join(".claude.json");
         let proj = dir.path().join("proj");
         let cc = ClaudeCode::from_paths(Some(user.clone()), [proj.clone()]);
-        let watched = cc.watch_paths();
+        let watched = cc.watch_targets().files;
         assert!(watched.contains(&user));
         assert!(watched.contains(&proj.join(".mcp.json")));
     }
@@ -332,7 +620,7 @@ mod tests {
         .unwrap();
 
         let cc = ClaudeCode::from_paths(Some(user.clone()), [proj.clone()]);
-        let servers = cc.parse_all().unwrap();
+        let servers = cc.discover().unwrap();
 
         assert_eq!(servers.len(), 2);
         let by_name: BTreeMap<_, _> = servers.iter().map(|s| (s.name.clone(), s)).collect();

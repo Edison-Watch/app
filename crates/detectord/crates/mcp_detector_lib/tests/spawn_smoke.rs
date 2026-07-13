@@ -16,7 +16,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use mcp_detector_lib::clients::VsCode;
-use mcp_detector_lib::{ChangeEvent, Client, Watcher};
+use mcp_detector_lib::{Agent, ChangeEvent, Watcher};
 use tempfile::tempdir;
 
 /// Wait up to `timeout` for an event matching `pred` to arrive on `events`.
@@ -48,7 +48,7 @@ fn spawn_delivers_added_event_when_a_server_appears() {
         None,
         Vec::<PathBuf>::new(),
     ));
-    let (events, _handle) = Watcher::new(vec![client as Arc<dyn Client>])
+    let (events, _handle) = Watcher::new(vec![client as Arc<dyn Agent>])
         .spawn()
         .unwrap();
 
@@ -65,7 +65,7 @@ fn spawn_delivers_added_event_when_a_server_appears() {
     .expect("Added event for new-thing within 10s");
     if let ChangeEvent::Added(s) = ev {
         assert_eq!(s.client, "vscode");
-        assert_eq!(s.source, global);
+        assert_eq!(s.location.path, global);
     }
 }
 
@@ -80,7 +80,7 @@ fn spawn_delivers_removed_event_when_a_server_disappears() {
         None,
         Vec::<PathBuf>::new(),
     ));
-    let (events, _handle) = Watcher::new(vec![client as Arc<dyn Client>])
+    let (events, _handle) = Watcher::new(vec![client as Arc<dyn Agent>])
         .spawn()
         .unwrap();
 
@@ -107,7 +107,7 @@ fn dropping_the_handle_stops_the_worker() {
         None,
         Vec::<PathBuf>::new(),
     ));
-    let (events, handle) = Watcher::new(vec![client as Arc<dyn Client>])
+    let (events, handle) = Watcher::new(vec![client as Arc<dyn Agent>])
         .spawn()
         .unwrap();
 

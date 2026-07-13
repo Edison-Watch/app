@@ -1,10 +1,10 @@
 //! Snapshot + diff used internally by the watcher to turn a freshly-parsed
-//! list of [`McpServer`]s into a stream of [`ChangeEvent`]s.
+//! list of [`DiscoveredServer`]s into a stream of [`ChangeEvent`]s.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use crate::types::{ChangeEvent, McpServer, Scope};
+use crate::types::{ChangeEvent, DiscoveredServer, Scope};
 
 /// Identity used to detect "is this the same server as before?". A server is
 /// uniquely identified by `(source file, scope, name)` - that way the same
@@ -16,7 +16,7 @@ type Key = (PathBuf, PathBuf, String);
 /// scope, name)`. The watcher keeps one of these per client.
 #[derive(Default)]
 pub(crate) struct Snapshot {
-    by_key: HashMap<Key, McpServer>,
+    by_key: HashMap<Key, DiscoveredServer>,
 }
 
 impl Snapshot {
@@ -25,15 +25,15 @@ impl Snapshot {
     }
 
     /// Seed the snapshot without emitting events.
-    pub(crate) fn prime(&mut self, current: &[McpServer]) {
+    pub(crate) fn prime(&mut self, current: &[DiscoveredServer]) {
         self.by_key = current.iter().map(|s| (key(s), s.clone())).collect();
     }
 
     /// Replace the snapshot with `current` and return `Added` / `Removed`
     /// events for any servers that appeared or disappeared. In-place edits
     /// (same key, different fields) are not reported yet.
-    pub(crate) fn update(&mut self, current: &[McpServer]) -> Vec<ChangeEvent> {
-        let new_map: HashMap<Key, McpServer> =
+    pub(crate) fn update(&mut self, current: &[DiscoveredServer]) -> Vec<ChangeEvent> {
+        let new_map: HashMap<Key, DiscoveredServer> =
             current.iter().map(|s| (key(s), s.clone())).collect();
 
         let mut events = Vec::new();
@@ -53,26 +53,38 @@ impl Snapshot {
     }
 }
 
-fn key(s: &McpServer) -> Key {
+fn key(s: &DiscoveredServer) -> Key {
     let scope_tag = match &s.scope {
         Scope::Global => PathBuf::from("<global>"),
         Scope::Project(p) => p.clone(),
     };
-    (s.source.clone(), scope_tag, s.name.clone())
+    (s.location.path.clone(), scope_tag, s.name.clone())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{Scope, Transport};
+    use crate::types::{ConfigLocation, LocationExtra, ServerConfig, SourceKind, Transport};
+    use std::collections::BTreeMap;
 
-    fn s(name: &str) -> McpServer {
-        McpServer {
+    fn s(name: &str) -> DiscoveredServer {
+        DiscoveredServer {
             client: "test",
             name: name.into(),
             transport: Transport::Stdio,
             scope: Scope::Global,
-            source: PathBuf::from("/tmp/x.json"),
+            config: ServerConfig::Stdio {
+                command: "x".into(),
+                args: vec![],
+                env: BTreeMap::new(),
+            },
+            location: ConfigLocation {
+                kind: SourceKind::Jsonc,
+                path: PathBuf::from("/tmp/x.json"),
+                key_path: vec!["mcpServers".into()],
+                server_key: name.into(),
+                extra: LocationExtra::None,
+            },
         }
     }
 

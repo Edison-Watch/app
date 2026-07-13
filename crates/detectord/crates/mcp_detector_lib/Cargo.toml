@@ -10,12 +10,29 @@ keywords = ["mcp", "model-context-protocol", "watcher", "config", "claude"]
 categories = ["development-tools", "filesystem", "command-line-utilities"]
 
 [features]
-default = ["vscode", "claude_code"]
-# Each client can be opted into independently. `vscode` pulls in rusqlite
-# (for reading VSCode's `state.vscdb` workspace history); consumers who only
-# care about Claude Code can disable it and skip that build cost entirely.
+default = [
+    "vscode",
+    "claude_code",
+    "cursor",
+    "claude_desktop",
+    "claude_cowork",
+    "windsurf",
+    "zed",
+    "jetbrains",
+    "codex",
+]
+# Each agent can be opted into independently. `vscode` and `cursor` pull in
+# rusqlite (for reading `state.vscdb`) + serde_json_lenient (JSONC); `codex`
+# pulls in `toml`; the plain single-file agents need no extra deps.
 vscode = ["dep:rusqlite", "dep:serde_json_lenient"]
+cursor = ["dep:rusqlite", "dep:serde_json_lenient"]
+codex = ["dep:toml"]
 claude_code = []
+claude_desktop = []
+claude_cowork = []
+windsurf = []
+zed = []
+jetbrains = []
 
 [dependencies]
 dirs = "6.0.0"
@@ -24,6 +41,8 @@ notify-debouncer-full = "0.7.0"
 rusqlite = { version = "0.39.0", features = ["bundled"], optional = true }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
+sha2 = "0.10.8"
+toml = { version = "0.9.8", optional = true }
 serde_json_lenient = { version = "0.2.4", optional = true }
 thiserror = "2.0.18"
 tracing = "0.1.44"

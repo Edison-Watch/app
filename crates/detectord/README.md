@@ -1,50 +1,73 @@
 # Edison Quarantine Daemon
 
-This repo contains the open Rust code for the Quarantine Daemon for the Edison Watch Desktop App. It contains a cargo workspace that watches the on-disk configs of MCP (Model Context Protocol) clients and reports changes as they happen. Two crates:
+Open Rust code for the Edison Watch **MCP quarantine** system agent. It discovers
+the MCP (Model Context Protocol) servers configured across a machine's host apps
+(Claude Code, VSCode, …) and — when an admin requires it — quarantines them:
+moves them off the local config and onto the Edison Watch backend.
 
-| Crate | Path | Role |
-|---|---|---|
-| `mcp_detector_lib` | [crates/mcp_detector_lib/](crates/mcp_detector_lib/) | Library: client abstraction, filesystem watcher, diff engine. Cross-platform, publishable. |
-| `mcp_detector_daemon` | [crates/mcp_detector_daemon/](crates/mcp_detector_daemon/) | Long-lived daemon: wraps the library behind a Unix-socket IPC, gated on Full Disk Access. |
+The target design (a privileged, non-stoppable, multi-user enforcement daemon) is
+specified in **[docs/architecture.md](docs/architecture.md)** — read that for the
+*why* behind the decisions (root `LaunchDaemon`, `getpeereid` scoping, fail-closed
+policy, quarantine-first, level-triggered reconciliation, the frozen fingerprint
+contract). This README describes what is **implemented today**; the repo is
+mid-migration from a read-only detector toward that design.
 
-Build everything: `cargo build --workspace --release`.
+## Workspace
+
+| Crate | Path | Role | Status |
+|---|---|---|---|
+| `mcp_detector_lib` | [crates/mcp_detector_lib/](crates/mcp_detector_lib/) | Read-only engine: agent abstraction, discovery, fingerprint, filesystem watcher. Cross-platform, publishable. | Reshaped |
+| `mcp_quarantine` | [crates/mcp_quarantine/](crates/mcp_quarantine/) | Mutation + state + the reconcile planner. No privilege/IPC/network. | Planner done; seen-store + writers WIP |
+| `mcp_detector_daemon` | [crates/mcp_detector_daemon/](crates/mcp_detector_daemon/) | Long-lived macOS daemon wrapping the engine behind a Unix-socket IPC. | Being reworked to the root enforcement model |
+
+Build everything: `cargo build --workspace --release`. Test: `cargo test --workspace`.
 
 ## Motivation
 
-MCP servers are configured independently by each client (Claude Code, VSCode, Cursor, Claude Desktop, ...) — often in several places per client: a global user-level file, per-project files, and sometimes application state stored in a SQLite database. Keeping track of this is difficult in a big project.
-
-## Progress
-
-For the initial milestone the focus is additions and removals: **when an MCP server appears in or disappears from any tracked config, an event is emitted identifying it, its scope (global vs project-specific), and its transport (stdio vs remote).** In-place edits (same server name, different fields) are not reported yet.
-
-Additionally, at the current stage the daemon and library only report changes and perform no modifications of their own, mostly to make sure that it works without breaking anything. In the future the library will be able to prevent modifications to the configs before they happen by tracking filesystem events. 
+MCP servers are configured independently by each host app — often in several
+places per app: a global user-level file, per-project files, and sometimes
+application state in a SQLite database. Quarantine is **imposed by admins**, so it
+must run as a system agent the user cannot stop. That posture — a privileged
+enforcement agent that assumes the local user is adversarial — drives the whole
+design.
 
 ## Library — `mcp_detector_lib`
 
-- **Client abstraction.** Each supported client implements a common trait exposing (a) the set of config paths to watch and (b) a parser that normalises the on-disk shape into a shared `McpServer` type. Trait: [crates/mcp_detector_lib/src/client.rs](crates/mcp_detector_lib/src/client.rs).
-- **Event-driven watching.** Uses `notify-debouncer-full` against parent directories rather than individual files — most editors write configs via atomic rename, which breaks single-file watches. Driver: [crates/mcp_detector_lib/src/watcher.rs](crates/mcp_detector_lib/src/watcher.rs).
-- **Stateful diffing.** Maintains a last-known snapshot per config source; emits structured events on each debounced reparse. See [crates/mcp_detector_lib/src/diff.rs](crates/mcp_detector_lib/src/diff.rs).
+The read-only engine. Cross-platform, no root, no network.
+
+- **Agent abstraction.** Each supported host app implements the [`Agent`](crates/mcp_detector_lib/src/agent.rs)
+  trait: `name`, `is_installed`, `watch_targets`, and `discover`. `discover`
+  normalises each on-disk entry into a [`DiscoveredServer`](crates/mcp_detector_lib/src/types.rs)
+  carrying its raw `config` ([`ServerConfig::Stdio` | `Http` | `Unsupported`]) and
+  a `location` (where + how to mutate it).
+- **Server fingerprint.** [`fingerprint`](crates/mcp_detector_lib/src/fingerprint.rs)
+  computes the stable identity used to ask "is this server already known to the
+  backend?". It is a **frozen cross-implementation contract** — byte-for-byte
+  identical to the Python backend and the TS client (`sha256(identifier)[:16]`,
+  secrets templatised first via [`secret_detection`](crates/mcp_detector_lib/src/secret_detection.rs)).
+  Pinned by golden-vector tests. See [docs/architecture.md §6](docs/architecture.md).
+- **Event-driven watching.** [`Watcher`](crates/mcp_detector_lib/src/watcher.rs)
+  uses `notify-debouncer-full` against parent directories (editors write configs
+  via atomic rename, which breaks single-file watches) and emits `ChangeEvent`s.
+  *(This edge-triggered watcher will be superseded by the daemon's level-triggered
+  reconcile driver — see the design doc.)*
 
 ### Source shapes
 
-Config sources across clients differ in several important ways:
+Config sources differ in **format** (JSON / JSONC / SQLite state DB), **scope** (a
+single file can mix global and project entries, e.g. Claude Code's `~/.claude.json`
+`projects` map), and **location** (project configs live inside each project dir).
+The `Agent` trait hides all of this; servers that expose no extractable
+command/url (e.g. VSCode extension-provider contributions) are emitted as
+`ServerConfig::Unsupported` — surfaced for reporting, skipped by enforcement.
 
-- **Format.** Most clients use JSON (`mcp.json`, `.mcp.json`, ...), but some store configuration or the metadata needed to *discover* project-level configs in a SQLite database (e.g. VSCode's `state.vscdb` workspace history).
-- **Scope.** A single file can mix global and project-scoped entries (Claude Code's `~/.claude.json` embeds a `projects` map with per-project server lists).
-- **Location.** Project-level configs live inside each project directory, so the detector has to know which projects to watch — either by enumerating them from the client's own state, or from a user-provided list.
+### Supported agents
 
-The client abstraction hides all of this from the core watcher and diff logic.
-
-### Supported clients
-
-| Client | Status | Cargo feature | Notes |
+| Agent | Status | Cargo feature | Notes |
 |---|---|---|---|
-| VSCode | Implemented | `vscode` | Handles global, project-specific, and extension-based MCP servers |
-| Claude Code | Implemented | `claude_code` | Handles global and project-specific servers. Remote connectors are out of scope for this daemon. |
-| Cursor | Planned | - | Can handle everything via hooks |
-| Claude Desktop & Cowork | Planned | - | Same as Claude Code |
-| Zed | Planned | - | N/A |
-| Codex CLI | Planned | - | N/A |
+| VSCode | Implemented | `vscode` | Global, per-workspace, and extension/marketplace (`state.vscdb`) servers |
+| Claude Code | Implemented | `claude_code` | Global + per-project servers (`~/.claude.json`, `.mcp.json`) |
+| Cursor, Claude Desktop, Zed, Codex | Planned | — | |
 
 ### Use as a dependency
 
@@ -53,19 +76,16 @@ The client abstraction hides all of this from the core watcher and diff logic.
 mcp_detector_lib = { path = "crates/mcp_detector_lib" }
 ```
 
-Then drive the watcher:
-
 ```rust,no_run
 use std::sync::Arc;
-use mcp_detector_lib::{Client, Result, Watcher, clients::{ClaudeCode, VsCode}};
+use mcp_detector_lib::{Agent, Result, Watcher, clients::{ClaudeCode, VsCode}};
 
 fn main() -> Result<()> {
-    let clients: Vec<Arc<dyn Client>> = vec![
+    let agents: Vec<Arc<dyn Agent>> = vec![
         Arc::new(VsCode::discover()?),
         Arc::new(ClaudeCode::discover()?),
     ];
-
-    let (events, _handle) = Watcher::new(clients).spawn()?;
+    let (events, _handle) = Watcher::new(agents).spawn()?;
     for ev in events {
         println!("{ev}");
     }
@@ -73,87 +93,46 @@ fn main() -> Result<()> {
 }
 ```
 
-`Watcher::spawn` runs the watcher on a background thread; the returned handle stops the worker on drop. For a blocking, callback-based variant, use `Watcher::run`. Full example: [crates/mcp_detector_lib/examples/watch.rs](crates/mcp_detector_lib/examples/watch.rs).
+`discover()` uses platform-specific paths; for tests/CI use `from_paths(...)`. Each
+agent lives behind its own cargo feature (`vscode` pulls in `rusqlite`; both on by
+default).
 
-`VsCode::discover()` and `ClaudeCode::discover()` use platform-specific paths. For tests, CI, or non-standard installs, use `from_paths(...)` to point each client at explicit locations instead.
+## Quarantine layer — `mcp_quarantine`
 
-### Cargo features
+Mutation, persistent state, and the decision logic — **no privilege, no IPC, no
+network** (the daemon injects those). Everything here is unit-testable in a
+tempdir.
 
-Each bundled client lives behind its own feature; both are on by default.
-
-- `vscode` — pulls in `rusqlite` (bundled) for reading VSCode's `state.vscdb` workspace history.
-- `claude_code` — no extra deps.
-
-```toml
-[dependencies]
-mcp_detector_lib = { path = "crates/mcp_detector_lib", default-features = false, features = ["claude_code"] }
-```
+- **Reconcile planner** ([reconcile.rs](crates/mcp_quarantine/src/reconcile.rs)) —
+  *implemented.* The pure, level-triggered heart:
+  `plan(observed, oracle, policy) -> Vec<Action>`. Quarantine-first — an unknown
+  server is neutralised immediately, then surfaced for disposition; a known one is
+  quarantined silently; the policy-off pass is inert; our own `edison-watch` entry
+  and report-only servers are skipped. Being level-triggered, it is inherently
+  tamper-resistant (a restored server simply reappears next pass).
+- **Seen-store** (the `KnownOracle`) and **config writers** (`quarantine`/`restore`,
+  dispatched on `SourceKind`) — *in progress.*
 
 ## Daemon — `mcp_detector_daemon`
 
-Long-lived macOS process that wraps the library and exposes its events over a Unix domain socket. Designed to be supervised by a per-user LaunchAgent (the consumer ships the plist; the daemon just runs in the foreground until killed).
+Long-lived macOS process wrapping the engine over a Unix-domain socket. **Today**
+it is the original read-only design: it watches configs gated on Full Disk Access
+and reports `ChangeEvent`s; it performs no mutation.
 
-### State machine
-
-```
-Starting -> AwaitingFda <-> Running
-```
-
-- Boots the IPC server immediately so clients can connect and observe `awaiting_fda` even before permissions are granted.
-- Polls a TCC-protected probe path (`~/Library/Application Support/com.apple.TCC/TCC.db` by default) every 3 seconds and on demand. Probe lives at [crates/mcp_detector_daemon/src/permission.rs](crates/mcp_detector_daemon/src/permission.rs).
-- Transitions to `Running` once the probe succeeds; rebuilds the watcher with whatever clients [crates/mcp_detector_daemon/src/app.rs](crates/mcp_detector_daemon/src/app.rs) discovers.
-- Re-enters `AwaitingFda` if the probe fails on a periodic recheck (i.e. the user revoked access).
-
-### IPC
-
-Newline-delimited JSON over a Unix domain socket (`0o600`). Default path: `~/Library/Application Support/Edison Watch/daemon.sock`. Wire types: [crates/mcp_detector_daemon/src/protocol.rs](crates/mcp_detector_daemon/src/protocol.rs).
-
-Requests:
-
-| Request | Reply |
-|---|---|
-| `{"op":"status"}` | `{"kind":"status","state":"awaiting_fda"\|"running"\|"starting","clients_watched":[...],"socket_path":"...","version":"..."}` |
-| `{"op":"recheck_fda"}` | `{"kind":"ack"}` (forces an immediate FDA re-probe) |
-
-Pushed unsolicited from the daemon:
-
-```json
-{"kind":"event","change":"added"|"removed","server_name":"...","client":"...","scope":"...","transport":"..."}
-```
-
-Quick smoke test:
-
-```bash
-cargo run --release -p mcp_detector_daemon -- \
-    --socket /tmp/daemon.sock --log-dir /tmp/daemon-logs
-
-echo '{"op":"status"}' | nc -U /tmp/daemon.sock -w 1
-```
-
-### CLI flags
-
-```
---socket <path>          Unix socket to listen on
-                         (default: ~/Library/Application Support/Edison Watch/daemon.sock)
---log-dir <path>         Directory for the daily-rolling log file
-                         (default: ~/Library/Logs/Edison Watch)
-```
-
-### Logging
-
-`tracing` with two layers:
-- Daily-rolling file under `--log-dir` (14-day retention).
-- Stdout when stdout is a TTY (i.e. when invoked from a terminal, not when supervised by launchd).
-
-Filter via `RUST_LOG`, e.g. `RUST_LOG=debug`.
+It is being reworked into the privileged enforcement daemon from the design doc:
+root `LaunchDaemon`, one socket with `getpeereid` per-user scoping, per-user
+reconcile workers, enrollment + fail-closed policy, an operator CLI
+(`install`/`uninstall`/`unenroll`/`status`), and a `state.json` status file. See
+[docs/architecture.md §4–§10](docs/architecture.md).
 
 ## Repository layout
 
 ```
 .
 ├── Cargo.toml                # virtual workspace
-├── crates/
-│   ├── mcp_detector_lib/     # library (was the top-level crate before the workspace split)
-│   └── mcp_detector_daemon/  # macOS daemon binary
-└── README.md
+├── docs/architecture.md      # design source of truth
+└── crates/
+    ├── mcp_detector_lib/      # read-only engine
+    ├── mcp_quarantine/        # mutation + state + reconcile
+    └── mcp_detector_daemon/   # macOS daemon binary
 ```

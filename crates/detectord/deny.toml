@@ -21,6 +21,9 @@ allow = [
     "BSD-2-Clause",
     "BSD-3-Clause",
     "CC0-1.0",
+    # webpki-roots (Mozilla CA bundle, via reqwest/rustls) ships under this
+    # permissive data license.
+    "CDLA-Permissive-2.0",
     "ISC",
     "MIT",
     "MPL-2.0",
@@ -34,7 +37,10 @@ confidence-threshold = 0.93
 # Multiple versions of the same crate are common via transitive deps;
 # warn rather than fail.
 multiple-versions = "warn"
+# Deny wildcard (`*`) version requirements on registry crates, but allow them
+# for our own workspace-internal path deps (which have no published version).
 wildcards = "deny"
+allow-wildcard-paths = true
 
 [sources]
 unknown-registry = "deny"

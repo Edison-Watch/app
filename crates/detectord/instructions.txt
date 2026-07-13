@@ -1,0 +1,71 @@
+0. Build once
+
+  cd ~/work/mcp-detector-lib
+  cargo build -p mcp_detector_daemon
+  BIN=./target/debug/mcp_detector_daemon
+  KEY=edison_LWRP3bGRJhfxew26pJpWq6kqOb0ibieD6wFSBUi
+
+  1. CLI — read-only (totally safe)
+
+  $BIN status                      # "Not enrolled" (fresh) or your enrollment
+  $BIN enroll --url http://localhost:3001 --key $KEY
+  $BIN status                      # cached policy
+  $BIN status --refresh            # re-fetch policy live
+  $BIN list                        # deduped view: known / new / opaque / report
+  $BIN list --verbose              # every instance + its source path
+  What to look for in list: new = would be quarantined, opaque = removed-locally-only (Cursor plugins), report = untouchable (VSCode extensions), edison = skipped.
+
+  2. Enforcement — dry-run first, then the real thing ⚠️
+
+  $BIN run                         # DRY-RUN: logs what it WOULD do, touches nothing. Ctrl-C to stop.
+  You'll see the summary (will_quarantine=… opaque_removals=… will_skip=…) and per-server lines, re-running on fs changes. Safe.
+
+  $BIN run --enforce               # REAL: quarantines your `new` + `opaque` servers. Ctrl-C to stop.
+  $BIN list                        # they're gone from configs; "Quarantined (N)" section appears
+  $BIN restore railway             # put one back (config restored, fingerprint forgotten)
+  Every quarantine leaves a <config>.ew-backup and a disabled_<config>.json next to the original, so nothing is lost.
+
+  3. Send one server to Edison Watch (mutates + hits backend)
+
+  $BIN send-to-ew railway --agent codex    # submits to backend, removes locally, marks known
+  $BIN restore railway                     # undo
+
+  4. IPC socket — what the UI will use
+
+  $BIN serve --socket /tmp/ew.sock &        # start the socket
+  printf '{"op":"status"}\n'      | nc -U /tmp/ew.sock -w 2   # note: user comes from the socket, not the message
+  printf '{"op":"list_agents"}\n' | nc -U /tmp/ew.sock -w 3
+  printf '{"op":"list_servers"}\n'| nc -U /tmp/ew.sock -w 3 | python3 -m json.tool | head
+  printf '{"op":"bogus"}\n'       | nc -U /tmp/ew.sock -w 2   # structured error
+  kill %1
+  The key thing: status reports "user":"gatlingx" even though you never sent a username — it's derived from the socket's peer credentials.
+
+  5. Full daemon (supervisor: IPC + worker + state.json + file logs)
+
+  $BIN daemon --socket /tmp/ew.sock &       # dry-run daemon; add --enforce to actually quarantine
+  sleep 2
+  printf '{"op":"status"}\n' | nc -U /tmp/ew.sock -w 2       # query it live
+  cat "$HOME/Library/Application Support/edison-watch-detectord/state.json"   # heartbeat
+  ls  "$HOME/Library/Application Support/edison-watch-detectord/logs/"        # rolling log file
+  kill %1
+
+  To watch a live event push (advanced, mutating): with daemon --enforce running, keep a socket connection open and add a new server so the worker quarantines it:
+  # terminal A:
+  $BIN daemon --enforce --socket /tmp/ew.sock
+  # terminal B — keep this open; it will receive pushes:
+  nc -U /tmp/ew.sock          # then paste: {"op":"status"}  and leave it connected
+  # terminal C — add an unknown server to trigger a quarantine (edit is reversible):
+  #   add a dummy entry under "mcpServers" in ~/.claude.json, save
+  # → terminal B prints {"event":"quarantined", ...} within ~1s
+
+  Cleanup
+
+  $BIN unenroll
+  rm -rf "$HOME/Library/Application Support/edison-watch-detectord"   # wipe all local state
+
+  Notes
+
+  - Your org currently has quarantine=true, so --enforce really does remove servers. Use plain run/daemon (dry-run) to observe safely.
+  - Everything runs as your user (dev mode); state lives under ~/Library/Application Support/edison-watch-detectord/. The root build would move that to /Library/... and add
+  launchd — that's the remaining sudo-only step.
+  - nc -U on macOS sometimes needs a timeout (-w) or it hangs waiting; that's just nc, not the daemon.

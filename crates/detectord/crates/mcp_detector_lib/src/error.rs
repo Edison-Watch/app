@@ -23,9 +23,9 @@ pub enum Error {
         source: io::Error,
     },
 
-    /// SQLite failure while reading a client's state database (e.g. VSCode's
-    /// `state.vscdb`). Only present when the `vscode` feature is enabled.
-    #[cfg(feature = "vscode")]
+    /// SQLite failure while reading an editor's state database (e.g. VSCode's
+    /// or Cursor's `state.vscdb`).
+    #[cfg(any(feature = "vscode", feature = "cursor"))]
     #[error("sqlite error at {path}: {source}")]
     Sqlite {
         path: PathBuf,
