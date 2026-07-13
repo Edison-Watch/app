@@ -164,10 +164,19 @@ fn sweep_orphaned(edison_dir: &Path) {
 
 /// `kill(pid, 0)`: 0 → alive; `EPERM` → alive (exists, no permission); `ESRCH`
 /// → gone.
+#[cfg(unix)]
 fn process_alive(pid: i32) -> bool {
     // SAFETY: kill with signal 0 performs only an existence/permission check.
     if unsafe { libc::kill(pid, 0) } == 0 {
         return true;
     }
     std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
+}
+
+/// Non-Unix has no `kill(pid, 0)` probe; a real liveness check lands with the
+/// Windows hook-consumer work. Conservatively assume alive so we never delete a
+/// live process's pending/error entry.
+#[cfg(not(unix))]
+fn process_alive(_pid: i32) -> bool {
+    true
 }

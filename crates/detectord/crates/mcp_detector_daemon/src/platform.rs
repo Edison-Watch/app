@@ -1,74 +1,98 @@
-//! Privilege helpers used by the root build.
+//! Privilege + user-identity helpers.
 //!
-//! When the daemon writes files into a user's home (the `disabled_<config>`
-//! sidecar and the `.ew-backup`) it runs as root, so those new files are
-//! root-owned. We `chown` them back to the owning user so they behave like the
-//! user's own files. In-place config edits and dir renames preserve ownership,
-//! so only the newly-created files need this.
+//! Under the privileged (root) macOS/Unix build the daemon writes files into a
+//! user's home and must resolve/chown them to that user; those helpers are
+//! implemented with libc. Non-Unix targets have no such privileged multi-user
+//! model (the daemon runs per-user via a scheduled task), so the same surface is
+//! provided as no-op / `None` stubs.
 
-use std::os::unix::ffi::OsStrExt;
-use std::path::Path;
+#[cfg(unix)]
+mod imp {
+    use std::os::unix::ffi::OsStrExt;
+    use std::path::Path;
 
-/// Resolve a uid to its OS user name via `getpwuid`. Used to scope an IPC
-/// connection to the peer's user (from the socket's peer credentials).
-pub fn username_for_uid(uid: u32) -> Option<String> {
-    // SAFETY: getpwuid returns a pointer into a static buffer valid until the
-    // next passwd call; we copy the name out immediately.
-    unsafe {
-        let pw = libc::getpwuid(uid);
-        if pw.is_null() {
-            None
+    /// Resolve a uid to its OS user name via `getpwuid`. Used to scope an IPC
+    /// connection to the peer's user (from the socket's peer credentials).
+    pub fn username_for_uid(uid: u32) -> Option<String> {
+        // SAFETY: getpwuid returns a pointer into a static buffer valid until the
+        // next passwd call; we copy the name out immediately.
+        unsafe {
+            let pw = libc::getpwuid(uid);
+            if pw.is_null() {
+                None
+            } else {
+                Some(
+                    std::ffi::CStr::from_ptr((*pw).pw_name)
+                        .to_string_lossy()
+                        .into_owned(),
+                )
+            }
+        }
+    }
+
+    /// Resolve an OS user name to its home dir via `getpwnam` (`pw_dir`).
+    pub fn home_dir_for(user: &str) -> Option<std::path::PathBuf> {
+        let cname = std::ffi::CString::new(user).ok()?;
+        // SAFETY: getpwnam returns a pointer into a static buffer valid until the
+        // next passwd call; we copy pw_dir out immediately.
+        unsafe {
+            let pw = libc::getpwnam(cname.as_ptr());
+            if pw.is_null() || (*pw).pw_dir.is_null() {
+                None
+            } else {
+                let bytes = std::ffi::CStr::from_ptr((*pw).pw_dir).to_bytes();
+                Some(std::path::PathBuf::from(std::ffi::OsStr::from_bytes(bytes)))
+            }
+        }
+    }
+
+    /// Resolve an OS user name to its `(uid, gid)` via `getpwnam`.
+    pub fn uid_gid_for(user: &str) -> Option<(u32, u32)> {
+        let cname = std::ffi::CString::new(user).ok()?;
+        // SAFETY: getpwnam returns a pointer into a static buffer valid until the
+        // next passwd call; we read its fields immediately and copy them out.
+        unsafe {
+            let pw = libc::getpwnam(cname.as_ptr());
+            if pw.is_null() {
+                None
+            } else {
+                Some(((*pw).pw_uid, (*pw).pw_gid))
+            }
+        }
+    }
+
+    /// `chown(path, uid, gid)`. Errors are the caller's to log (best-effort).
+    pub fn chown(path: &Path, uid: u32, gid: u32) -> std::io::Result<()> {
+        let cpath = std::ffi::CString::new(path.as_os_str().as_bytes())
+            .map_err(|_| std::io::Error::other("path contains NUL"))?;
+        // SAFETY: cpath is a valid NUL-terminated C string for the duration of the call.
+        let rc = unsafe { libc::chown(cpath.as_ptr(), uid, gid) };
+        if rc == 0 {
+            Ok(())
         } else {
-            Some(
-                std::ffi::CStr::from_ptr((*pw).pw_name)
-                    .to_string_lossy()
-                    .into_owned(),
-            )
+            Err(std::io::Error::last_os_error())
         }
     }
 }
 
-/// Resolve an OS user name to its home dir via `getpwnam` (`pw_dir`). Used to
-/// target the correct user's home when the root daemon writes installs/hooks.
-pub fn home_dir_for(user: &str) -> Option<std::path::PathBuf> {
-    let cname = std::ffi::CString::new(user).ok()?;
-    // SAFETY: getpwnam returns a pointer into a static buffer valid until the
-    // next passwd call; we copy pw_dir out immediately.
-    unsafe {
-        let pw = libc::getpwnam(cname.as_ptr());
-        if pw.is_null() || (*pw).pw_dir.is_null() {
-            None
-        } else {
-            let bytes = std::ffi::CStr::from_ptr((*pw).pw_dir).to_bytes();
-            Some(std::path::PathBuf::from(std::ffi::OsStr::from_bytes(bytes)))
-        }
-    }
-}
+#[cfg(not(unix))]
+mod imp {
+    use std::path::{Path, PathBuf};
 
-/// Resolve an OS user name to its `(uid, gid)` via `getpwnam`.
-pub fn uid_gid_for(user: &str) -> Option<(u32, u32)> {
-    let cname = std::ffi::CString::new(user).ok()?;
-    // SAFETY: getpwnam returns a pointer into a static buffer valid until the
-    // next passwd call; we read its fields immediately and copy them out.
-    unsafe {
-        let pw = libc::getpwnam(cname.as_ptr());
-        if pw.is_null() {
-            None
-        } else {
-            Some(((*pw).pw_uid, (*pw).pw_gid))
-        }
+    // Non-Unix has no uid/gid model. IPC peer identity is resolved differently
+    // (the named-pipe daemon is per-user), and the root drop-to-user machinery
+    // doesn't apply, so these are stubs: the daemon runs as the single logged-in
+    // user. (`username_for_uid` is intentionally omitted: only the Unix peer-cred
+    // path uses it.)
+    pub fn home_dir_for(_user: &str) -> Option<PathBuf> {
+        dirs::home_dir()
     }
-}
-
-/// `chown(path, uid, gid)`. Errors are the caller's to log (best-effort).
-pub fn chown(path: &Path, uid: u32, gid: u32) -> std::io::Result<()> {
-    let cpath = std::ffi::CString::new(path.as_os_str().as_bytes())
-        .map_err(|_| std::io::Error::other("path contains NUL"))?;
-    // SAFETY: cpath is a valid NUL-terminated C string for the duration of the call.
-    let rc = unsafe { libc::chown(cpath.as_ptr(), uid, gid) };
-    if rc == 0 {
+    pub fn uid_gid_for(_user: &str) -> Option<(u32, u32)> {
+        None
+    }
+    pub fn chown(_path: &Path, _uid: u32, _gid: u32) -> std::io::Result<()> {
         Ok(())
-    } else {
-        Err(std::io::Error::last_os_error())
     }
 }
+
+pub use imp::*;

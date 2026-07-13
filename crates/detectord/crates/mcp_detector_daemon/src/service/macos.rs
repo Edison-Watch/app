@@ -1,13 +1,13 @@
-//! macOS LaunchAgent install for the detector daemon — a per-user agent (no
+//! macOS LaunchAgent install for the detector daemon: a per-user agent (no
 //! sudo, no root LaunchDaemon), mirroring `edison-stdiod` so the desktop client
 //! installs and launches us exactly the way it installs stdiod:
 //!
 //! - plist at `~/Library/LaunchAgents/watch.edison.detectord.plist`
-//! - loaded via `launchctl bootstrap gui/$uid …` (modern flow, not `load`)
+//! - loaded via `launchctl bootstrap gui/$uid ...` (modern flow, not `load`)
 //! - `RunAtLoad` + `KeepAlive` so launchd starts it now/at login and restarts
-//!   it on crash — the daemon serves its socket for the client to connect to.
+//!   it on crash. The daemon serves its socket for the client to connect to.
 //! - a PATH override so child spawns (the `claude` CLI, npx-wrapped servers)
-//!   resolve — launchd's default PATH omits Homebrew / `/usr/local/bin`.
+//!   resolve; launchd's default PATH omits Homebrew / `/usr/local/bin`.
 //!
 //! Install is idempotent: it always boots-out any existing unit before
 //! bootstrapping the fresh plist, so re-running picks up a moved binary or a
@@ -23,7 +23,7 @@ use crate::{ipc, paths};
 const LABEL: &str = "watch.edison.detectord";
 const PLIST_FILENAME: &str = "watch.edison.detectord.plist";
 /// launchd's per-user default PATH omits Homebrew and /usr/local/bin; without
-/// this every child spawn (`claude`, `npx`, …) fails to resolve.
+/// this every child spawn (`claude`, `npx`, ...) fails to resolve.
 const CHILD_PATH: &str = "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/local/sbin:/usr/bin:/bin:/usr/sbin:/sbin";
 
 fn plist_path() -> Result<PathBuf> {
@@ -129,11 +129,8 @@ fn bootout_quiet() -> Result<()> {
 
 /// Write the plist and `launchctl bootstrap` it. Idempotent. `enforce` decides
 /// whether the running daemon actually quarantines (still gated by org policy)
-/// or runs report-only — default off is safe for first-time install.
+/// or runs report-only; default off is safe for first-time install.
 pub fn install(enforce: bool) -> Result<()> {
-    if !cfg!(target_os = "macos") {
-        bail!("`service install` is only supported on macOS");
-    }
     let binary = std::env::current_exe().context("could not resolve current exe path")?;
     let log = launchd_log()?;
     let plist = plist_path()?;
@@ -163,31 +160,15 @@ pub fn install(enforce: bool) -> Result<()> {
     Ok(())
 }
 
-/// `launchctl bootout` + remove the plist. Idempotent. Leaves state/logs.
-pub fn uninstall(purge: bool) -> Result<()> {
+/// `launchctl bootout` + remove the plist. Idempotent. Leaves state/logs; the
+/// caller (`service::uninstall`) handles the optional data purge.
+pub fn uninstall() -> Result<()> {
     bootout_quiet()?;
     let plist = plist_path()?;
     match std::fs::remove_file(&plist) {
         Ok(()) => tracing::info!(path = %plist.display(), "removed LaunchAgent plist"),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
         Err(e) => return Err(e).with_context(|| format!("removing {}", plist.display())),
-    }
-    if purge {
-        // enrollment(s), per-user seen-store + quarantine records, state.json,
-        // logs/, and the socket all live under base_dir — wipe the whole thing.
-        let dir = paths::base_dir();
-        match std::fs::remove_dir_all(&dir) {
-            Ok(()) => tracing::info!(path = %dir.display(), "purged daemon data dir"),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-            Err(e) => return Err(e).with_context(|| format!("purging {}", dir.display())),
-        }
-        println!(
-            "Uninstalled LaunchAgent and purged all data (enrollment, seen-store, \
-             quarantine records, logs, socket) at {}.",
-            dir.display()
-        );
-    } else {
-        println!("Uninstalled LaunchAgent (state + logs left in place).");
     }
     Ok(())
 }
