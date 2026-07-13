@@ -18,10 +18,18 @@ use std::path::PathBuf;
 
 const DIR_NAME: &str = "edison-watch-detectord";
 
-/// True when running as the privileged system daemon (euid 0).
+/// True when running as the privileged system daemon (euid 0). Always false on
+/// non-Unix targets, which have no root/euid model.
 pub fn is_root() -> bool {
-    // SAFETY: geteuid has no preconditions and no failure mode.
-    unsafe { geteuid() == 0 }
+    #[cfg(unix)]
+    {
+        // SAFETY: geteuid has no preconditions and no failure mode.
+        unsafe { geteuid() == 0 }
+    }
+    #[cfg(not(unix))]
+    {
+        false
+    }
 }
 
 /// Root of all daemon state: system-level under root, the user's config dir
@@ -72,6 +80,7 @@ pub fn ensure_user_dir(user: &str) -> io::Result<()> {
 pub fn current_username() -> String {
     std::env::var("USER")
         .or_else(|_| std::env::var("LOGNAME"))
+        .or_else(|_| std::env::var("USERNAME")) // Windows
         .unwrap_or_else(|_| "unknown".to_string())
 }
 
@@ -81,6 +90,7 @@ pub fn edison_watch_dir() -> Option<PathBuf> {
     dirs::home_dir().map(|h| h.join(".edison-watch"))
 }
 
+#[cfg(unix)]
 unsafe extern "C" {
     fn geteuid() -> u32;
 }

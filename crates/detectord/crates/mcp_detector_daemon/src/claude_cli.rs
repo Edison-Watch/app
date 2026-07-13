@@ -7,6 +7,7 @@ use std::process::Command;
 
 use anyhow::Context;
 
+#[cfg(unix)]
 use crate::{paths, platform};
 
 /// `claude mcp add --transport http --scope user [--header …] edison-watch <url>`.
@@ -57,9 +58,29 @@ pub fn remove(user: &str) -> anyhow::Result<()> {
 fn run_as(user: &str, args: &[String]) -> anyhow::Result<()> {
     let mut cmd = Command::new("claude");
     cmd.args(args);
-
+    // The daemon is GUI-subsystem on Windows; suppress the console window a
+    // console child (`claude`) would otherwise flash.
+    no_window(&mut cmd);
     // When running as root, drop to the target user so the CLI writes into their
-    // home. In the user-mode dev build this branch is skipped.
+    // home. No-op in the user-mode dev build and on non-Unix (no root/setuid).
+    drop_to_user(&mut cmd, user);
+
+    let output = cmd.output().context("spawning `claude` CLI")?;
+    if output.status.success() {
+        Ok(())
+    } else {
+        anyhow::bail!(
+            "`claude {}` failed: {}",
+            args.join(" "),
+            String::from_utf8_lossy(&output.stderr).trim()
+        )
+    }
+}
+
+/// Under root, set HOME/USER for the target user and `setuid`/`setgid` to them
+/// in the child before exec, so the `claude` CLI writes into their home.
+#[cfg(unix)]
+fn drop_to_user(cmd: &mut Command, user: &str) {
     if paths::is_root()
         && let Some((uid, gid)) = platform::uid_gid_for(user)
     {
@@ -82,15 +103,21 @@ fn run_as(user: &str, args: &[String]) -> anyhow::Result<()> {
             });
         }
     }
-
-    let output = cmd.output().context("spawning `claude` CLI")?;
-    if output.status.success() {
-        Ok(())
-    } else {
-        anyhow::bail!(
-            "`claude {}` failed: {}",
-            args.join(" "),
-            String::from_utf8_lossy(&output.stderr).trim()
-        )
-    }
 }
+
+/// Non-Unix: the daemon already runs as the single logged-in user, so there is
+/// nothing to drop to.
+#[cfg(not(unix))]
+fn drop_to_user(_cmd: &mut Command, _user: &str) {}
+
+/// Windows: spawn the child with no console window (CREATE_NO_WINDOW), matching
+/// the schtasks/whoami spawns and stdiod's behaviour.
+#[cfg(windows)]
+fn no_window(cmd: &mut Command) {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    cmd.creation_flags(CREATE_NO_WINDOW);
+}
+
+#[cfg(not(windows))]
+fn no_window(_cmd: &mut Command) {}

@@ -27,4 +27,8 @@ anyhow = "1.0"
 clap = { version = "4.5", features = ["derive"] }
 notify = "8.2.0"
 notify-debouncer-full = "0.7.0"
+
+# libc is only used by the Unix privilege/user code (getpwuid, setuid, chown,
+# kill); cfg-gated out on Windows, which has no such model.
+[target.'cfg(unix)'.dependencies]
 libc = "0.2"

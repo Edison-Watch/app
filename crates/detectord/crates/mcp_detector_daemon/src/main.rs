@@ -6,6 +6,11 @@
 //! Two interfaces: an operator CLI (below) and an IPC socket (`serve`) — both
 //! go through the shared, per-user [`ops`] layer.
 
+// Release Windows builds are GUI-subsystem so the supervisor (Scheduled Task)
+// and one-shot CLI spawns don't flash a console window. Debug keeps the console
+// so `run`/`daemon` still print to a terminal during dev.
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -17,7 +22,6 @@ mod claude_cli;
 mod enrollment;
 mod hook_consumer;
 mod ipc;
-mod launchd;
 mod logging;
 mod ops;
 mod paths;
@@ -26,6 +30,7 @@ mod protocol;
 mod quarantined;
 mod recovery;
 mod runner;
+mod service;
 mod status;
 mod supervisor;
 
@@ -217,13 +222,13 @@ async fn dispatch(cmd: Cmd) -> anyhow::Result<()> {
             SecretCmd::Reset { key, confirm } => cmd_reset_secret(key, confirm).await,
         },
         Cmd::Service { action } => match action {
-            ServiceCmd::Install { enforce } => launchd::install(enforce),
-            ServiceCmd::Uninstall { purge } => launchd::uninstall(purge),
+            ServiceCmd::Install { enforce } => service::install(enforce),
+            ServiceCmd::Uninstall { purge } => service::uninstall(purge),
             ServiceCmd::Status => {
                 println!(
                     "installed: {}\nrunning:   {}\nsocket:    {}",
-                    launchd::is_installed(),
-                    launchd::is_running(),
+                    service::is_installed(),
+                    service::is_running(),
                     ipc::default_socket_path().display()
                 );
                 Ok(())
