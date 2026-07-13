@@ -1,4 +1,4 @@
-//! Cursor [`Agent`](crate::Agent). Scans:
+//! Cursor [`Agent`]. Scans:
 //!
 //! 1. **User config** — `~/.cursor/mcp.json` (JSONC), key `mcpServers`.
 //! 2. **Project configs** — `<workspaceRoot>/.cursor/mcp.json` (JSONC), for each

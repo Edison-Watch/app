@@ -8,7 +8,7 @@ use std::path::PathBuf;
 /// shape that's the same regardless of where it came from.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DiscoveredServer {
-    /// Identifier of the producing [`crate::Client`] (e.g. `"vscode"`,
+    /// Identifier of the producing [`crate::Agent`] (e.g. `"vscode"`,
     /// `"claude_code"`). Useful for filtering events by source.
     pub client: &'static str,
     /// Server name as it appears in the config (the key under `servers` /
@@ -68,7 +68,7 @@ impl std::fmt::Display for Scope {
 }
 
 /// Raw, normalised launch configuration for a server — the payload the daemon
-/// needs both to compute the [fingerprint](crate::fingerprint) and to act on
+/// needs both to compute the [fingerprint](crate::fingerprint()) and to act on
 /// the server. Mirrors the stdio/http arms of client_2's `McpServerConfig`
 /// union; the unsupported/opaque arm (no extractable command or url) is simply
 /// not emitted by adapters, so it has no variant here.
@@ -165,7 +165,7 @@ pub enum SourceKind {
 
 /// How to install the `edison-watch` proxy entry into an agent's config — the
 /// inverse of quarantine (we *add* an entry). Produced by
-/// [`Agent::edison_install`](crate::Agent::edison_install).
+/// [`Agent::edison_installs`](crate::Agent::edison_installs).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EdisonInstall {
     /// The config file to write the entry into (created if absent).

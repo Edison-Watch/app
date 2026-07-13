@@ -1,4 +1,4 @@
-//! Claude Code [`Agent`](crate::Agent) implementation. Watches `~/.claude.json` (which
+//! Claude Code [`Agent`] implementation. Watches `~/.claude.json` (which
 //! contains both the global `mcpServers` map and a `projects` sub-map with
 //! per-project servers) plus a `.mcp.json` inside every project listed in
 //! that file.

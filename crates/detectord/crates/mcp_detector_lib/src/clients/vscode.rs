@@ -1,4 +1,4 @@
-//! VSCode [`Agent`](crate::Agent) implementation. Watches four sources:
+//! VSCode [`Agent`] implementation. Watches four sources:
 //!
 //! 1. **User-level `Code/User/mcp.json`** — the file users edit by hand.
 //! 2. **Per-workspace `<workspace>/.vscode/mcp.json`** for every workspace

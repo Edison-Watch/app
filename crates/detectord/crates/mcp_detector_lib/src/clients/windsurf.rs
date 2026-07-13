@@ -1,4 +1,4 @@
-//! Windsurf [`Agent`](crate::Agent) — a single user-level JSON config,
+//! Windsurf [`Agent`] — a single user-level JSON config,
 //! `~/.codeium/windsurf/mcp_config.json` (same on all platforms), key
 //! `mcpServers`.
 

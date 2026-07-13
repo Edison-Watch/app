@@ -1,4 +1,4 @@
-//! Claude Desktop [`Agent`](crate::Agent) — a single user-level JSON config,
+//! Claude Desktop [`Agent`] — a single user-level JSON config,
 //! `claude_desktop_config.json`, key `mcpServers`.
 
 use std::path::PathBuf;

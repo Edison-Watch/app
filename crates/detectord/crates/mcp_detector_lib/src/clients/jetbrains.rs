@@ -1,4 +1,4 @@
-//! JetBrains IDEs [`Agent`](crate::Agent) — IntelliJ IDEA, PyCharm, WebStorm.
+//! JetBrains IDEs [`Agent`] — IntelliJ IDEA, PyCharm, WebStorm.
 //!
 //! Each IDE stores MCP servers in `<JetBrainsBase>/<IDEFolder>/mcp/servers.json`
 //! (JSON, key `mcpServers`). The base dir holds version-suffixed folders (e.g.

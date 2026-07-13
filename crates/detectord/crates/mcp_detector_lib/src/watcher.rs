@@ -20,7 +20,7 @@ use crate::types::ChangeEvent;
 /// How often the event loop wakes up to check the stop flag.
 const STOP_CHECK_INTERVAL: Duration = Duration::from_millis(250);
 
-/// Driver that observes a fixed set of [`Client`]s and emits [`ChangeEvent`]s
+/// Driver that observes a fixed set of [`Agent`]s and emits [`ChangeEvent`]s
 /// as their configs change.
 ///
 /// A `Watcher` is constructed with [`Watcher::new`] and consumed by either

@@ -5,7 +5,7 @@
 //!
 //! # Scope
 //!
-//! The [fingerprint](crate::fingerprint) consumes only `command`, `args`, and
+//! The [fingerprint](crate::fingerprint()) consumes only `command`, `args`, and
 //! `url` — never `env` or `headers` — so this module only templatises secrets
 //! that appear *in those fields*.
 //!
@@ -91,7 +91,7 @@ const NON_SECRET_FLAGS: &[&str] = &[
 ];
 
 /// Return a copy of `config` with secrets in fingerprint-relevant fields
-/// (`command`, `args`, `url`) replaced by [`PLACEHOLDER`]. `env`/`headers` are
+/// (`command`, `args`, `url`) replaced by `PLACEHOLDER`. `env`/`headers` are
 /// passed through unchanged — they do not feed the fingerprint.
 pub fn templatize_for_fingerprint(config: &ServerConfig) -> ServerConfig {
     match config {

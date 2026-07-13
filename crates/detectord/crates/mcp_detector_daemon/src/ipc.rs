@@ -4,7 +4,7 @@
 //! (`SO_PEERCRED` / `getpeereid`, via tokio's `peer_cred`), not from anything
 //! the client sends — so every request is scoped to the kernel-reported uid.
 //! Requests/replies are newline-delimited JSON; the daemon also pushes
-//! [`Event`]s to a connection when they match its peer user.
+//! [`Event`](crate::protocol::Event)s to a connection when they match its peer user.
 
 use std::path::{Path, PathBuf};
 

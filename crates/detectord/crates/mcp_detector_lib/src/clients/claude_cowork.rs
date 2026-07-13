@@ -1,4 +1,4 @@
-//! Claude Cowork [`Agent`](crate::Agent). Uses the same on-disk config as Claude
+//! Claude Cowork [`Agent`]. Uses the same on-disk config as Claude
 //! Desktop (`claude_desktop_config.json`, key `mcpServers`) but is only active
 //! when a sibling `vm_bundles/` directory exists (Cowork's distinguishing
 //! marker vs. plain Desktop).

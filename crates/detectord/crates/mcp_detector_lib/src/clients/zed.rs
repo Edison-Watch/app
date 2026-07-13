@@ -1,4 +1,4 @@
-//! Zed [`Agent`](crate::Agent) — a single JSON settings file whose MCP servers
+//! Zed [`Agent`] — a single JSON settings file whose MCP servers
 //! live under the top-level `context_servers` key.
 
 use std::path::{Path, PathBuf};

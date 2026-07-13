@@ -1,4 +1,4 @@
-//! Codex CLI [`Agent`](crate::Agent) — `~/.codex/config.toml` (TOML), servers
+//! Codex CLI [`Agent`] — `~/.codex/config.toml` (TOML), servers
 //! under the `[mcp_servers]` table.
 //!
 //! (client_2 stubs Codex discovery; we actually parse the table.)
