@@ -12,7 +12,7 @@ name = "mcp_detector_daemon"
 path = "src/main.rs"
 
 [dependencies]
-mcp_detector_lib = { path = "../mcp_detector_lib" }
+edison-detectord = { path = "../edison-detectord" }
 mcp_quarantine = { path = "../mcp_quarantine" }
 mcp_backend = { path = "../mcp_backend" }
 tokio = { version = "1.41", features = ["rt-multi-thread", "net", "signal", "time", "macros", "io-util", "sync"] }

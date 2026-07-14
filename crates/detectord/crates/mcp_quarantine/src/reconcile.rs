@@ -7,7 +7,7 @@
 //! inherently tamper-resistant — a restored server simply reappears in
 //! `observed` next pass and is actioned again (design §8).
 
-use mcp_detector_lib::{DiscoveredServer, ServerConfig, fingerprint};
+use edison_detectord::{DiscoveredServer, ServerConfig, fingerprint};
 
 /// Our own injected entry — never quarantine it.
 const EDISON_SERVER_NAME: &str = "edison-watch";
@@ -124,7 +124,7 @@ mod tests {
     use std::collections::HashSet;
     use std::path::PathBuf;
 
-    use mcp_detector_lib::{
+    use edison_detectord::{
         ConfigLocation, LocationExtra, OpaqueReason, Scope, ServerConfig, SourceKind, Transport,
     };
 

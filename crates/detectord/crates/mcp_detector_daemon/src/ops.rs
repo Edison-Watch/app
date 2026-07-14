@@ -2,8 +2,8 @@
 //! user. Returning protocol DTOs keeps the two front-ends in sync.
 
 use anyhow::Context;
+use edison_detectord::{DiscoveredServer, ServerConfig, fingerprint};
 use mcp_backend::{BackendClient, Error as BackendError, KnownStatus, SubmitRequest};
-use mcp_detector_lib::{DiscoveredServer, ServerConfig, fingerprint};
 use mcp_quarantine::{
     Action as SeenAction, ConfigStore, FileConfigStore, SeenStore, is_edison_entry,
 };
@@ -572,7 +572,7 @@ async fn submit_to_ew(
     config: &ServerConfig,
 ) -> anyhow::Result<SeenAction> {
     let register = matches!(e.role.as_str(), "owner" | "admin");
-    let config = mcp_detector_lib::secret_detection::templatize_for_fingerprint(config);
+    let config = edison_detectord::secret_detection::templatize_for_fingerprint(config);
     let res = BackendClient::new(e.api_base_url.clone(), e.api_key.clone())
         .submit(&SubmitRequest {
             name: name.to_string(),

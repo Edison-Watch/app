@@ -4,7 +4,7 @@
 
 use std::path::{Path, PathBuf};
 
-use mcp_detector_lib::{LocationExtra, SourceKind};
+use edison_detectord::{LocationExtra, SourceKind};
 use mcp_quarantine::{ConfigStore, FileConfigStore, QuarantineRecord};
 
 use crate::agents;

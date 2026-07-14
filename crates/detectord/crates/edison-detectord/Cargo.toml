@@ -1,13 +1,15 @@
 [package]
-name = "mcp_detector_lib"
+name = "edison-detectord"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.88"
 description = "Watches MCP (Model Context Protocol) client configs and reports added or removed servers as they happen."
-license = "MIT OR Apache-2.0"
-readme = "README.md"
+license = "AGPL-3.0-only"
+readme = "../../README.md"
+repository = "https://github.com/Edison-Watch/detectord"
+homepage = "https://github.com/Edison-Watch/detectord"
 keywords = ["mcp", "model-context-protocol", "watcher", "config", "claude"]
-categories = ["development-tools", "filesystem", "command-line-utilities"]
+categories = ["development-tools", "filesystem", "config"]
 
 [features]
 default = [

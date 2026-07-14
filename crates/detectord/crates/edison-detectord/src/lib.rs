@@ -16,7 +16,7 @@
 //!
 //! ```no_run
 //! use std::sync::Arc;
-//! use mcp_detector_lib::{Agent, Result, Watcher, clients::{ClaudeCode, VsCode}};
+//! use edison_detectord::{Agent, Result, Watcher, clients::{ClaudeCode, VsCode}};
 //!
 //! fn main() -> Result<()> {
 //!     let clients: Vec<Arc<dyn Agent>> = vec![

@@ -2,8 +2,8 @@
 
 use std::sync::Arc;
 
-use mcp_detector_lib::Agent;
-use mcp_detector_lib::clients::{
+use edison_detectord::Agent;
+use edison_detectord::clients::{
     ClaudeCode, ClaudeCowork, ClaudeDesktop, Codex, Cursor, JetBrains, VsCode, Windsurf, Zed,
 };
 
@@ -38,7 +38,7 @@ pub fn build() -> Vec<Arc<dyn Agent>> {
 
 /// One reconcile-pass discovery across all agents, flattening per-agent errors
 /// to a logged warning (one broken config can't stop the rest).
-pub fn discover_all(agents: &[Arc<dyn Agent>]) -> Vec<mcp_detector_lib::DiscoveredServer> {
+pub fn discover_all(agents: &[Arc<dyn Agent>]) -> Vec<edison_detectord::DiscoveredServer> {
     let mut out = Vec::new();
     for a in agents {
         match a.discover() {

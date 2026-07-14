@@ -8,7 +8,7 @@
 
 use std::path::{Path, PathBuf};
 
-use mcp_detector_lib::{HookBinding, HookInstall, HookScriptKind, HookStyle};
+use edison_detectord::{HookBinding, HookInstall, HookScriptKind, HookStyle};
 use serde_json::{Map, Value, json};
 
 use crate::configstore::{backup_path, parse, read, serialize, write};
