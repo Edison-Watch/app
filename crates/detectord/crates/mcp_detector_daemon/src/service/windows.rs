@@ -221,29 +221,80 @@ pub fn install(enforce: bool) -> Result<()> {
     Ok(())
 }
 
+/// Every registered task whose leaf name starts with `TASK_BASENAME` (the bare
+/// legacy name plus every `<base> <SID>` variant). Parses `schtasks /query /fo
+/// LIST`'s `TaskName:` field (English-locale, matching `is_running`'s parse).
+///
+/// We enumerate rather than reconstruct the SID name because uninstall can run
+/// in a different context than install (UAC elevation to another admin, or a
+/// context where `whoami` resolves a different/no SID), so the name rebuilt from
+/// the live token may not match the task that was actually registered.
+fn all_matching_tasks() -> Vec<String> {
+    let Ok(out) = schtasks(&["/query", "/fo", "LIST"]) else {
+        return Vec::new();
+    };
+    if !out.status.success() {
+        return Vec::new();
+    }
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let mut tasks = Vec::new();
+    for line in stdout.lines() {
+        if let Some(rest) = line.trim().strip_prefix("TaskName:") {
+            let full = rest.trim();
+            // TaskName is a path like `\Edison Watch detectord S-1-5-...`; match
+            // on the leaf so a task nested in a folder still matches.
+            let leaf = full.rsplit('\\').next().unwrap_or(full);
+            if leaf.starts_with(TASK_BASENAME) {
+                tasks.push(full.to_string());
+            }
+        }
+    }
+    tasks
+}
+
 /// Stop + remove the task. Idempotent. Leaves data; the caller
 /// (`service::uninstall`) handles the optional purge.
 pub fn uninstall() -> Result<()> {
-    let task = task_name();
-    let _ = schtasks(&["/end", "/tn", &task]); // stop a running instance
-    if task != TASK_BASENAME {
-        let _ = schtasks(&["/end", "/tn", TASK_BASENAME]);
-        let _ = schtasks(&["/delete", "/tn", TASK_BASENAME, "/f"]);
-    }
-    let out = schtasks(&["/delete", "/tn", &task, "/f"])?;
-    if out.status.success() {
-        info!(task = %task, "removed scheduled task");
-    } else {
-        let stderr = String::from_utf8_lossy(&out.stderr);
-        // Benign: the task doesn't exist (already uninstalled).
-        let benign = stderr.contains("does not exist")
-            || stderr.contains("cannot find")
-            || stderr.to_lowercase().contains("the system cannot find");
-        if benign {
-            info!("no scheduled task to remove");
-        } else {
-            warn!(stderr = %stderr, "schtasks /delete reported an error; continuing");
+    // Enumerate every task matching our base name and remove each, so an
+    // SID-namespaced task still goes even when the uninstall context can't
+    // reproduce the SID used at install time. Fall back to the reconstructed
+    // names if enumeration finds nothing (e.g. non-English `schtasks` output).
+    let mut targets = all_matching_tasks();
+    if targets.is_empty() {
+        targets.push(task_name());
+        if !targets.iter().any(|t| t == TASK_BASENAME) {
+            targets.push(TASK_BASENAME.to_string());
         }
+    }
+
+    let mut removed = 0usize;
+    for task in &targets {
+        let _ = schtasks(&["/end", "/tn", task]); // stop a running instance
+        let out = match schtasks(&["/delete", "/tn", task, "/f"]) {
+            Ok(o) => o,
+            Err(e) => {
+                warn!(task = %task, error = %e, "schtasks /delete failed to invoke; continuing");
+                continue;
+            }
+        };
+        if out.status.success() {
+            info!(task = %task, "removed scheduled task");
+            removed += 1;
+        } else {
+            let stderr = String::from_utf8_lossy(&out.stderr);
+            // Benign: the task doesn't exist (already uninstalled).
+            let benign = stderr.contains("does not exist")
+                || stderr.contains("cannot find")
+                || stderr.to_lowercase().contains("the system cannot find");
+            if benign {
+                info!(task = %task, "no scheduled task to remove");
+            } else {
+                warn!(task = %task, stderr = %stderr, "schtasks /delete reported an error; continuing");
+            }
+        }
+    }
+    if removed == 0 {
+        info!("no scheduled task to remove");
     }
     Ok(())
 }
