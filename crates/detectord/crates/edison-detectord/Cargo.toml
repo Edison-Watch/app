@@ -8,7 +8,7 @@ license = "AGPL-3.0-only"
 readme = "../../README.md"
 repository = "https://github.com/Edison-Watch/detectord"
 homepage = "https://github.com/Edison-Watch/detectord"
-keywords = ["mcp", "model-context-protocol", "watcher", "config", "claude"]
+keywords = ["mcp", "mcp-servers", "watcher", "config", "claude"]
 categories = ["development-tools", "filesystem", "config"]
 
 [features]
