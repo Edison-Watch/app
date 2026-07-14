@@ -31,6 +31,14 @@ allow = [
     "Unicode-DFS-2016",
     "Zlib",
 ]
+# First-party workspace crates are AGPL-3.0-only; the permissive-only
+# allowlist above is for third-party dependencies.
+exceptions = [
+    { crate = "edison-detectord", allow = ["AGPL-3.0-only"] },
+    { crate = "mcp_backend", allow = ["AGPL-3.0-only"] },
+    { crate = "mcp_detector_daemon", allow = ["AGPL-3.0-only"] },
+    { crate = "mcp_quarantine", allow = ["AGPL-3.0-only"] },
+]
 confidence-threshold = 0.93
 
 [bans]
