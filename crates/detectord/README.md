@@ -16,7 +16,7 @@ mid-migration from a read-only detector toward that design.
 
 | Crate | Path | Role | Status |
 |---|---|---|---|
-| `mcp_detector_lib` | [crates/mcp_detector_lib/](crates/mcp_detector_lib/) | Read-only engine: agent abstraction, discovery, fingerprint, filesystem watcher. Cross-platform, publishable. | Reshaped |
+| `edison-detectord` | [crates/edison-detectord/](crates/edison-detectord/) | Read-only engine: agent abstraction, discovery, fingerprint, filesystem watcher. Cross-platform, publishable. | Reshaped |
 | `mcp_quarantine` | [crates/mcp_quarantine/](crates/mcp_quarantine/) | Mutation + state + the reconcile planner. No privilege/IPC/network. | Planner done; seen-store + writers WIP |
 | `mcp_detector_daemon` | [crates/mcp_detector_daemon/](crates/mcp_detector_daemon/) | Long-lived macOS daemon wrapping the engine behind a Unix-socket IPC. | Being reworked to the root enforcement model |
 
@@ -31,22 +31,22 @@ must run as a system agent the user cannot stop. That posture — a privileged
 enforcement agent that assumes the local user is adversarial — drives the whole
 design.
 
-## Library — `mcp_detector_lib`
+## Library — `edison-detectord`
 
 The read-only engine. Cross-platform, no root, no network.
 
-- **Agent abstraction.** Each supported host app implements the [`Agent`](crates/mcp_detector_lib/src/agent.rs)
+- **Agent abstraction.** Each supported host app implements the [`Agent`](crates/edison-detectord/src/agent.rs)
   trait: `name`, `is_installed`, `watch_targets`, and `discover`. `discover`
-  normalises each on-disk entry into a [`DiscoveredServer`](crates/mcp_detector_lib/src/types.rs)
+  normalises each on-disk entry into a [`DiscoveredServer`](crates/edison-detectord/src/types.rs)
   carrying its raw `config` ([`ServerConfig::Stdio` | `Http` | `Unsupported`]) and
   a `location` (where + how to mutate it).
-- **Server fingerprint.** [`fingerprint`](crates/mcp_detector_lib/src/fingerprint.rs)
+- **Server fingerprint.** [`fingerprint`](crates/edison-detectord/src/fingerprint.rs)
   computes the stable identity used to ask "is this server already known to the
   backend?". It is a **frozen cross-implementation contract** — byte-for-byte
   identical to the Python backend and the TS client (`sha256(identifier)[:16]`,
-  secrets templatised first via [`secret_detection`](crates/mcp_detector_lib/src/secret_detection.rs)).
+  secrets templatised first via [`secret_detection`](crates/edison-detectord/src/secret_detection.rs)).
   Pinned by golden-vector tests. See [docs/architecture.md §6](docs/architecture.md).
-- **Event-driven watching.** [`Watcher`](crates/mcp_detector_lib/src/watcher.rs)
+- **Event-driven watching.** [`Watcher`](crates/edison-detectord/src/watcher.rs)
   uses `notify-debouncer-full` against parent directories (editors write configs
   via atomic rename, which breaks single-file watches) and emits `ChangeEvent`s.
   *(This edge-triggered watcher will be superseded by the daemon's level-triggered
@@ -73,12 +73,12 @@ command/url (e.g. VSCode extension-provider contributions) are emitted as
 
 ```toml
 [dependencies]
-mcp_detector_lib = { path = "crates/mcp_detector_lib" }
+edison-detectord = "0.1"
 ```
 
 ```rust,no_run
 use std::sync::Arc;
-use mcp_detector_lib::{Agent, Result, Watcher, clients::{ClaudeCode, VsCode}};
+use edison_detectord::{Agent, Result, Watcher, clients::{ClaudeCode, VsCode}};
 
 fn main() -> Result<()> {
     let agents: Vec<Arc<dyn Agent>> = vec![
@@ -132,7 +132,7 @@ reconcile workers, enrollment + fail-closed policy, an operator CLI
 ├── Cargo.toml                # virtual workspace
 ├── docs/architecture.md      # design source of truth
 └── crates/
-    ├── mcp_detector_lib/      # read-only engine
+    ├── edison-detectord/      # read-only engine
     ├── mcp_quarantine/        # mutation + state + reconcile
     └── mcp_detector_daemon/   # macOS daemon binary
 ```

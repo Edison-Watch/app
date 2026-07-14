@@ -266,6 +266,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "edison-detectord"
+version = "0.1.0"
+dependencies = [
+ "dirs",
+ "notify",
+ "notify-debouncer-full",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "serde_json_lenient",
+ "sha2",
+ "tempfile",
+ "thiserror",
+ "toml",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "equivalent"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -830,7 +849,7 @@ dependencies = [
 name = "mcp_backend"
 version = "0.1.0"
 dependencies = [
- "mcp_detector_lib",
+ "edison-detectord",
  "reqwest",
  "serde",
  "serde_json",
@@ -846,9 +865,9 @@ dependencies = [
  "anyhow",
  "clap",
  "dirs",
+ "edison-detectord",
  "libc",
  "mcp_backend",
- "mcp_detector_lib",
  "mcp_quarantine",
  "notify",
  "notify-debouncer-full",
@@ -862,29 +881,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "mcp_detector_lib"
-version = "0.1.0"
-dependencies = [
- "dirs",
- "notify",
- "notify-debouncer-full",
- "rusqlite",
- "serde",
- "serde_json",
- "serde_json_lenient",
- "sha2",
- "tempfile",
- "thiserror",
- "toml",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "mcp_quarantine"
 version = "0.1.0"
 dependencies = [
- "mcp_detector_lib",
+ "edison-detectord",
  "rusqlite",
  "serde",
  "serde_json",

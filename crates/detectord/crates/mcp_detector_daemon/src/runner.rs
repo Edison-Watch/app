@@ -10,8 +10,8 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use edison_detectord::{Agent, DiscoveredServer, ServerConfig, fingerprint};
 use mcp_backend::{BackendClient, KnownStatus};
-use mcp_detector_lib::{Agent, DiscoveredServer, ServerConfig, fingerprint};
 use mcp_quarantine::{
     Action as SeenAction, ConfigStore, FileConfigStore, Policy, QuarantineRecord, ReconcileAction,
     SeenStore, is_edison_entry, plan,
@@ -458,7 +458,7 @@ struct Skip {
 }
 
 impl Skip {
-    fn edison(s: &mcp_detector_lib::DiscoveredServer) -> Self {
+    fn edison(s: &edison_detectord::DiscoveredServer) -> Self {
         Self {
             name: s.name.clone(),
             agent: s.client,
@@ -467,7 +467,7 @@ impl Skip {
         }
     }
 
-    fn untouchable(s: &mcp_detector_lib::DiscoveredServer) -> Self {
+    fn untouchable(s: &edison_detectord::DiscoveredServer) -> Self {
         Self {
             name: s.name.clone(),
             agent: s.client,

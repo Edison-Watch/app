@@ -21,7 +21,7 @@
 
 use std::path::{Path, PathBuf};
 
-use mcp_detector_lib::{
+use edison_detectord::{
     ConfigLocation, EdisonInstall, EdisonStyle, HttpKind, LocationExtra, ServerConfig, SourceKind,
     StateShape,
 };
@@ -748,7 +748,7 @@ mod tests {
             path: path.to_path_buf(),
             key_path: key_path.iter().map(|s| s.to_string()).collect(),
             server_key: server_key.into(),
-            extra: mcp_detector_lib::LocationExtra::None,
+            extra: edison_detectord::LocationExtra::None,
         }
     }
 
@@ -1070,7 +1070,7 @@ mod tests {
             path: cfg.clone(),
             key_path: vec!["mcp_servers".into()],
             server_key: "evil".into(),
-            extra: mcp_detector_lib::LocationExtra::None,
+            extra: edison_detectord::LocationExtra::None,
         };
 
         let rec = store.quarantine(&loc, &stdio("run", &["--bad"])).unwrap();

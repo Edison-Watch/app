@@ -15,7 +15,7 @@
 
 use serde::Deserialize;
 
-use mcp_detector_lib::{HttpKind, ServerConfig};
+use edison_detectord::{HttpKind, ServerConfig};
 
 const DOMAIN_CONFIG_PATH: &str = "/api/v1/user/domain-config";
 const FINGERPRINTS_PATH: &str = "/api/v1/servers/fingerprints";

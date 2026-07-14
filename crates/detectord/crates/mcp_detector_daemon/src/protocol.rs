@@ -6,7 +6,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use mcp_detector_lib::ServerConfig;
+use edison_detectord::ServerConfig;
 
 fn default_true() -> bool {
     true

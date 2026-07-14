@@ -20,7 +20,7 @@ pub enum Error {
     #[error("server config is not actionable (unsupported/report-only)")]
     NotActionable,
     #[error("no writer implemented for source kind {0:?}")]
-    UnsupportedKind(mcp_detector_lib::SourceKind),
+    UnsupportedKind(edison_detectord::SourceKind),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

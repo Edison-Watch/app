@@ -6,7 +6,7 @@
 
 This document captures the architecture decided for the Rust quarantine daemon and
 **the reasoning behind each decision** — especially the non-obvious ones. It is the
-source of truth for the design; the current code (`mcp_detector_lib` read-only
+source of truth for the design; the current code (`edison-detectord` read-only
 watcher + `mcp_detector_daemon` FDA-gated per-user daemon) predates it and will be
 reshaped to match.
 
@@ -417,7 +417,7 @@ Organizing principle: **isolate by trust/privilege so each boundary is auditable
 
 ```
 crates/
-  mcp_detector_lib/      READ-ONLY engine. Cross-platform, no root, no network, publishable.
+  edison-detectord/      READ-ONLY engine. Cross-platform, no root, no network, publishable.
     agent.rs             trait Agent (was Client)
     agents/{claude_code,vscode}.rs   parsers → DiscoveredServer
     types.rs             DiscoveredServer, ServerConfig, ConfigLocation, SourceKind, Scope, Transport
@@ -430,11 +430,11 @@ crates/
     writers/{json,jsonc,sqlite,claude_cli,plugin_dir}.rs
     seen_store.rs        persistent known-oracle (path injected)
     reconcile.rs         pure planner: plan(observed, oracle, policy) -> Vec<Action>
-    # depends on: mcp_detector_lib
+    # depends on: edison-detectord
 
   mcp_backend/           Backend REST client (reqwest). No privilege.
     lib.rs, types.rs     domain_config / server_fingerprints / submit_request
-    # depends on: mcp_detector_lib
+    # depends on: edison-detectord
 
   mcp_detector_daemon/   THE binary. All privilege + all wiring.
     main.rs              operator CLI
@@ -451,7 +451,7 @@ crates/
 **Dependency DAG (strict, acyclic):**
 
 ```
-              mcp_detector_lib
+              edison-detectord
               ▲       ▲       ▲
      mcp_quarantine   │   mcp_backend          (siblings; no edge between them)
               ▲       │       ▲
@@ -479,7 +479,7 @@ privilege-drop, root socket, launchd, operator CLI — collapses into the binary
 
 | Crate | Status | Work |
 |---|---|---|
-| `mcp_detector_lib` | exists, reshape | `Client→Agent`; `parse_all→discover` (raw config + locator); add `fingerprint`/`secret_detection`; `watch_paths→watch_targets` |
+| `edison-detectord` | exists, reshape | `Client→Agent`; `parse_all→discover` (raw config + locator); add `fingerprint`/`secret_detection`; `watch_paths→watch_targets` |
 | `mcp_quarantine` | new | configstore + writers, seen_store, reconcile planner |
 | `mcp_backend` | new | thin reqwest client over 3 endpoints |
 | `mcp_detector_daemon` | exists, heavy rework | drop FDA + `permission.rs`; add root socket + uid scoping + multi-user workers + enrollment + policy refresh + operator CLI + privilege-drop + launchd |

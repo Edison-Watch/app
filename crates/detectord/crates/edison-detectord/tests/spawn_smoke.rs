@@ -1,4 +1,4 @@
-//! End-to-end smoke test for [`mcp_detector_lib::Watcher::spawn`].
+//! End-to-end smoke test for [`edison_detectord::Watcher::spawn`].
 //!
 //! Asserts that mutating a watched config file actually produces an `Added`
 //! / `Removed` event on the receiver - the only path *not* covered by unit
@@ -15,8 +15,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use mcp_detector_lib::clients::VsCode;
-use mcp_detector_lib::{Agent, ChangeEvent, Watcher};
+use edison_detectord::clients::VsCode;
+use edison_detectord::{Agent, ChangeEvent, Watcher};
 use tempfile::tempdir;
 
 /// Wait up to `timeout` for an event matching `pred` to arrive on `events`.

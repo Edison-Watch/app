@@ -3,7 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use mcp_detector_lib::ServerConfig;
+use edison_detectord::ServerConfig;
 use mcp_quarantine::QuarantineRecord;
 
 use crate::paths;
