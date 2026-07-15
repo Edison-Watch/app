@@ -20,9 +20,14 @@ mod windows;
 #[cfg(target_os = "windows")]
 use windows as imp;
 
-#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+#[cfg(target_os = "linux")]
+mod linux;
+#[cfg(target_os = "linux")]
+use linux as imp;
+
+#[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
 mod stub;
-#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+#[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
 use stub as imp;
 
 /// Install + start the supervisor unit for the current binary. `enforce` selects

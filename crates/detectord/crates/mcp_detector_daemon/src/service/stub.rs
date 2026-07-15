@@ -1,8 +1,8 @@
-//! Fallback for platforms without supervisor integration (Linux, etc.). The
-//! daemon still builds and can be run directly with `daemon` (e.g. under a
-//! systemd user unit); install reports "not supported" rather than failing to
-//! compile. `uninstall` is a no-op so `service uninstall --purge` can still wipe
-//! data (the shared purge runs in `service::uninstall`).
+//! Fallback for platforms without supervisor integration (the BSDs, illumos,
+//! etc.; macOS, Windows, and Linux each have their own module). The daemon still
+//! builds and can be run directly with `daemon`; install reports "not supported"
+//! rather than failing to compile. `uninstall` is a no-op so `service uninstall
+//! --purge` can still wipe data (the shared purge runs in `service::uninstall`).
 
 use anyhow::{Result, bail};
 
