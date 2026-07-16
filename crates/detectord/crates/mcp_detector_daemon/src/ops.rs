@@ -578,6 +578,7 @@ async fn submit_to_ew(
             name: name.to_string(),
             config,
             register,
+            hostname: crate::platform::hostname(),
         })
         .await;
     match res {

@@ -96,3 +96,33 @@ mod imp {
 }
 
 pub use imp::*;
+
+/// Best-effort machine hostname, sent to the backend so a local (stdio) server
+/// can be approved for the specific host it lives on.
+///
+/// IMPORTANT: this must stay aligned with edison-stdiod's `config::hostname()`
+/// (env `HOSTNAME`, then `COMPUTERNAME`, then the `hostname` command) so the
+/// backend keys the *same* machine identity for both daemons. The command
+/// fallback is what works on macOS, where `HOSTNAME` isn't exported to
+/// launchd/user processes. On Windows `COMPUTERNAME` is always set and
+/// short-circuits, so the GUI-subsystem daemon never spawns a console
+/// `hostname`. Cross-platform, so it lives outside the cfg-split `imp`.
+pub fn hostname() -> String {
+    for var in ["HOSTNAME", "COMPUTERNAME"] {
+        if let Ok(h) = std::env::var(var) {
+            let trimmed = h.trim();
+            if !trimmed.is_empty() {
+                return trimmed.to_string();
+            }
+        }
+    }
+    if let Ok(out) = std::process::Command::new("hostname").output()
+        && let Ok(s) = String::from_utf8(out.stdout)
+    {
+        let trimmed = s.trim();
+        if !trimmed.is_empty() {
+            return trimmed.to_string();
+        }
+    }
+    "unknown".to_string()
+}

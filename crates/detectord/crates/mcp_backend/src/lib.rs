@@ -116,6 +116,9 @@ pub struct SubmitRequest {
     pub config: ServerConfig,
     /// `true` = register (admin/owner, auto-approved); `false` = request review.
     pub register: bool,
+    /// The machine the server was discovered on. The backend uses this to scope
+    /// approval of a local (stdio) server to the specific host it lives on.
+    pub hostname: String,
 }
 
 /// Async client bound to a base URL + bearer key.
@@ -390,10 +393,14 @@ fn submit_body(req: &SubmitRequest) -> serde_json::Value {
     let mut body = json!({
         "name": req.name,
         "status": if req.register { "registered" } else { "requested" },
+        "hostname": req.hostname,
     });
     let obj = body.as_object_mut().expect("object literal");
     match &req.config {
         ServerConfig::Stdio { command, args, env } => {
+            // Explicit transport type so the backend doesn't have to infer stdio
+            // from the presence of `command`.
+            obj.insert("type".into(), json!("stdio"));
             obj.insert("command".into(), json!(command));
             obj.insert("args".into(), json!(args));
             obj.insert("env".into(), json!(env));
@@ -473,11 +480,14 @@ mod tests {
                 env: BTreeMap::new(),
             },
             register: true,
+            hostname: "dev-box".into(),
         };
         let b = submit_body(&stdio);
         assert_eq!(b["name"], "s");
         assert_eq!(b["status"], "registered");
+        assert_eq!(b["type"], "stdio");
         assert_eq!(b["command"], "npx");
+        assert_eq!(b["hostname"], "dev-box");
 
         let http = SubmitRequest {
             name: "h".into(),
@@ -487,11 +497,13 @@ mod tests {
                 kind: HttpKind::Sse,
             },
             register: false,
+            hostname: "dev-box".into(),
         };
         let b = submit_body(&http);
         assert_eq!(b["status"], "requested");
         assert_eq!(b["type"], "sse");
         assert_eq!(b["url"], "https://x");
+        assert_eq!(b["hostname"], "dev-box");
     }
 
     #[test]
