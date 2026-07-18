@@ -206,8 +206,17 @@ async fn dispatch(user: &str, req: Request) -> Reply {
                 agent,
                 choice,
                 rename,
+                submit_config,
             } => {
-                ops::disposition(user, &name, agent.as_deref(), choice, rename.as_deref()).await?;
+                ops::disposition(
+                    user,
+                    &name,
+                    agent.as_deref(),
+                    choice,
+                    rename.as_deref(),
+                    submit_config,
+                )
+                .await?;
                 Reply::Ack
             }
             Request::Unenroll => {

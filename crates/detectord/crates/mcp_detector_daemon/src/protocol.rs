@@ -56,6 +56,14 @@ pub enum Request {
         /// For SendToEw: submit under this name instead (rename-on-conflict).
         #[serde(default)]
         rename: Option<String>,
+        /// For SendToEw: submit THIS config verbatim instead of the
+        /// discovered/stored one. It is the client's authoritative
+        /// credential-review result (already redacted per the user's choices, and
+        /// NOT auto-templatized again — so a value the user left unmarked is sent
+        /// as-is). `None` = auto-templatize the discovered/stored config. The
+        /// locally retained raw config (for secret injection) is unaffected.
+        #[serde(default)]
+        submit_config: Option<ServerConfig>,
     },
     /// Force a policy + known-set refresh.
     RefreshPolicy,
@@ -192,11 +200,13 @@ mod tests {
                 agent,
                 choice,
                 rename,
+                submit_config,
             } => {
                 assert_eq!(name, "foo");
                 assert_eq!(agent.as_deref(), Some("cursor"));
                 assert!(matches!(choice, Choice::SendToEw));
                 assert_eq!(rename.as_deref(), Some("foo2"));
+                assert!(submit_config.is_none());
             }
             other => panic!("wrong variant: {other:?}"),
         }
@@ -208,6 +218,18 @@ mod tests {
             Request::Disposition { rename, choice, .. } => {
                 assert!(rename.is_none());
                 assert!(matches!(choice, Choice::Skip));
+            }
+            other => panic!("wrong variant: {other:?}"),
+        }
+
+        // A client-supplied submit_config (credential-review override) parses.
+        let r: Request = serde_json::from_str(
+            r#"{"op":"disposition","name":"foo","choice":"send_to_ew","submit_config":{"Stdio":{"command":"npx","args":["-y","{TOKEN}"],"env":{}}}}"#,
+        )
+        .unwrap();
+        match r {
+            Request::Disposition { submit_config, .. } => {
+                assert!(submit_config.is_some());
             }
             other => panic!("wrong variant: {other:?}"),
         }

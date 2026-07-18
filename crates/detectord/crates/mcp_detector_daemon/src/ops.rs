@@ -473,6 +473,7 @@ pub async fn disposition(
     agent: Option<&str>,
     choice: Choice,
     rename: Option<&str>,
+    submit_config: Option<ServerConfig>,
 ) -> anyhow::Result<()> {
     let e = Enrollment::load_for(user)?.ok_or_else(|| anyhow::anyhow!("not enrolled"))?;
 
@@ -484,7 +485,7 @@ pub async fn disposition(
         .find(|x| x.name == name && agent.is_none_or(|a| x.agent == a))
         .cloned()
     {
-        return disposition_quarantined(user, &e, &entry, choice, rename).await;
+        return disposition_quarantined(user, &e, &entry, choice, rename, submit_config).await;
     }
 
     let observed = agents::discover_all(&agents::build());
@@ -511,7 +512,13 @@ pub async fn disposition(
     let action = match choice {
         Choice::SendToEw => {
             let name = rename.unwrap_or(&server.name);
-            submit_to_ew(&e, name, &server.config).await?
+            // A client-supplied override is the user's authoritative redaction —
+            // submit it verbatim. Otherwise auto-templatize the discovered config.
+            let cfg = match submit_config {
+                Some(c) => c,
+                None => edison_detectord::secret_detection::templatize_for_fingerprint(&server.config),
+            };
+            submit_to_ew(&e, name, &cfg).await?
         }
         Choice::Skip => SeenAction::Dismissed,
     };
@@ -542,13 +549,22 @@ async fn disposition_quarantined(
     entry: &QuarantinedEntry,
     choice: Choice,
     rename: Option<&str>,
+    submit_config: Option<ServerConfig>,
 ) -> anyhow::Result<()> {
     let mut seen = SeenStore::open(paths::seen_store_path(user), e.org_id.clone())?;
     let action = match choice {
         Choice::SendToEw => {
-            let config = entry.config.clone().ok_or_else(|| {
-                anyhow::anyhow!("no stored config for '{}' — cannot send to EW", entry.name)
-            })?;
+            // A client-supplied override is the user's authoritative redaction —
+            // submit it verbatim. Otherwise auto-templatize the stored raw config.
+            let config = match submit_config {
+                Some(c) => c,
+                None => {
+                    let raw = entry.config.clone().ok_or_else(|| {
+                        anyhow::anyhow!("no stored config for '{}' — cannot send to EW", entry.name)
+                    })?;
+                    edison_detectord::secret_detection::templatize_for_fingerprint(&raw)
+                }
+            };
             // Submit under the (possibly renamed) name, but keep marking the
             // *original* fingerprint known so the still-local server is silently
             // re-quarantined instead of re-prompting.
@@ -562,8 +578,11 @@ async fn disposition_quarantined(
     Ok(())
 }
 
-/// Submit a config to the backend under `name`, templatizing detected secrets
-/// first so raw credentials never leave the machine. Returns the seen-store
+/// Submit `config` to the backend under `name`, exactly as given. The caller is
+/// responsible for redaction: daemon-discovered configs are auto-templatized
+/// first, while a client-supplied `submit_config` (the user's manual
+/// credential-review decision) is submitted verbatim so their explicit choices —
+/// including leaving a value unmarked — are honored. Returns the seen-store
 /// action (Registered for owner/admin, else Requested). A backend 409 is
 /// surfaced as a `conflict:`-prefixed error so the UI can offer a rename.
 async fn submit_to_ew(
@@ -572,11 +591,10 @@ async fn submit_to_ew(
     config: &ServerConfig,
 ) -> anyhow::Result<SeenAction> {
     let register = matches!(e.role.as_str(), "owner" | "admin");
-    let config = edison_detectord::secret_detection::templatize_for_fingerprint(config);
     let res = BackendClient::new(e.api_base_url.clone(), e.api_key.clone())
         .submit(&SubmitRequest {
             name: name.to_string(),
-            config,
+            config: config.clone(),
             register,
             hostname: crate::platform::hostname(),
         })

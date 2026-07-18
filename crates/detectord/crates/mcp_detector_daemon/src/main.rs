@@ -401,7 +401,7 @@ fn print_list_verbose(servers: &[ServerView]) {
 }
 
 async fn cmd_send_to_ew(name: String, agent: Option<String>) -> anyhow::Result<()> {
-    ops::disposition(&cli_user(), &name, agent.as_deref(), Choice::SendToEw, None).await?;
+    ops::disposition(&cli_user(), &name, agent.as_deref(), Choice::SendToEw, None, None).await?;
     println!("Sent {name} to Edison Watch and removed it from the local config.");
     Ok(())
 }
