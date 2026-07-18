@@ -516,7 +516,9 @@ pub async fn disposition(
             // submit it verbatim. Otherwise auto-templatize the discovered config.
             let cfg = match submit_config {
                 Some(c) => c,
-                None => edison_detectord::secret_detection::templatize_for_fingerprint(&server.config),
+                None => {
+                    edison_detectord::secret_detection::templatize_for_fingerprint(&server.config)
+                }
             };
             submit_to_ew(&e, name, &cfg).await?
         }
