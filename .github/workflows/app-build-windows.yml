@@ -1,0 +1,199 @@
+name: Build Windows (app, unsigned demo)
+
+# Windows demo build, ported from the private monorepo's build-client-upstream
+# windows job: stages the bundled Python + npx/uvx runtimes, natively builds
+# edison-stdiod for both Windows arches from crates/stdiod, packages an
+# unsigned NSIS installer versioned <base>-demo.<run>, sanity-checks the
+# auto-update manifest, and (when the R2 secrets are configured) publishes to
+# the Cloudflare R2 testing feed.
+#
+# Unsigned on purpose: NSIS auto-update verifies the package via the sha512 in
+# latest.yml (not Authenticode), so updates apply unsigned - users only see a
+# SmartScreen prompt on first install. Code signing is deferred until before
+# public release.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/app/**'
+      - 'packages/shared/**'
+      - 'crates/stdiod/**'
+      - '.github/workflows/app-build-windows.yml'
+
+concurrency:
+  group: build-windows-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows-demo:
+    name: Build Windows (Unsigned, demo)
+    runs-on: windows-latest
+    # This natively builds edison-stdiod for both arches (release `ring`
+    # C-crypto compile) and stages the npx/uvx runtimes.
+    timeout-minutes: 45
+    # Git Bash for the scripted steps. The Python/runtime staging steps run
+    # via npm scripts (-> pwsh).
+    defaults:
+      run:
+        shell: bash
+        working-directory: packages/app
+    env:
+      # Demo backend config (DEMO_VITE_* repository variables).
+      VITE_DEPLOY_ENV: ${{ vars.DEMO_VITE_DEPLOY_ENV }}
+      VITE_API_BASE_URL: ${{ vars.DEMO_VITE_API_BASE_URL }}
+      VITE_MCP_BASE_URL: ${{ vars.DEMO_VITE_MCP_BASE_URL }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies (workspace root)
+        run: npm ci
+        working-directory: .
+
+      - name: Build @edison-watch/shared
+        run: npm run build -w packages/shared
+        working-directory: .
+
+      - name: Stage bundled Python (x64 + arm64)
+        # Downloads + SHA256-verifies the embeddable interpreter into
+        # bin/python/<arch>/; win.extraResources copies the matching arch into
+        # resources/python/. The session hooks need a Python runtime Windows
+        # does not reliably provide. Runs via npm script (-> pwsh).
+        run: npm run stage:python
+
+      - name: Build edison-stdiod (x64 + arm64)
+        # Native per-arch cargo build on the Windows runner. Staged into
+        # packages/app/bin/stdiod/<arch>/ so win.extraResources copies the
+        # matching-arch edison-stdiod.exe into resources/bin/. Without this the
+        # packaged app ships with no stdio daemon.
+        working-directory: crates/stdiod
+        run: |
+          set -euo pipefail
+          rustup target add x86_64-pc-windows-msvc aarch64-pc-windows-msvc
+          for spec in "x64:x86_64-pc-windows-msvc" "arm64:aarch64-pc-windows-msvc"; do
+            arch="${spec%%:*}"
+            target="${spec##*:}"
+            echo "Building edison-stdiod for $target ..."
+            cargo build --release --target "$target" --bin edison-stdiod
+            mkdir -p "../../packages/app/bin/stdiod/$arch"
+            cp "target/$target/release/edison-stdiod.exe" "../../packages/app/bin/stdiod/$arch/edison-stdiod.exe"
+          done
+
+      - name: Stage bundled runtimes (npx/uvx, x64 + arm64)
+        # Downloads Node (npx) + uv (uvx) into bin/runtimes/<arch>/;
+        # win.extraResources copies the matching arch into resources/runtimes/.
+        # The stdiod daemon spawns child MCP servers via npx/uvx, which Windows
+        # users often lack. Runs via the npm script (-> pwsh). Mirrors `build:win`.
+        run: npm run stage:runtimes
+
+      - name: Build Electron app (unsigned, demo)
+        # Version is <base>-demo.<run> so the demo feed advances per run.
+        run: |
+          BASE=$(node -p "require('./package.json').version")
+          VERSION="${BASE}-demo.${GITHUB_RUN_NUMBER}"
+          echo "Building demo version $VERSION"
+          npm run build:demo
+          npx electron-builder --win --publish never \
+            -c.extraMetadata.version="$VERSION" \
+            -c.publish.url=https://demo-releases.edison.watch/client/latest
+
+      - name: Verify update artifacts (auto-update sanity)
+        # Fail BEFORE publishing a broken build: a wrong version in latest.yml or
+        # a missing installer silently breaks electron-updater on Windows.
+        run: |
+          set -euo pipefail
+          BASE=$(node -p "require('./package.json').version")
+          VERSION="${BASE}-demo.${GITHUB_RUN_NUMBER}"
+          YML="dist/latest.yml"
+          test -f "$YML" || { echo "::error::dist/latest.yml missing"; exit 1; }
+          MVER=$(grep -m1 '^version:' "$YML" | awk '{print $2}' | tr -d '\r')
+          [ "$MVER" = "$VERSION" ] || { echo "::error::manifest version '$MVER' != build version '$VERSION'"; exit 1; }
+          ls dist/*.exe >/dev/null 2>&1 || { echo "::error::no NSIS installer (.exe) produced"; exit 1; }
+          echo "manifest version: $MVER"
+          for f in dist/*.exe; do
+            SIZE_MB=$(( $(wc -c < "$f") / 1024 / 1024 )); echo "installer: $(basename "$f") (${SIZE_MB} MB)"
+          done
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: edison-watch-windows-demo
+          path: |
+            packages/app/dist/*.exe
+            packages/app/dist/latest.yml
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload to Cloudflare R2 (Testing)
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT: ${{ secrets.R2_TESTING_ENDPOINT }}
+          R2_BUCKET: ${{ secrets.R2_TESTING_BUCKET }}
+        # Co-located with the macOS artifacts under client/latest/. The Windows
+        # manifest (latest.yml) and installers have distinct names from the mac
+        # ones (latest-mac.yml / .dmg), and `aws s3 cp` never deletes, so the two
+        # jobs publishing to the same prefix do not clobber each other.
+        run: |
+          if [ -z "${AWS_ACCESS_KEY_ID:-}" ] || [ -z "${R2_ENDPOINT:-}" ]; then
+            echo "::notice::R2 secrets not configured - skipping publish"
+            exit 0
+          fi
+          SHORT_SHA="${GITHUB_SHA::7}"
+
+          aws s3 cp dist/ "s3://${R2_BUCKET}/client/${SHORT_SHA}/" \
+            --endpoint-url "${R2_ENDPOINT}" \
+            --recursive \
+            --exclude '*.yml' \
+            --exclude '*-unpacked/*'
+
+          aws s3 cp dist/ "s3://${R2_BUCKET}/client/latest/" \
+            --endpoint-url "${R2_ENDPOINT}" \
+            --recursive \
+            --exclude '*-unpacked/*'
+
+          echo "## Published Windows to R2 (Testing)" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Versioned:** \`client/${SHORT_SHA}/\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Latest:** \`client/latest/\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Verify published demo feed
+        # Post-publish self-check: confirm the public feed serves the new version
+        # and a reachable installer. Retries to ride out R2/CDN propagation.
+        # Skipped when publishing was skipped (no R2 secrets).
+        env:
+          HAS_R2: ${{ secrets.R2_ACCESS_KEY_ID != '' && 'true' || 'false' }}
+        run: |
+          set -uo pipefail
+          if [ "$HAS_R2" != "true" ]; then
+            echo "::notice::R2 not configured - skipping feed verification"
+            exit 0
+          fi
+          BASE=$(node -p "require('./package.json').version")
+          VERSION="${BASE}-demo.${GITHUB_RUN_NUMBER}"
+          DIR="https://demo-releases.edison.watch/client/latest"
+          BODY=""
+          for i in $(seq 1 8); do
+            if BODY=$(curl -fsS "$DIR/latest.yml"); then
+              FVER=$(printf '%s\n' "$BODY" | grep -m1 '^version:' | awk '{print $2}' | tr -d '\r')
+              [ "$FVER" = "$VERSION" ] && break
+              echo "attempt $i: feed version '$FVER' != '$VERSION' (propagation/cache?)"
+            else
+              echo "attempt $i: feed unreachable"
+            fi
+            sleep 15
+          done
+          [ "${FVER:-}" = "$VERSION" ] || { echo "::error::feed never served $VERSION"; exit 1; }
+          echo "feed serves $VERSION"

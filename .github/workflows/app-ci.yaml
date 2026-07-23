@@ -1,0 +1,95 @@
+name: CI (app)
+
+# Typecheck + unit tests + coverage + an Electron startup smoke test for the
+# desktop app. Replaces the client job of the private monorepo's
+# "CI - v2 Packages" and its phase2-electron e2e smoke.
+
+on:
+  pull_request:
+    paths:
+      - 'packages/app/**'
+      - 'packages/shared/**'
+      - 'package-lock.json'
+      - '.github/workflows/app-ci.yaml'
+  push:
+    branches: [main]
+    paths:
+      - 'packages/app/**'
+      - 'packages/shared/**'
+      - 'package-lock.json'
+      - '.github/workflows/app-ci.yaml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: packages/app
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      # --ignore-scripts skips the Electron binary download; typecheck and
+      # vitest run against the types only.
+      - name: Install dependencies (workspace root)
+        run: npm ci --ignore-scripts
+        working-directory: .
+
+      - name: Build @edison-watch/shared
+        run: npm run build -w packages/shared
+        working-directory: .
+
+      - run: npm run typecheck
+      - run: npm run test:coverage
+
+      - if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-app
+          path: packages/app/coverage/coverage-summary.json
+          retention-days: 1
+
+  e2e-smoke:
+    name: Electron startup smoke (setup wizard)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: packages/app
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      # Full install: the e2e harness launches the real Electron binary.
+      - name: Install dependencies (workspace root)
+        run: npm ci
+        working-directory: .
+
+      - name: Build @edison-watch/shared
+        run: npm run build -w packages/shared
+        working-directory: .
+
+      - name: Build the app bundles
+        run: npm run build
+
+      - name: Run Electron e2e under Xvfb
+        run: xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" npm run test:e2e

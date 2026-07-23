@@ -1,0 +1,73 @@
+name: Visual Tests (app)
+
+# Storybook screenshot + video capture for the desktop app renderer, uploaded
+# to the visual-tests service. Ported from the private monorepo's
+# "Visual Tests - client_2". The upload step no-ops when the
+# VISUAL_TESTS_URL / VISUAL_TESTS_API_KEY secrets are not configured.
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: visual-tests-app-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  visual-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: packages/app
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies (workspace root)
+        run: npm ci --ignore-scripts
+        working-directory: .
+
+      - name: Build @edison-watch/shared
+        run: npm run build -w packages/shared
+        working-directory: .
+
+      - name: Build Storybook
+        run: npm run build-storybook
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Take screenshots and record videos
+        run: npx playwright test --config=playwright.visual.config.ts
+
+      - name: Upload to visual-tests service
+        working-directory: .
+        env:
+          VISUAL_TESTS_URL: ${{ secrets.VISUAL_TESTS_URL }}
+          VISUAL_TESTS_API_KEY: ${{ secrets.VISUAL_TESTS_API_KEY }}
+        run: |
+          SCREENSHOTS_DIR="packages/app/tests/visual/screenshots"
+          if ! ([ -d "$SCREENSHOTS_DIR" ] && ls "$SCREENSHOTS_DIR"/*.png "$SCREENSHOTS_DIR"/*.webm 2>/dev/null | head -1 | grep -q .); then
+            echo "No screenshots found - skipping upload"
+            exit 0
+          fi
+          tar czf screenshots.tar.gz -C "$SCREENSHOTS_DIR" .
+          bash .github/scripts/upload-visual-run.sh \
+            "storybook-app" "screenshots.tar.gz" "false" "${{ github.ref_name }}" "main" \
+            "${{ github.sha }}" "${{ github.repository }}" "null"
+
+      - name: Upload screenshots as artifact (for debugging)
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: visual-test-screenshots-app
+          path: packages/app/tests/visual/screenshots/
+          retention-days: 7
