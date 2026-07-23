@@ -50,7 +50,15 @@ async fn broken_stdin_replays_actionable_terminal_error() {
     frame_tx.send(json!({"jsonrpc": "2.0"})).await.unwrap();
     drop(frame_tx);
 
-    stdin_pump("server".into(), stdin, frame_rx, outgoing, diagnostics, None).await;
+    stdin_pump(
+        "server".into(),
+        stdin,
+        frame_rx,
+        outgoing,
+        diagnostics,
+        None,
+    )
+    .await;
 
     let frame = wire_rx.recv().await.unwrap();
     let TunnelFrame::TunnelError(error) = frame else {
