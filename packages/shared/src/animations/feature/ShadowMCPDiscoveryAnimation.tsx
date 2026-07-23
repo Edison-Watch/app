@@ -126,6 +126,23 @@ const CSS = `
   .smd-anim .smd-eye { opacity: 1; }
   .smd-anim .smd-progress { animation: none; transform: scaleX(1); }
 }
+.smd-anim.anim-static .smd-edison, .smd-anim.anim-static .smd-pulse, .smd-anim.anim-static .smd-glow, .smd-anim.anim-static .smd-beam,
+.smd-anim.anim-static .smd-d1, .smd-anim.anim-static .smd-r1, .smd-anim.anim-static .smd-d2, .smd-anim.anim-static .smd-r2,
+.smd-anim.anim-static .smd-d3, .smd-anim.anim-static .smd-r3, .smd-anim.anim-static .smd-eslash, .smd-anim.anim-static .smd-eye { animation: none; }
+/* Thumbnail frame = mid-sweep: column 1 discovered, columns 2-3 still dark
+   with "?" badges (fog of war), beam crossing. The prefers-reduced-motion
+   block above still resolves to the fully-illuminated end-state. */
+.smd-anim.anim-static .smd-edison { opacity: 1; }
+.smd-anim.anim-static .smd-pulse { opacity: 0; }
+.smd-anim.anim-static .smd-glow  { opacity: .4; transform: scale(1); }
+.smd-anim.anim-static .smd-beam  { opacity: .9; transform: translateX(250px); }
+.smd-anim.anim-static .smd-d1 { opacity: 0; }
+.smd-anim.anim-static .smd-r1 { opacity: 1; }
+.smd-anim.anim-static .smd-d2, .smd-anim.anim-static .smd-d3 { opacity: 1; }
+.smd-anim.anim-static .smd-r2, .smd-anim.anim-static .smd-r3 { opacity: 0; }
+.smd-anim.anim-static .smd-eslash { opacity: 0; }
+.smd-anim.anim-static .smd-eye { opacity: 1; }
+.smd-anim.anim-static .smd-progress { animation: none; transform: scaleX(0.45); }
 `
 
 const CELL_W = 108

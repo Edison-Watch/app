@@ -95,12 +95,7 @@ async function deriveKey(
   const salt = new Uint8Array(32) // zero-filled per RFC 5869
 
   return crypto.subtle.deriveKey(
-    {
-      name: 'HKDF',
-      hash: 'SHA-256',
-      salt,
-      info: ENCODER.encode(`edison-secret:${context}`)
-    },
+    { name: 'HKDF', hash: 'SHA-256', salt, info: ENCODER.encode(`edison-secret:${context}`) },
     ikm,
     { name: 'AES-GCM', length: 256 },
     false,

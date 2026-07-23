@@ -231,6 +231,27 @@ const CSS = `
   .di-anim .di-done { opacity: 1; transform: scale(1); }
   .di-anim .di-progress { animation: none; transform: scaleX(1); }
 }
+.di-anim.anim-static .di-p1, .di-anim.anim-static .di-p2,
+.di-anim.anim-static .di-arrow, .di-anim.anim-static .di-icon,
+.di-anim.anim-static .di-cursor, .di-anim.anim-static .di-click, .di-anim.anim-static .di-rip1, .di-anim.anim-static .di-rip2,
+.di-anim.anim-static .di-dot1, .di-anim.anim-static .di-dot2, .di-anim.anim-static .di-dot3,
+.di-anim.anim-static .di-wcur, .di-anim.anim-static .di-wclk,
+.di-anim.anim-static .di-wrip1, .di-anim.anim-static .di-wrip2, .di-anim.anim-static .di-wrip3,
+.di-anim.anim-static .di-wiz, .di-anim.anim-static .di-done { animation: none; }
+/* Thumbnail frame = Phase 1: download arrow + Edison app icon, so the still
+   reads as "install the desktop app" rather than the "All set!" end-state.
+   (The prefers-reduced-motion block above still shows the resolved state.) */
+.di-anim.anim-static .di-cursor { opacity: 0; }
+.di-anim.anim-static .di-click { transform: scale(1); }
+.di-anim.anim-static .di-rip1, .di-anim.anim-static .di-rip2 { opacity: 0; }
+.di-anim.anim-static .di-wcur { opacity: 0; }
+.di-anim.anim-static .di-wiz { opacity: 0; }
+.di-anim.anim-static .di-p1 { opacity: 1; }
+.di-anim.anim-static .di-p2 { opacity: 0; }
+.di-anim.anim-static .di-arrow { opacity: 0.8; transform: translateY(-16px); }
+.di-anim.anim-static .di-icon { opacity: 1; transform: scale(1); }
+.di-anim.anim-static .di-done { opacity: 0; }
+.di-anim.anim-static .di-progress { animation: none; transform: scaleX(0.4); }
 `
 
 export default function DesktopInstallAnimation(): React.ReactNode {

@@ -304,6 +304,22 @@ const CSS = `
   .cms .cms-return, .cms .cms-ast-bad, .cms .cms-block-flash { opacity: 0; }
   .cms .cms-progress { transform: scaleX(1); }
 }
+.cms.anim-static .cms-line, .cms.anim-static .cms-submit,
+.cms.anim-static .cms-beam, .cms.anim-static .cms-ast-ok, .cms.anim-static .cms-ast-bad, .cms.anim-static .cms-bad-flash,
+.cms.anim-static .cms-box, .cms.anim-static .cms-deno,
+.cms.anim-static .cms-pkt-a, .cms.anim-static .cms-pkt-b, .cms.anim-static .cms-pkt-c,
+.cms.anim-static .cms-var-a, .cms.anim-static .cms-var-b, .cms.anim-static .cms-var-c,
+.cms.anim-static .cms-block, .cms.anim-static .cms-block-flash, .cms.anim-static .cms-return, .cms.anim-static .cms-result,
+.cms.anim-static .cms-pulse, .cms.anim-static .cms-pulse-wrap,
+.cms.anim-static .cms-code1, .cms.anim-static .cms-code2, .cms.anim-static .cms-code3, .cms.anim-static .cms-code4,
+.cms.anim-static .cms-progress { animation: none; }
+.cms.anim-static .cms-code1, .cms.anim-static .cms-code2, .cms.anim-static .cms-code3, .cms.anim-static .cms-code4 { opacity: 1; }
+.cms.anim-static .cms-box, .cms.anim-static .cms-deno,
+.cms.anim-static .cms-ast-ok, .cms.anim-static .cms-var-a, .cms.anim-static .cms-var-b, .cms.anim-static .cms-var-c,
+.cms.anim-static .cms-block, .cms.anim-static .cms-result { opacity: 1; }
+.cms.anim-static .cms-submit, .cms.anim-static .cms-pkt-a, .cms.anim-static .cms-pkt-b, .cms.anim-static .cms-pkt-c,
+.cms.anim-static .cms-return, .cms.anim-static .cms-ast-bad, .cms.anim-static .cms-block-flash { opacity: 0; }
+.cms.anim-static .cms-progress { transform: scaleX(1); }
 `
 
 function McpServer({ x, y }: { x: number; y: number }): React.ReactNode {

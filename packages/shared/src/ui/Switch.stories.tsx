@@ -29,30 +29,15 @@ export const Checked: Story = {
 }
 
 export const Disabled: Story = {
-  args: {
-    checked: false,
-    onChange: () => {},
-    label: 'Disabled switch',
-    disabled: true
-  }
+  args: { checked: false, onChange: () => {}, label: 'Disabled switch', disabled: true }
 }
 
 export const DisabledChecked: Story = {
-  args: {
-    checked: true,
-    onChange: () => {},
-    label: 'Disabled (on)',
-    disabled: true
-  }
+  args: { checked: true, onChange: () => {}, label: 'Disabled (on)', disabled: true }
 }
 
 export const Loading: Story = {
-  args: {
-    checked: false,
-    onChange: () => {},
-    label: 'Saving...',
-    loading: true
-  }
+  args: { checked: false, onChange: () => {}, label: 'Saving...', loading: true }
 }
 
 export const WithoutLabel: Story = {

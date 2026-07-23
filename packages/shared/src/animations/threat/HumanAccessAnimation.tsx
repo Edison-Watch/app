@@ -129,6 +129,15 @@ const CSS = `
   .hac-anim .hac-glow-good { fill-opacity: 0.1; }
   .hac-anim .hac-progress { transform: scaleX(1); }
 }
+.hac-anim.anim-static .hac-line,
+.hac-anim.anim-static .hac-pkt-good, .hac-anim.anim-static .hac-glow-good,
+.hac-anim.anim-static .hac-radar-sweep, .hac-anim.anim-static .hac-radar-rings,
+.hac-anim.anim-static .hac-radar-glow, .hac-anim.anim-static .hac-check,
+.hac-anim.anim-static .hac-progress { animation: none; }
+.hac-anim.anim-static .hac-radar-sweep, .hac-anim.anim-static .hac-radar-rings { opacity: 0; }
+.hac-anim.anim-static .hac-pkt-good { opacity: 0; }
+.hac-anim.anim-static .hac-glow-good { fill-opacity: 0.1; }
+.hac-anim.anim-static .hac-progress { transform: scaleX(1); }
 `
 
 export default function HumanAccessAnimation(): React.ReactNode {

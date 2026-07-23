@@ -6,6 +6,7 @@ export { default as DesktopClientAnimation } from './feature/DesktopClientAnimat
 export { default as ShadowMCPDiscoveryAnimation } from './feature/ShadowMCPDiscoveryAnimation'
 export { default as AdminFleetAnimation } from './admin/AdminFleetAnimation'
 export { default as AdminFleetBlindAnimation } from './admin/AdminFleetBlindAnimation'
+export { default as AdminFleetGovernedAnimation } from './admin/AdminFleetGovernedAnimation'
 export { default as StdioVsHttpAnimation } from './feature/StdioVsHttpAnimation'
 export {
   default as StdioVirusAnimation,
@@ -26,6 +27,8 @@ export { default as FlexibleDeploymentAnimation } from './feature/FlexibleDeploy
 export { default as DependencyPinningAnimation } from './feature/DependencyPinningAnimation'
 export { default as UserAccountabilityAnimation } from './admin/UserAccountabilityAnimation'
 export { default as SecurityBusinessValueAnimation } from './admin/SecurityBusinessValueAnimation'
+export { AnimationThumbnail } from './thumbnails'
+export type { AnimationThumbnailProps } from './thumbnails'
 export { MCP_ICON_PATHS, MCP_ICON_VIEWBOX } from '../svg/mcp-svg'
 export {
   EDISON_E_PATH,

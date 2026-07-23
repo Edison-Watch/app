@@ -220,6 +220,28 @@ const CSS = `
   .pi-anim .pi-label { opacity: 1; }
   .pi-anim .pi-progress { animation: none; transform: scaleX(1); }
 }
+.pi-anim.anim-static .pi-line,
+.pi-anim.anim-static .pi-bot-clean, .pi-anim.anim-static .pi-bot-dirty,
+.pi-anim.anim-static .pi-eye-pulse, .pi-anim.anim-static .pi-flash,
+.pi-anim.anim-static .pi-ring, .pi-anim.anim-static .pi-hl,
+.pi-anim.anim-static .pi-poison, .pi-anim.anim-static .pi-pglow,
+.pi-anim.anim-static .pi-arrow1, .pi-anim.anim-static .pi-pkt1,
+.pi-anim.anim-static .pi-arrow2, .pi-anim.anim-static .pi-pkt2,
+.pi-anim.anim-static .pi-arrow3, .pi-anim.anim-static .pi-pkt3,
+.pi-anim.anim-static .pi-apulse, .pi-anim.anim-static .pi-apulse-wrap,
+.pi-anim.anim-static .pi-label { animation: none; }
+.pi-anim.anim-static .pi-bot-clean { opacity: 0; }
+.pi-anim.anim-static .pi-bot-dirty { opacity: 1; }
+.pi-anim.anim-static .pi-eye-pulse { fill-opacity: 0.7; }
+.pi-anim.anim-static .pi-flash { fill-opacity: 0; }
+.pi-anim.anim-static .pi-ring { stroke: var(--text-muted); stroke-opacity: 0.35; }
+.pi-anim.anim-static .pi-hl { opacity: 0.4; }
+.pi-anim.anim-static .pi-poison { opacity: 1; }
+.pi-anim.anim-static .pi-arrow1, .pi-anim.anim-static .pi-arrow2, .pi-anim.anim-static .pi-arrow3 { opacity: 1; }
+.pi-anim.anim-static .pi-pkt1, .pi-anim.anim-static .pi-pkt2, .pi-anim.anim-static .pi-pkt3 { opacity: 0; }
+.pi-anim.anim-static .pi-apulse-wrap { opacity: 1; }
+.pi-anim.anim-static .pi-label { opacity: 1; }
+.pi-anim.anim-static .pi-progress { animation: none; transform: scaleX(1); }
 `
 
 export default function PromptInjectionAnimation(): React.ReactNode {

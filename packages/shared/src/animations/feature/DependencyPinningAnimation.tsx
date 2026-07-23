@@ -121,6 +121,20 @@ const CSS = `
   .dp-anim .dp-cap3 { opacity: 1; }
   .dp-anim .dp-progress { animation: none; transform: scaleX(1); }
 }
+.dp-anim.anim-static .dp-line, .dp-anim.anim-static .dp-cut-l, .dp-anim.anim-static .dp-cut-r, .dp-anim.anim-static .dp-srv-ok, .dp-anim.anim-static .dp-srv-bad,
+.dp-anim.anim-static .dp-atk-ring, .dp-anim.anim-static .dp-atk-pulse, .dp-anim.anim-static .dp-atk,
+.dp-anim.anim-static .dp-atk-show, .dp-anim.anim-static .dp-detect-w, .dp-anim.anim-static .dp-detect, .dp-anim.anim-static .dp-deny,
+.dp-anim.anim-static .dp-warn, .dp-anim.anim-static .dp-cap2, .dp-anim.anim-static .dp-cap3 { animation: none; }
+.dp-anim.anim-static .dp-atk-show { opacity: 1; }
+.dp-anim.anim-static .dp-cut-l, .dp-anim.anim-static .dp-cut-r { opacity: .3; transform: scaleX(.6); }
+.dp-anim.anim-static .dp-srv-ok { opacity: 0; }
+.dp-anim.anim-static .dp-srv-bad { opacity: 1; }
+.dp-anim.anim-static .dp-atk-ring, .dp-anim.anim-static .dp-atk, .dp-anim.anim-static .dp-detect-w { opacity: 0; }
+.dp-anim.anim-static .dp-deny { opacity: 1; transform: scale(1); }
+.dp-anim.anim-static .dp-warn { opacity: 1; transform: scale(1); }
+.dp-anim.anim-static .dp-cap2 { opacity: 0; }
+.dp-anim.anim-static .dp-cap3 { opacity: 1; }
+.dp-anim.anim-static .dp-progress { animation: none; transform: scaleX(1); }
 `
 
 /** Travelling packet (halo + core), colour via currentColor. */

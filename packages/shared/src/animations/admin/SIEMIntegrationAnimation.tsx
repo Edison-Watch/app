@@ -212,6 +212,16 @@ const CSS = `
   .siem .siem-log1, .siem .siem-log2, .siem .siem-log3, .siem .siem-log4 { opacity:1; transform:none; }
   .siem .siem-progress { animation:none; transform:scaleX(1); }
 }
+.siem.anim-static .siem-line, .siem.anim-static .siem-pkt1, .siem.anim-static .siem-pkt2, .siem.anim-static .siem-pkt3,
+.siem.anim-static .siem-evt1, .siem.anim-static .siem-evt2, .siem.anim-static .siem-evt3,
+.siem.anim-static .siem-pulse, .siem.anim-static .siem-log1, .siem.anim-static .siem-log2,
+.siem.anim-static .siem-log3, .siem.anim-static .siem-log4,
+.siem.anim-static .siem-v1, .siem.anim-static .siem-v2, .siem.anim-static .siem-v3 { animation:none; }
+.siem.anim-static .siem-pkt1, .siem.anim-static .siem-pkt2, .siem.anim-static .siem-pkt3 { opacity:0; }
+.siem.anim-static .siem-evt1, .siem.anim-static .siem-evt2, .siem.anim-static .siem-evt3 { opacity:0; }
+.siem.anim-static .siem-v1, .siem.anim-static .siem-v2, .siem.anim-static .siem-v3 { opacity:1; transform:scale(1); }
+.siem.anim-static .siem-log1, .siem.anim-static .siem-log2, .siem.anim-static .siem-log3, .siem.anim-static .siem-log4 { opacity:1; transform:none; }
+.siem.anim-static .siem-progress { animation:none; transform:scaleX(1); }
 `
 
 function Laptop({ y, agent }: { y: number; agent: AgentIconEntry }): React.ReactNode {

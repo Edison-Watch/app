@@ -197,6 +197,28 @@ const CSS = `
   .ek-anim .ek-zk { opacity: 1; }
   .ek-anim .ek-progress { animation: none; transform: scaleX(1); }
 }
+.ek-anim.anim-static .ek-line, .ek-anim.anim-static .ek-plain,
+.ek-anim.anim-static .ek-enc, .ek-anim.anim-static .ek-key-icon,
+.ek-anim.anim-static .ek-pulse-wrap, .ek-anim.anim-static .ek-key-pulse,
+.ek-anim.anim-static .ek-flash, .ek-anim.anim-static .ek-shield,
+.ek-anim.anim-static .ek-laptop-ring, .ek-anim.anim-static .ek-flow,
+.ek-anim.anim-static .ek-pkt-main, .ek-anim.anim-static .ek-vault-content,
+.ek-anim.anim-static .ek-eye, .ek-anim.anim-static .ek-slash,
+.ek-anim.anim-static .ek-zk { animation: none; }
+.ek-anim.anim-static .ek-plain { opacity: 0; }
+.ek-anim.anim-static .ek-enc { opacity: 1; }
+.ek-anim.anim-static .ek-key-icon { opacity: 1; transform: scale(1); }
+.ek-anim.anim-static .ek-pulse-wrap { opacity: 0; }
+.ek-anim.anim-static .ek-flash { fill-opacity: 0; }
+.ek-anim.anim-static .ek-laptop-ring { stroke: var(--text-muted); stroke-opacity: 0.35; }
+.ek-anim.anim-static .ek-pkt-main { opacity: 0; }
+.ek-anim.anim-static .ek-flow { opacity: 0; }
+.ek-anim.anim-static .ek-vault-content { opacity: 1; }
+.ek-anim.anim-static .ek-shield { opacity: 1; transform: scale(1); }
+.ek-anim.anim-static .ek-eye { opacity: 1; }
+.ek-anim.anim-static .ek-slash { stroke-dashoffset: 0; }
+.ek-anim.anim-static .ek-zk { opacity: 1; }
+.ek-anim.anim-static .ek-progress { animation: none; transform: scaleX(1); }
 `
 
 /** Small padlock - open variant (shackle disconnected). */

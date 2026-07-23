@@ -234,6 +234,19 @@ const CSS = `
   .ua .ua-log2 { opacity:1; }
   .ua .ua-user-prompt { opacity:1; }
 }
+.ua.anim-static .ua-line, .ua.anim-static .ua-pkt1, .ua.anim-static .ua-pkt2a, .ua.anim-static .ua-pkt2c,
+.ua.anim-static .ua-pulse, .ua.anim-static .ua-p1, .ua.anim-static .ua-p2,
+.ua.anim-static .ua-deny, .ua.anim-static .ua-approve, .ua.anim-static .ua-log1, .ua.anim-static .ua-log2,
+.ua.anim-static .ua-rule-a, .ua.anim-static .ua-rule-c,
+.ua.anim-static .ua-ask-arrow, .ua.anim-static .ua-user-prompt, .ua.anim-static .ua-mcp-glow { animation:none; }
+.ua.anim-static .ua-pkt1, .ua.anim-static .ua-pkt2a, .ua.anim-static .ua-pkt2c { opacity:0; }
+.ua.anim-static .ua-progress { animation:none; transform:scaleX(1); }
+.ua.anim-static .ua-p1 { opacity:0; }
+.ua.anim-static .ua-p2 { opacity:1; }
+.ua.anim-static .ua-approve { opacity:1; transform:scale(1); }
+.ua.anim-static .ua-ask-arrow { opacity:1; }
+.ua.anim-static .ua-log2 { opacity:1; }
+.ua.anim-static .ua-user-prompt { opacity:1; }
 `
 
 export default function UserAccountabilityAnimation(): React.ReactNode {

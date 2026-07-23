@@ -284,6 +284,38 @@ const CSS = `
   .sbv .sbv-h1 { opacity:1; }
   .sbv .sbv-h2, .sbv .sbv-h3, .sbv .sbv-h4 { opacity:0; }
 }
+.sbv.anim-static .sbv-h1, .sbv.anim-static .sbv-h2, .sbv.anim-static .sbv-h3, .sbv.anim-static .sbv-h4,
+.sbv.anim-static .sbv-line, .sbv.anim-static .sbv-pulse, .sbv.anim-static .sbv-progress,
+.sbv.anim-static .sbv-pk1, .sbv.anim-static .sbv-pk2, .sbv.anim-static .sbv-pk3, .sbv.anim-static .sbv-pk4,
+.sbv.anim-static .sbv-radar1, .sbv.anim-static .sbv-radar2, .sbv.anim-static .sbv-radar3, .sbv.anim-static .sbv-radar4,
+.sbv.anim-static .sbv-sweep1, .sbv.anim-static .sbv-sweep2, .sbv.anim-static .sbv-sweep3, .sbv.anim-static .sbv-sweep4,
+.sbv.anim-static .sbv-score1, .sbv.anim-static .sbv-score2, .sbv.anim-static .sbv-score3, .sbv.anim-static .sbv-score4,
+.sbv.anim-static .sbv-out1, .sbv.anim-static .sbv-out2, .sbv.anim-static .sbv-out3, .sbv.anim-static .sbv-out4,
+.sbv.anim-static .sbv-approve2, .sbv.anim-static .sbv-approve3,
+.sbv.anim-static .sbv-fwd2, .sbv.anim-static .sbv-fwd3,
+.sbv.anim-static .sbv-dh1, .sbv.anim-static .sbv-dh2, .sbv.anim-static .sbv-dh3,
+.sbv.anim-static .sbv-dh1b, .sbv.anim-static .sbv-dh1c,
+.sbv.anim-static .sbv-ticket,
+.sbv.anim-static .sbv-checklist, .sbv.anim-static .sbv-chk1, .sbv.anim-static .sbv-chk2, .sbv.anim-static .sbv-chk3,
+.sbv.anim-static .sbv-block-x { animation:none; }
+.sbv.anim-static .sbv-progress { transform:scaleX(1); }
+.sbv.anim-static .sbv-pk1, .sbv.anim-static .sbv-pk2, .sbv.anim-static .sbv-pk3, .sbv.anim-static .sbv-pk4 { opacity:0; }
+.sbv.anim-static .sbv-out1, .sbv.anim-static .sbv-out2, .sbv.anim-static .sbv-out3, .sbv.anim-static .sbv-out4 { opacity:0; }
+.sbv.anim-static .sbv-fwd2, .sbv.anim-static .sbv-fwd3 { opacity:0; }
+.sbv.anim-static .sbv-approve2, .sbv.anim-static .sbv-approve3 { opacity:0; }
+.sbv.anim-static .sbv-radar1 { opacity:1; }
+.sbv.anim-static .sbv-radar2, .sbv.anim-static .sbv-radar3, .sbv.anim-static .sbv-radar4 { opacity:0; }
+.sbv.anim-static .sbv-sweep1 { transform:rotate(540deg); }
+.sbv.anim-static .sbv-score1 { opacity:1; }
+.sbv.anim-static .sbv-score2, .sbv.anim-static .sbv-score3, .sbv.anim-static .sbv-score4 { opacity:0; }
+.sbv.anim-static .sbv-dh1 { opacity:1; }
+.sbv.anim-static .sbv-dh2, .sbv.anim-static .sbv-dh3, .sbv.anim-static .sbv-dh1b, .sbv.anim-static .sbv-dh1c { opacity:0; }
+.sbv.anim-static .sbv-ticket { opacity:0; }
+.sbv.anim-static .sbv-checklist { opacity:0; }
+.sbv.anim-static .sbv-chk1, .sbv.anim-static .sbv-chk2, .sbv.anim-static .sbv-chk3 { opacity:0; }
+.sbv.anim-static .sbv-block-x { opacity:0; }
+.sbv.anim-static .sbv-h1 { opacity:1; }
+.sbv.anim-static .sbv-h2, .sbv.anim-static .sbv-h3, .sbv.anim-static .sbv-h4 { opacity:0; }
 `
 
 export default function SecurityBusinessValueAnimation(): React.ReactNode {

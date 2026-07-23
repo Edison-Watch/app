@@ -68,6 +68,9 @@ const CSS = `
   .afb .afb-pkt1 { opacity:0; }
   .afb .afb-progress { transform:scaleX(1); }
 }
+.afb.anim-static .afb-line, .afb.anim-static .afb-pkt1, .afb.anim-static .afb-progress { animation:none; }
+.afb.anim-static .afb-pkt1 { opacity:0; }
+.afb.anim-static .afb-progress { transform:scaleX(1); }
 `
 
 export function Laptop({ y, agents }: { y: number; agents: AgentIconEntry[] }): React.ReactNode {

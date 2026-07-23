@@ -243,6 +243,20 @@ const CSS = `
   .fd .fd-sh-boundary { stroke-opacity:0.6; }
   .fd .fd-v-h1, .fd .fd-v-deny, .fd .fd-v-s1, .fd .fd-v-s2 { opacity:1; transform:scale(1); }
 }
+.fd.anim-static .fd-line, .fd.anim-static .fd-pulse-sh, .fd.anim-static .fd-pulse-saas,
+.fd.anim-static .fd-sh-glow, .fd.anim-static .fd-sh-lines, .fd.anim-static .fd-sh-label, .fd.anim-static .fd-sh-boundary,
+.fd.anim-static .fd-saas-glow, .fd.anim-static .fd-saas-lines,
+.fd.anim-static .fd-pkt-h1, .fd.anim-static .fd-pkt-h2, .fd.anim-static .fd-pkt-h3, .fd.anim-static .fd-pkt-h4,
+.fd.anim-static .fd-pkt-s1, .fd.anim-static .fd-pkt-s2,
+.fd.anim-static .fd-v-h1, .fd.anim-static .fd-v-deny, .fd.anim-static .fd-v-s1, .fd.anim-static .fd-v-s2 { animation:none; }
+.fd.anim-static .fd-pkt-h1, .fd.anim-static .fd-pkt-h2, .fd.anim-static .fd-pkt-h3, .fd.anim-static .fd-pkt-h4,
+.fd.anim-static .fd-pkt-s1, .fd.anim-static .fd-pkt-s2 { opacity:0; }
+.fd.anim-static .fd-progress { animation:none; transform:scaleX(1); }
+.fd.anim-static .fd-sh-glow, .fd.anim-static .fd-saas-glow { opacity:1; }
+.fd.anim-static .fd-sh-lines, .fd.anim-static .fd-saas-lines { opacity:1; }
+.fd.anim-static .fd-sh-label { opacity:1; }
+.fd.anim-static .fd-sh-boundary { stroke-opacity:0.6; }
+.fd.anim-static .fd-v-h1, .fd.anim-static .fd-v-deny, .fd.anim-static .fd-v-s1, .fd.anim-static .fd-v-s2 { opacity:1; transform:scale(1); }
 `
 
 function ToolBox({

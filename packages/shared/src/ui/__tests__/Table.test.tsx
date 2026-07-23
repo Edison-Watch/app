@@ -10,19 +10,8 @@ interface TestRow {
 }
 
 const columns = [
-  {
-    key: 'name',
-    header: 'Name',
-    sortable: true,
-    render: (r: TestRow) => r.name
-  },
-  {
-    key: 'count',
-    header: 'Count',
-    sortable: true,
-    numeric: true,
-    render: (r: TestRow) => r.count
-  }
+  { key: 'name', header: 'Name', sortable: true, render: (r: TestRow) => r.name },
+  { key: 'count', header: 'Count', sortable: true, numeric: true, render: (r: TestRow) => r.count }
 ]
 
 const data: TestRow[] = [

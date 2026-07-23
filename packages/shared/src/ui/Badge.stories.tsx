@@ -16,27 +16,15 @@ const meta: Meta<typeof Badge> = {
 export default meta
 type Story = StoryObj<typeof Badge>
 
-export const Success: Story = {
-  args: { variant: 'success', children: 'Active' }
-}
-export const Warning: Story = {
-  args: { variant: 'warning', children: 'Pending' }
-}
+export const Success: Story = { args: { variant: 'success', children: 'Active' } }
+export const Warning: Story = { args: { variant: 'warning', children: 'Pending' } }
 export const Danger: Story = { args: { variant: 'danger', children: 'Error' } }
 export const Info: Story = { args: { variant: 'info', children: 'Info' } }
-export const Neutral: Story = {
-  args: { variant: 'neutral', children: 'Default' }
-}
-export const Blocked: Story = {
-  args: { variant: 'blocked', children: 'Blocked' }
-}
+export const Neutral: Story = { args: { variant: 'neutral', children: 'Default' } }
+export const Blocked: Story = { args: { variant: 'blocked', children: 'Blocked' } }
 
-export const Small: Story = {
-  args: { variant: 'success', size: 'sm', children: 'Small' }
-}
-export const Medium: Story = {
-  args: { variant: 'success', size: 'md', children: 'Medium' }
-}
+export const Small: Story = { args: { variant: 'success', size: 'sm', children: 'Small' } }
+export const Medium: Story = { args: { variant: 'success', size: 'md', children: 'Medium' } }
 
 export const AllVariants: Story = {
   render: () => (

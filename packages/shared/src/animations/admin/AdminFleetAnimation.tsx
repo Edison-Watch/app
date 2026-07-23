@@ -10,6 +10,9 @@
  * Phase 2 - "Control": All connections route through Edison. The admin
  *          gains full visibility with local Edison wrappers on each
  *          laptop and policy enforcement (accept/deny) at the gateway.
+ *          The Phase 2 scene is the standalone {@link AdminFleetGovernedAnimation},
+ *          whose building blocks (routed lines, full-visibility overlay,
+ *          local Edison wrappers, policy icon) are re-imported here.
  *
  * 12s loop. Pure SVG + CSS. Respects `prefers-reduced-motion`.
  */
@@ -19,13 +22,9 @@ import {
   AdminFigure,
   DANGER,
   EdisonGateway,
-  EdisonLogo,
-  EYE_PATH,
-  FlowLine,
   McpPacket,
   ORANGE as O,
   ProgressBar,
-  SHIELD_CHECK_PATH,
   VerdictBadge
 } from '../_shared'
 import {
@@ -37,13 +36,16 @@ import {
   onedriveSvg,
   SLACK_SVG
 } from './AdminFleetBlindAnimation'
+import {
+  AdminFullVisibilityOverlay,
+  FleetLocalWrappers,
+  FleetPolicyIcon,
+  FleetRoutedLines
+} from './AdminFleetGovernedAnimation'
 
 const CURSOR = AGENT_REGISTRY['cursor']
 const CLAUDE = AGENT_REGISTRY['claude-code']
 const CODEX = AGENT_REGISTRY['codex']
-
-const POLICY_D =
-  'M208,40H48A16,16,0,0,0,32,56v56c0,52.72,25.52,84.67,46.93,102.19,23.06,18.86,46,25.26,47,25.53a8,8,0,0,0,4.2,0c1-.27,23.91-6.67,47-25.53C198.48,196.67,224,164.72,224,112V56A16,16,0,0,0,208,40Zm0,72c0,37.07-13.66,67.16-40.6,89.42A129.3,129.3,0,0,1,128,223.62a128.25,128.25,0,0,1-38.92-21.81C61.82,179.51,48,149.3,48,112l0-56,160,0ZM96,104a8,8,0,0,1,8-8h64a8,8,0,0,1,0,16H104A8,8,0,0,1,96,104Zm8,40h64a8,8,0,0,0,0-16H104a8,8,0,0,0,0,16Z'
 
 const CSS = `
 .afc { color: var(--text-primary); }
@@ -175,6 +177,14 @@ const CSS = `
   .afc .afc-direct { opacity:0; }
   .afc .afc-routed { opacity:1; }
 }
+.afc.anim-static .afc-line, .afc.anim-static .afc-pkt-p1, .afc.anim-static .afc-pkt1, .afc.anim-static .afc-pkt2, .afc.anim-static .afc-pkt3,
+.afc.anim-static .afc-pulse, .afc.anim-static .afc-direct, .afc.anim-static .afc-edison,
+.afc.anim-static .afc-routed, .afc.anim-static .afc-v1, .afc.anim-static .afc-v2, .afc.anim-static .afc-v3 { animation:none; }
+.afc.anim-static .afc-pkt-p1, .afc.anim-static .afc-pkt1, .afc.anim-static .afc-pkt2, .afc.anim-static .afc-pkt3 { opacity:0; }
+.afc.anim-static .afc-progress { animation:none; transform:scaleX(1); }
+.afc.anim-static .afc-edison { opacity:1; transform:scale(1); }
+.afc.anim-static .afc-direct { opacity:0; }
+.afc.anim-static .afc-routed { opacity:1; }
 `
 
 export default function AdminFleetAnimation(): React.ReactNode {
@@ -215,76 +225,12 @@ export default function AdminFleetAnimation(): React.ReactNode {
             pulseClassName="afc-pulse"
             label="Edison Watch"
           />
-          {/* Large eye under admin - full visibility */}
-          <svg x={322} y={46} width={36} height={36} viewBox="0 0 256 256">
-            <path d={EYE_PATH} fill="var(--accent)" fillOpacity="0.85" />
-          </svg>
-          <text
-            x="340"
-            y="94"
-            textAnchor="middle"
-            fill="var(--accent)"
-            fillOpacity="0.85"
-            fontSize="8"
-            fontWeight="bold"
-            fontFamily="system-ui,sans-serif"
-          >
-            Full visibility
-          </text>
+          <AdminFullVisibilityOverlay />
         </g>
 
         {/* ══ Phase 2: routed connection lines ══ */}
         <g className="afc-routed">
-          {/* Laptops → Edison */}
-          <FlowLine
-            className="afc-line"
-            x1={120}
-            y1={33}
-            x2={310}
-            y2={130}
-            stroke="var(--text-muted)"
-          />
-          <FlowLine
-            className="afc-line"
-            x1={120}
-            y1={133}
-            x2={310}
-            y2={130}
-            stroke="var(--text-muted)"
-          />
-          <FlowLine
-            className="afc-line"
-            x1={120}
-            y1={233}
-            x2={310}
-            y2={130}
-            stroke="var(--text-muted)"
-          />
-          {/* Edison → servers (accent) */}
-          <FlowLine
-            className="afc-line"
-            x1={370}
-            y1={130}
-            x2={560}
-            y2={47}
-            stroke="var(--accent)"
-          />
-          <FlowLine
-            className="afc-line"
-            x1={370}
-            y1={130}
-            x2={560}
-            y2={127}
-            stroke="var(--accent)"
-          />
-          <FlowLine
-            className="afc-line"
-            x1={370}
-            y1={130}
-            x2={560}
-            y2={207}
-            stroke="var(--accent)"
-          />
+          <FleetRoutedLines lineClassName="afc-line" />
         </g>
 
         {/* ══ 3 Laptops (always visible) ══ */}
@@ -294,26 +240,7 @@ export default function AdminFleetAnimation(): React.ReactNode {
 
         {/* ══ Local Edison wrapper + shield on each laptop (Phase 2) ══ */}
         <g className="afc-routed">
-          {[5, 105, 205].map((ly) => (
-            <g key={ly}>
-              <rect
-                x={22}
-                y={ly + 31}
-                width={76}
-                height={24}
-                rx={4}
-                fill="var(--accent)"
-                fillOpacity="0.03"
-                stroke="var(--accent)"
-                strokeOpacity="0.5"
-                strokeWidth="1.5"
-              />
-              <EdisonLogo x={10} y={ly + 24} w={16} h={15.5} />
-              <svg x={100} y={ly + 33} width={14} height={14} viewBox="0 0 256 256">
-                <path d={SHIELD_CHECK_PATH} fill="var(--accent)" fillOpacity="0.7" />
-              </svg>
-            </g>
-          ))}
+          <FleetLocalWrappers />
         </g>
 
         {/* ══ Policy verdicts near Edison (Phase 2, staggered) ══ */}
@@ -322,9 +249,7 @@ export default function AdminFleetAnimation(): React.ReactNode {
         <VerdictBadge className="afc-v3" cx={290} cy={152} r={9} variant="deny" />
         {/* Policy icon near Edison */}
         <g className="afc-routed">
-          <svg x={355} y={155} width={18} height={18} viewBox="0 0 256 256">
-            <path d={POLICY_D} fill="var(--text-primary)" fillOpacity="0.45" />
-          </svg>
+          <FleetPolicyIcon />
         </g>
 
         {/* ══ 3 MCP servers (always visible) ══ */}

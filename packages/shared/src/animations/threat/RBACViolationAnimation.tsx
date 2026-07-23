@@ -149,6 +149,15 @@ const CSS = `
   .rbac .rbac-pkt1, .rbac .rbac-pkt2 { opacity: 0; }
   .rbac .rbac-progress { animation: none; transform: scaleX(1); }
 }
+.rbac.anim-static .rbac-line, .rbac.anim-static .rbac-pkt1, .rbac.anim-static .rbac-pkt2,
+.rbac.anim-static .rbac-aglow, .rbac.anim-static .rbac-progress { animation: none; }
+.rbac.anim-static .rbac-arrow1, .rbac.anim-static .rbac-arrow2 { animation: none; opacity: 1; }
+.rbac.anim-static .rbac-label1, .rbac.anim-static .rbac-label2 { animation: none; opacity: 1; }
+.rbac.anim-static .rbac-warn { animation: none; opacity: 1; }
+.rbac.anim-static .rbac-flash { animation: none; fill-opacity: 0; }
+.rbac.anim-static .rbac-output { animation: none; opacity: 1; }
+.rbac.anim-static .rbac-pkt1, .rbac.anim-static .rbac-pkt2 { opacity: 0; }
+.rbac.anim-static .rbac-progress { animation: none; transform: scaleX(1); }
 `
 
 export default function RBACViolationAnimation(): React.ReactNode {

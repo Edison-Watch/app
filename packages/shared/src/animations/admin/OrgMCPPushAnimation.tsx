@@ -241,6 +241,26 @@ const CSS = `
   .om-anim .om-v1, .om-anim .om-v2, .om-anim .om-v3, .om-anim .om-v4, .om-anim .om-v5 { opacity: 1; transform: scale(1); }
   .om-anim .om-progress { animation: none; transform: scaleX(1); }
 }
+.om-anim.anim-static .om-line, .om-anim.anim-static .om-toggle-knob,
+.om-anim.anim-static .om-toggle-bg, .om-anim.anim-static .om-panel-glow,
+.om-anim.anim-static .om-ripple1, .om-anim.anim-static .om-ripple2,
+.om-anim.anim-static .om-mcp1, .om-anim.anim-static .om-mcp2, .om-anim.anim-static .om-mcp3,
+.om-anim.anim-static .om-srv, .om-anim.anim-static .om-traf,
+.om-anim.anim-static .om-tp1, .om-anim.anim-static .om-tp2, .om-anim.anim-static .om-tp3,
+.om-anim.anim-static .om-rpkt1, .om-anim.anim-static .om-rpkt2,
+.om-anim.anim-static .om-v1, .om-anim.anim-static .om-v2, .om-anim.anim-static .om-v3,
+.om-anim.anim-static .om-v4, .om-anim.anim-static .om-v5 { animation: none; }
+.om-anim.anim-static .om-ripple1, .om-anim.anim-static .om-ripple2 { opacity: 0; }
+.om-anim.anim-static .om-toggle-knob { transform: translateX(14px); }
+.om-anim.anim-static .om-toggle-bg { fill: ${accent}; fill-opacity: 0.3; }
+.om-anim.anim-static .om-panel-glow { stroke: ${accent}; stroke-opacity: 0.3; }
+.om-anim.anim-static .om-mcp1, .om-anim.anim-static .om-mcp2, .om-anim.anim-static .om-mcp3 { opacity: 1; transform: scale(1); }
+.om-anim.anim-static .om-srv { opacity: 1; transform: scale(1); }
+.om-anim.anim-static .om-traf { opacity: 1; }
+.om-anim.anim-static .om-tp1, .om-anim.anim-static .om-tp2, .om-anim.anim-static .om-tp3 { opacity: 0; }
+.om-anim.anim-static .om-rpkt1, .om-anim.anim-static .om-rpkt2 { opacity: 0; }
+.om-anim.anim-static .om-v1, .om-anim.anim-static .om-v2, .om-anim.anim-static .om-v3, .om-anim.anim-static .om-v4, .om-anim.anim-static .om-v5 { opacity: 1; transform: scale(1); }
+.om-anim.anim-static .om-progress { animation: none; transform: scaleX(1); }
 `
 
 export default function OrgMCPPushAnimation(): React.ReactNode {

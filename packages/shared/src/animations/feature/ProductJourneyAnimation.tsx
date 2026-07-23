@@ -311,6 +311,29 @@ const CSS = `
   .pj .pj-va, .pj .pj-vd { opacity:0; transform:scale(1); }
   .pj .pj-progress { animation:none; transform:scaleX(1); }
 }
+.pj.anim-static .pj-line, .pj.anim-static .pj-pulse, .pj.anim-static .pj-scan,
+.pj.anim-static .pj-p1, .pj.anim-static .pj-p2, .pj.anim-static .pj-p3, .pj.anim-static .pj-p4, .pj.anim-static .pj-blind, .pj.anim-static .pj-pre4,
+.pj.anim-static .pj-l1, .pj.anim-static .pj-l2, .pj.anim-static .pj-l3, .pj.anim-static .pj-l4,
+.pj.anim-static .pj-s1, .pj.anim-static .pj-s2, .pj.anim-static .pj-s3, .pj.anim-static .pj-s4,
+.pj.anim-static .pj-edison,
+.pj.anim-static .pj-inst1, .pj.anim-static .pj-inst2, .pj.anim-static .pj-inst3,
+.pj.anim-static .pj-iglow1, .pj.anim-static .pj-iglow2, .pj.anim-static .pj-iglow3,
+.pj.anim-static .pj-shad1, .pj.anim-static .pj-shad2, .pj.anim-static .pj-shad3, .pj.anim-static .pj-sglow,
+.pj.anim-static .pj-pkt0, .pj.anim-static .pj-pkt1, .pj.anim-static .pj-pkt2, .pj.anim-static .pj-pkt3, .pj.anim-static .pj-pkt4,
+.pj.anim-static .pj-va, .pj.anim-static .pj-vd { animation:none; }
+.pj.anim-static .pj-p1, .pj.anim-static .pj-p2, .pj.anim-static .pj-p3, .pj.anim-static .pj-p4 { opacity:1; }
+.pj.anim-static .pj-blind { opacity:0; }
+.pj.anim-static .pj-pre4 { opacity:0; }
+.pj.anim-static .pj-l1, .pj.anim-static .pj-l2, .pj.anim-static .pj-l3 { opacity:0; }
+.pj.anim-static .pj-l4 { opacity:1; }
+.pj.anim-static .pj-s1, .pj.anim-static .pj-s2, .pj.anim-static .pj-s3, .pj.anim-static .pj-s4 { opacity:1; }
+.pj.anim-static .pj-edison { opacity:1; transform:scale(1); }
+.pj.anim-static .pj-inst1, .pj.anim-static .pj-inst2, .pj.anim-static .pj-inst3 { opacity:1; transform:scale(1); }
+.pj.anim-static .pj-iglow1, .pj.anim-static .pj-iglow2, .pj.anim-static .pj-iglow3 { opacity:0; }
+.pj.anim-static .pj-shad1, .pj.anim-static .pj-shad2, .pj.anim-static .pj-shad3 { opacity:0; }
+.pj.anim-static .pj-pkt0, .pj.anim-static .pj-pkt1, .pj.anim-static .pj-pkt2, .pj.anim-static .pj-pkt3, .pj.anim-static .pj-pkt4 { opacity:0; }
+.pj.anim-static .pj-va, .pj.anim-static .pj-vd { opacity:0; transform:scale(1); }
+.pj.anim-static .pj-progress { animation:none; transform:scaleX(1); }
 `
 
 export default function ProductJourneyAnimation(): React.ReactNode {

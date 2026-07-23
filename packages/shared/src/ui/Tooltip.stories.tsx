@@ -72,13 +72,7 @@ export const RichContent: Story = {
     content: (
       <span>
         Press{' '}
-        <kbd
-          style={{
-            padding: '1px 4px',
-            background: 'var(--bg-overlay)',
-            borderRadius: 3
-          }}
-        >
+        <kbd style={{ padding: '1px 4px', background: 'var(--bg-overlay)', borderRadius: 3 }}>
           Esc
         </kbd>{' '}
         to close

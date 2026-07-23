@@ -455,6 +455,46 @@ const CSS = `
   .td-anim .td-hl2 { opacity: 0.4; }
   .td-anim .td-progress { animation: none; transform: scaleX(1); }
 }
+.td-anim.anim-static .td-line,
+.td-anim.anim-static .td-p1, .td-anim.anim-static .td-p2,
+.td-anim.anim-static .td-bot1-clean, .td-anim.anim-static .td-bot1-dirty,
+.td-anim.anim-static .td-bot2-clean, .td-anim.anim-static .td-bot2-dirty,
+.td-anim.anim-static .td-eye-pulse, .td-anim.anim-static .td-flash1, .td-anim.anim-static .td-flash2,
+.td-anim.anim-static .td-ring1, .td-anim.anim-static .td-ring2,
+.td-anim.anim-static .td-hl1, .td-anim.anim-static .td-hl2,
+.td-anim.anim-static .td-poison1, .td-anim.anim-static .td-poison2, .td-anim.anim-static .td-pglow,
+.td-anim.anim-static .td-a1-1, .td-anim.anim-static .td-pk1-1,
+.td-anim.anim-static .td-a1-2, .td-anim.anim-static .td-pk1-2,
+.td-anim.anim-static .td-a1-3, .td-anim.anim-static .td-pk1-3,
+.td-anim.anim-static .td-a2-1, .td-anim.anim-static .td-pk2-1,
+.td-anim.anim-static .td-a2-2, .td-anim.anim-static .td-pk2-2,
+.td-anim.anim-static .td-a2-3, .td-anim.anim-static .td-pk2-3,
+.td-anim.anim-static .td-a2-4, .td-anim.anim-static .td-pk2-4,
+.td-anim.anim-static .td-apulse, .td-anim.anim-static .td-apulse-wrap,
+.td-anim.anim-static .td-edison, .td-anim.anim-static .td-exclaim,
+.td-anim.anim-static .td-shield, .td-anim.anim-static .td-blocked,
+.td-anim.anim-static .td-label1, .td-anim.anim-static .td-label2 { animation: none; }
+.td-anim.anim-static .td-p1 { opacity: 0; }
+.td-anim.anim-static .td-p2 { opacity: 1; }
+.td-anim.anim-static .td-bot1-clean, .td-anim.anim-static .td-bot1-dirty { opacity: 0; }
+.td-anim.anim-static .td-bot2-clean { opacity: 0; }
+.td-anim.anim-static .td-bot2-dirty { opacity: 1; }
+.td-anim.anim-static .td-poison1 { opacity: 0; }
+.td-anim.anim-static .td-poison2 { opacity: 1; }
+.td-anim.anim-static .td-edison { opacity: 1; transform: scale(1); }
+.td-anim.anim-static .td-exclaim { opacity: 0; }
+.td-anim.anim-static .td-shield { opacity: 1; transform: scale(1); }
+.td-anim.anim-static .td-blocked { opacity: 1; transform: scale(1); }
+.td-anim.anim-static .td-label1 { opacity: 0; }
+.td-anim.anim-static .td-label2 { opacity: 1; }
+.td-anim.anim-static .td-a1-1, .td-anim.anim-static .td-a1-2, .td-anim.anim-static .td-a1-3 { opacity: 0; }
+.td-anim.anim-static .td-pk1-1, .td-anim.anim-static .td-pk1-2, .td-anim.anim-static .td-pk1-3 { opacity: 0; }
+.td-anim.anim-static .td-apulse-wrap { opacity: 0; }
+.td-anim.anim-static .td-hl1 { opacity: 0; }
+.td-anim.anim-static .td-a2-1, .td-anim.anim-static .td-a2-2, .td-anim.anim-static .td-a2-3, .td-anim.anim-static .td-a2-4 { opacity: 1; }
+.td-anim.anim-static .td-pk2-1, .td-anim.anim-static .td-pk2-2, .td-anim.anim-static .td-pk2-3, .td-anim.anim-static .td-pk2-4 { opacity: 0; }
+.td-anim.anim-static .td-hl2 { opacity: 0.4; }
+.td-anim.anim-static .td-progress { animation: none; transform: scaleX(1); }
 `
 
 export default function TrifectaDefenseAnimation(): React.ReactNode {

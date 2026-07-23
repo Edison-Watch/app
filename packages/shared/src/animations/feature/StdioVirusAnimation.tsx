@@ -72,6 +72,13 @@ export const STDIO_VIRUS_CSS = `
   .sv-anim .sv-m2 { opacity:.7; transform:translate(136px,86px) scale(1); }
   .sv-anim .sv-m3 { opacity:.6; transform:translate(142px,60px) scale(1); }
 }
+.sv-anim.anim-static .sv-line, .sv-anim.anim-static .sv-spawn,
+.sv-anim.anim-static .sv-m0, .sv-anim.anim-static .sv-m1, .sv-anim.anim-static .sv-m2, .sv-anim.anim-static .sv-m3 { animation:none; }
+.sv-anim.anim-static .sv-spawn { opacity:1; }
+.sv-anim.anim-static .sv-m0 { opacity:1; transform:translate(80px,70px) scale(1.15); }
+.sv-anim.anim-static .sv-m1 { opacity:.9; transform:translate(28px,90px) scale(1.15); }
+.sv-anim.anim-static .sv-m2 { opacity:.85; transform:translate(136px,86px) scale(1.15); }
+.sv-anim.anim-static .sv-m3 { opacity:.8; transform:translate(142px,60px) scale(1.15); }
 `
 
 /**

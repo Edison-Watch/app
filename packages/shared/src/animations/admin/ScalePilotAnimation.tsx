@@ -212,6 +212,23 @@ const CSS = `
   .spa .spa-v-eng, .spa .spa-v-sales, .spa .spa-v-fin,
   .spa .spa-v-legal, .spa .spa-v-hr { opacity:1; }
 }
+.spa.anim-static .spa-line, .spa.anim-static .spa-pulse,
+.spa.anim-static .spa-stalled, .spa.anim-static .spa-edison, .spa.anim-static .spa-scaled,
+.spa.anim-static .spa-pkt-eng, .spa.anim-static .spa-pkt-sales, .spa.anim-static .spa-pkt-fin,
+.spa.anim-static .spa-pkt-legal, .spa.anim-static .spa-pkt-hr,
+.spa.anim-static .spa-dept-sales, .spa.anim-static .spa-dept-fin, .spa.anim-static .spa-dept-legal, .spa.anim-static .spa-dept-hr,
+.spa.anim-static .spa-v-eng, .spa.anim-static .spa-v-sales, .spa.anim-static .spa-v-fin,
+.spa.anim-static .spa-v-legal, .spa.anim-static .spa-v-hr { animation:none; }
+.spa.anim-static .spa-pkt-eng, .spa.anim-static .spa-pkt-sales, .spa.anim-static .spa-pkt-fin,
+.spa.anim-static .spa-pkt-legal, .spa.anim-static .spa-pkt-hr { opacity:0; }
+.spa.anim-static .spa-progress { animation:none; transform:scaleX(1); }
+.spa.anim-static .spa-edison  { opacity:1; transform:scale(1); }
+.spa.anim-static .spa-stalled { opacity:0; }
+.spa.anim-static .spa-scaled  { opacity:1; }
+.spa.anim-static .spa-dept-sales, .spa.anim-static .spa-dept-fin,
+.spa.anim-static .spa-dept-legal, .spa.anim-static .spa-dept-hr { opacity:1; }
+.spa.anim-static .spa-v-eng, .spa.anim-static .spa-v-sales, .spa.anim-static .spa-v-fin,
+.spa.anim-static .spa-v-legal, .spa.anim-static .spa-v-hr { opacity:1; }
 `
 
 /* ──────────────────────────────────────────────────────────────────────

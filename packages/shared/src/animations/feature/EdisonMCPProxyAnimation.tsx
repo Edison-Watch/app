@@ -114,6 +114,15 @@ const CSS = `
   .ew-anim .ew-routed { opacity:1; }
   .ew-anim .ew-local-wrap { animation:none; opacity:1; }
 }
+.ew-anim.anim-static .ew-line, .ew-anim.anim-static .ew-pkt-main,
+.ew-anim.anim-static .ew-pulse, .ew-anim.anim-static .ew-direct, .ew-anim.anim-static .ew-edison,
+.ew-anim.anim-static .ew-routed { animation:none; }
+.ew-anim.anim-static .ew-pkt-main { opacity:0; }
+.ew-anim.anim-static .ew-progress { animation:none; transform:scaleX(1); }
+.ew-anim.anim-static .ew-edison { opacity:1; transform:scale(1); }
+.ew-anim.anim-static .ew-direct { opacity:0; }
+.ew-anim.anim-static .ew-routed { opacity:1; }
+.ew-anim.anim-static .ew-local-wrap { animation:none; opacity:1; }
 `
 
 function McpServer({ x, y }: { x: number; y: number }): React.ReactNode {

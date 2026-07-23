@@ -103,6 +103,15 @@ const CSS = `
   .abp-anim .abp-warn { opacity: 1; }
   .abp-anim .abp-progress { transform: scaleX(1); }
 }
+.abp-anim.anim-static .abp-line,
+.abp-anim.anim-static .abp-pkt-bad, .abp-anim.anim-static .abp-glow-bad,
+.abp-anim.anim-static .abp-wall-bad-flash, .abp-anim.anim-static .abp-warn,
+.abp-anim.anim-static .abp-progress { animation: none; }
+.abp-anim.anim-static .abp-pkt-bad { opacity: 0; }
+.abp-anim.anim-static .abp-glow-bad { fill-opacity: 0.1; }
+.abp-anim.anim-static .abp-wall-bad-flash { opacity: 0.15; }
+.abp-anim.anim-static .abp-warn { opacity: 1; }
+.abp-anim.anim-static .abp-progress { transform: scaleX(1); }
 `
 
 export default function AgentBypassPathAnimation(): React.ReactNode {

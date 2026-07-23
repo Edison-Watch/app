@@ -29,7 +29,7 @@ export default function Select({
   value: controlledValue,
   defaultValue,
   onChange,
-  options: staticOptions = [],
+  options: staticOptions,
   loadOptions,
   placeholder = 'Select...',
   searchable = false,
@@ -47,7 +47,10 @@ export default function Select({
   const containerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const options = loadOptions ? asyncOptions : staticOptions
+  const options = useMemo(
+    () => (loadOptions ? asyncOptions : (staticOptions ?? [])),
+    [loadOptions, asyncOptions, staticOptions]
+  )
 
   const filtered = useMemo(() => {
     if (!searchable || !search) return options

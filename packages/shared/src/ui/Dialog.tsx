@@ -1,16 +1,19 @@
-import { type ReactNode, useCallback, useEffect, useRef } from 'react'
+import { type ReactNode, type RefObject, useCallback, useEffect, useRef } from 'react'
 
-interface DialogProps {
-  open: boolean
-  onClose: () => void
-  title?: string
-  children: ReactNode
-  /** Use a wider dialog (e.g. for forms with more content) */
-  wide?: boolean
-}
+const FOCUSABLE_SELECTOR =
+  'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
 
-export default function Dialog({ open, onClose, title, children, wide }: DialogProps) {
-  const dialogRef = useRef<HTMLDivElement>(null)
+/**
+ * Shared behavior for modal overlays: document-level Escape-to-close, Tab
+ * focus trap within `containerRef`, body scroll lock, and restoring focus to
+ * the previously focused element on close. Auto-focus on open is left to the
+ * caller (Dialog focuses its first focusable, the command palette its input).
+ */
+export function useModalChrome(
+  open: boolean,
+  onClose: () => void,
+  containerRef: RefObject<HTMLElement | null>
+): void {
   const previousFocusRef = useRef<HTMLElement | null>(null)
 
   const handleKeyDown = useCallback(
@@ -21,10 +24,8 @@ export default function Dialog({ open, onClose, title, children, wide }: DialogP
       }
 
       // Focus trap
-      if (e.key === 'Tab' && dialogRef.current) {
-        const focusable = dialogRef.current.querySelectorAll<HTMLElement>(
-          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-        )
+      if (e.key === 'Tab' && containerRef.current) {
+        const focusable = containerRef.current.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)
         if (focusable.length === 0) return
 
         const first = focusable[0]!
@@ -39,19 +40,50 @@ export default function Dialog({ open, onClose, title, children, wide }: DialogP
         }
       }
     },
-    [onClose]
+    [onClose, containerRef]
   )
+
+  // Capture the previously focused element once per open; restore on close.
+  useEffect(() => {
+    if (!open) return
+    previousFocusRef.current = document.activeElement as HTMLElement | null
+    return () => {
+      previousFocusRef.current?.focus()
+    }
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return
+    document.body.style.overflow = 'hidden'
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.body.style.overflow = ''
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [open, handleKeyDown])
+}
+
+interface DialogProps {
+  open: boolean
+  onClose: () => void
+  title?: string
+  children: ReactNode
+  /** Use a wider dialog (e.g. for forms with more content) */
+  wide?: boolean
+}
+
+export default function Dialog({ open, onClose, title, children, wide }: DialogProps) {
+  const dialogRef = useRef<HTMLDivElement>(null)
+
+  useModalChrome(open, onClose, dialogRef)
 
   // Auto-focus first focusable element only when the dialog opens (not on re-renders)
   const hasAutoFocused = useRef(false)
   useEffect(() => {
     if (open && !hasAutoFocused.current) {
       hasAutoFocused.current = true
-      previousFocusRef.current = document.activeElement as HTMLElement
       requestAnimationFrame(() => {
-        const focusable = dialogRef.current?.querySelector<HTMLElement>(
-          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-        )
+        const focusable = dialogRef.current?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR)
         focusable?.focus()
       })
     }
@@ -59,21 +91,6 @@ export default function Dialog({ open, onClose, title, children, wide }: DialogP
       hasAutoFocused.current = false
     }
   }, [open])
-
-  useEffect(() => {
-    if (open) {
-      document.body.style.overflow = 'hidden'
-      document.addEventListener('keydown', handleKeyDown)
-    }
-
-    return () => {
-      document.body.style.overflow = ''
-      document.removeEventListener('keydown', handleKeyDown)
-      if (!open) {
-        previousFocusRef.current?.focus()
-      }
-    }
-  }, [open, handleKeyDown])
 
   if (!open) return null
 

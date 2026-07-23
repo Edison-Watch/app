@@ -78,6 +78,24 @@ const CSS = `
   .sh-anim .sh-fpulse { transform:scale(1); opacity:.8; }
   .sh-anim .sh-progress { transform:scaleX(1); }
 }
+.sh-anim.anim-static .sh-line,
+.sh-anim.anim-static .sh-admin-l,
+.sh-anim.anim-static .sh-hreq, .sh-anim.anim-static .sh-hpkt, .sh-anim.anim-static .sh-block,
+.sh-anim.anim-static .sh-fpulse, .sh-anim.anim-static .sh-admin-r, .sh-anim.anim-static .sh-progress { animation:none; }
+.sh-anim.anim-static .sh-admin-l,
+.sh-anim.anim-static .sh-hreq, .sh-anim.anim-static .sh-block, .sh-anim.anim-static .sh-admin-r { opacity:1; }
+.sh-anim.anim-static .sh-hpkt { opacity:0; }
+.sh-anim.anim-static .sh-fpulse { transform:scale(1); opacity:.8; }
+.sh-anim.anim-static .sh-progress { transform:scaleX(1); }
+/* Freeze the embedded STDIO virus (its own .sv-anim never gets the class in
+   composition, so drive its malware from the parent's static trigger). */
+.sh-anim.anim-static .sv-line, .sh-anim.anim-static .sv-spawn,
+.sh-anim.anim-static .sv-m0, .sh-anim.anim-static .sv-m1, .sh-anim.anim-static .sv-m2, .sh-anim.anim-static .sv-m3 { animation:none; }
+.sh-anim.anim-static .sv-spawn { opacity:1; }
+.sh-anim.anim-static .sv-m0 { opacity:1; transform:translate(80px,70px) scale(1.15); }
+.sh-anim.anim-static .sv-m1 { opacity:.9; transform:translate(28px,90px) scale(1.15); }
+.sh-anim.anim-static .sv-m2 { opacity:.85; transform:translate(136px,86px) scale(1.15); }
+.sh-anim.anim-static .sv-m3 { opacity:.8; transform:translate(142px,60px) scale(1.15); }
 `
 
 export default function StdioVsHttpAnimation(): React.ReactNode {
