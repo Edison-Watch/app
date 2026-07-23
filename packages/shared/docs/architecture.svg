@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="508" viewBox="0 0 960 508" font-family="'Archivo', 'Helvetica Neue', Arial, sans-serif" role="img" aria-label="@edison/shared architecture diagram in the Edison Hackbox style">
+  <defs>
+    <style>
+      .title    { font-size: 26px; font-weight: 800; fill: #FFFFFF; letter-spacing: 0.5px; }
+      .subtitle { font-size: 13px; font-weight: 400; fill: #9BA4A6; letter-spacing: 0.3px; }
+      .tag-text { font-size: 12px; font-weight: 700; fill: #000000; letter-spacing: 1px; }
+      .body     { font-size: 14px; font-weight: 600; fill: #FFFFFF; }
+      .item     { font-size: 13.5px; font-weight: 400; fill: #F9F9F9; }
+      .caption  { font-size: 11.5px; font-weight: 400; fill: #9BA4A6; letter-spacing: 1px; }
+      .foot     { font-size: 12px; font-weight: 400; fill: #9BA4A6; letter-spacing: 0.3px; }
+    </style>
+    <marker id="cy-arrow" markerWidth="12" markerHeight="12" refX="7" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,1 L9,5 L0,9 Z" fill="#C3FFFD"/>
+    </marker>
+  </defs>
+
+  <!-- void black background -->
+  <rect x="0" y="0" width="960" height="508" fill="#000000"/>
+
+  <!-- grid-marker dashes (technical-precision accents) -->
+  <g stroke="#C3FFFD" stroke-width="2" opacity="0.55">
+    <line x1="34" y1="40" x2="46" y2="40"/>
+    <line x1="914" y1="40" x2="926" y2="40"/>
+    <line x1="34" y1="270" x2="46" y2="270"/>
+    <line x1="914" y1="270" x2="926" y2="270"/>
+    <line x1="34" y1="474" x2="46" y2="474"/>
+    <line x1="914" y1="474" x2="926" y2="474"/>
+  </g>
+
+  <!-- header -->
+  <text x="80" y="48" class="title">@edison/shared</text>
+  <text x="80" y="72" class="subtitle">One shared client foundation for the Edison Watch applications</text>
+
+  <!-- ============ CONSUMERS (horizontal box) ============ -->
+  <rect x="80" y="92" width="800" height="64" fill="none" stroke="#C3FFFD" stroke-width="2"/>
+  <rect x="80" y="92" width="320" height="26" fill="#C3FFFD"/>
+  <text x="240" y="110" text-anchor="middle" class="tag-text">CONSUMING APPLICATIONS</text>
+  <text x="480" y="142" text-anchor="middle" class="body">Edison Watch web and desktop clients, sharing one source of truth</text>
+
+  <!-- arrow down -->
+  <line x1="480" y1="156" x2="480" y2="186" stroke="#C3FFFD" stroke-width="2" marker-end="url(#cy-arrow)"/>
+
+  <!-- ============ @edison/shared container ============ -->
+  <rect x="80" y="190" width="800" height="276" fill="none" stroke="#C3FFFD" stroke-width="2"/>
+  <rect x="80" y="190" width="320" height="26" fill="#C3FFFD"/>
+  <text x="240" y="208" text-anchor="middle" class="tag-text">@EDISON/SHARED</text>
+
+  <!-- Design system box (tag top-left) -->
+  <rect x="112" y="240" width="352" height="200" fill="none" stroke="#C3FFFD" stroke-width="2"/>
+  <rect x="112" y="240" width="141" height="24" fill="#C3FFFD"/>
+  <text x="182" y="257" text-anchor="middle" class="tag-text">DESIGN SYSTEM</text>
+  <g>
+    <rect x="130" y="294" width="6" height="6" fill="#C3FFFD"/>
+    <text x="146" y="301" class="item">Reusable UI components</text>
+    <rect x="130" y="328" width="6" height="6" fill="#C3FFFD"/>
+    <text x="146" y="335" class="item">Design tokens and theming</text>
+    <rect x="130" y="362" width="6" height="6" fill="#C3FFFD"/>
+    <text x="146" y="369" class="item">Motion and illustration</text>
+  </g>
+  <text x="130" y="424" class="caption">LOOK AND FEEL</text>
+
+  <!-- Client services box (tag bottom-right, for rhythm) -->
+  <rect x="496" y="240" width="352" height="200" fill="none" stroke="#C3FFFD" stroke-width="2"/>
+  <rect x="707" y="416" width="141" height="24" fill="#C3FFFD"/>
+  <text x="777" y="433" text-anchor="middle" class="tag-text">CLIENT SERVICES</text>
+  <text x="514" y="280" class="caption">BEHAVIOR</text>
+  <g>
+    <rect x="514" y="300" width="6" height="6" fill="#C3FFFD"/>
+    <text x="530" y="307" class="item">Authentication and identity</text>
+    <rect x="514" y="330" width="6" height="6" fill="#C3FFFD"/>
+    <text x="530" y="337" class="item">Runtime configuration</text>
+    <rect x="514" y="360" width="6" height="6" fill="#C3FFFD"/>
+    <text x="530" y="367" class="item">Client-side cryptography</text>
+    <rect x="514" y="390" width="6" height="6" fill="#C3FFFD"/>
+    <text x="530" y="397" class="item">Canonical reference data</text>
+  </g>
+
+  <!-- footer -->
+  <text x="80" y="494" class="foot">Built once from a single source, consumed by every Edison Watch client. Shipped as standard JS modules.</text>
+</svg>
