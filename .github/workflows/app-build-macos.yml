@@ -88,7 +88,7 @@ jobs:
       # common dependabot case) no longer needlessly re-downloads ~200 MB. The npm
       # dependencies themselves are cached separately by setup-node's `cache: npm`.
       - name: Cache electron-builder downloads
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/Library/Caches/electron
