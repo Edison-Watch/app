@@ -1,7 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
 /**
- * Playwright config for visual regression screenshot + video capture (client_2).
+ * Playwright config for visual regression screenshot + video capture.
  *
  * Serves the static Storybook build (storybook-static/) via http-server on port 6009.
  * Runs separately from playwright.config.ts (which targets the full Electron app).

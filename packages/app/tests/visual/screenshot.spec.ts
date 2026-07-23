@@ -3,7 +3,7 @@ import { readFileSync, mkdirSync } from "fs";
 import { join } from "path";
 
 /**
- * Visual regression screenshot + video generator for client_2 Storybook.
+ * Visual regression screenshot + video generator for the app's Storybook.
  *
  * Reads storybook-static/index.json to discover all stories, navigates to each,
  * captures a full-page PNG screenshot AND a WebM recording of the story loading.
@@ -25,7 +25,7 @@ interface StorybookIndex {
   entries: Record<string, StoryEntry>;
 }
 
-// Paths relative to process.cwd() (client_2 project root)
+// Paths relative to process.cwd() (package root)
 const SCREENSHOT_DIR = join(process.cwd(), "tests/visual/screenshots");
 const STORYBOOK_INDEX = join(process.cwd(), "storybook-static/index.json");
 const SETTLE_DELAY_MS = 500;

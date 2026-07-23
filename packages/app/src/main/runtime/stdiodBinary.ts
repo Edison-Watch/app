@@ -24,8 +24,8 @@ function getBundledStdiodBinaryPath(): string {
   if (app.isPackaged) {
     return path.join(process.resourcesPath, 'bin', exe)
   }
-  // __dirname in dev is <repo>/client_2/out/main; three steps up reaches
-  // the repo root (out/main -> out -> client_2 -> <repo>).
+  // __dirname in dev is <pkg>/out/main; three steps up reaches
+  // the repo root (out/main -> out -> <pkg>).
   const repoRoot = path.resolve(__dirname, '..', '..', '..')
   return path.join(repoRoot, 'stdiod', 'target', 'release', exe)
 }

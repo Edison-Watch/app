@@ -7,7 +7,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 /**
- * Storybook config for client_2 (Electron renderer).
+ * Storybook config for the Electron renderer.
  *
  * Runs as a plain Vite + React Storybook - no Electron binaries involved.
  * Components that use window.api (Electron IPC) receive a mock in preview.tsx.

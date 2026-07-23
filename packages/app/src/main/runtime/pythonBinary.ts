@@ -13,7 +13,7 @@ export function getBundledPythonPath(): string | null {
     return existsSync(packaged) ? packaged : null
   }
 
-  // Dev: optional staged copy under client_2/bin (__dirname is client_2/out/main).
+  // Dev: optional staged copy under the package's bin/ (__dirname is <pkg>/out/main).
   const arch = process.arch === 'arm64' ? 'arm64' : 'x64'
   const devPath = path.resolve(__dirname, '..', '..', 'bin', 'python', arch, 'python.exe')
   return existsSync(devPath) ? devPath : null
