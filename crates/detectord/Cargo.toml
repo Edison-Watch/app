@@ -1,0 +1,13 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/edison-detectord",
+    "crates/mcp_quarantine",
+    "crates/mcp_backend",
+    "crates/mcp_detector_daemon",
+]
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.88"
+license = "AGPL-3.0-only"
