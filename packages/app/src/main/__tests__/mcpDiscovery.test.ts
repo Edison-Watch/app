@@ -1,4 +1,12 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
+
+// discoverMcpServers consults the detectord daemon first; its client resolves
+// a socket path via Electron's `app.getPath`, which does not exist under
+// vitest. Returning null exercises the local-discovery fallback these tests
+// actually cover.
+vi.mock("../detectord/discovery", () => ({
+  discoverViaDetectord: () => Promise.resolve(null),
+}));
 import { tmpdir, platform } from "os";
 import { join } from "path";
 import { pathToFileURL } from "url";

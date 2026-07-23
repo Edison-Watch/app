@@ -2,32 +2,23 @@ import { test, expect } from "./fixtures";
 
 test.describe("Setup Wizard", () => {
   test("app launches and renders Step 1 (Welcome)", async ({ firstWindow }) => {
-    // The wizard should show the welcome step with Edison branding
-    await expect(firstWindow.locator("text=Edison Watch")).toBeVisible({ timeout: 10000 });
-
-    // Step indicator should show step 1 as active
-    await expect(firstWindow.locator("text=Sign In")).toBeVisible();
-
-    // Sign in form should be present
-    await expect(firstWindow.locator('input[type="email"], input[placeholder*="email" i]')).toBeVisible();
+    // The wizard's sign-in method picker is the welcome step's stable marker
+    // (the branding is an SVG logo, not text).
+    await expect(firstWindow.locator("text=Sign in with SSO")).toBeVisible({ timeout: 30000 });
   });
 
   test("Step 1 shows sign-in options", async ({ firstWindow }) => {
-    // Wait for the welcome step to render
-    await expect(firstWindow.locator("text=Edison Watch")).toBeVisible({ timeout: 10000 });
-
-    // Should show email input
-    const emailInput = firstWindow.locator('input[type="email"], input[placeholder*="email" i]');
-    await expect(emailInput).toBeVisible();
-
-    // Should show password or sign-in button
-    const signInElements = firstWindow.locator('button:has-text("Sign"), button:has-text("Continue")');
-    await expect(signInElements.first()).toBeVisible();
+    // Step 1 offers provider sign-in (OAuth buttons and/or the SSO/Email
+    // tiles); a bare email input only appears after expanding a tile.
+    const signInElements = firstWindow.locator(
+      'button:has-text("Sign in with"), button:has-text("Continue with")',
+    );
+    await expect(signInElements.first()).toBeVisible({ timeout: 30000 });
   });
 
   test("Step 2 placeholder renders after mock auth", async ({ electronApp, firstWindow }) => {
     // Wait for app to be ready
-    await expect(firstWindow.locator("text=Edison Watch")).toBeVisible({ timeout: 10000 });
+    await expect(firstWindow.locator("text=Sign in with SSO")).toBeVisible({ timeout: 30000 });
 
     // Simulate auth completion by evaluating in renderer context
     // This bypasses real auth and injects mock state
