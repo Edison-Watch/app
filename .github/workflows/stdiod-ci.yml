@@ -10,6 +10,7 @@ on:
     paths:
       - 'crates/stdiod/**'
       - '.github/workflows/stdiod-ci.yml'
+  workflow_dispatch:
 
 # Cancel superseded runs on the same ref.
 concurrency:
