@@ -1,0 +1,173 @@
+name: Release macOS (app, beta upstream)
+
+# Manually-triggered UPSTREAM prerelease to GitHub Releases (channel: beta).
+#
+# How this differs from app-release-demo.yml (the other beta-channel workflow):
+#   - shared:    built FROM SOURCE at packages/shared (the workspace-linked
+#                copy), not from a published npm version.
+#   - stdiod:    built FROM SOURCE at crates/stdiod via scripts/build-stdiod.sh,
+#                instead of downloading the last published universal binary.
+#   - detectord: built FROM SOURCE at crates/detectord via
+#                scripts/build-detectord.sh. (app-release-demo.yml bundles NO
+#                detectord binary at all - this workflow is the only mac CI that
+#                packages one.)
+#
+# Before the monorepo this required checking out four sibling repos; now
+# "main of everything" is simply this repo's tree, so a single checkout builds
+# the whole integration. It remains the build that catches breakage between the
+# desktop app and unreleased daemon changes, which the pinned/published-artifact
+# workflows can't see by construction.
+#
+# VERSIONING: `${package.json version}-upstream.${run_number}` (e.g.
+# 0.5.4-upstream.12). The distinct `upstream` prerelease id avoids tag collisions
+# with app-release-demo.yml's `-beta.${run_number}` (independent run_number
+# counters would otherwise clash). electron-updater resolves the beta channel
+# through beta.yml, not the tag text, so `-upstream.N` still serves beta installs.
+#
+# CAVEAT - upstream outranks demo at the same base version: semver compares
+# prerelease identifiers alphabetically, so 0.5.4-upstream.N > 0.5.4-beta.N. Once
+# an upstream build ships on the beta channel, a demo prerelease cut at the SAME
+# base version will NOT be picked up by installs that already took the upstream
+# build. Bump package.json's base version before cutting demo again, or keep
+# upstream builds off the beta channel if that matters.
+
+on:
+  workflow_dispatch:
+    inputs:
+      notarize:
+        description: 'Notarize the build (false = faster, signed-only; testers must run xattr -dr com.apple.quarantine to open)'
+        type: boolean
+        default: true
+
+concurrency:
+  group: release-macos-upstream
+  cancel-in-progress: false
+
+permissions:
+  contents: write # create / publish the prerelease
+
+jobs:
+  release-upstream:
+    name: Build deps from source, sign, notarize & publish (beta upstream)
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: packages/app
+    env:
+      CSC_LINK: ${{ secrets.CSC_LINK }}
+      CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+      # APPLE_ID / APPLE_TEAM_ID are non-sensitive repo Variables; the
+      # app-specific password is a Secret.
+      APPLE_ID: ${{ vars.APPLE_ID }}
+      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+      APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Demo backend config (DEMO_VITE_* repository variables).
+      VITE_DEPLOY_ENV: ${{ vars.DEMO_VITE_DEPLOY_ENV }}
+      VITE_API_BASE_URL: ${{ vars.DEMO_VITE_API_BASE_URL }}
+      VITE_MCP_BASE_URL: ${{ vars.DEMO_VITE_MCP_BASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      # --- Caches -------------------------------------------------------------
+      # Electron runtime is pinned by electronVersion in electron-builder.yml
+      # (independent of the resolved `electron` devDep), so key on that value -
+      # an unrelated dependency bump shouldn't re-download ~200 MB.
+      - name: Resolve Electron runtime version (cache key)
+        id: electron
+        run: echo "version=$(grep '^electronVersion:' electron-builder.yml | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+
+      - name: Cache electron-builder downloads
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Caches/electron
+            ~/Library/Caches/electron-builder
+          key: ${{ runner.os }}-electron-${{ steps.electron.outputs.version }}
+          restore-keys: ${{ runner.os }}-electron-
+
+      # Cargo registry + both daemons' target dirs. Keyed on the lockfiles: a
+      # source-only change to either daemon still reuses the dependency builds,
+      # which is the bulk of a cold Rust release build.
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            crates/stdiod/target
+            crates/detectord/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('crates/stdiod/Cargo.lock', 'crates/detectord/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      # --- shared: built from the workspace source ----------------------------
+      - name: Install dependencies (workspace root)
+        run: npm ci
+        working-directory: .
+
+      - name: Build @edison-watch/shared from source
+        run: npm run build -w packages/shared
+        working-directory: .
+
+      # --- daemons: build from source via the layout-aware scripts ------------
+      - name: Build edison-stdiod from source
+        run: npm run build:stdiod
+
+      - name: Build edison-detectord from source
+        run: npm run build:detectord
+
+      # --- version, bundle, package ------------------------------------------
+      - name: Compute upstream prerelease version
+        id: ver
+        run: |
+          BASE=$(node -p "require('./package.json').version")
+          UPSTREAM="${BASE}-upstream.${{ github.run_number }}"
+          echo "version=$UPSTREAM" >> "$GITHUB_OUTPUT"
+          echo "Upstream prerelease version: $UPSTREAM (beta channel)"
+
+      - name: Build renderer/main/preload bundles (demo mode)
+        # Runs typecheck against the source-built shared - this is where an
+        # unreleased breaking change in shared surfaces.
+        run: npm run build:demo
+
+      - name: Pre-create draft release
+        # electron-builder races itself creating the GitHub release: the dmg and
+        # zip finish near-simultaneously, PublishManager spawns two
+        # GitHubPublisher instances (async cache-miss race), and both POST
+        # /releases for the same tag - the loser dies with 422 after a successful
+        # notarization. Pre-creating means every publisher instance finds and
+        # reuses it. Draft keeps it invisible to auto-updaters until all assets
+        # (incl. beta.yml) are up.
+        run: |
+          TAG="v${{ steps.ver.outputs.version }}"
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" \
+              --title "${{ steps.ver.outputs.version }}" \
+              --draft --prerelease \
+              --notes "Beta upstream build (run ${{ github.run_number }}) - desktop app + shared + stdiod + detectord all built from source at ${{ github.sha }}."
+
+      - name: Package, sign, notarize & upload prerelease assets
+        # extraMetadata.version sets the app/asset/yaml version without editing
+        # package.json. channel: beta writes beta.yml; releaseType: prerelease
+        # marks the GitHub release a prerelease (both required for the GitHub
+        # provider to resolve the beta channel). Assets go into the draft
+        # pre-created above; the next step flips it public.
+        run: |
+          npx electron-builder --mac --publish always \
+            -c.extraMetadata.version="${{ steps.ver.outputs.version }}" \
+            -c.mac.notarize=${{ inputs.notarize }} \
+            -c.publish.channel=beta \
+            -c.publish.releaseType=prerelease
+
+      - name: Publish prerelease
+        # All assets + beta.yml are uploaded - make the release visible.
+        run: |
+          gh release edit "v${{ steps.ver.outputs.version }}" \
+            --repo "$GITHUB_REPOSITORY" --draft=false --prerelease

@@ -1,8 +1,9 @@
-name: Build macOS
+name: Build macOS (app)
 
 # Upstream TEST build - NOT a release.
-# Pulls the latest published edison-stdiod universal binary from the stdiod repo,
-# bundles it, and produces a universal .dmg/.zip uploaded as an Actions artifact.
+# Pulls the latest published edison-stdiod universal binary from the stdiod
+# releases, bundles it, and produces a universal .dmg/.zip uploaded as an
+# Actions artifact.
 #
 # Signing depends on the trigger:
 #   - pull_request: UNSIGNED. Code signing is the slow part of the build and
@@ -17,14 +18,22 @@ name: Build macOS
 # Either way the artifact is un-notarized, so it's Gatekeeper-blocked on other
 # machines (run `xattr -dr com.apple.quarantine` to launch) and won't auto-update
 # - that's fine for testing. Real, notarized, published releases come from
-# release.yml / release-demo.yml.
+# app-release.yml / app-release-demo.yml.
 
 on:
   workflow_dispatch:
   pull_request:
     branches: [main]
+    paths:
+      - 'packages/**'
+      - 'package-lock.json'
+      - '.github/workflows/app-build-macos.yml'
   push:
     branches: [main]
+    paths:
+      - 'packages/**'
+      - 'package-lock.json'
+      - '.github/workflows/app-build-macos.yml'
 
 concurrency:
   group: build-macos-${{ github.ref }}
@@ -37,6 +46,9 @@ jobs:
   build:
     name: Build (universal)
     runs-on: macos-latest # arm64; builds the universal target for both arches
+    defaults:
+      run:
+        working-directory: packages/app
     env:
       # Sign only on post-merge push to main; PR builds stay unsigned (see header).
       # On pull_request these resolve to empty / false so electron-builder skips
@@ -45,7 +57,7 @@ jobs:
       CSC_KEY_PASSWORD: ${{ github.event_name == 'push' && secrets.CSC_KEY_PASSWORD || '' }}
       # false => electron-builder produces an unsigned build without probing the
       # keychain for a Developer ID identity (none exists on PR runs).
-      CSC_IDENTITY_AUTO_DISCOVERY: ${{ github.event_name == 'push' }}
+      CSC_IDENTITY_AUTO_DISCOVERY: ${{ github.event_name == 'push' && secrets.CSC_LINK != '' }}
       # gh CLI auth for cross-repo public release download.
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       # Demo backend config. Vite's loadEnv() also reads matching keys from the
@@ -61,6 +73,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: package-lock.json
 
       # The Electron runtime electron-builder downloads is pinned by electronVersion
       # in electron-builder.yml (independent of the resolved `electron` devDep), so
@@ -83,8 +96,15 @@ jobs:
           key: ${{ runner.os }}-electron-${{ steps.electron.outputs.version }}
           restore-keys: ${{ runner.os }}-electron-
 
-      - name: Install dependencies
+      - name: Install dependencies (workspace root)
         run: npm ci
+        working-directory: .
+
+      # The app consumes the workspace-linked @edison-watch/shared, whose
+      # package entry points live in dist/ - build it first.
+      - name: Build @edison-watch/shared
+        run: npm run build -w packages/shared
+        working-directory: .
 
       - name: Pull latest edison-stdiod (universal) from stdiod releases
         run: |
@@ -111,7 +131,7 @@ jobs:
         with:
           name: edison-watch-macos
           path: |
-            dist/*.dmg
-            dist/*.zip
+            packages/app/dist/*.dmg
+            packages/app/dist/*.zip
           if-no-files-found: error
           retention-days: 14

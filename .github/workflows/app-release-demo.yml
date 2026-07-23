@@ -1,4 +1,4 @@
-name: Release macOS (demo prerelease)
+name: Release macOS (app, demo prerelease)
 
 # Manually-triggered DEMO prerelease to GitHub Releases (channel: beta).
 # Builds a signed + NOTARIZED universal macOS app versioned as a prerelease of
@@ -8,7 +8,7 @@ name: Release macOS (demo prerelease)
 # channel and are never pulled down onto a stable release.
 #
 # This is the "manual pre-release" tier. The fast per-commit signed builds
-# (build-macos.yml, Actions artifacts, NOT published) auto-update TO whatever
+# (app-build-macos.yml, Actions artifacts, NOT published) auto-update TO whatever
 # this workflow publishes - that's why those builds are usable upstream.
 
 on:
@@ -30,12 +30,15 @@ jobs:
   release-demo:
     name: Build, sign, notarize & publish (demo prerelease)
     runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: packages/app
     env:
       CSC_LINK: ${{ secrets.CSC_LINK }}
       CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
       # Notarized so demo testers don't hit the Gatekeeper prompt. Demo is
       # manual/infrequent, so the notarization round-trip is acceptable here
-      # (unlike the fast per-commit build-macos.yml, which stays un-notarized).
+      # (unlike the fast per-commit app-build-macos.yml, which stays un-notarized).
       # APPLE_ID / APPLE_TEAM_ID are non-sensitive repo Variables; the
       # app-specific password is a Secret.
       APPLE_ID: ${{ vars.APPLE_ID }}
@@ -53,6 +56,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: package-lock.json
 
       - name: Cache electron-builder downloads
         uses: actions/cache@v4
@@ -63,8 +67,15 @@ jobs:
           key: ${{ runner.os }}-electron-${{ hashFiles('package-lock.json') }}
           restore-keys: ${{ runner.os }}-electron-
 
-      - name: Install dependencies
+      - name: Install dependencies (workspace root)
         run: npm ci
+        working-directory: .
+
+      # The app consumes the workspace-linked @edison-watch/shared, whose
+      # package entry points live in dist/ - build it first.
+      - name: Build @edison-watch/shared
+        run: npm run build -w packages/shared
+        working-directory: .
 
       - name: Pull latest edison-stdiod (universal) from stdiod releases
         run: |

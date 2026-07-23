@@ -1,10 +1,15 @@
-name: CI
+name: CI (detectord)
 
 on:
   push:
-    branches: [main, master]
+    branches: [main]
+    paths:
+      - 'crates/detectord/**'
+      - '.github/workflows/detectord-ci.yml'
   pull_request:
-    branches: [main, master]
+    paths:
+      - 'crates/detectord/**'
+      - '.github/workflows/detectord-ci.yml'
 
 env:
   CARGO_TERM_COLOR: always
@@ -13,8 +18,11 @@ jobs:
   fmt:
     name: rustfmt
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: crates/detectord
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
@@ -23,17 +31,25 @@ jobs:
   clippy:
     name: clippy
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: crates/detectord
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: crates/detectord
       - run: cargo clippy --all-targets --all-features -- -D warnings
 
   test:
     name: test (${{ matrix.name }})
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: crates/detectord
     strategy:
       fail-fast: false
       matrix:
@@ -64,36 +80,49 @@ jobs:
             flags: --no-default-features --features claude_code
             cargo_test: test --lib
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: crates/detectord
       - run: cargo ${{ matrix.cargo_test }} ${{ matrix.flags }}
 
   doctests:
     name: doctests
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: crates/detectord
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: crates/detectord
       - run: cargo test --doc
 
   doc:
     name: rustdoc
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: crates/detectord
     env:
       RUSTDOCFLAGS: -D warnings
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: crates/detectord
       - run: cargo doc --no-deps --all-features
 
   deny:
     name: cargo-deny
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: EmbarkStudios/cargo-deny-action@v2
         with:
+          manifest-path: crates/detectord/Cargo.toml
           command: check advisories bans licenses sources

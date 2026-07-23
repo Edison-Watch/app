@@ -25,7 +25,13 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CLIENT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 REPO_ROOT="$(cd "$CLIENT_DIR/.." && pwd)"
-DETECTORD_DIR="$REPO_ROOT/detectord"
+# Monorepo layout puts the daemon at crates/detectord; the old sibling-checkout
+# layout (../detectord next to the app checkout) is kept as a fallback.
+if [[ -d "$CLIENT_DIR/../../crates/detectord" ]]; then
+  DETECTORD_DIR="$(cd "$CLIENT_DIR/../../crates/detectord" && pwd)"
+else
+  DETECTORD_DIR="$REPO_ROOT/detectord"
+fi
 BIN_NAME="mcp_detector_daemon"
 OUT_ROOT="$CLIENT_DIR/bin/detectord"
 

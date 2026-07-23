@@ -1,0 +1,12 @@
+{
+  "name": "edison-watch-app",
+  "private": true,
+  "description": "Everything Edison Watch runs on your machine: desktop app, daemons, and shared library.",
+  "license": "AGPL-3.0-only",
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "packages/*"
+  ]
+}

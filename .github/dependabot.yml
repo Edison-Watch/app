@@ -1,3 +1,5 @@
+# One config for the whole monorepo. npm is a single root workspace (one
+# lockfile), the two Rust daemons are independent Cargo workspaces.
 version: 2
 updates:
   - package-ecosystem: npm
@@ -29,3 +31,18 @@ updates:
     schedule:
       interval: weekly
       day: monday
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: cargo
+    directories:
+      - /crates/stdiod
+      - /crates/detectord
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      cargo-minor-patch:
+        update-types:
+          - minor
+          - patch

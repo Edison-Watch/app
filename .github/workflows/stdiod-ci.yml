@@ -1,9 +1,15 @@
-name: CI
+name: CI (stdiod)
 
 on:
   push:
     branches: [main]
+    paths:
+      - 'crates/stdiod/**'
+      - '.github/workflows/stdiod-ci.yml'
   pull_request:
+    paths:
+      - 'crates/stdiod/**'
+      - '.github/workflows/stdiod-ci.yml'
 
 # Cancel superseded runs on the same ref.
 concurrency:
@@ -18,13 +24,18 @@ jobs:
   test:
     name: build & test
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: crates/stdiod
     steps:
       - uses: actions/checkout@v7
-      # rust-toolchain.toml pins the channel + rustfmt/clippy components.
+      # crates/stdiod/rust-toolchain.toml pins the channel + rustfmt/clippy components.
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: crates/stdiod
       - name: AI writing check
         run: scripts/check_ai_writing.sh
       - name: Format

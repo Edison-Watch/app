@@ -1,4 +1,4 @@
-name: Release macOS (stable)
+name: Release macOS (app, stable)
 
 # Manually-triggered STABLE release to GitHub Releases (channel: latest).
 # Builds a signed + NOTARIZED universal macOS app and publishes it as a normal
@@ -6,13 +6,14 @@ name: Release macOS (stable)
 # it up.
 #
 # VERSIONING INVARIANT (keeps demo installs on demo, never pulled onto stable):
-#   package.json `version` is the in-development NEXT stable (e.g. 0.5.4 while
-#   0.5.3 is the latest published stable). Demo builds are `0.5.4-beta.N`, which
-#   are always semver-greater than the released stable, so demo installs only
-#   ever update within the demo (beta) channel.
-#   => AFTER publishing a stable release, bump package.json to the next patch so
-#      the demo channel immediately leads the just-shipped stable again. Until
-#      that bump lands, do NOT cut a demo prerelease at the old base version.
+#   packages/app/package.json `version` is the in-development NEXT stable (e.g.
+#   0.5.4 while 0.5.3 is the latest published stable). Demo builds are
+#   `0.5.4-beta.N`, which are always semver-greater than the released stable, so
+#   demo installs only ever update within the demo (beta) channel.
+#   => AFTER publishing a stable release, bump packages/app/package.json to the
+#      next patch so the demo channel immediately leads the just-shipped stable
+#      again. Until that bump lands, do NOT cut a demo prerelease at the old
+#      base version.
 
 on:
   workflow_dispatch:
@@ -37,6 +38,9 @@ jobs:
   release:
     name: Build, sign, notarize & publish (stable)
     runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: packages/app
     env:
       # Code signing.
       CSC_LINK: ${{ secrets.CSC_LINK }}
@@ -60,6 +64,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: package-lock.json
 
       - name: Cache electron-builder downloads
         uses: actions/cache@v4
@@ -70,8 +75,15 @@ jobs:
           key: ${{ runner.os }}-electron-${{ hashFiles('package-lock.json') }}
           restore-keys: ${{ runner.os }}-electron-
 
-      - name: Install dependencies
+      - name: Install dependencies (workspace root)
         run: npm ci
+        working-directory: .
+
+      # The app consumes the workspace-linked @edison-watch/shared, whose
+      # package entry points live in dist/ - build it first.
+      - name: Build @edison-watch/shared
+        run: npm run build -w packages/shared
+        working-directory: .
 
       - name: Pull pinned edison-stdiod (universal) from stdiod releases
         run: |
@@ -92,7 +104,7 @@ jobs:
       - name: Pre-create draft release
         # electron-builder races itself creating the GitHub release (two
         # publisher instances, both POST /releases, loser 422s - see
-        # release-demo.yml for details). Pre-create the release as a draft so
+        # app-release-demo.yml for details). Pre-create the release as a draft so
         # every publisher instance finds and reuses it; the last step publishes
         # it once all assets (incl. latest.yml) are uploaded.
         run: |

@@ -1,9 +1,17 @@
-name: CI
+name: CI (shared)
 
 on:
   pull_request:
+    paths:
+      - 'packages/shared/**'
+      - 'package-lock.json'
+      - '.github/workflows/shared-ci.yaml'
   push:
     branches: [main]
+    paths:
+      - 'packages/shared/**'
+      - 'package-lock.json'
+      - '.github/workflows/shared-ci.yaml'
   workflow_dispatch:
 
 concurrency:
@@ -19,6 +27,9 @@ jobs:
     name: AI Writing Check
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: packages/shared
     steps:
       - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
@@ -27,6 +38,9 @@ jobs:
   quality:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: packages/shared
     steps:
       - uses: actions/checkout@v7
 
@@ -34,8 +48,11 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: package-lock.json
 
+      # Workspace install must run from the repo root (single root lockfile).
       - run: npm ci
+        working-directory: .
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run format:check
@@ -45,7 +62,7 @@ jobs:
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v7
         with:
-          files: coverage/lcov.info
+          files: packages/shared/coverage/lcov.info
           flags: unit
           use_oidc: true
 
@@ -56,13 +73,16 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: coverage
-          path: coverage/coverage-summary.json
+          path: packages/shared/coverage/coverage-summary.json
           retention-days: 1
 
   compatibility:
     name: Node 24 compatibility
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: packages/shared
     steps:
       - uses: actions/checkout@v7
 
@@ -70,8 +90,10 @@ jobs:
         with:
           node-version: 24
           cache: npm
+          cache-dependency-path: package-lock.json
 
       - run: npm ci
+        working-directory: .
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run format:check

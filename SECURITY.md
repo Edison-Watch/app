@@ -1,9 +1,14 @@
 # Security Policy
 
+This policy covers every component in this repository: the desktop app
+(`packages/app`), the shared library (`packages/shared`), and the `stdiod` and
+`detectord` daemons (`crates/*`).
+
 ## Supported versions
 
-stdiod is pre-1.0, experimental software. Only the latest `main` / most recent
-release receives security fixes. Pin a specific commit if you need stability.
+Edison Watch's client components are pre-1.0, fast-moving software. Only the
+latest `main` / most recent release receives security fixes. Pin a specific
+commit if you need stability.
 
 | Version | Supported |
 | --- | --- |
@@ -21,12 +26,13 @@ Instead, report privately through either channel:
   **"Report a vulnerability"** ([private vulnerability reporting](https://docs.github.com/en/code-security/security-advisories/guidance-on-reporting-and-writing-information-about-vulnerabilities/privately-reporting-a-security-vulnerability)).
 - **Email** - <security@edison.watch>.
 
-Please include enough detail to reproduce: affected version/commit, platform,
-configuration, and a description of the impact. We aim to acknowledge reports
-within a few business days and will keep you updated on remediation. We support
-coordinated disclosure and are happy to credit reporters.
+Please include enough detail to reproduce: affected component and
+version/commit, platform, configuration, and a description of the impact. We
+aim to acknowledge reports within a few business days and will keep you updated
+on remediation. We support coordinated disclosure and are happy to credit
+reporters.
 
-## Security model and notes
+## Security model and notes (stdiod)
 
 stdiod runs as a long-lived daemon on a user's machine and handles credentials,
 so a few properties are worth understanding:

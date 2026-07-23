@@ -1,0 +1,32 @@
+name: Large File Check (shared)
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'packages/shared/**.ts'
+      - 'packages/shared/**.tsx'
+      - 'packages/shared/**.js'
+      - 'packages/shared/**.jsx'
+      - 'packages/shared/**.mjs'
+      - 'packages/shared/**.cjs'
+
+jobs:
+  check-file-sizes:
+    name: Large File Check (shared)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/shared
+    steps:
+      - uses: actions/checkout@v7
+        with: { fetch-depth: 0 }
+      - name: Run check
+        run: |
+          if [ -n "${{ github.event.pull_request.base.sha }}" ]; then
+            # --relative scopes the diff to this component and strips the path prefix.
+            mapfile -t files < <(git diff --name-only --diff-filter=d --relative "${{ github.event.pull_request.base.sha }}...HEAD")
+            [ "${#files[@]}" -eq 0 ] && { echo "No files changed."; exit 0; }
+            scripts/check_large_files.sh "${files[@]}"
+          else
+            scripts/check_large_files.sh --all
+          fi

@@ -1,11 +1,16 @@
-name: AI Writing Check
+name: AI Writing Check (app)
 on:
   workflow_dispatch:
   pull_request:
+    paths:
+      - 'packages/app/**'
 jobs:
   ai-writing-check:
-    name: AI Writing Check
+    name: AI Writing Check (app)
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/app
     steps:
       - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2

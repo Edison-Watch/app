@@ -26,7 +26,13 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CLIENT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 REPO_ROOT="$(cd "$CLIENT_DIR/.." && pwd)"
-STDIOD_DIR="$REPO_ROOT/stdiod"
+# Monorepo layout puts the daemon at crates/stdiod; the old sibling-checkout
+# layout (../stdiod next to the app checkout) is kept as a fallback.
+if [[ -d "$CLIENT_DIR/../../crates/stdiod" ]]; then
+  STDIOD_DIR="$(cd "$CLIENT_DIR/../../crates/stdiod" && pwd)"
+else
+  STDIOD_DIR="$REPO_ROOT/stdiod"
+fi
 OUT_ROOT="$CLIENT_DIR/bin/stdiod"
 
 command -v zig >/dev/null 2>&1 || {
