@@ -4,8 +4,12 @@ name: Build Windows (app, unsigned demo)
 # windows job: stages the bundled Python + npx/uvx runtimes, natively builds
 # edison-stdiod for both Windows arches from crates/stdiod, packages an
 # unsigned NSIS installer versioned <base>-demo.<run>, sanity-checks the
-# auto-update manifest, and (when the R2 secrets are configured) publishes to
-# the Cloudflare R2 testing feed.
+# auto-update manifest, and uploads the installers as a workflow artifact.
+#
+# No publish step: this repo's auto-update rides the GitHub provider baked into
+# electron-builder.yml (the monorepo's Cloudflare R2 generic feed does not
+# apply here). Windows releases will join the GitHub-release flow alongside
+# the macOS release workflows when Windows release jobs are added.
 #
 # Unsigned on purpose: NSIS auto-update verifies the package via the sha512 in
 # latest.yml (not Authenticode), so updates apply unsigned - users only see a
@@ -106,8 +110,7 @@ jobs:
           echo "Building demo version $VERSION"
           npm run build:demo
           npx electron-builder --win --publish never \
-            -c.extraMetadata.version="$VERSION" \
-            -c.publish.url=https://demo-releases.edison.watch/client/latest
+            -c.extraMetadata.version="$VERSION"
 
       - name: Verify update artifacts (auto-update sanity)
         # Fail BEFORE publishing a broken build: a wrong version in latest.yml or
@@ -135,65 +138,3 @@ jobs:
             packages/app/dist/latest.yml
           if-no-files-found: error
           retention-days: 14
-
-      - name: Upload to Cloudflare R2 (Testing)
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          R2_ENDPOINT: ${{ secrets.R2_TESTING_ENDPOINT }}
-          R2_BUCKET: ${{ secrets.R2_TESTING_BUCKET }}
-        # Co-located with the macOS artifacts under client/latest/. The Windows
-        # manifest (latest.yml) and installers have distinct names from the mac
-        # ones (latest-mac.yml / .dmg), and `aws s3 cp` never deletes, so the two
-        # jobs publishing to the same prefix do not clobber each other.
-        run: |
-          if [ -z "${AWS_ACCESS_KEY_ID:-}" ] || [ -z "${R2_ENDPOINT:-}" ]; then
-            echo "::notice::R2 secrets not configured - skipping publish"
-            exit 0
-          fi
-          SHORT_SHA="${GITHUB_SHA::7}"
-
-          aws s3 cp dist/ "s3://${R2_BUCKET}/client/${SHORT_SHA}/" \
-            --endpoint-url "${R2_ENDPOINT}" \
-            --recursive \
-            --exclude '*.yml' \
-            --exclude '*-unpacked/*'
-
-          aws s3 cp dist/ "s3://${R2_BUCKET}/client/latest/" \
-            --endpoint-url "${R2_ENDPOINT}" \
-            --recursive \
-            --exclude '*-unpacked/*'
-
-          echo "## Published Windows to R2 (Testing)" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **Versioned:** \`client/${SHORT_SHA}/\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **Latest:** \`client/latest/\`" >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Verify published demo feed
-        # Post-publish self-check: confirm the public feed serves the new version
-        # and a reachable installer. Retries to ride out R2/CDN propagation.
-        # Skipped when publishing was skipped (no R2 secrets).
-        env:
-          HAS_R2: ${{ secrets.R2_ACCESS_KEY_ID != '' && 'true' || 'false' }}
-        run: |
-          set -uo pipefail
-          if [ "$HAS_R2" != "true" ]; then
-            echo "::notice::R2 not configured - skipping feed verification"
-            exit 0
-          fi
-          BASE=$(node -p "require('./package.json').version")
-          VERSION="${BASE}-demo.${GITHUB_RUN_NUMBER}"
-          DIR="https://demo-releases.edison.watch/client/latest"
-          BODY=""
-          for i in $(seq 1 8); do
-            if BODY=$(curl -fsS "$DIR/latest.yml"); then
-              FVER=$(printf '%s\n' "$BODY" | grep -m1 '^version:' | awk '{print $2}' | tr -d '\r')
-              [ "$FVER" = "$VERSION" ] && break
-              echo "attempt $i: feed version '$FVER' != '$VERSION' (propagation/cache?)"
-            else
-              echo "attempt $i: feed unreachable"
-            fi
-            sleep 15
-          done
-          [ "${FVER:-}" = "$VERSION" ] || { echo "::error::feed never served $VERSION"; exit 1; }
-          echo "feed serves $VERSION"
