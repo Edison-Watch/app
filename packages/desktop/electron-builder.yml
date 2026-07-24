@@ -155,5 +155,5 @@ artifactName: EdisonWatch-${version}-${arch}.${ext}
 publish:
   provider: github
   owner: Edison-Watch
-  repo: desktop
+  repo: app
   channel: latest
