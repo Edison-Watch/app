@@ -1,7 +1,7 @@
 #!/usr/bin/env npx tsx
 /**
  * CLI tool to test the MCP server discovery pipeline.
- * Usage: npx tsx packages/app/scripts/discover-mcp.ts [--json] [--client cursor|vscode|...]
+ * Usage: npx tsx packages/desktop/scripts/discover-mcp.ts [--json] [--client cursor|vscode|...]
  */
 import { discoverMcpServers } from '../src/main/discovery/mcpDiscovery'
 import type { DiscoveredMcpServer } from '../src/main/discovery/mcpDiscovery'

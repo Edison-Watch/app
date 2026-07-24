@@ -1,7 +1,7 @@
 # Security Policy
 
 This policy covers every component in this repository: the desktop app
-(`packages/app`), the shared library (`packages/shared`), and the `stdiod` and
+(`packages/desktop`), the shared library (`packages/shared`), and the `stdiod` and
 `detectord` daemons (`crates/*`).
 
 ## Supported versions

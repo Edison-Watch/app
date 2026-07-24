@@ -1,5 +1,5 @@
 {
-  "name": "@edison-watch/app",
+  "name": "@edison-watch/desktop",
   "version": "0.5.2",
   "private": true,
   "description": "Edison Watch Desktop Client v2 - Electron + React 19",

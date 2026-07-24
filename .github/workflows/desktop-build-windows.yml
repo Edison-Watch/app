@@ -1,4 +1,4 @@
-name: Build Windows (app, unsigned demo)
+name: Build Windows (desktop, unsigned demo)
 
 # Windows demo build, ported from the private monorepo's build-client-upstream
 # windows job: stages the bundled Python + npx/uvx runtimes, natively builds
@@ -21,10 +21,10 @@ on:
   push:
     branches: [main]
     paths:
-      - 'packages/app/**'
+      - 'packages/desktop/**'
       - 'packages/shared/**'
       - 'crates/stdiod/**'
-      - '.github/workflows/app-build-windows.yml'
+      - '.github/workflows/desktop-build-windows.yml'
 
 concurrency:
   group: build-windows-${{ github.ref }}
@@ -45,7 +45,7 @@ jobs:
     defaults:
       run:
         shell: bash
-        working-directory: packages/app
+        working-directory: packages/desktop
     env:
       # Demo backend config (DEMO_VITE_* repository variables).
       VITE_DEPLOY_ENV: ${{ vars.DEMO_VITE_DEPLOY_ENV }}
@@ -79,7 +79,7 @@ jobs:
 
       - name: Build edison-stdiod (x64 + arm64)
         # Native per-arch cargo build on the Windows runner. Staged into
-        # packages/app/bin/stdiod/<arch>/ so win.extraResources copies the
+        # packages/desktop/bin/stdiod/<arch>/ so win.extraResources copies the
         # matching-arch edison-stdiod.exe into resources/bin/. Without this the
         # packaged app ships with no stdio daemon.
         working-directory: crates/stdiod
@@ -91,8 +91,8 @@ jobs:
             target="${spec##*:}"
             echo "Building edison-stdiod for $target ..."
             cargo build --release --target "$target" --bin edison-stdiod
-            mkdir -p "../../packages/app/bin/stdiod/$arch"
-            cp "target/$target/release/edison-stdiod.exe" "../../packages/app/bin/stdiod/$arch/edison-stdiod.exe"
+            mkdir -p "../../packages/desktop/bin/stdiod/$arch"
+            cp "target/$target/release/edison-stdiod.exe" "../../packages/desktop/bin/stdiod/$arch/edison-stdiod.exe"
           done
 
       - name: Stage bundled runtimes (npx/uvx, x64 + arm64)
@@ -134,7 +134,7 @@ jobs:
         with:
           name: edison-watch-windows-demo
           path: |
-            packages/app/dist/*.exe
-            packages/app/dist/latest.yml
+            packages/desktop/dist/*.exe
+            packages/desktop/dist/latest.yml
           if-no-files-found: error
           retention-days: 14

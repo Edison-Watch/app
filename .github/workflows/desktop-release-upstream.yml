@@ -1,14 +1,14 @@
-name: Release macOS (app, beta upstream)
+name: Release macOS (desktop, beta upstream)
 
 # Manually-triggered UPSTREAM prerelease to GitHub Releases (channel: beta).
 #
-# How this differs from app-release-demo.yml (the other beta-channel workflow):
+# How this differs from desktop-release-demo.yml (the other beta-channel workflow):
 #   - shared:    built FROM SOURCE at packages/shared (the workspace-linked
 #                copy), not from a published npm version.
 #   - stdiod:    built FROM SOURCE at crates/stdiod via scripts/build-stdiod.sh,
 #                instead of downloading the last published universal binary.
 #   - detectord: built FROM SOURCE at crates/detectord via
-#                scripts/build-detectord.sh. (app-release-demo.yml bundles NO
+#                scripts/build-detectord.sh. (desktop-release-demo.yml bundles NO
 #                detectord binary at all - this workflow is the only mac CI that
 #                packages one.)
 #
@@ -20,7 +20,7 @@ name: Release macOS (app, beta upstream)
 #
 # VERSIONING: `${package.json version}-upstream.${run_number}` (e.g.
 # 0.5.4-upstream.12). The distinct `upstream` prerelease id avoids tag collisions
-# with app-release-demo.yml's `-beta.${run_number}` (independent run_number
+# with desktop-release-demo.yml's `-beta.${run_number}` (independent run_number
 # counters would otherwise clash). electron-updater resolves the beta channel
 # through beta.yml, not the tag text, so `-upstream.N` still serves beta installs.
 #
@@ -52,7 +52,7 @@ jobs:
     runs-on: macos-latest
     defaults:
       run:
-        working-directory: packages/app
+        working-directory: packages/desktop
     env:
       CSC_LINK: ${{ secrets.CSC_LINK }}
       CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}

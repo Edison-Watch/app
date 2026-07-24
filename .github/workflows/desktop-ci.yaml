@@ -1,4 +1,4 @@
-name: CI (app)
+name: CI (desktop)
 
 # Typecheck + unit tests + coverage + an Electron startup smoke test for the
 # desktop app. Replaces the client job of the private monorepo's
@@ -7,17 +7,17 @@ name: CI (app)
 on:
   pull_request:
     paths:
-      - 'packages/app/**'
+      - 'packages/desktop/**'
       - 'packages/shared/**'
       - 'package-lock.json'
-      - '.github/workflows/app-ci.yaml'
+      - '.github/workflows/desktop-ci.yaml'
   push:
     branches: [main]
     paths:
-      - 'packages/app/**'
+      - 'packages/desktop/**'
       - 'packages/shared/**'
       - 'package-lock.json'
-      - '.github/workflows/app-ci.yaml'
+      - '.github/workflows/desktop-ci.yaml'
   workflow_dispatch:
 
 concurrency:
@@ -33,7 +33,7 @@ jobs:
     timeout-minutes: 15
     defaults:
       run:
-        working-directory: packages/app
+        working-directory: packages/desktop
     steps:
       - uses: actions/checkout@v7
 
@@ -59,8 +59,8 @@ jobs:
       - if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: coverage-app
-          path: packages/app/coverage/coverage-summary.json
+          name: coverage-desktop
+          path: packages/desktop/coverage/coverage-summary.json
           retention-days: 1
 
   e2e-smoke:
@@ -69,7 +69,7 @@ jobs:
     timeout-minutes: 15
     defaults:
       run:
-        working-directory: packages/app
+        working-directory: packages/desktop
     steps:
       - uses: actions/checkout@v7
 

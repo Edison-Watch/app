@@ -25,7 +25,7 @@ and web dashboard are server-side and live elsewhere (see below).
 
 | Component | Path | What it does |
 | --- | --- | --- |
-| Desktop app | [`packages/app/`](./packages/app) | Electron menu-bar app: discovery, quarantine review, credential encryption, and settings. The user-facing control plane. |
+| Desktop app | [`packages/desktop/`](./packages/desktop) | Electron menu-bar app: discovery, quarantine review, credential encryption, and settings. The user-facing control plane. |
 | stdiod | [`crates/stdiod/`](./crates/stdiod) | Rust daemon that spawns local stdio MCP servers and bridges them to the gateway over one outbound WebSocket. No inbound ports; the processes and their secrets stay on the device. |
 | detectord | [`crates/detectord/`](./crates/detectord) | Rust daemon and library that watches the MCP config files of host apps (Claude Code, VS Code, Cursor, ...) and enforces quarantine. |
 | Shared library | [`packages/shared/`](./packages/shared) | `@edison-watch/shared`: the React components, design tokens, and client utilities the desktop app shares with the web dashboard. |
@@ -59,7 +59,7 @@ only runs that component's checks.
 # Desktop app + shared library
 npm ci
 npm run build -w packages/shared
-npm run dev -w packages/app          # or: npm run build:mac -w packages/app
+npm run dev -w packages/desktop          # or: npm run build:mac -w packages/desktop
 
 # Daemons
 cargo build --workspace --manifest-path crates/stdiod/Cargo.toml

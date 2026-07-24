@@ -8,7 +8,7 @@ lightweight.
 
 This repo holds four components:
 
-- `packages/app` - Electron desktop app (npm workspace)
+- `packages/desktop` - Electron desktop app (npm workspace)
 - `packages/shared` - `@edison-watch/shared` React library (npm workspace)
 - `crates/stdiod` - Rust daemon (its own Cargo workspace)
 - `crates/detectord` - Rust library + daemon (its own Cargo workspace)
@@ -35,7 +35,7 @@ cargo build --manifest-path crates/detectord/Cargo.toml
 Please make sure the same checks CI runs pass locally for the component you
 touched.
 
-npm packages (run inside `packages/shared` or `packages/app`):
+npm packages (run inside `packages/shared` or `packages/desktop`):
 
 ```sh
 npm run typecheck && npm run lint && npm run format:check && npm run test

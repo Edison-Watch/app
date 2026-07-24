@@ -1,4 +1,4 @@
-name: Build macOS (app)
+name: Build macOS (desktop)
 
 # Upstream TEST build - NOT a release.
 # Pulls the latest published edison-stdiod universal binary from the stdiod
@@ -18,7 +18,7 @@ name: Build macOS (app)
 # Either way the artifact is un-notarized, so it's Gatekeeper-blocked on other
 # machines (run `xattr -dr com.apple.quarantine` to launch) and won't auto-update
 # - that's fine for testing. Real, notarized, published releases come from
-# app-release.yml / app-release-demo.yml.
+# desktop-release.yml / desktop-release-demo.yml.
 
 on:
   workflow_dispatch:
@@ -27,13 +27,13 @@ on:
     paths:
       - 'packages/**'
       - 'package-lock.json'
-      - '.github/workflows/app-build-macos.yml'
+      - '.github/workflows/desktop-build-macos.yml'
   push:
     branches: [main]
     paths:
       - 'packages/**'
       - 'package-lock.json'
-      - '.github/workflows/app-build-macos.yml'
+      - '.github/workflows/desktop-build-macos.yml'
 
 concurrency:
   group: build-macos-${{ github.ref }}
@@ -48,7 +48,7 @@ jobs:
     runs-on: macos-latest # arm64; builds the universal target for both arches
     defaults:
       run:
-        working-directory: packages/app
+        working-directory: packages/desktop
     env:
       # Sign only on post-merge push to main; PR builds stay unsigned (see header).
       # On pull_request these resolve to empty / false so electron-builder skips
@@ -136,7 +136,7 @@ jobs:
         with:
           name: edison-watch-macos
           path: |
-            packages/app/dist/*.dmg
-            packages/app/dist/*.zip
+            packages/desktop/dist/*.dmg
+            packages/desktop/dist/*.zip
           if-no-files-found: error
           retention-days: 14

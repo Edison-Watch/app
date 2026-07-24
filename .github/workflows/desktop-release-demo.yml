@@ -1,4 +1,4 @@
-name: Release macOS (app, demo prerelease)
+name: Release macOS (desktop, demo prerelease)
 
 # Manually-triggered DEMO prerelease to GitHub Releases (channel: beta).
 # Builds a signed + NOTARIZED universal macOS app versioned as a prerelease of
@@ -8,7 +8,7 @@ name: Release macOS (app, demo prerelease)
 # channel and are never pulled down onto a stable release.
 #
 # This is the "manual pre-release" tier. The fast per-commit signed builds
-# (app-build-macos.yml, Actions artifacts, NOT published) auto-update TO whatever
+# (desktop-build-macos.yml, Actions artifacts, NOT published) auto-update TO whatever
 # this workflow publishes - that's why those builds are usable upstream.
 
 on:
@@ -32,13 +32,13 @@ jobs:
     runs-on: macos-latest
     defaults:
       run:
-        working-directory: packages/app
+        working-directory: packages/desktop
     env:
       CSC_LINK: ${{ secrets.CSC_LINK }}
       CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
       # Notarized so demo testers don't hit the Gatekeeper prompt. Demo is
       # manual/infrequent, so the notarization round-trip is acceptable here
-      # (unlike the fast per-commit app-build-macos.yml, which stays un-notarized).
+      # (unlike the fast per-commit desktop-build-macos.yml, which stays un-notarized).
       # APPLE_ID / APPLE_TEAM_ID are non-sensitive repo Variables; the
       # app-specific password is a Secret.
       APPLE_ID: ${{ vars.APPLE_ID }}

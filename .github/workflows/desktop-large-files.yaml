@@ -1,22 +1,22 @@
-name: Folder Size Check (app)
+name: Large File Check (desktop)
 on:
   workflow_dispatch:
   pull_request:
     paths:
-      - 'packages/app/**.ts'
-      - 'packages/app/**.tsx'
-      - 'packages/app/**.js'
-      - 'packages/app/**.jsx'
-      - 'packages/app/**.mjs'
-      - 'packages/app/**.cjs'
+      - 'packages/desktop/**.ts'
+      - 'packages/desktop/**.tsx'
+      - 'packages/desktop/**.js'
+      - 'packages/desktop/**.jsx'
+      - 'packages/desktop/**.mjs'
+      - 'packages/desktop/**.cjs'
 
 jobs:
-  check-folder-sizes:
-    name: Folder Size Check (app)
+  check-file-sizes:
+    name: Large File Check (desktop)
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: packages/app
+        working-directory: packages/desktop
     steps:
       - uses: actions/checkout@v7
         with: { fetch-depth: 0 }
@@ -26,7 +26,7 @@ jobs:
             # --relative scopes the diff to this component and strips the path prefix.
             mapfile -t files < <(git diff --name-only --diff-filter=d --relative "${{ github.event.pull_request.base.sha }}...HEAD")
             [ "${#files[@]}" -eq 0 ] && { echo "No files changed."; exit 0; }
-            scripts/check_folder_sizes.sh "${files[@]}"
+            scripts/check_large_files.sh "${files[@]}"
           else
-            scripts/check_folder_sizes.sh --all
+            scripts/check_large_files.sh --all
           fi

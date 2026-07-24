@@ -1,4 +1,4 @@
-name: Visual Tests (app)
+name: Visual Tests (desktop)
 
 # Storybook screenshot + video capture for the desktop app renderer, uploaded
 # to the visual-tests service. Ported from the private monorepo's
@@ -21,7 +21,7 @@ jobs:
     timeout-minutes: 20
     defaults:
       run:
-        working-directory: packages/app
+        working-directory: packages/desktop
     steps:
       - uses: actions/checkout@v7
 
@@ -54,14 +54,14 @@ jobs:
           VISUAL_TESTS_URL: ${{ secrets.VISUAL_TESTS_URL }}
           VISUAL_TESTS_API_KEY: ${{ secrets.VISUAL_TESTS_API_KEY }}
         run: |
-          SCREENSHOTS_DIR="packages/app/tests/visual/screenshots"
+          SCREENSHOTS_DIR="packages/desktop/tests/visual/screenshots"
           if ! ([ -d "$SCREENSHOTS_DIR" ] && ls "$SCREENSHOTS_DIR"/*.png "$SCREENSHOTS_DIR"/*.webm 2>/dev/null | head -1 | grep -q .); then
             echo "No screenshots found - skipping upload"
             exit 0
           fi
           tar czf screenshots.tar.gz -C "$SCREENSHOTS_DIR" .
           bash .github/scripts/upload-visual-run.sh \
-            "storybook-app" "screenshots.tar.gz" "false" "${{ github.ref_name }}" "main" \
+            "storybook-desktop" "screenshots.tar.gz" "false" "${{ github.ref_name }}" "main" \
             "${{ github.sha }}" "${{ github.repository }}" "null"
 
       - name: Upload screenshots as artifact (for debugging)
@@ -69,5 +69,5 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: visual-test-screenshots-app
-          path: packages/app/tests/visual/screenshots/
+          path: packages/desktop/tests/visual/screenshots/
           retention-days: 7

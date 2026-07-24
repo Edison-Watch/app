@@ -1,4 +1,4 @@
-name: Release macOS (app, stable)
+name: Release macOS (desktop, stable)
 
 # Manually-triggered STABLE release to GitHub Releases (channel: latest).
 # Builds a signed + NOTARIZED universal macOS app and publishes it as a normal
@@ -6,11 +6,11 @@ name: Release macOS (app, stable)
 # it up.
 #
 # VERSIONING INVARIANT (keeps demo installs on demo, never pulled onto stable):
-#   packages/app/package.json `version` is the in-development NEXT stable (e.g.
+#   packages/desktop/package.json `version` is the in-development NEXT stable (e.g.
 #   0.5.4 while 0.5.3 is the latest published stable). Demo builds are
 #   `0.5.4-beta.N`, which are always semver-greater than the released stable, so
 #   demo installs only ever update within the demo (beta) channel.
-#   => AFTER publishing a stable release, bump packages/app/package.json to the
+#   => AFTER publishing a stable release, bump packages/desktop/package.json to the
 #      next patch so the demo channel immediately leads the just-shipped stable
 #      again. Until that bump lands, do NOT cut a demo prerelease at the old
 #      base version.
@@ -40,7 +40,7 @@ jobs:
     runs-on: macos-latest
     defaults:
       run:
-        working-directory: packages/app
+        working-directory: packages/desktop
     env:
       # Code signing.
       CSC_LINK: ${{ secrets.CSC_LINK }}
@@ -104,7 +104,7 @@ jobs:
       - name: Pre-create draft release
         # electron-builder races itself creating the GitHub release (two
         # publisher instances, both POST /releases, loser 422s - see
-        # app-release-demo.yml for details). Pre-create the release as a draft so
+        # desktop-release-demo.yml for details). Pre-create the release as a draft so
         # every publisher instance finds and reuses it; the last step publishes
         # it once all assets (incl. latest.yml) are uploaded.
         run: |

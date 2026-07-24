@@ -6,7 +6,7 @@
 //   - read state.json directly for live status (no subprocess)
 //   - return typed results so the renderer can map errors to UX
 //
-// The daemon binary is bundled by packages/app/scripts/build-stdiod.sh and
+// The daemon binary is bundled by packages/desktop/scripts/build-stdiod.sh and
 // resolved by getStdiodBinaryPath(). The launchd unit (registered by
 // `edison-stdiod install`) is what actually keeps the daemon running -
 // this controller only orchestrates the one-shot CLI subcommands.
