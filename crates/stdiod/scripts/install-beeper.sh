@@ -2,15 +2,16 @@
 #
 # install-beeper.sh - wire Beeper into the Edison Watch MCP gateway on macOS.
 #
-# Reality check (2026-07): Beeper only exposes an MCP endpoint from the Beeper
-# *Desktop app* (enabled once under Settings > Developers > MCP). The headless
-# `beeper` Server ships no MCP endpoint (github.com/beeper/cli issue #20), so a
-# fully unattended install is not possible today. This script automates the
-# Edison side end to end and gives exact, checkable instructions for the few
-# steps that Beeper and the dashboard still gate behind a human.
+# Reality check (2026-07): `@beeper/desktop-mcp` is itself the MCP server; it
+# bridges Beeper's local Client API (127.0.0.1:23373-23378) to MCP. That API is
+# served by either the Beeper Desktop app OR a headless `beeper` server
+# (`beeper setup --server`), so a headless setup works (verified against a
+# headless server on a real Mac). Beeper's main `execute` tool runs code in a
+# local Deno sandbox, so Deno must be installed. Full automation still stops at
+# the human-gated steps below (device approval, server approval, Beeper login).
 #
 # What it automates:
-#   1. Install prerequisites (node/npx, `edison-stdiod`).
+#   1. Install prerequisites (node/npx, Deno, `edison-stdiod`).
 #   2. Authorize this device to Edison Watch via the stdiod browser/device flow
 #      (`edison-stdiod login`; no API key paste, no step-up dance).
 #   3. Supervise the tunnel daemon (`edison-stdiod install`).
@@ -212,13 +213,18 @@ ensure_deps() {
   ensure_tool npx \
     "install Node (brew install node) or re-run with --install-deps" \
     brew install --quiet node
+  # @beeper/desktop-mcp runs its `execute` tool (the main Beeper surface) in a
+  # Deno sandbox spawned on this machine, so Deno is a hard runtime dep.
+  ensure_tool deno \
+    "install Deno (brew install deno); @beeper/desktop-mcp runs its execute tool in a Deno sandbox" \
+    brew install deno
   ensure_tool edison-stdiod \
     "run: cargo install --path crates/edison-stdiod   (or re-run with --install-deps)" \
     cargo install --path "$stdiod_src"
   if [ "$DRY_RUN" -eq 1 ]; then
     info "deps: preview only (nothing was installed)"
   else
-    ok "npx and edison-stdiod present"
+    ok "npx, deno, and edison-stdiod present"
   fi
 }
 
@@ -258,11 +264,11 @@ ensure_beeper_desktop() {
     ok "Beeper Desktop API reachable at $base"
     return 0
   fi
-  warn "the Beeper Desktop API is not answering on 23373-23378"
-  todo "open the Beeper Desktop app, then Settings > Developers > MCP and enable it"
-  todo "link the chats you want (WhatsApp / Telegram / ...) inside the Beeper app"
-  info "the headless 'beeper' Server does not expose MCP (github.com/beeper/cli issue #20), so the Desktop app must be running"
-  warn "continuing to wire the Edison side; the Beeper child stays idle until this is enabled"
+  warn "the Beeper Client API is not answering on 23373-23378"
+  todo "start Beeper: the Desktop app, or a headless server via 'beeper setup --server --install'"
+  todo "link the chats you want (WhatsApp / Telegram / ...) in Beeper"
+  info "@beeper/desktop-mcp bridges this local Client API to MCP, so either the Desktop app or a headless server works"
+  warn "continuing to wire the Edison side; the Beeper child stays idle until Beeper is reachable"
 }
 
 # ---------------------------------------------------------------------------
@@ -561,7 +567,7 @@ cmd_install() {
 cmd_doctor() {
   step "Doctor"
   local allgood=1
-  for c in npx edison-stdiod; do
+  for c in npx deno edison-stdiod; do
     if command -v "$c" >/dev/null 2>&1; then ok "$c"; else warn "$c missing"; allgood=0; fi
   done
   if beeper_api_base >/dev/null 2>&1; then ok "Beeper Desktop API reachable"; else warn "Beeper Desktop API not reachable (enable MCP in Beeper Desktop)"; allgood=0; fi
