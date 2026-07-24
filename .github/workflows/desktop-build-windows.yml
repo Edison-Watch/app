@@ -95,6 +95,24 @@ jobs:
             cp "target/$target/release/edison-stdiod.exe" "../../packages/desktop/bin/stdiod/$arch/edison-stdiod.exe"
           done
 
+      - name: Build edison-detectord (x64 + arm64)
+        # Same native per-arch pattern as stdiod above. The cargo binary is
+        # mcp_detector_daemon; win.extraResources expects it staged as
+        # bin/detectord/<arch>/edison-detectord.exe. Without this the packaged
+        # app ships without the detector daemon (electron-builder only warns).
+        working-directory: crates/detectord
+        run: |
+          set -euo pipefail
+          rustup target add x86_64-pc-windows-msvc aarch64-pc-windows-msvc
+          for spec in "x64:x86_64-pc-windows-msvc" "arm64:aarch64-pc-windows-msvc"; do
+            arch="${spec%%:*}"
+            target="${spec##*:}"
+            echo "Building mcp_detector_daemon for $target ..."
+            cargo build --release --target "$target" --bin mcp_detector_daemon
+            mkdir -p "../../packages/desktop/bin/detectord/$arch"
+            cp "target/$target/release/mcp_detector_daemon.exe" "../../packages/desktop/bin/detectord/$arch/edison-detectord.exe"
+          done
+
       - name: Stage bundled runtimes (npx/uvx, x64 + arm64)
         # Downloads Node (npx) + uv (uvx) into bin/runtimes/<arch>/;
         # win.extraResources copies the matching arch into resources/runtimes/.

@@ -23,9 +23,9 @@ on:
         type: boolean
         default: false
       stdiod_tag:
-        description: 'edison-stdiod release tag to bundle (pin for reproducible stable builds)'
+        description: 'edison-stdiod release tag in this repo to bundle (pin for reproducible stable builds)'
         type: string
-        default: v0.0.1
+        default: stdiod-v0.0.1
 
 concurrency:
   group: release-macos-stable
@@ -89,7 +89,7 @@ jobs:
         run: |
           mkdir -p stdiod-dl bin
           # Pinned to a specific tag so a stable release is reproducible.
-          gh release download "${{ inputs.stdiod_tag }}" --repo Edison-Watch/stdiod \
+          gh release download "${{ inputs.stdiod_tag }}" --repo "$GITHUB_REPOSITORY" \
             --pattern 'edison-stdiod-macos-universal' \
             --pattern 'SHA256SUMS' \
             --dir stdiod-dl --clobber

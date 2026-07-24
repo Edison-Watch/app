@@ -109,7 +109,14 @@ jobs:
       - name: Pull latest edison-stdiod (universal) from stdiod releases
         run: |
           mkdir -p stdiod-dl bin
-          gh release download --repo Edison-Watch/stdiod \
+          # Releases in this repo are mixed (desktop v*, stdiod stdiod-v*), so
+          # "latest" must be resolved per component, not taken from GitHub's
+          # repo-wide latest.
+          TAG=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 100 \
+            --json tagName --jq '[.[] | select(.tagName | startswith("stdiod-v"))][0].tagName')
+          [ -n "$TAG" ] || { echo "::error::no stdiod-v* release found in $GITHUB_REPOSITORY"; exit 1; }
+          echo "Bundling stdiod release: $TAG"
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
             --pattern 'edison-stdiod-macos-universal' \
             --pattern 'SHA256SUMS' \
             --dir stdiod-dl --clobber
