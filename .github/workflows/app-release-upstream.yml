@@ -84,7 +84,7 @@ jobs:
         run: echo "version=$(grep '^electronVersion:' electron-builder.yml | awk '{print $2}')" >> "$GITHUB_OUTPUT"
 
       - name: Cache electron-builder downloads
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/Library/Caches/electron
@@ -96,7 +96,7 @@ jobs:
       # source-only change to either daemon still reuses the dependency builds,
       # which is the bulk of a cold Rust release build.
       - name: Cache cargo
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry

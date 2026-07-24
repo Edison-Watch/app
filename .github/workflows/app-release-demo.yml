@@ -59,7 +59,7 @@ jobs:
           cache-dependency-path: package-lock.json
 
       - name: Cache electron-builder downloads
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/Library/Caches/electron
