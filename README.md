@@ -1,6 +1,6 @@
 <div align="center">
 
-# Edison Watch - App
+# Edison Watch client apps
 
 <b>Everything Edison Watch runs on your machine.</b>
 
@@ -8,39 +8,52 @@
 
 </div>
 
-This monorepo contains every client-side component of
-[Edison Watch](https://edison.watch) - the pieces that are installed on your
-machine, all open source and auditable. The server side lives elsewhere; the
-trust boundary is exactly this repo.
+[Edison Watch](https://edison.watch) is a security gateway that sits between AI
+tools (Claude, Cursor, VS Code, and friends) and the MCP servers they call, so
+an organization can see, approve, and block what its AI agents do. Those MCP
+servers can read files, hold credentials, and reach the network, and they're
+configured in a dozen different places on each machine.
 
-## Components
+The client side of that lives here: a desktop app that finds every MCP server
+configured across the AI clients on a machine, quarantines new or unapproved
+ones before they run, and encrypts credentials with zero-knowledge keys, plus
+the two daemons that do the on-machine work. Everything that gets installed on
+a user's device is in this repository, open source and auditable. The gateway
+and web dashboard are server-side and live elsewhere (see below).
 
-| Component | Path | What it is |
+## What's in this repo
+
+| Component | Path | What it does |
 | --- | --- | --- |
-| Desktop app | [`packages/app/`](./packages/app) | Electron menu-bar app: discover, quarantine, and encrypt your AI tools' MCP servers |
-| Shared library | [`packages/shared/`](./packages/shared) | `@edison-watch/shared` - React components, design tokens, and client utilities |
-| stdiod | [`crates/stdiod/`](./crates/stdiod) | Rust daemon that runs local stdio MCP servers and tunnels them to the gateway |
-| detectord | [`crates/detectord/`](./crates/detectord) | Rust library + daemon that detects and tracks MCP client configuration files |
+| Desktop app | [`packages/app/`](./packages/app) | Electron menu-bar app: discovery, quarantine review, credential encryption, and settings. The user-facing control plane. |
+| stdiod | [`crates/stdiod/`](./crates/stdiod) | Rust daemon that spawns local stdio MCP servers and bridges them to the gateway over one outbound WebSocket. No inbound ports; the processes and their secrets stay on the device. |
+| detectord | [`crates/detectord/`](./crates/detectord) | Rust daemon and library that watches the MCP config files of host apps (Claude Code, VS Code, Cursor, ...) and enforces quarantine. |
+| Shared library | [`packages/shared/`](./packages/shared) | `@edison-watch/shared`: the React components, design tokens, and client utilities the desktop app shares with the web dashboard. |
 
-Each component was formerly its own repository
+Each component's README covers its own architecture and usage.
+
+## What's not in this repo
+
+- The Edison Watch gateway (the server the daemons tunnel to) and the web
+  dashboard are server-side and developed separately. The split is deliberate:
+  this repo is exactly the code that runs with access to your machine, so it's
+  the part you can audit.
+- Product and setup docs are at [edison.watch](https://edison.watch).
+
+Each component here started as its own repository
 ([desktop](https://github.com/Edison-Watch/desktop),
 [shared](https://github.com/Edison-Watch/shared),
 [stdiod](https://github.com/Edison-Watch/stdiod),
-[detectord](https://github.com/Edison-Watch/detectord)); their full git
-histories were preserved in the import (tags are prefixed per component, e.g.
-`desktop-v0.5.2`).
-
-## Layout
-
-- `packages/*` are npm workspaces rooted at this directory - run `npm ci` here,
-  not inside a package.
-- `crates/stdiod` and `crates/detectord` are two independent Cargo workspaces -
-  run `cargo` commands from inside each.
-- CI lives in [`.github/workflows/`](./.github/workflows), one prefixed set of
-  workflows per component, path-filtered so a change to one component only runs
-  that component's checks.
+[detectord](https://github.com/Edison-Watch/detectord)) and was merged in with
+its git history preserved. Tags carry a component prefix, e.g.
+`desktop-v0.5.2`.
 
 ## Building
+
+The JavaScript packages are npm workspaces rooted here; the two Rust crates
+are independent Cargo workspaces. CI is path-filtered per component
+([`.github/workflows/`](./.github/workflows)), so a change to one component
+only runs that component's checks.
 
 ```sh
 # Desktop app + shared library
@@ -53,7 +66,11 @@ cargo build --workspace --manifest-path crates/stdiod/Cargo.toml
 cargo build --manifest-path crates/detectord/Cargo.toml
 ```
 
-See each component's own README for details.
+## Contributing and security
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md). For security issues, do not open a
+public issue; follow [SECURITY.md](./SECURITY.md) (private advisory or
+security@edison.watch).
 
 ## License
 
