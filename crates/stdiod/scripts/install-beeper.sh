@@ -49,8 +49,11 @@ export HOMEBREW_NO_ENV_HINTS="${HOMEBREW_NO_ENV_HINTS:-1}"
 # ---------------------------------------------------------------------------
 # Defaults (every one overridable by flag or environment variable)
 # ---------------------------------------------------------------------------
-EW_BACKEND="${EW_BACKEND:-https://dashboard.edison.watch}"
-EW_BACKEND_SET=0                                   # 1 once --ew-backend is given on the CLI
+# An EW_BACKEND supplied through the environment is an explicit choice, exactly
+# like passing --ew-backend, so resolve_backend must not override it with the
+# device's saved session. Capture that before applying the release default.
+if [ -n "${EW_BACKEND:-}" ]; then EW_BACKEND_SET=1; else EW_BACKEND_SET=0; fi
+EW_BACKEND="${EW_BACKEND:-https://dashboard.edison.watch}"  # --ew-backend/--demo/--release also set EW_BACKEND_SET
 EW_API_KEY="${EW_API_KEY:-}"                       # only for the mcp-url client snippet
 BEEPER_ACCESS_TOKEN="${BEEPER_ACCESS_TOKEN:-}"     # skip token discovery if set
 SERVER_NAME="${SERVER_NAME:-beeper}"               # tunnel server name / gateway prefix
@@ -115,6 +118,7 @@ need_cmd() {
 
 confirm() {
   local ans
+  [ "$DRY_RUN" -eq 1 ] && return 0   # dry-run mutates nothing; let its previews through
   [ "$ASSUME_YES" -eq 1 ] && return 0
   [ "$INTERACTIVE" -eq 0 ] && die "refusing to run a confirming action non-interactively: $1" \
     "pass --yes to proceed, or --dry-run to preview"
@@ -231,14 +235,32 @@ ensure_deps() {
 # ---------------------------------------------------------------------------
 # Step A: Beeper Desktop app + its MCP endpoint
 # ---------------------------------------------------------------------------
+# The Beeper Client API is local-only, so every URL that later receives an
+# Authorization: Bearer header (the API base and the userinfo endpoint) must
+# resolve to a loopback host. This blocks a hostile BEEPER_API_URL or a
+# userinfo_endpoint injected into the well-known document from turning token
+# discovery into a leak of every scraped candidate to a remote server.
+is_loopback_url() {
+  local host
+  host="$(printf '%s' "$1" | sed -E 's#^[a-zA-Z][a-zA-Z0-9+.-]*://##; s#/.*$##; s#:[0-9]+$##')"
+  case "$host" in
+    127.0.0.1|localhost|"[::1]"|::1) return 0;;
+    *) return 1;;
+  esac
+}
+
 # Echo the first reachable Beeper Desktop API base URL, or nothing (exit 1).
 # The app answers on 127.0.0.1:23373 by default; it may also bind IPv6 ([::1])
-# or scan 23373-23378. BEEPER_API_URL overrides the probe.
+# or scan 23373-23378. BEEPER_API_URL overrides the probe (loopback only).
 beeper_api_base() {
   local wk="/.well-known/oauth-authorization-server" code h p url
   if [ -n "${BEEPER_API_URL:-}" ]; then
-    code="$(curl -s -m 3 -o /dev/null -w '%{http_code}' "${BEEPER_API_URL}${wk}" 2>/dev/null || true)"
-    [ -n "$code" ] && [ "$code" != "000" ] && { printf '%s' "$BEEPER_API_URL"; return 0; }
+    if is_loopback_url "$BEEPER_API_URL"; then
+      code="$(curl -s -m 3 -o /dev/null -w '%{http_code}' "${BEEPER_API_URL}${wk}" 2>/dev/null || true)"
+      [ -n "$code" ] && [ "$code" != "000" ] && { printf '%s' "$BEEPER_API_URL"; return 0; }
+    else
+      warn "ignoring non-loopback BEEPER_API_URL ($BEEPER_API_URL); the Beeper Client API is local-only"
+    fi
   fi
   for h in 127.0.0.1 localhost "[::1]"; do
     for p in 23373 23374 23375 23376 23377 23378; do
@@ -280,6 +302,20 @@ mask_token() {
   printf '%s...%s (len %s)' "${s:0:6}" "${s: -4}" "${#s}"
 }
 
+# Escape a value for safe interpolation into a JSON string literal. Covers the
+# characters JSON forbids raw: backslash (first), double-quote, and the common
+# controls. Keeps --json output and the bind-token body valid even when a token,
+# label, or backend contains quotes or backslashes.
+json_escape() {
+  local s="$1"
+  s="${s//\\/\\\\}"
+  s="${s//\"/\\\"}"
+  s="${s//$'\n'/\\n}"
+  s="${s//$'\r'/\\r}"
+  s="${s//$'\t'/\\t}"
+  printf '%s' "$s"
+}
+
 # Resolve the Beeper OAuth userinfo endpoint from the well-known document, with
 # a sensible default. Echoes the URL; empty on no reachable API.
 beeper_userinfo_endpoint() {
@@ -288,7 +324,13 @@ beeper_userinfo_endpoint() {
   uinfo="$(curl -s -m 4 "$base/.well-known/oauth-authorization-server" 2>/dev/null \
            | grep -oE '"userinfo_endpoint"[[:space:]]*:[[:space:]]*"[^"]+"' \
            | grep -oE 'https?://[^"]+' | head -1)"
-  [ -z "$uinfo" ] && uinfo="$base/oauth/userinfo"
+  # $base is already loopback; refuse to follow a userinfo_endpoint that points
+  # anywhere else, since candidate tokens are sent here with an Authorization
+  # header. Fall back to the local default rather than leaking to a remote host.
+  if [ -z "$uinfo" ] || ! is_loopback_url "$uinfo"; then
+    [ -n "$uinfo" ] && warn "ignoring non-loopback userinfo_endpoint ($uinfo); using the local default"
+    uinfo="$base/oauth/userinfo"
+  fi
   printf '%s' "$uinfo"
 }
 
@@ -532,7 +574,8 @@ print_result() {
   local mcp_url="${EW_BACKEND%/}/mcp"
   if [ "$JSON" -eq 1 ]; then
     printf '{"mcp_url":"%s","server":"%s","device_label":"%s","beeper_token_present":%s}\n' \
-      "$mcp_url" "$SERVER_NAME" "$DEVICE_LABEL" "$([ -n "$BEEPER_ACCESS_TOKEN" ] && echo true || echo false)"
+      "$(json_escape "$mcp_url")" "$(json_escape "$SERVER_NAME")" "$(json_escape "$DEVICE_LABEL")" \
+      "$([ -n "$BEEPER_ACCESS_TOKEN" ] && echo true || echo false)"
     return 0
   fi
   local b=$C_BOLD g=$C_GREEN d=$C_DIM r=$C_RESET
@@ -570,7 +613,7 @@ cmd_doctor() {
   for c in npx deno edison-stdiod; do
     if command -v "$c" >/dev/null 2>&1; then ok "$c"; else warn "$c missing"; allgood=0; fi
   done
-  if beeper_api_base >/dev/null 2>&1; then ok "Beeper Desktop API reachable"; else warn "Beeper Desktop API not reachable (enable MCP in Beeper Desktop)"; allgood=0; fi
+  if beeper_api_base >/dev/null 2>&1; then ok "Beeper Client API reachable"; else warn "Beeper Client API not reachable (start Beeper Desktop with MCP enabled, or a headless 'beeper' server)"; allgood=0; fi
   if stdiod_logged_in; then ok "device authorized to Edison"; else warn "not authorized (run: $PROG install)"; allgood=0; fi
   if command -v edison-stdiod >/dev/null 2>&1 && edison-stdiod status >/dev/null 2>&1; then
     ok "stdiod daemon connected"; else warn "stdiod daemon not running (run: $PROG install)"; allgood=0; fi
@@ -583,7 +626,7 @@ cmd_status() {
   need_cmd edison-stdiod
   run edison-stdiod status
   local base; base="$(beeper_api_base 2>/dev/null || true)"
-  if [ -n "$base" ]; then ok "Beeper Desktop API: $base"; else warn "Beeper Desktop API not reachable"; fi
+  if [ -n "$base" ]; then ok "Beeper Client API: $base"; else warn "Beeper Client API not reachable (Beeper Desktop with MCP enabled, or a headless 'beeper' server)"; fi
 }
 
 cmd_token() {
@@ -611,8 +654,12 @@ cmd_token() {
 # AFTER the '$SERVER_NAME' request is approved in the dashboard.
 cmd_bind_token() {
   step "Binding BEEPER_ACCESS_TOKEN to server '$SERVER_NAME'"
-  [ -n "$EW_API_KEY" ] || die "an admin Edison API key is required to push env" \
-    "pass --ew-api-key edison_... (must belong to an org admin on ${EW_BACKEND})"
+  # The admin key is only needed for the real POST. Requiring it before the
+  # dry-run branch would block a credential-free preview, so gate it on DRY_RUN.
+  if [ "$DRY_RUN" -eq 0 ]; then
+    [ -n "$EW_API_KEY" ] || die "an admin Edison API key is required to push env" \
+      "pass --ew-api-key edison_... (must belong to an org admin on ${EW_BACKEND})"
+  fi
   local tok="$BEEPER_ACCESS_TOKEN"
   if [ -z "$tok" ] && [ "$DRY_RUN" -eq 0 ]; then
     if ! tok="$(discover_beeper_token)" || [ -z "$tok" ]; then
@@ -627,7 +674,7 @@ cmd_bind_token() {
   local code
   code="$(curl -s -o /dev/null -w '%{http_code}' -m 60 --connect-timeout 5 -X POST "$url" \
     -H "Authorization: Bearer ${EW_API_KEY}" -H "Content-Type: application/json" \
-    --data "$(printf '{"env":{"BEEPER_ACCESS_TOKEN":"%s"}}' "$tok")" 2>/dev/null || true)"
+    --data "$(printf '{"env":{"BEEPER_ACCESS_TOKEN":"%s"}}' "$(json_escape "$tok")")" 2>/dev/null || true)"
   [ -z "$code" ] && code="000"
   case "$code" in
     2*)      ok "bound BEEPER_ACCESS_TOKEN; the backend verified the spawn and pushed it to the device [$(mask_token "$tok")]";;
