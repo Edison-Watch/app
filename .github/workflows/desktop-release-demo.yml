@@ -77,6 +77,19 @@ jobs:
         run: npm run build -w packages/shared
         working-directory: .
 
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: crates/detectord
+
+      - name: Build edison-detectord from source
+        # Stages crates/detectord's daemon into bin/edison-detectord (arm64).
+        # mac.extraResources expects it; electron-builder only WARNS when the
+        # file is missing, which is how releases shipped without the detector
+        # daemon until 0.6.0.
+        run: npm run build:detectord
+
       - name: Pull latest edison-stdiod (universal) from stdiod releases
         run: |
           mkdir -p stdiod-dl bin
@@ -138,6 +151,17 @@ jobs:
             -c.mac.notarize=${{ inputs.notarize }} \
             -c.publish.channel=beta \
             -c.publish.releaseType=prerelease
+
+      - name: Verify bundled daemons
+        # electron-builder treats a missing extraResources source as a warning,
+        # so assert both daemons actually made it into the packaged .app.
+        run: |
+          set -euo pipefail
+          for bin in edison-stdiod edison-detectord; do
+            found=$(find dist -path "*Contents/Resources/bin/$bin" | head -1)
+            [ -n "$found" ] || { echo "::error::$bin missing from packaged app"; exit 1; }
+            echo "bundled: $found"
+          done
 
       - name: Publish prerelease
         # All assets + beta.yml are uploaded - make the release visible.
