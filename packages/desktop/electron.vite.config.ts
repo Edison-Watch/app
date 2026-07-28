@@ -36,10 +36,6 @@ export default defineConfig(({ mode }) => {
         alias: {
           "@": resolve(__dirname, "src/renderer/src"),
         },
-        dedupe: ["@supabase/supabase-js"],
-      },
-      optimizeDeps: {
-        include: ["@supabase/supabase-js"],
       },
       server: {
         fs: {
