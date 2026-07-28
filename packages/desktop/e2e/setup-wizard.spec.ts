@@ -2,23 +2,25 @@ import { test, expect } from "./fixtures";
 
 test.describe("Setup Wizard", () => {
   test("app launches and renders Step 1 (Welcome)", async ({ firstWindow }) => {
-    // The wizard's sign-in method picker is the welcome step's stable marker
+    // The wizard's browser sign-in button is the welcome step's stable marker
     // (the branding is an SVG logo, not text).
-    await expect(firstWindow.locator("text=Sign in with SSO")).toBeVisible({ timeout: 30000 });
+    await expect(
+      firstWindow.getByRole("button", { name: "Sign in with your browser" }),
+    ).toBeVisible({ timeout: 30000 });
   });
 
-  test("Step 1 shows sign-in options", async ({ firstWindow }) => {
-    // Step 1 offers provider sign-in (OAuth buttons and/or the SSO/Email
-    // tiles); a bare email input only appears after expanding a tile.
-    const signInElements = firstWindow.locator(
-      'button:has-text("Sign in with"), button:has-text("Continue with")',
-    );
+  test("Step 1 shows the browser sign-in option", async ({ firstWindow }) => {
+    // Step 1 offers a single device-authorization sign-in path: the dashboard
+    // handles the actual login method (Google, Microsoft, SSO, email).
+    const signInElements = firstWindow.locator('button:has-text("Sign in with")');
     await expect(signInElements.first()).toBeVisible({ timeout: 30000 });
   });
 
   test("Step 2 placeholder renders after mock auth", async ({ electronApp, firstWindow }) => {
     // Wait for app to be ready
-    await expect(firstWindow.locator("text=Sign in with SSO")).toBeVisible({ timeout: 30000 });
+    await expect(
+      firstWindow.getByRole("button", { name: "Sign in with your browser" }),
+    ).toBeVisible({ timeout: 30000 });
 
     // Simulate auth completion by evaluating in renderer context
     // This bypasses real auth and injects mock state
@@ -28,7 +30,7 @@ test.describe("Setup Wizard", () => {
       window.dispatchEvent(new CustomEvent("test:advance-step"));
     });
 
-    // Since we can't easily mock Supabase auth in E2E,
+    // Since we can't approve a real device grant in this smoke test,
     // verify the step indicator structure exists
     const stepIndicator = firstWindow.locator('[class*="step"], [class*="indicator"]');
     const stepCount = await stepIndicator.count();

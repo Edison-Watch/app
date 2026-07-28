@@ -40,7 +40,7 @@ export function getBuildDefaultEnv(): DebugEnvName | null {
   return null;
 }
 
-// "dev" = localhost backend (make dev / make demo_server) + demo Supabase auth
+// "dev" = localhost backend (make dev / make demo_server)
 export const DEV_MCP_BASE_URL = "http://localhost:3000";
 export const DEV_API_BASE_URL = "http://localhost:3001";
 

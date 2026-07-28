@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Button, Badge } from "@edison-watch/shared/ui";
-import { supabase } from "@edison-watch/shared/auth";
+import { clearStoredDeviceSession, deviceSignOut } from "@edison-watch/shared/auth";
+import { getActiveEnvName, getEnv } from "@edison-watch/shared/config";
 import { clearCachedSecretKey } from "@edison-watch/shared/crypto";
 import edisonIcon from "../assets/edison-icon.png";
 import ClientsView from "./ClientsView";
@@ -141,7 +142,9 @@ export default function MainMenu(): React.ReactNode {
         setSwitching(false);
         return;
       }
-      await supabase.auth.signOut();
+      // Drop this renderer's device session; the installation credential stays
+      // valid so switching back later doesn't require re-approval.
+      clearStoredDeviceSession(getActiveEnvName());
     } catch {
       // fall through to reload regardless - main process may already
       // be operating as the new account after a successful switch
@@ -157,7 +160,14 @@ export default function MainMenu(): React.ReactNode {
 
   const handleSignOut = async () => {
     try {
-      await supabase.auth.signOut();
+      let apiBaseUrl = getEnv().API_BASE_URL;
+      try {
+        const effective = await window.api.config.getEffectiveBaseUrls();
+        if (effective.apiBaseUrl) apiBaseUrl = effective.apiBaseUrl;
+      } catch {
+        // fall back to env default
+      }
+      await deviceSignOut(getActiveEnvName(), apiBaseUrl);
     } catch {
       // best-effort sign-out; always continue to reset
     }
