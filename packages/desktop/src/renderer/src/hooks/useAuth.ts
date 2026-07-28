@@ -226,58 +226,69 @@ export default function useAuth() {
       pendingVerificationUri: grant.verification_uri_complete,
     });
 
+    // The controller stays armed until credentials are stored, so Cancel
+    // aborts the whole flow - including profile resolution - not just polling.
     const controller = new AbortController();
     pollAbort.current = controller;
-    let token: DeviceTokenResponse;
     try {
-      token = await pollDeviceToken(apiBaseUrl, grant, verifier, controller.signal);
-    } catch (err) {
-      pollAbort.current = null;
-      if ((err as Error).name === "AbortError") return; // user cancelled
-      const message =
-        err instanceof DeviceAuthError ? err.message : "Sign-in failed. Please try again.";
+      let token: DeviceTokenResponse;
+      try {
+        token = await pollDeviceToken(apiBaseUrl, grant, verifier, controller.signal);
+      } catch (err) {
+        if ((err as Error).name === "AbortError") return; // user cancelled
+        const message =
+          err instanceof DeviceAuthError ? err.message : "Sign-in failed. Please try again.";
+        update({
+          loading: false,
+          error: message,
+          awaitingBrowserCallback: false,
+          pendingUserCode: "",
+          pendingVerificationUri: "",
+        });
+        return;
+      }
+
+      if (!token.api_key) {
+        update({
+          loading: false,
+          error: "The server did not return an API key. Please update Edison and try again.",
+          awaitingBrowserCallback: false,
+          pendingUserCode: "",
+          pendingVerificationUri: "",
+        });
+        return;
+      }
+
+      // The token response has no email - resolve it from the user profile.
+      let profile;
+      try {
+        profile = await fetchUserProfile(apiBaseUrl, token.api_key, 5000, controller.signal);
+      } catch {
+        return; // aborted by Cancel during profile resolution
+      }
+      if (controller.signal.aborted) return;
+
+      storeDeviceSession(getActiveEnvName(), {
+        apiKey: token.api_key,
+        clientAccessToken: token.access_token,
+        clientInstallationId: token.client_installation_id,
+        userId: token.user_id,
+        orgId: token.org_id,
+        email: profile?.email ?? "",
+      });
       update({
-        loading: false,
-        error: message,
         awaitingBrowserCallback: false,
         pendingUserCode: "",
         pendingVerificationUri: "",
       });
-      return;
-    }
-    pollAbort.current = null;
-
-    if (!token.api_key) {
-      update({
-        loading: false,
-        error: "The server did not return an API key. Please update Edison and try again.",
-        awaitingBrowserCallback: false,
-        pendingUserCode: "",
-        pendingVerificationUri: "",
+      await completeSignIn({
+        apiKey: token.api_key,
+        userId: token.user_id,
+        email: profile?.email ?? "",
       });
-      return;
+    } finally {
+      if (pollAbort.current === controller) pollAbort.current = null;
     }
-
-    // The token response has no email - resolve it from the user profile.
-    const profile = await fetchUserProfile(apiBaseUrl, token.api_key);
-    storeDeviceSession(getActiveEnvName(), {
-      apiKey: token.api_key,
-      clientAccessToken: token.access_token,
-      clientInstallationId: token.client_installation_id,
-      userId: token.user_id,
-      orgId: token.org_id,
-      email: profile?.email ?? "",
-    });
-    update({
-      awaitingBrowserCallback: false,
-      pendingUserCode: "",
-      pendingVerificationUri: "",
-    });
-    await completeSignIn({
-      apiKey: token.api_key,
-      userId: token.user_id,
-      email: profile?.email ?? "",
-    });
   }, [completeSignIn, update]);
 
   // Re-open the dashboard approval page for a pending sign-in.

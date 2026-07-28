@@ -1,8 +1,19 @@
 import { useState, useEffect } from "react";
 import { Button, Badge } from "@edison-watch/shared/ui";
-import { clearStoredDeviceSession, deviceSignOut } from "@edison-watch/shared/auth";
+import { deviceSignOut } from "@edison-watch/shared/auth";
 import { getActiveEnvName, getEnv } from "@edison-watch/shared/config";
 import { clearCachedSecretKey } from "@edison-watch/shared/crypto";
+
+/** Effective API origin: main-process override first, env default as fallback. */
+async function resolveApiBaseUrl(): Promise<string> {
+  try {
+    const effective = await window.api.config.getEffectiveBaseUrls();
+    if (effective.apiBaseUrl) return effective.apiBaseUrl;
+  } catch {
+    // fall back to env default
+  }
+  return getEnv().API_BASE_URL;
+}
 import edisonIcon from "../assets/edison-icon.png";
 import ClientsView from "./ClientsView";
 import MyMcpsView from "./MyMcpsView";
@@ -142,9 +153,10 @@ export default function MainMenu(): React.ReactNode {
         setSwitching(false);
         return;
       }
-      // Drop this renderer's device session; the installation credential stays
-      // valid so switching back later doesn't require re-approval.
-      clearStoredDeviceSession(getActiveEnvName());
+      // Revoke this account's installation credential before dropping the
+      // session - switching back later uses the API key saved in
+      // accounts.json, and a fresh device login recreates the installation.
+      await deviceSignOut(getActiveEnvName(), await resolveApiBaseUrl());
     } catch {
       // fall through to reload regardless - main process may already
       // be operating as the new account after a successful switch
@@ -160,14 +172,7 @@ export default function MainMenu(): React.ReactNode {
 
   const handleSignOut = async () => {
     try {
-      let apiBaseUrl = getEnv().API_BASE_URL;
-      try {
-        const effective = await window.api.config.getEffectiveBaseUrls();
-        if (effective.apiBaseUrl) apiBaseUrl = effective.apiBaseUrl;
-      } catch {
-        // fall back to env default
-      }
-      await deviceSignOut(getActiveEnvName(), apiBaseUrl);
+      await deviceSignOut(getActiveEnvName(), await resolveApiBaseUrl());
     } catch {
       // best-effort sign-out; always continue to reset
     }

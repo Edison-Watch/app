@@ -7,6 +7,7 @@ export {
   fetchUserProfile,
   generatePkce,
   loadStoredDeviceSession,
+  parseRetryAfterSeconds,
   pollDeviceToken,
   requestDeviceCode,
   revokeDeviceSession,

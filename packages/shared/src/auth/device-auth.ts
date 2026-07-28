@@ -128,6 +128,20 @@ export async function requestDeviceCode(
   return body as DeviceCodeGrant
 }
 
+/**
+ * Parse a Retry-After header value: delta-seconds or HTTP-date.
+ * Returns undefined for absent, invalid, or already-elapsed values.
+ */
+export function parseRetryAfterSeconds(value: string | null): number | undefined {
+  if (!value) return undefined
+  const seconds = Number(value)
+  if (Number.isFinite(seconds)) return seconds > 0 ? seconds : undefined
+  const date = Date.parse(value)
+  if (Number.isNaN(date)) return undefined
+  const delta = (date - Date.now()) / 1000
+  return delta > 0 ? delta : undefined
+}
+
 const sleep = (ms: number, signal?: AbortSignal): Promise<void> =>
   new Promise((resolve, reject) => {
     const timer = setTimeout(resolve, ms)
@@ -181,13 +195,24 @@ export async function pollDeviceToken(
     }
 
     if (res.status === 429) {
-      const retryAfter = Number(res.headers.get('retry-after'))
-      waitSeconds = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : waitSeconds + 5
+      // Server-directed pacing only ever slows us down: take the max of the
+      // current backoff and the Retry-After value so a short header can never
+      // undo an earlier slow_down.
+      const retryAfter = parseRetryAfterSeconds(res.headers.get('retry-after'))
+      waitSeconds = Math.max(waitSeconds, retryAfter ?? waitSeconds + 5)
       continue
     }
 
     const body = await res.json().catch(() => null)
     if (res.ok) {
+      if (
+        !body ||
+        typeof body.access_token !== 'string' ||
+        typeof body.user_id !== 'string' ||
+        typeof body.org_id !== 'string'
+      ) {
+        throw new DeviceAuthError('protocol', 'Token response was missing required fields.')
+      }
       return body as DeviceTokenResponse
     }
     switch (body?.error) {
@@ -209,39 +234,52 @@ export async function pollDeviceToken(
   }
 }
 
-/** Fetch the user profile with an Edison API key (also validates the key). */
+/**
+ * Fetch the user profile with an Edison API key (also validates the key).
+ * Rethrows an abort of the caller's `signal` (a cancelled flow must be
+ * distinguishable from an invalid key); every other failure returns null.
+ */
 export async function fetchUserProfile(
   apiBaseUrl: string,
   apiKey: string,
-  timeoutMs = 5000
+  timeoutMs = 5000,
+  signal?: AbortSignal
 ): Promise<UserProfile | null> {
+  const timeout = AbortSignal.timeout(timeoutMs)
   try {
     const res = await fetch(`${trimBase(apiBaseUrl)}/api/v1/user/profile`, {
       headers: { Authorization: `Bearer ${apiKey}`, Accept: 'application/json' },
-      signal: AbortSignal.timeout(timeoutMs)
+      signal: signal ? AbortSignal.any([signal, timeout]) : timeout
     })
     if (!res.ok) return null
     return (await res.json()) as UserProfile
-  } catch {
+  } catch (err) {
+    if (signal?.aborted) throw err
     return null
   }
 }
 
-/** Best-effort revocation of this installation's client credential. */
+/**
+ * Best-effort revocation of this installation's client credential.
+ * Resolves true when the credential is confirmed gone (revoked now, or the
+ * server no longer recognizes it); false when revocation could not be
+ * confirmed (network failure or server error).
+ */
 export async function revokeDeviceSession(
   apiBaseUrl: string,
   clientAccessToken: string
-): Promise<void> {
-  if (!clientAccessToken) return
+): Promise<boolean> {
+  if (!clientAccessToken) return true
   try {
-    await fetch(`${trimBase(apiBaseUrl)}/api/v1/auth/device/revoke`, {
+    const res = await fetch(`${trimBase(apiBaseUrl)}/api/v1/auth/device/revoke`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${clientAccessToken}` },
       signal: AbortSignal.timeout(5000)
     })
+    // 401 means the credential is already invalid or revoked - nothing to do.
+    return res.ok || res.status === 401
   } catch {
-    // Sign-out must never fail on a network error; the credential can be
-    // revoked later from the dashboard's Devices page.
+    return false
   }
 }
 
@@ -280,11 +318,22 @@ export function clearStoredDeviceSession(envName: string): void {
 /**
  * Sign out of the active env: revoke the installation credential (best-effort)
  * and drop the stored session. Shared by useAuth, WelcomeStep and MainMenu.
+ *
+ * The local session is cleared even when revocation cannot be confirmed:
+ * destroying the only copy of the bearer token is the fail-safe (nobody can
+ * use the installation afterwards), and the entry can still be revoked from
+ * the dashboard's Devices page. Sign-out must work offline.
  */
 export async function deviceSignOut(envName: string, apiBaseUrl: string): Promise<void> {
   const session = loadStoredDeviceSession(envName)
   if (session) {
-    await revokeDeviceSession(apiBaseUrl, session.clientAccessToken)
+    const confirmed = await revokeDeviceSession(apiBaseUrl, session.clientAccessToken)
+    if (!confirmed) {
+      console.warn(
+        '[device-auth] Installation revocation was not confirmed by the server; ' +
+          'the device entry can be revoked from the dashboard Devices page.'
+      )
+    }
   }
   clearStoredDeviceSession(envName)
 }
