@@ -126,13 +126,16 @@ export async function requestDeviceCode(
     }
     throw new DeviceAuthError('protocol', `Device code request failed (HTTP ${res.status})`)
   }
-  // The numeric fields drive the polling loop: a non-finite expires_in would
-  // disable the deadline (Date.now() > NaN is always false) and a bad
-  // interval would produce a tight loop, so both are validated up front.
+  // The string fields feed the UI and browser launch, and the numeric fields
+  // drive the polling loop: a non-finite expires_in would disable the
+  // deadline (Date.now() > NaN is always false) and a bad interval would
+  // produce a tight loop, so everything is validated up front.
+  const isNonEmptyString = (value: unknown): value is string =>
+    typeof value === 'string' && value.length > 0
   if (
-    !body?.device_code ||
-    !body?.user_code ||
-    !body?.verification_uri_complete ||
+    !isNonEmptyString(body?.device_code) ||
+    !isNonEmptyString(body?.user_code) ||
+    !isNonEmptyString(body?.verification_uri_complete) ||
     !Number.isFinite(body.expires_in) ||
     body.expires_in <= 0 ||
     !Number.isFinite(body.interval) ||
@@ -186,7 +189,14 @@ export async function pollDeviceToken(
   const deadline = Date.now() + grant.expires_in * 1000
 
   for (;;) {
-    await sleep(waitSeconds * 1000, signal)
+    // Never sleep past the grant's expiry: a large Retry-After or accumulated
+    // backoff is bounded by the remaining lifetime so the expiry check below
+    // fires on time instead of after an oversized wait.
+    const remainingMs = deadline - Date.now()
+    if (remainingMs <= 0) {
+      throw new DeviceAuthError('expired_token', 'The sign-in request expired. Please try again.')
+    }
+    await sleep(Math.min(waitSeconds * 1000, remainingMs), signal)
     if (Date.now() > deadline) {
       throw new DeviceAuthError('expired_token', 'The sign-in request expired. Please try again.')
     }
@@ -220,11 +230,14 @@ export async function pollDeviceToken(
 
     const body = await res.json().catch(() => null)
     if (res.ok) {
+      // Non-empty is required: an empty access_token would be persisted as a
+      // falsy client credential, silently disabling sign-out revocation.
+      const isNonEmptyString = (value: unknown): value is string =>
+        typeof value === 'string' && value.length > 0
       if (
-        !body ||
-        typeof body.access_token !== 'string' ||
-        typeof body.user_id !== 'string' ||
-        typeof body.org_id !== 'string'
+        !isNonEmptyString(body?.access_token) ||
+        !isNonEmptyString(body?.user_id) ||
+        !isNonEmptyString(body?.org_id)
       ) {
         throw new DeviceAuthError('protocol', 'Token response was missing required fields.')
       }

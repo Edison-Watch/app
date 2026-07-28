@@ -85,7 +85,9 @@ describe('requestDeviceCode', () => {
     ['zero expires_in', { ...VALID_GRANT_BODY, expires_in: 0 }],
     ['missing interval', { ...VALID_GRANT_BODY, interval: undefined }],
     ['negative interval', { ...VALID_GRANT_BODY, interval: -1 }],
-    ['missing device_code', { ...VALID_GRANT_BODY, device_code: '' }]
+    ['missing device_code', { ...VALID_GRANT_BODY, device_code: '' }],
+    ['object-valued user_code', { ...VALID_GRANT_BODY, user_code: { nested: true } }],
+    ['non-string verification_uri_complete', { ...VALID_GRANT_BODY, verification_uri_complete: 42 }]
   ])('rejects a 200 grant with %s (would break the polling loop)', async (_label, body) => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(body))
     await expect(requestDeviceCode('http://backend', {}, 'c'.repeat(43))).rejects.toMatchObject({
@@ -120,6 +122,26 @@ describe('pollDeviceToken', () => {
     const result = await pollOnce(jsonResponse({ unexpected: true }))
     expect(result).toBeInstanceOf(DeviceAuthError)
     expect((result as DeviceAuthError).code).toBe('protocol')
+  })
+
+  it('rejects a 2xx token with an empty access_token (would disable revocation)', async () => {
+    const result = await pollOnce(jsonResponse({ ...VALID_TOKEN, access_token: '' }))
+    expect(result).toBeInstanceOf(DeviceAuthError)
+    expect((result as DeviceAuthError).code).toBe('protocol')
+  })
+
+  it('bounds a huge Retry-After by the grant expiry instead of sleeping past it', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      jsonResponse({ error: 'rate limited' }, 429, { 'Retry-After': '999999' })
+    )
+    const promise = pollDeviceToken('http://backend', { ...GRANT, expires_in: 10 }, 'verifier')
+    const settled = promise.catch((err: unknown) => err)
+    // Sleep is clamped to the ~10s remaining lifetime, so the flow must
+    // terminate as expired shortly after - far sooner than the Retry-After.
+    await vi.advanceTimersByTimeAsync(11_000)
+    const result = await settled
+    expect(result).toBeInstanceOf(DeviceAuthError)
+    expect((result as DeviceAuthError).code).toBe('expired_token')
   })
 
   it('rejects a 2xx response with an unparseable body', async () => {

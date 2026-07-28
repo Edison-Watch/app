@@ -148,6 +148,10 @@ export default function MainMenu(): React.ReactNode {
   const handleSwitchAccount = async (userId: string) => {
     setSwitching(true);
     try {
+      // Resolve the API origin BEFORE switching: the outgoing account's
+      // installation must be revoked on its own backend, not the new
+      // account's (accounts can point at different origins).
+      const outgoingApiBaseUrl = await resolveApiBaseUrl();
       const result = await window.api.accounts.switch(userId);
       if (!result.ok) {
         setSwitching(false);
@@ -156,7 +160,7 @@ export default function MainMenu(): React.ReactNode {
       // Revoke this account's installation credential before dropping the
       // session - switching back later uses the API key saved in
       // accounts.json, and a fresh device login recreates the installation.
-      await deviceSignOut(getActiveEnvName(), await resolveApiBaseUrl());
+      await deviceSignOut(getActiveEnvName(), outgoingApiBaseUrl);
     } catch {
       // fall through to reload regardless - main process may already
       // be operating as the new account after a successful switch
