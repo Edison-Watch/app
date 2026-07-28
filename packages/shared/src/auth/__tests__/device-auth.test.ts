@@ -73,9 +73,10 @@ describe('requestDeviceCode', () => {
 
   it('returns a valid grant', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(VALID_GRANT_BODY))
-    await expect(
-      requestDeviceCode('http://backend', {}, 'c'.repeat(43))
-    ).resolves.toMatchObject({ user_code: 'ABCD-EFGH', interval: 7 })
+    await expect(requestDeviceCode('http://backend', {}, 'c'.repeat(43))).resolves.toMatchObject({
+      user_code: 'ABCD-EFGH',
+      interval: 7
+    })
   })
 
   it.each([
