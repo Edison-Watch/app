@@ -5,6 +5,7 @@ import {
   deviceSignOut,
   parseRetryAfterSeconds,
   pollDeviceToken,
+  requestDeviceCode,
   revokeDeviceSession,
   storeDeviceSession,
   loadStoredDeviceSession,
@@ -55,6 +56,40 @@ describe('parseRetryAfterSeconds', () => {
     expect(parseRetryAfterSeconds('soon')).toBeUndefined()
     expect(parseRetryAfterSeconds('0')).toBeUndefined()
     expect(parseRetryAfterSeconds(new Date(Date.now() - 60_000).toUTCString())).toBeUndefined()
+  })
+})
+
+describe('requestDeviceCode', () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  const VALID_GRANT_BODY = {
+    device_code: 'device-code',
+    user_code: 'ABCD-EFGH',
+    verification_uri: 'http://backend/device',
+    verification_uri_complete: 'http://backend/device?user_code=ABCD-EFGH',
+    expires_in: 600,
+    interval: 7
+  }
+
+  it('returns a valid grant', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(VALID_GRANT_BODY))
+    await expect(
+      requestDeviceCode('http://backend', {}, 'c'.repeat(43))
+    ).resolves.toMatchObject({ user_code: 'ABCD-EFGH', interval: 7 })
+  })
+
+  it.each([
+    ['missing expires_in', { ...VALID_GRANT_BODY, expires_in: undefined }],
+    ['non-numeric expires_in', { ...VALID_GRANT_BODY, expires_in: 'soon' }],
+    ['zero expires_in', { ...VALID_GRANT_BODY, expires_in: 0 }],
+    ['missing interval', { ...VALID_GRANT_BODY, interval: undefined }],
+    ['negative interval', { ...VALID_GRANT_BODY, interval: -1 }],
+    ['missing device_code', { ...VALID_GRANT_BODY, device_code: '' }]
+  ])('rejects a 200 grant with %s (would break the polling loop)', async (_label, body) => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(body))
+    await expect(requestDeviceCode('http://backend', {}, 'c'.repeat(43))).rejects.toMatchObject({
+      code: 'protocol'
+    })
   })
 })
 

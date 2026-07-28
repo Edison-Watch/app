@@ -109,7 +109,11 @@ export async function requestDeviceCode(
         device_label: info.deviceLabel,
         platform: info.platform,
         client_version: info.clientVersion
-      })
+      }),
+      // Bounded so a stalled request surfaces as a retryable error instead of
+      // leaving the sign-in button disabled forever (no cancel exists yet at
+      // this point in the flow - the waiting panel only appears with a grant).
+      signal: AbortSignal.timeout(15_000)
     })
   } catch {
     throw new DeviceAuthError('network', 'Could not reach the Edison server.')
@@ -122,7 +126,18 @@ export async function requestDeviceCode(
     }
     throw new DeviceAuthError('protocol', `Device code request failed (HTTP ${res.status})`)
   }
-  if (!body?.device_code || !body?.user_code || !body?.verification_uri_complete) {
+  // The numeric fields drive the polling loop: a non-finite expires_in would
+  // disable the deadline (Date.now() > NaN is always false) and a bad
+  // interval would produce a tight loop, so both are validated up front.
+  if (
+    !body?.device_code ||
+    !body?.user_code ||
+    !body?.verification_uri_complete ||
+    !Number.isFinite(body.expires_in) ||
+    body.expires_in <= 0 ||
+    !Number.isFinite(body.interval) ||
+    body.interval < 0
+  ) {
     throw new DeviceAuthError('protocol', 'Device code response was missing required fields.')
   }
   return body as DeviceCodeGrant
