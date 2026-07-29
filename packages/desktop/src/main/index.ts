@@ -78,6 +78,7 @@ import { refreshStdiodStatusCache, startStdiodStatusCacheRefresh } from './stdio
 import { uninstall as uninstallStdiod } from './stdiod/controller'
 import { uninstallService as uninstallDetectord } from './detectord/controller'
 import { maybeRefreshStdiodInstall } from './stdiod/installRefresh'
+import { initQuitConfirmation } from './runtime/quitConfirmation'
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import appIconPath from '../../resources/icon.png?asset'
@@ -437,6 +438,9 @@ app.whenReady().then(async () => {
   if (!gotSingleInstanceLock) return
   slog('app.whenReady fired')
   electronApp.setAppUserModelId('com.edisonwatch.desktop')
+  // macOS: ask for confirmation on quit (registered after the single-instance
+  // check so a doomed second instance can still quit silently).
+  initQuitConfirmation()
   updateAppMenu()
 
   // Linux/AppImage: copy the daemons out of the ephemeral FUSE mount to stable

@@ -25,6 +25,7 @@ import { app, BrowserWindow } from 'electron'
 import electronUpdater, { type UpdateInfo, type ProgressInfo } from 'electron-updater'
 import { getBuildDefaultEnv } from './setupConfig'
 import { getUpdateSettings, setUpdateSettings, type UpdateSettings } from './updateSettings'
+import { bypassQuitConfirmation } from '../runtime/quitConfirmation'
 
 // electron-updater is CJS; under electron-vite a named import resolves to
 // undefined, so take the default export and destructure it.
@@ -233,6 +234,9 @@ export async function downloadUpdate(): Promise<void> {
 export function quitAndInstall(): void {
   if (internal.status !== 'downloaded') return
   try {
+    // The user already clicked "Restart to update" - don't stack the macOS
+    // quit-confirmation dialog on top of the updater's own quit.
+    bypassQuitConfirmation()
     // (isSilent=false, isForceRunAfter=true) so the app relaunches after install.
     autoUpdater.quitAndInstall(false, true)
   } catch (err) {
