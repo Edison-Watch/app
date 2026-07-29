@@ -331,6 +331,64 @@ fn command_has_script(entry: &Value, kind: HookScriptKind) -> bool {
         .is_some_and(|c| c.contains(script_filename(kind)))
 }
 
+/// How many of `install`'s hook bindings are already present, and how many
+/// there are in total. Read-only counterpart to [`inject_hooks`]: it applies the
+/// same per-style presence checks the injector uses to decide "already there",
+/// so status can never disagree with what a re-injection would do.
+///
+/// A missing or unparseable file counts as zero installed, never as an error -
+/// the UI wants a coverage number, not a failure.
+pub fn hooks_status(install: &HookInstall) -> (u32, u32) {
+    let total = install.events.len() as u32;
+    if total == 0 {
+        return (0, 0);
+    }
+    let installed = match install.style {
+        HookStyle::CodexToml => {
+            let text = read(&install.path).unwrap_or_default();
+            install
+                .events
+                .iter()
+                .filter(|b| text.contains(script_filename(b.script)))
+                .count()
+        }
+        _ => {
+            let Ok(raw) = read(&install.path) else {
+                return (0, total);
+            };
+            let Ok(root) = parse(&raw, &install.path) else {
+                return (0, total);
+            };
+            let Some(hooks) = root.get("hooks").and_then(Value::as_object) else {
+                return (0, total);
+            };
+            install
+                .events
+                .iter()
+                .filter(|b| {
+                    let Some(arr) = hooks.get(&b.event).and_then(Value::as_array) else {
+                        return false;
+                    };
+                    match install.style {
+                        // Claude nests the commands one level deeper, inside
+                        // per-matcher groups.
+                        HookStyle::ClaudeSettings => arr.iter().any(|group| {
+                            group
+                                .get("hooks")
+                                .and_then(Value::as_array)
+                                .is_some_and(|hs| {
+                                    hs.iter().any(|h| command_has_script(h, b.script))
+                                })
+                        }),
+                        _ => arr.iter().any(|h| command_has_script(h, b.script)),
+                    }
+                })
+                .count()
+        }
+    };
+    (installed as u32, total)
+}
+
 fn inject_claude(install: &HookInstall, scripts: &HookScripts) -> Result<bool> {
     ensure_parent(&install.path)?;
     let (mut root, existed, raw) = read_json_or_empty(&install.path)?;
@@ -649,6 +707,27 @@ pub fn inject_workspace_task(tasks_json: &Path, registration_script: &Path) -> R
     backup_once(tasks_json, existed, &raw)?;
     write(tasks_json, &serialize(&root))?;
     Ok(true)
+}
+
+/// Whether a workspace `tasks.json` already carries the Edison Watch
+/// registration task. Read-only counterpart to [`inject_workspace_task`]: the
+/// desktop app reports hook coverage from the daemon's answer instead of
+/// opening workspace files itself (those live in the user's project
+/// directories, which on macOS are TCC-gated).
+pub fn workspace_task_installed(tasks_json: &Path) -> bool {
+    let Ok(raw) = read(tasks_json) else {
+        return false;
+    };
+    let Ok(root) = parse(&raw, tasks_json) else {
+        return false;
+    };
+    root.get("tasks")
+        .and_then(Value::as_array)
+        .is_some_and(|tasks| {
+            tasks
+                .iter()
+                .any(|t| t.get("label").and_then(Value::as_str) == Some(VSCODE_TASK_LABEL))
+        })
 }
 
 /// Strip the Edison Watch registration task from a workspace `tasks.json`

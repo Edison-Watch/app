@@ -152,7 +152,13 @@ export default function ClientsView(): React.ReactNode {
 
   const refresh = useCallback(async () => {
     try {
-      const statuses = (await window.api.mcp.getHookStatus()) as HookStatus[];
+      const { statuses, daemonUnavailable } = (await window.api.mcp.getHookStatus()) as {
+        statuses: HookStatus[];
+        daemonUnavailable: boolean;
+      };
+      // An unanswered daemon would otherwise render as "every client unhooked".
+      // Leave the previous list in place; the banner says why it's stale.
+      if (daemonUnavailable) return;
       setClients(
         statuses.map((s) => ({
           id: s.client,

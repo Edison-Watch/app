@@ -1,5 +1,6 @@
 import StepIndicator from "./StepIndicator";
 import logoDark from "../assets/logo-dark.png";
+import DaemonWarningBanner from "./DaemonWarningBanner";
 
 interface WizardLayoutProps {
   currentStep: number;
@@ -12,6 +13,12 @@ interface WizardLayoutProps {
 export default function WizardLayout({ currentStep, maxVisitedStep, locked, onStepClick, children }: WizardLayoutProps): React.ReactNode {
   return (
     <div className="flex h-screen flex-col items-center overflow-y-auto bg-[var(--bg-base)]">
+      {/* Onboarding depends on the daemon for every step that touches an agent,
+          so the warning belongs here too, not only in the main window. */}
+      <div className="w-full">
+        <DaemonWarningBanner />
+      </div>
+
       {/* Header with branding */}
       <header className="flex w-full flex-col items-center gap-3 px-6 pt-8 pb-4">
         <img src={logoDark} alt="Edison Watch" className="h-7 w-auto" />

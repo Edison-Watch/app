@@ -43,7 +43,28 @@ export async function showServerRegistrationDialog(
     return []
   }
 
-  const allServers = await discoverMcpServers()
+  let allServers
+  try {
+    allServers = await discoverMcpServers()
+  } catch (err) {
+    // The daemon is the only source of servers. Saying "no new servers found"
+    // here would be a false all-clear.
+    const msgOpts = {
+      type: 'warning' as const,
+      title: 'Register MCP Servers',
+      message: "Edison Watch can't reach its detector daemon",
+      detail:
+        "Without it, Edison Watch can't tell which MCP servers are configured on this machine, " +
+        'and new ones will not be detected or quarantined. ' +
+        `Try again once it's running.\n\n${err instanceof Error ? err.message : String(err)}`
+    }
+    if (parentWindow && !parentWindow.isDestroyed()) {
+      await dialog.showMessageBox(parentWindow, msgOpts)
+    } else {
+      await dialog.showMessageBox(msgOpts)
+    }
+    return []
+  }
   const servers = filterOutEdisonWatchServers(allServers)
 
   if (servers.length === 0) {

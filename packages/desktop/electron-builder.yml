@@ -88,10 +88,27 @@ mac:
   hardenedRuntime: true
   gatekeeperAssess: false
   extendInfo:
-    NSCameraUsageDescription: Application requests access to the device's camera.
-    NSMicrophoneUsageDescription: Application requests access to the device's microphone.
-    NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
-    NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
+    # Usage strings for TCC-gated resources the app never touches. A null value
+    # DELETES the key from the generated Info.plist (electron-builder assigns
+    # nulls through deepAssign, then strips null entries), which is the only way
+    # to drop the ones electron-builder injects by default.
+    #
+    # Camera / microphone / audio capture: never used, pure boilerplate.
+    #
+    # Documents / Downloads: the app used to enumerate the user's project
+    # directories (Claude Code's projects map, Cursor + VSCode workspaces) to
+    # find project-scoped MCP configs, and a project under ~/Documents or
+    # ~/Downloads made macOS prompt. That work now lives entirely in the
+    # detector daemon, which reaches those paths under its OWN code signature -
+    # a usage string here cannot speak for it. Nothing in this bundle opens a
+    # path inside a user project directory any more, so the app can no longer
+    # trigger those prompts. If that ever changes, restore these keys WITH
+    # copy that explains the access, and add NSDesktopFolderUsageDescription.
+    NSCameraUsageDescription: null
+    NSMicrophoneUsageDescription: null
+    NSAudioCaptureUsageDescription: null
+    NSDocumentsFolderUsageDescription: null
+    NSDownloadsFolderUsageDescription: null
     NSUserNotificationAlertStyle: alert
   notarize: false
 dmg:

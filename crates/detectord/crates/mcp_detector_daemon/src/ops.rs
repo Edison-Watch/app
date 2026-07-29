@@ -12,18 +12,192 @@ use crate::agents;
 use crate::enrollment::Enrollment;
 use crate::paths;
 use crate::platform;
-use crate::protocol::{AgentInfo, Choice, ServerView, Status};
+use crate::protocol::{AgentInfo, Choice, IntegrationChange, ServerView, Status};
 use crate::quarantined::{QuarantinedEntry, QuarantinedState};
 
-/// Which agents are present on the machine.
-pub fn list_agents() -> Vec<AgentInfo> {
+/// Which agents are present on the machine, with their workspace hook coverage.
+///
+/// The hook counts are computed here rather than by the UI: the workspace
+/// targets are `.vscode/tasks.json` files inside the user's project
+/// directories, and the daemon is the only component that walks those.
+pub fn list_agents(user: &str) -> Vec<AgentInfo> {
+    let home = user_home(user);
+    // One discovery pass for every agent's edison entry, rather than one per
+    // agent: discovery walks the same config set either way.
+    let observed = agents::discover_all(&agents::build());
     agents::build()
         .iter()
-        .map(|a| AgentInfo {
-            name: a.name().to_string(),
-            installed: a.is_installed(),
+        .map(|a| {
+            let targets = a.hook_workspace_targets(&home);
+            let workspace_hooks_installed = targets
+                .iter()
+                .filter(|t| mcp_quarantine::workspace_task_installed(t))
+                .count() as u32;
+            let (hooks_installed, hooks_total) = a
+                .hook_install(&home)
+                .map(|hi| mcp_quarantine::hooks_status(&hi))
+                .unwrap_or((0, 0));
+            AgentInfo {
+                name: a.name().to_string(),
+                installed: a.is_installed(),
+                hooks_total,
+                hooks_installed,
+                workspace_hooks_total: targets.len() as u32,
+                workspace_hooks_installed,
+                edison_url: observed
+                    .iter()
+                    .find(|s| s.client == a.name() && is_edison_entry(s))
+                    .and_then(|s| edison_entry_url(&s.config)),
+                config_path: a
+                    .edison_installs(&home)
+                    .first()
+                    .map(|i| i.path.display().to_string()),
+            }
         })
         .collect()
+}
+
+/// The upstream URL of an `edison-watch` entry, whichever shape it was written
+/// in: a plain HTTP entry carries it directly, the stdio shim
+/// (`npx -y mcp-remote <url> …`, used by the Claude hosts) hides it in the args.
+fn edison_entry_url(config: &ServerConfig) -> Option<String> {
+    match config {
+        ServerConfig::Http { url, .. } => Some(url.clone()),
+        ServerConfig::Stdio { args, .. } => args
+            .iter()
+            .find(|a| a.starts_with("http://") || a.starts_with("https://"))
+            .cloned(),
+        ServerConfig::Opaque { .. } => None,
+    }
+}
+
+/// Install the `edison-watch` entry + hooks for `agents`, reporting what
+/// changed per agent. The agents are added to the enrolled selection, so a
+/// later self-heal keeps them installed.
+pub fn apply_integrations(user: &str, agents_to_add: &[String]) -> anyhow::Result<Vec<IntegrationChange>> {
+    let mut e = Enrollment::load_for(user)?.ok_or_else(|| anyhow::anyhow!("not enrolled"))?;
+    for a in agents_to_add {
+        if !e.selected_agents.contains(a) {
+            e.selected_agents.push(a.clone());
+        }
+    }
+    e.save_for(user)?;
+
+    let home = user_home(user);
+    let changes = install_edison_entries_for(user, &e, &home, agents_to_add);
+    purge_shadowing_edison_entries();
+    apply_hooks(&home);
+    Ok(changes)
+}
+
+/// Remove the `edison-watch` entry for `agents` and drop them from the enrolled
+/// selection, so the self-heal doesn't put them straight back.
+pub fn revert_integrations(user: &str, agents_to_remove: &[String]) -> anyhow::Result<Vec<IntegrationChange>> {
+    let mut changes = Vec::new();
+    let home = user_home(user);
+    for agent in agents::build() {
+        if !agents_to_remove.iter().any(|s| s == agent.name()) {
+            continue;
+        }
+        for inst in agent.edison_installs(&home) {
+            let res = if inst.prefer_cli {
+                crate::claude_cli::remove(user)
+            } else {
+                mcp_quarantine::uninstall_edison(&inst).map_err(Into::into)
+            };
+            changes.push(IntegrationChange {
+                agent: agent.name().to_string(),
+                path: (!inst.prefer_cli).then(|| inst.path.display().to_string()),
+                backup_path: None,
+                ok: res.is_ok(),
+                error: res.err().map(|e: anyhow::Error| e.to_string()),
+            });
+        }
+    }
+    if let Some(mut e) = Enrollment::load_for(user)? {
+        e.selected_agents
+            .retain(|a| !agents_to_remove.iter().any(|r| r == a));
+        e.save_for(user)?;
+    }
+    Ok(changes)
+}
+
+/// An agent's user-scope config file and its current contents, for display.
+/// A missing file is `None` content, not an error - the UI shows "no config
+/// yet" and the daemon stays the only reader of agent files.
+pub fn read_config(user: &str, agent_name: &str) -> anyhow::Result<(String, Option<String>)> {
+    let home = user_home(user);
+    let agent = agents::build()
+        .into_iter()
+        .find(|a| a.name() == agent_name)
+        .ok_or_else(|| anyhow::anyhow!("unknown agent '{agent_name}'"))?;
+    let path = agent
+        .edison_installs(&home)
+        .first()
+        .map(|i| i.path.clone())
+        .ok_or_else(|| anyhow::anyhow!("agent '{agent_name}' has no user-scope config"))?;
+    let content = std::fs::read_to_string(&path).ok();
+    Ok((path.display().to_string(), content))
+}
+
+/// Put quarantined servers back where they came from: one by name/fingerprint,
+/// or all of them when `needle` is `None`. Restored servers are forgotten from
+/// the seen-store so the next reconcile pass doesn't immediately re-quarantine.
+pub fn restore_quarantined(user: &str, needle: Option<&str>) -> anyhow::Result<(u32, Vec<String>)> {
+    let mut q = QuarantinedState::load_for(user)?;
+    let mut seen = Enrollment::load_for(user)?
+        .map(|e| SeenStore::open(paths::seen_store_path(user), e.org_id))
+        .transpose()?;
+
+    let targets: Vec<QuarantinedEntry> = match needle {
+        Some(n) => vec![
+            q.take(n)
+                .ok_or_else(|| anyhow::anyhow!("no quarantined server matching '{n}'"))?,
+        ],
+        None => q.entries.clone(),
+    };
+
+    let mut restored = 0;
+    let mut errors = Vec::new();
+    for entry in &targets {
+        match FileConfigStore.restore(&entry.record) {
+            Ok(()) => {
+                if let Some(s) = seen.as_mut() {
+                    let _ = s.forget(&entry.fingerprint);
+                }
+                if needle.is_none() {
+                    q.take(&entry.fingerprint);
+                }
+                restored += 1;
+                tracing::info!(server = %entry.name, agent = %entry.agent, "restored");
+            }
+            Err(e) => errors.push(format!("{} ({}): {e}", entry.name, entry.agent)),
+        }
+    }
+    q.save_for(user)?;
+    Ok((restored, errors))
+}
+
+/// Record a submit the caller made against the backend. Keeps the daemon's
+/// seen-store authoritative for "what is known" even when the app, not the
+/// daemon, did the submitting.
+pub fn mark_seen(user: &str, name: &str, agent: Option<&str>, status: &str) -> anyhow::Result<()> {
+    let e = Enrollment::load_for(user)?.ok_or_else(|| anyhow::anyhow!("not enrolled"))?;
+    let action = match status {
+        "registered" => SeenAction::Registered,
+        "requested" => SeenAction::Requested,
+        "dismissed" => SeenAction::Dismissed,
+        other => anyhow::bail!("unknown seen status '{other}'"),
+    };
+    let observed = agents::discover_all(&agents::build());
+    let server = observed
+        .iter()
+        .find(|s| s.name == name && agent.is_none_or(|a| s.client == a) && !is_edison_entry(s))
+        .ok_or_else(|| anyhow::anyhow!("no discovered server named '{name}'"))?;
+    let fp = fingerprint(&server.name, &server.config)
+        .ok_or_else(|| anyhow::anyhow!("'{name}' has no fingerprintable config"))?;
+    SeenStore::open(paths::seen_store_path(user), e.org_id)?.mark(&fp, name, action)?;
+    Ok(())
 }
 
 /// `(kind, state, fingerprint)` for one server — the shared classification.
@@ -248,55 +422,117 @@ fn user_home(user: &str) -> std::path::PathBuf {
 pub fn apply_install(user: &str, e: &Enrollment) {
     let home = user_home(user);
     install_edison_entries(user, e, &home);
+    purge_shadowing_edison_entries();
     apply_hooks(&home);
 }
 
-fn install_edison_entries(user: &str, e: &Enrollment, home: &std::path::Path) {
-    let Some(mcp_base) = e.mcp_base_url.as_deref() else {
-        if !e.selected_agents.is_empty() {
-            tracing::warn!(
-                "agents selected but no mcp_base_url set — skipping edison-watch install"
-            );
+/// Drop `edison-watch` entries that live in a *project-scoped* Cursor config.
+///
+/// Cursor's `<project>/.cursor/mcp.json` takes precedence over the user-level
+/// `~/.cursor/mcp.json`, so a stale entry there (manual setup, or an older app
+/// version that wrote one) shadows the registration we just installed and the
+/// user sees "edison-watch not recognized". Only Cursor has this precedence
+/// rule; other agents' project configs merge, and a project-scoped entry there
+/// may well be deliberate, so leave those alone.
+fn purge_shadowing_edison_entries() {
+    for server in agents::discover_all(&agents::build()) {
+        if server.client != "cursor" || !is_edison_entry(&server) {
+            continue;
         }
-        return;
+        let edison_detectord::Scope::Project(project) = &server.scope else {
+            continue; // the user-level entry is the one we just installed
+        };
+        match FileConfigStore.quarantine(&server.location, &server.config) {
+            Ok(_) => tracing::info!(
+                project = %project.display(),
+                "removed shadowing project-scoped edison-watch entry"
+            ),
+            Err(err) => tracing::warn!(
+                project = %project.display(),
+                error = %err,
+                "removing shadowing project-scoped edison-watch entry failed"
+            ),
+        }
+    }
+}
+
+fn install_edison_entries(user: &str, e: &Enrollment, home: &std::path::Path) {
+    let selected = e.selected_agents.clone();
+    install_edison_entries_for(user, e, home, &selected);
+}
+
+/// Install the `edison-watch` entry for `wanted` agents, reporting per-agent
+/// outcomes. `install_edison_entries` passes the whole enrolled selection;
+/// `apply_integrations` passes just the agents the UI asked for.
+fn install_edison_entries_for(
+    user: &str,
+    e: &Enrollment,
+    home: &std::path::Path,
+    wanted: &[String],
+) -> Vec<IntegrationChange> {
+    let Some(mcp_base) = e.mcp_base_url.as_deref() else {
+        if !wanted.is_empty() {
+            tracing::warn!("agents selected but no mcp_base_url set — skipping edison-watch install");
+        }
+        return Vec::new();
     };
     let secret = e.edison_secret_key.as_deref();
+    let mut changes = Vec::new();
     for agent in agents::build() {
-        if !e.selected_agents.iter().any(|s| s == agent.name()) {
+        if !wanted.iter().any(|s| s == agent.name()) {
             continue;
         }
         for inst in agent.edison_installs(home) {
             // Claude Code goes through its own CLI (as the user); the file write
             // is the fallback.
-            let done_via_cli = inst.prefer_cli
-                && {
-                    let url = mcp_quarantine::edison_url(mcp_base, &e.api_key, &inst.client_id);
-                    match crate::claude_cli::install(user, &url, secret) {
-                        Ok(()) => {
-                            tracing::info!(
-                                agent = agent.name(),
-                                "installed edison-watch (via claude CLI)"
-                            );
-                            true
-                        }
-                        Err(err) => {
-                            tracing::warn!(agent = agent.name(), error = %err, "claude CLI failed; writing the file directly");
-                            false
-                        }
-                    }
-                };
-            if !done_via_cli {
-                match mcp_quarantine::install_edison(&inst, mcp_base, &e.api_key, secret) {
+            let done_via_cli = inst.prefer_cli && {
+                let url = mcp_quarantine::edison_url(mcp_base, &e.api_key, &inst.client_id);
+                match crate::claude_cli::install(user, &url, secret) {
                     Ok(()) => {
-                        tracing::info!(agent = agent.name(), path = %inst.path.display(), "installed edison-watch")
+                        tracing::info!(
+                            agent = agent.name(),
+                            "installed edison-watch (via claude CLI)"
+                        );
+                        true
                     }
                     Err(err) => {
-                        tracing::warn!(agent = agent.name(), error = %err, "edison-watch install failed")
+                        tracing::warn!(agent = agent.name(), error = %err, "claude CLI failed; writing the file directly");
+                        false
                     }
                 }
+            };
+            if done_via_cli {
+                changes.push(IntegrationChange {
+                    agent: agent.name().to_string(),
+                    path: None,
+                    backup_path: None,
+                    ok: true,
+                    error: None,
+                });
+                continue;
             }
+            // The backup is taken on the first edit only, so report it just
+            // when it's actually on disk.
+            let backup = mcp_quarantine::backup_path(&inst.path);
+            let res = mcp_quarantine::install_edison(&inst, mcp_base, &e.api_key, secret);
+            match &res {
+                Ok(()) => {
+                    tracing::info!(agent = agent.name(), path = %inst.path.display(), "installed edison-watch")
+                }
+                Err(err) => {
+                    tracing::warn!(agent = agent.name(), error = %err, "edison-watch install failed")
+                }
+            }
+            changes.push(IntegrationChange {
+                agent: agent.name().to_string(),
+                path: Some(inst.path.display().to_string()),
+                backup_path: backup.exists().then(|| backup.display().to_string()),
+                ok: res.is_ok(),
+                error: res.err().map(|e| e.to_string()),
+            });
         }
     }
+    changes
 }
 
 /// Re-install the edison-watch entry for any *selected* agent where it's
@@ -474,6 +710,7 @@ pub async fn disposition(
     choice: Choice,
     rename: Option<&str>,
     submit_config: Option<ServerConfig>,
+    register: Option<bool>,
 ) -> anyhow::Result<()> {
     let e = Enrollment::load_for(user)?.ok_or_else(|| anyhow::anyhow!("not enrolled"))?;
 
@@ -485,7 +722,8 @@ pub async fn disposition(
         .find(|x| x.name == name && agent.is_none_or(|a| x.agent == a))
         .cloned()
     {
-        return disposition_quarantined(user, &e, &entry, choice, rename, submit_config).await;
+        return disposition_quarantined(user, &e, &entry, choice, rename, submit_config, register)
+            .await;
     }
 
     let observed = agents::discover_all(&agents::build());
@@ -520,7 +758,7 @@ pub async fn disposition(
                     edison_detectord::secret_detection::templatize_for_fingerprint(&server.config)
                 }
             };
-            submit_to_ew(&e, name, &cfg).await?
+            submit_to_ew(&e, name, &cfg, register).await?
         }
         Choice::Skip => SeenAction::Dismissed,
     };
@@ -542,6 +780,61 @@ pub async fn disposition(
     Ok(())
 }
 
+/// Remove a discovered server from its local config, leaving seen-state alone.
+///
+/// For a caller that already submitted the server and recorded the outcome
+/// itself (the app's own submit path) and only needs the local entry gone. The
+/// removal goes through [`FileConfigStore`], so Claude Code project scope,
+/// Cursor plugin directories and the state DBs are all covered, and the entry
+/// is recorded in the quarantined state so it stays restorable.
+///
+/// Unlike [`disposition`], this never touches the seen store and never talks to
+/// the backend. A server that is already quarantined is a no-op success: the
+/// local config no longer holds it, which is exactly what the caller wanted.
+pub fn remove_local(user: &str, name: &str, agent: Option<&str>) -> anyhow::Result<()> {
+    if QuarantinedState::load_for(user)?
+        .entries
+        .iter()
+        .any(|x| x.name == name && agent.is_none_or(|a| x.agent == a))
+    {
+        return Ok(());
+    }
+
+    let observed = agents::discover_all(&agents::build());
+    let matches: Vec<_> = observed
+        .iter()
+        .filter(|s| s.name == name && agent.is_none_or(|a| s.client == a) && !is_edison_entry(s))
+        .collect();
+    let server = match matches.as_slice() {
+        [] => anyhow::bail!("no discovered server named '{name}'"),
+        [only] => *only,
+        many => {
+            let ags: Vec<_> = many.iter().map(|s| s.client).collect();
+            anyhow::bail!("'{name}' exists under multiple agents {ags:?}; specify agent");
+        }
+    };
+
+    let record = FileConfigStore
+        .quarantine(&server.location, &server.config)
+        .context("removing from local config")?;
+    tracing::info!(server = %name, agent = server.client, "removed from local config on request");
+
+    let mut q = QuarantinedState::load_for(user)?;
+    q.upsert(QuarantinedEntry {
+        name: server.name.clone(),
+        agent: server.client.to_string(),
+        // Opaque servers (Cursor plugin dirs) have no fingerprint; key them by
+        // path as the runner does, so each record stays distinct and no empty
+        // fingerprint can leak into the seen store.
+        fingerprint: fingerprint(&server.name, &server.config)
+            .unwrap_or_else(|| format!("opaque:{}", server.location.path.display())),
+        config: Some(server.config.clone()),
+        record,
+    });
+    q.save_for(user)?;
+    Ok(())
+}
+
 /// Dispose of an already-quarantined server (primary mode). It stays quarantined
 /// locally either way; SendToEw submits its stored config to the backend and
 /// marks it known, Skip marks it dismissed so it isn't re-prompted.
@@ -552,6 +845,7 @@ async fn disposition_quarantined(
     choice: Choice,
     rename: Option<&str>,
     submit_config: Option<ServerConfig>,
+    register: Option<bool>,
 ) -> anyhow::Result<()> {
     let mut seen = SeenStore::open(paths::seen_store_path(user), e.org_id.clone())?;
     let action = match choice {
@@ -571,7 +865,7 @@ async fn disposition_quarantined(
             // *original* fingerprint known so the still-local server is silently
             // re-quarantined instead of re-prompting.
             let name = rename.unwrap_or(&entry.name);
-            submit_to_ew(e, name, &config).await?
+            submit_to_ew(e, name, &config, register).await?
         }
         Choice::Skip => SeenAction::Dismissed,
     };
@@ -591,8 +885,12 @@ async fn submit_to_ew(
     e: &Enrollment,
     name: &str,
     config: &ServerConfig,
+    register_override: Option<bool>,
 ) -> anyhow::Result<SeenAction> {
-    let register = matches!(e.role.as_str(), "owner" | "admin");
+    // Owners/admins register directly by default, everyone else files a
+    // request. `register_override` carries an explicit UI choice (an admin who
+    // picked "request approval" gets a request, not a silent registration).
+    let register = register_override.unwrap_or(matches!(e.role.as_str(), "owner" | "admin"));
     let res = BackendClient::new(e.api_base_url.clone(), e.api_key.clone())
         .submit(&SubmitRequest {
             name: name.to_string(),

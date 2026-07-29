@@ -4,6 +4,8 @@
 
 export type Choice = 'send_to_ew' | 'skip'
 
+export type SeenStatus = 'registered' | 'requested' | 'dismissed'
+
 export type Request =
   | {
       op: 'enroll'
@@ -29,7 +31,23 @@ export type Request =
       /** For SendToEw: submit this (manually redacted) config instead of the
        *  daemon's discovered one, honoring the credential-review overrides. */
       submit_config?: ServerConfig
+      /** Register directly (true) or leave pending approval (false). Omit to
+       *  let the daemon decide from the user's role. */
+      register?: boolean
     }
+  /** Install the edison-watch entry + hooks for these agents. */
+  | { op: 'apply_integrations'; agents: string[] }
+  /** Remove the edison-watch entry for these agents. */
+  | { op: 'revert_integrations'; agents: string[] }
+  /** An agent's user-scope config file (path + contents), for display. */
+  | { op: 'read_config'; agent: string }
+  /** Put quarantined servers back: one by name, or all when omitted. */
+  | { op: 'restore_quarantined'; name?: string }
+  /** Record a submit the app performed, so the daemon's seen-store stays
+   *  authoritative for what's known. */
+  | { op: 'mark_seen'; name: string; agent?: string; status: SeenStatus }
+  /** Remove a server from its local config without touching seen-state. */
+  | { op: 'remove_local'; name: string; agent?: string }
   | { op: 'refresh_policy' }
   | { op: 'verify_secret'; key: string }
   | { op: 'reset_secret'; key: string; confirm: boolean }
@@ -50,6 +68,26 @@ export interface Status {
 export interface AgentInfo {
   name: string
   installed: boolean
+  /**
+   * Hook bindings this agent has and how many are injected, counted by the
+   * daemon with the same checks its injector uses. The app reports coverage
+   * from these instead of opening the agent's hook file.
+   */
+  hooks_total?: number
+  hooks_installed?: number
+  /** URL of the installed edison-watch entry, or null when there isn't one. */
+  edison_url?: string | null
+  /** The agent's user-scope config file, for display and `read_config`. */
+  config_path?: string | null
+  /**
+   * Workspace-level hook targets the daemon found for this agent (one
+   * `.vscode/tasks.json` per enumerated VSCode workspace) and how many already
+   * carry the Edison Watch task. The daemon counts these because the targets
+   * live in the user's project directories - the app deliberately never opens
+   * those. Absent from pre-0.6 daemons, hence optional.
+   */
+  workspace_hooks_total?: number
+  workspace_hooks_installed?: number
 }
 
 /** One discovered server instance. `state`: edison | known | new | opaque | report. */
@@ -71,6 +109,17 @@ export interface ServerView {
   config?: ServerConfig | null
 }
 
+/** What installing or removing the edison-watch entry did for one agent. */
+export interface IntegrationChange {
+  agent: string
+  /** The config file written; null when the agent's own CLI owns the path. */
+  path?: string | null
+  /** The one-time backup taken before our first edit, if it exists. */
+  backup_path?: string | null
+  ok: boolean
+  error?: string | null
+}
+
 export interface SecretOutcome {
   valid?: boolean | null
   expired?: boolean | null
@@ -79,6 +128,9 @@ export interface SecretOutcome {
 
 export type Reply =
   | ({ reply: 'status' } & Status)
+  | { reply: 'integrations'; changes: IntegrationChange[] }
+  | { reply: 'config'; path: string; content: string | null }
+  | { reply: 'restored'; restored: number; errors: string[] }
   | { reply: 'agents'; agents: AgentInfo[] }
   | { reply: 'servers'; servers: ServerView[] }
   | ({ reply: 'secret' } & SecretOutcome)

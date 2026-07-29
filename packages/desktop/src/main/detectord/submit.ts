@@ -190,3 +190,55 @@ export async function resubmitServerViaDetectord(
     return { success: false, error: err instanceof Error ? err.message : String(err) }
   }
 }
+
+/** What one dialog-driven registration did. Mirrors the shape the dialogs render. */
+export interface DetectordSingleSubmit {
+  action: string
+  autoApproved?: boolean
+  /** The backend already has a server under this name (offer a rename). */
+  alreadyExists?: boolean
+  errorMessage?: string
+}
+
+/**
+ * Register one server through the daemon, for the tray dialogs.
+ *
+ * `action` is the user's explicit choice: 'registered' asks for it to go live
+ * (the daemon registers directly when their role allows), 'requested' files a
+ * request for approval even when they could have registered it outright. The
+ * daemon submits, marks it known, and removes the local entry in one step, so
+ * no part of this needs the app to touch a config file.
+ */
+export async function submitOneViaDetectord(
+  server: DiscoveredMcpServer,
+  action: 'registered' | 'requested',
+  overrides?: TemplateOverride[]
+): Promise<DetectordSingleSubmit> {
+  const c = getDetectordClient()
+  const daemonName = server.originalName ?? server.name
+  const rename = server.originalName ? server.name : undefined
+  // An explicit (even empty) override list is the user's authoritative
+  // redaction from credential review; absent means "auto-templatize".
+  const submitConfig =
+    overrides !== undefined
+      ? (toDaemonSubmitConfig(applyTemplateOverrides(server.config, overrides)) ?? undefined)
+      : undefined
+  try {
+    await c.connect()
+    await c.disposition(
+      daemonName,
+      'send_to_ew',
+      toAgent(server.client),
+      rename,
+      submitConfig,
+      action === 'registered'
+    )
+    return { action, autoApproved: action === 'registered' }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    if (/conflict/i.test(message)) {
+      return { action, alreadyExists: true, errorMessage: message }
+    }
+    throw new Error(message)
+  }
+}

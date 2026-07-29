@@ -6,7 +6,7 @@
 
 import type { DiscoveredMcpServer } from './types'
 import { detectSecrets } from './secretDetection'
-import { getServerFingerprint } from './seenServersStore'
+import { getServerFingerprint } from './fingerprint'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 

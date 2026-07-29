@@ -6,64 +6,8 @@ import { getClientDisplayName } from '../runtime/mcpConfigMonitor'
 import { escapeHtml, getClientIcon } from './dialogIcons'
 import { showWhenReady } from './showWindow'
 import { BASE_CSS, HEADER_CSS, SERVER_CARD_CSS, DEBUG_CSS } from './dialogStyles'
-import {
-  getCursorProjectMcpPaths,
-  getCursorPluginMcpPaths,
-  getVsCodeWorkspacePaths,
-  getClaudeCodeProjectMcpPaths,
-} from '../runtime/mcpProjectPaths'
 
 let debugWindow: BrowserWindow | null = null
-
-interface ProjectPathGroup {
-  label: string
-  paths: string[]
-}
-
-async function gatherProjectPaths(): Promise<ProjectPathGroup[]> {
-  const [cursor, cursorPlugins, vscode, claudeCode] = await Promise.all([
-    getCursorProjectMcpPaths(),
-    getCursorPluginMcpPaths(),
-    getVsCodeWorkspacePaths(),
-    getClaudeCodeProjectMcpPaths(),
-  ])
-  return [
-    { label: 'Claude Code Projects', paths: claudeCode },
-    { label: 'Cursor Project MCP Configs', paths: cursor },
-    { label: 'Cursor Plugin MCP Configs', paths: cursorPlugins },
-    { label: 'VS Code Workspaces', paths: vscode },
-  ]
-}
-
-function buildProjectPathsHtml(groups: ProjectPathGroup[]): string {
-  const totalPaths = groups.reduce((sum, g) => sum + g.paths.length, 0)
-  const groupsHtml = groups
-    .map((group) => {
-      const pathsHtml =
-        group.paths.length === 0
-          ? '<div class="path-empty">None found</div>'
-          : group.paths
-              .map((p) => `<div class="path-item">${escapeHtml(p)}</div>`)
-              .join('')
-      return `
-        <div class="path-group">
-          <div class="path-group-header">
-            <span class="path-group-label">${escapeHtml(group.label)}</span>
-            <span class="path-group-count">${group.paths.length}</span>
-          </div>
-          ${pathsHtml}
-        </div>
-      `
-    })
-    .join('')
-
-  return `
-    <div class="debug-actions" id="project-paths-section">
-      <h2>Project Directories <span class="path-group-count" style="margin-left:6px">${totalPaths}</span></h2>
-      ${groupsHtml}
-    </div>
-  `
-}
 
 /**
  * Build the server info string (command+args or url) from a discovered server config.
@@ -97,7 +41,7 @@ function getTransportLabel(server: DiscoveredMcpServer): string {
 /**
  * Build the full HTML for the debug window content.
  */
-function buildDebugHtml(servers: DiscoveredMcpServer[], projectPathsHtml: string): string {
+function buildDebugHtml(servers: DiscoveredMcpServer[]): string {
   // Count unique clients
   const uniqueClients = new Set(servers.map((s) => s.client))
 
@@ -176,7 +120,6 @@ function buildDebugHtml(servers: DiscoveredMcpServer[], projectPathsHtml: string
           </button>
         </div>
       </div>
-      ${projectPathsHtml}
       <div id="servers">${serversHtml}${emptyState}</div>
       <script>
         const { ipcRenderer } = require('electron')
@@ -203,10 +146,6 @@ function buildDebugHtml(servers: DiscoveredMcpServer[], projectPathsHtml: string
               const html = await ipcRenderer.invoke('debug:refreshServers')
               document.getElementById('servers').innerHTML = html.serversHtml
               document.querySelector('.summary').innerHTML = html.summaryHtml
-              const pathsSection = document.getElementById('project-paths-section')
-              if (pathsSection && html.projectPathsHtml) {
-                pathsSection.outerHTML = html.projectPathsHtml
-              }
             } catch (e) { console.error('Refresh after reset failed:', e) }
             setTimeout(() => { this.innerHTML = originalHtml; this.disabled = false }, 3000)
           } catch (err) {
@@ -224,10 +163,6 @@ function buildDebugHtml(servers: DiscoveredMcpServer[], projectPathsHtml: string
             const html = await ipcRenderer.invoke('debug:refreshServers')
             document.getElementById('servers').innerHTML = html.serversHtml
             document.querySelector('.summary').innerHTML = html.summaryHtml
-            const pathsSection = document.getElementById('project-paths-section')
-            if (pathsSection && html.projectPathsHtml) {
-              pathsSection.outerHTML = html.projectPathsHtml
-            }
           } catch (err) {
             console.error('Refresh failed:', err)
           } finally {
@@ -305,10 +240,12 @@ export async function showDebugWindow(parentWindow?: BrowserWindow): Promise<voi
     return
   }
 
-  const [servers, projectGroups] = await Promise.all([
-    discoverMcpServers(),
-    gatherProjectPaths(),
-  ])
+  // The debug window is the one place a raw failure is useful, but it still
+  // shouldn't render an empty list as fact.
+  const servers = await discoverMcpServers().catch((err) => {
+    console.error(`[debug] discovery unavailable: ${String(err)}`)
+    return [] as DiscoveredMcpServer[]
+  })
 
   debugWindow = new BrowserWindow({
     width: 560,
@@ -331,21 +268,14 @@ export async function showDebugWindow(parentWindow?: BrowserWindow): Promise<voi
     }
   })
 
-  // IPC handler for refresh -- re-discovers servers and project paths, returns updated HTML fragments
+  // IPC handler for refresh -- re-asks the daemon, returns updated HTML fragments
   const refreshHandler = async (): Promise<{
     serversHtml: string
     summaryHtml: string
-    projectPathsHtml: string
-  }> => {
-    const [freshServers, freshGroups] = await Promise.all([
-      discoverMcpServers(),
-      gatherProjectPaths(),
-    ])
-    return {
-      ...buildRefreshData(freshServers),
-      projectPathsHtml: buildProjectPathsHtml(freshGroups),
-    }
-  }
+  }> =>
+    buildRefreshData(
+      await discoverMcpServers().catch(() => [] as DiscoveredMcpServer[])
+    )
 
   // Register the handler only if not already registered (guards against double-open race)
   try {
@@ -361,7 +291,7 @@ export async function showDebugWindow(parentWindow?: BrowserWindow): Promise<voi
     debugWindow = null
   })
 
-  const html = buildDebugHtml(servers, buildProjectPathsHtml(projectGroups))
+  const html = buildDebugHtml(servers)
   debugWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`)
   showWhenReady(debugWindow)
 }

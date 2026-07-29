@@ -53,6 +53,8 @@ export default function AppsStep({
   const [clients, setClients] = useState<DetectedClient[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  // The daemon didn't answer: lists are unknown, not empty.
+  const [daemonDown, setDaemonDown] = useState(false);
 
   // Scan state
   const [scanning, setScanning] = useState(false);
@@ -83,7 +85,8 @@ export default function AppsStep({
   const detectClients = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     try {
-      const detected = await window.api.mcp.detectClients();
+      const { clients: detected, daemonUnavailable } = await window.api.mcp.detectClients();
+      setDaemonDown(daemonUnavailable);
       setClients((prev) => {
         // Preserve enabled/expanded state for existing clients
         const prevMap = new Map(prev.map((c) => [c.id, c]));
@@ -105,7 +108,7 @@ export default function AppsStep({
         setClients((prev) =>
           prev.map((c) => {
             if (c.expanded) {
-              window.api.mcp.readConfig(c.configPath).then((content) => {
+              window.api.mcp.readConfig(c.id).then((content) => {
                 setClients((curr) =>
                   curr.map((cc) => (cc.id === c.id ? { ...cc, configPreview: content ?? "(No config file yet)" } : cc)),
                 );
@@ -169,7 +172,7 @@ export default function AppsStep({
         if (c.id !== id) return c;
         if (!c.expanded && !c.configPreview) {
           // Load config preview on first expand
-          window.api.mcp.readConfig(c.configPath).then((content) => {
+          window.api.mcp.readConfig(c.id).then((content) => {
             setClients((curr) =>
               curr.map((cc) => (cc.id === id ? { ...cc, configPreview: content ?? "(No config file yet)" } : cc)),
             );
@@ -183,7 +186,18 @@ export default function AppsStep({
   const handleScan = async () => {
     setScanning(true);
     try {
-      const result = await window.api.mcp.discover() as { servers: DiscoveredServer[]; unsupported: DiscoveredServer[] };
+      const result = (await window.api.mcp.discover()) as {
+        servers: DiscoveredServer[];
+        unsupported: DiscoveredServer[];
+        daemonUnavailable?: boolean;
+      };
+      if (result.daemonUnavailable) {
+        // Not "no servers" - nobody could look. The banner explains why; don't
+        // mark the scan as done, or the user reads a clean result.
+        setDaemonDown(true);
+        return;
+      }
+      setDaemonDown(false);
       console.log("[AppsStep] Discovered", result.servers.length, "MCP servers,", result.unsupported.length, "unsupported");
       setDiscoveredServers(result.servers);
       setUnsupportedServers(result.unsupported);
@@ -317,7 +331,9 @@ export default function AppsStep({
         <Card>
           <div className="flex items-center justify-between py-2">
             <p className="text-sm text-[var(--text-muted)]">
-              No MCP clients detected. You can configure them manually later.
+              {daemonDown
+                ? "Can't check which apps are installed while the detector daemon is unreachable."
+                : "No MCP clients detected. You can configure them manually later."}
             </p>
             <button
               type="button"
@@ -422,7 +438,11 @@ export default function AppsStep({
           {scanned && showServers && (
             <div className="mt-2 rounded-md bg-[var(--bg-input)] p-3 text-xs">
               {discoveredServers.length === 0 ? (
-                <span className="text-[var(--text-muted)]">No MCP servers found.</span>
+                <span className="text-[var(--text-muted)]">
+                  {daemonDown
+                    ? "Couldn't scan - the detector daemon is unreachable."
+                    : "No MCP servers found."}
+                </span>
               ) : (
                 <div className="flex flex-col gap-1 max-h-32 overflow-y-auto">
                   {(() => {

@@ -3,7 +3,14 @@ import { join } from 'path'
 import type { DiscoveredMcpServer } from '../discovery/mcpDiscovery'
 import { showWhenReady } from './showWindow'
 import { getClientDisplayName } from '../runtime/mcpConfigMonitor'
-import type { ServerAction } from '../discovery/seenServersStore'
+/**
+ * What the user chose for a server in the dialogs:
+ * - 'quarantined': auto-quarantined by the daemon
+ * - 'requested': access requested from an admin
+ * - 'registered': registered directly (admin/owner)
+ * - 'dismissed': left quarantined, don't re-prompt
+ */
+export type ServerAction = 'quarantined' | 'requested' | 'registered' | 'dismissed'
 import {
   BASE_CSS,
   HEADER_CSS,

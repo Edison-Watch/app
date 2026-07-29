@@ -67,6 +67,12 @@ impl Cursor {
                 let cfg = root.join(".cursor").join("mcp.json");
                 (root, cfg)
             })
+            // A workspace rooted at $HOME synthesises `~/.cursor/mcp.json`,
+            // which IS the user-scope config. Keeping it would report the same
+            // file under both scopes: the servers get double-counted, and
+            // anything that acts on project scope (the shadow-entry purge)
+            // would act on the user's global config.
+            .filter(|(_, cfg)| user_config.as_ref() != Some(cfg))
             .collect();
 
         Ok(Self {
@@ -91,6 +97,7 @@ impl Cursor {
                 let cfg = root.join(".cursor").join("mcp.json");
                 (root, cfg)
             })
+            .filter(|(_, cfg)| user_config.as_ref() != Some(cfg))
             .collect();
         Self {
             user_config,
@@ -451,6 +458,45 @@ mod tests {
             .unwrap();
         assert_eq!(servers.len(), 1);
         assert_eq!(servers[0].scope, Scope::Project(proj));
+    }
+
+    /// A workspace rooted at the home directory synthesises
+    /// `~/.cursor/mcp.json`, which is the *user-scope* config. It must not also
+    /// be reported as project scope: the servers would be double-counted, and
+    /// the shadow-entry purge (which removes project-scoped edison entries)
+    /// would eat the user's global registration.
+    #[test]
+    fn skips_workspace_rooted_at_the_user_config_dir() {
+        let dir = tempdir().unwrap();
+        let home = dir.path();
+        let user_cfg = home.join(".cursor").join("mcp.json");
+        std::fs::create_dir_all(user_cfg.parent().unwrap()).unwrap();
+        std::fs::write(&user_cfg, r#"{"mcpServers":{"g":{"command":"x"}}}"#).unwrap();
+
+        let proj = home.join("work").join("real");
+        std::fs::create_dir_all(proj.join(".cursor")).unwrap();
+        std::fs::write(
+            proj.join(".cursor").join("mcp.json"),
+            r#"{"mcpServers":{"p":{"command":"y"}}}"#,
+        )
+        .unwrap();
+
+        let servers = Cursor::from_paths(
+            Some(user_cfg),
+            None,
+            [home.to_path_buf(), proj.clone()],
+        )
+        .discover()
+        .unwrap();
+
+        assert_eq!(servers.len(), 2, "global counted once, project once");
+        let scopes: Vec<_> = servers.iter().map(|s| s.scope.clone()).collect();
+        assert!(scopes.contains(&Scope::Global));
+        assert!(scopes.contains(&Scope::Project(proj)));
+        assert!(
+            !scopes.contains(&Scope::Project(home.to_path_buf())),
+            "the home-rooted workspace must not alias the user config"
+        );
     }
 
     #[test]

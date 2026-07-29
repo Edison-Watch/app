@@ -478,7 +478,9 @@ fn disabled_path(path: &Path) -> PathBuf {
     path.with_file_name(format!("ewd-disabled_{name}"))
 }
 
-pub(crate) fn backup_path(path: &Path) -> PathBuf {
+/// The one-time backup taken before Edison first edits `path`. Public so the
+/// daemon can report it to the UI, which offers "revert this config".
+pub fn backup_path(path: &Path) -> PathBuf {
     let name = path
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())

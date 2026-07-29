@@ -19,6 +19,7 @@ import {
 
 import { showDaemonApprovalDialog } from './approvalDialog'
 import { detectordBinaryExists, getDetectordBinaryPath } from './binary'
+import { reportDetectordFailure, reportDetectordOk } from './health'
 import { ensureDetectord } from './lifecycle'
 import type { DetectordEvent, SecretOutcome, ServerView } from './protocol'
 import type { DetectordClient } from './socket'
@@ -71,9 +72,12 @@ export async function bootstrapDetectord(creds?: DetectordEnrollInput): Promise<
   )
   const ensured = await ensureDetectord((m) => console.log(m), primary)
   if (!ensured.ok) {
-    console.error(`[detectord] bootstrap skipped: ${ensured.reason}`)
+    // Nothing else in the app can do this work, so a failed bootstrap is not a
+    // "skip" - it means the machine is unprotected. Raise the warning.
+    reportDetectordFailure('bootstrap', ensured.reason ?? 'daemon unavailable')
     return false
   }
+  reportDetectordOk()
   const client = ensured.client
 
   // Enroll is safe to run on every login: it's additive (agents union with the
@@ -89,7 +93,10 @@ export async function bootstrapDetectord(creds?: DetectordEnrollInput): Promise<
     // reach the UI. status() is a LOCAL IPC read (it reads the on-disk
     // enrollment, no backend call), so it's reliable even during a backend
     // outage. Only bail when there's genuinely no enrollment to observe.
-    const status = await client.status().catch(() => null)
+    const status = await client.status().catch((err) => {
+      reportDetectordFailure('status', err)
+      return null
+    })
     if (!status?.enrolled) return false
     console.warn('[detectord] enroll did not run; observing already-enrolled daemon')
   }
