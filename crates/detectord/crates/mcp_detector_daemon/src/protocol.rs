@@ -71,11 +71,22 @@ pub enum Request {
         #[serde(default)]
         register: Option<bool>,
     },
-    /// Install the `edison-watch` entry + hooks for these agents (additive: the
-    /// agents join the enrolled selection). The daemon is the only component
-    /// that writes agent configs.
+    /// Install the `edison-watch` entry + session hooks for these agents, and
+    /// only these agents. Additive: they join the enrolled selection, so a
+    /// later self-heal keeps them installed.
+    ///
+    /// Nothing outside `agents` is written. The machine-wide hook sweep (every
+    /// installed agent, whether or not it is registered with the gateway)
+    /// belongs to enrollment, which runs on every app start.
+    ///
+    /// The daemon is the only component that writes agent configs.
     ApplyIntegrations { agents: Vec<String> },
-    /// Remove the `edison-watch` entry for these agents.
+    /// Remove the `edison-watch` entry for these agents and drop them from the
+    /// enrolled selection.
+    ///
+    /// Session hooks are deliberately left in place: they are how Edison
+    /// observes an agent's activity and are not tied to gateway registration.
+    /// `unenroll` is what tears them down.
     RevertIntegrations { agents: Vec<String> },
     /// The text of an agent's user-scope config file, for display.
     ReadConfig { agent: String },
@@ -83,26 +94,6 @@ pub enum Request {
     RestoreQuarantined {
         #[serde(default)]
         name: Option<String>,
-    },
-    /// Record a submit the CALLER performed against the backend, so the daemon's
-    /// seen-store stays the single source of truth for what's known.
-    MarkSeen {
-        name: String,
-        #[serde(default)]
-        agent: Option<String>,
-        /// `registered` | `requested` | `dismissed`.
-        status: String,
-    },
-    /// Remove a discovered server from its local config, leaving seen-state
-    /// alone. For callers that already submitted the server and marked it seen
-    /// themselves and only need the local entry gone; `disposition` is the op
-    /// that submits *and* records an outcome. Removal goes through the same
-    /// writer, so Claude Code project scope, Cursor plugin dirs and the state
-    /// DBs are all handled, and the entry stays restorable.
-    RemoveLocal {
-        name: String,
-        #[serde(default)]
-        agent: Option<String>,
     },
     /// Force a policy + known-set refresh.
     RefreshPolicy,

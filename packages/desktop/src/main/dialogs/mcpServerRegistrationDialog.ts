@@ -337,7 +337,7 @@ export async function showServerRegistrationDialog(
                   if (!bulkOperationInProgress) reenableButtons()
                   return
                 }
-                if (result && result.alreadyPending) { showConflictRename(fp, sn, sa, act, 'A server with this name already has a pending approval request'); return }
+                if (result && result.alreadyPending) { showAlreadyPendingBadge(fp); return }
                 if (result && result.alreadyExists) { showConflictRename(fp, sn, sa, act, result.errorMessage); return }
                 results.push({ fingerprint: fp, serverName: sn, sourceApp: sa, action: act })
                 removeServerItem(fp)
@@ -376,7 +376,7 @@ export async function showServerRegistrationDialog(
                 return
               }
               if (result && result.alreadyPending) {
-                showConflictRename(fingerprint, serverName, sourceApp, action, 'A server with this name already has a pending approval request')
+                showAlreadyPendingBadge(fingerprint)
                 return
               }
               if (result && result.alreadyExists) {

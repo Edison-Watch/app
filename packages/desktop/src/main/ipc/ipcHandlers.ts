@@ -190,11 +190,13 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       _event,
       input: { apiUrl?: string; mcpUrl?: string; apiKey?: string; edisonSecretKey?: string }
     ) => {
-      const ok = await bootstrapDetectord(input).catch((err) => {
+      const outcome = await bootstrapDetectord(input).catch((err) => {
         console.error('[detectord] enroll (push) failed:', err)
-        return false
+        return null
       })
-      return { ok }
+      // This caller only needs "is the daemon usable" - it isn't changing
+      // credentials, so `ok` (not `applied`) is the right question.
+      return { ok: outcome?.ok === true }
     }
   )
 
@@ -297,10 +299,17 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     // new credentials, and its install step rewrites the edison-watch entry
     // with the new URL and key. Without this the configs would keep the
     // previous account's.
-    await bootstrapDetectord().catch((err) => {
+    const reEnrolled = await bootstrapDetectord().catch((err) => {
       console.error('[accounts:switch] Failed to update MCP integrations:', err)
-      return false
+      return null
     })
+    if (!reEnrolled?.applied) {
+      // The daemon may still be enrolled under the PREVIOUS account, in which
+      // case its agents keep that account's URL and key.
+      console.error(
+        `[accounts:switch] agents were NOT re-pointed at the new account: ${reEnrolled?.reason ?? 'enrollment failed'}`
+      )
+    }
 
     // Re-point the daemon at the new account (or stop it) so it doesn't keep
     // tunneling under the old credentials.

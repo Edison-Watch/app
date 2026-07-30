@@ -4,8 +4,6 @@
 
 export type Choice = 'send_to_ew' | 'skip'
 
-export type SeenStatus = 'registered' | 'requested' | 'dismissed'
-
 export type Request =
   | {
       op: 'enroll'
@@ -35,7 +33,7 @@ export type Request =
        *  let the daemon decide from the user's role. */
       register?: boolean
     }
-  /** Install the edison-watch entry + hooks for these agents. */
+  /** Install the edison-watch entry + session hooks for these agents only. */
   | { op: 'apply_integrations'; agents: string[] }
   /** Remove the edison-watch entry for these agents. */
   | { op: 'revert_integrations'; agents: string[] }
@@ -43,11 +41,6 @@ export type Request =
   | { op: 'read_config'; agent: string }
   /** Put quarantined servers back: one by name, or all when omitted. */
   | { op: 'restore_quarantined'; name?: string }
-  /** Record a submit the app performed, so the daemon's seen-store stays
-   *  authoritative for what's known. */
-  | { op: 'mark_seen'; name: string; agent?: string; status: SeenStatus }
-  /** Remove a server from its local config without touching seen-state. */
-  | { op: 'remove_local'; name: string; agent?: string }
   | { op: 'refresh_policy' }
   | { op: 'verify_secret'; key: string }
   | { op: 'reset_secret'; key: string; confirm: boolean }

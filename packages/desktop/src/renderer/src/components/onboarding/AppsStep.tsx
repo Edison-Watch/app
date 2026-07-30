@@ -39,6 +39,16 @@ export interface DuplicateSelections {
   [fingerprint: string]: string[];
 }
 
+/**
+ * What to show in the config panel. An unreadable file is not an empty one:
+ * the daemon reports absence as `content: null` with no error, and anything
+ * else (permissions, a directory, non-UTF-8) with a reason worth showing.
+ */
+function previewText(content: string | null, error?: string): string {
+  if (content !== null) return content;
+  return error ? `(Couldn't read this config: ${error})` : "(No config file yet)";
+}
+
 interface AppsStepProps {
   onNext: (selectedApps: string[], discoveredServers: DiscoveredServer[], serversToRemove: RemovalTarget[], dupeSelections: DuplicateSelections, skipServers: string[]) => void;
   initialSelectedApps?: string[] | null;
@@ -82,11 +92,49 @@ export default function AppsStep({
     })));
   };
 
+  /**
+   * Pull the discovered servers into state. Returns false when the daemon
+   * didn't answer.
+   *
+   * On no answer nothing is replaced but the outage flag: an unanswered scan
+   * means "unknown", and overwriting a known-good list with an empty one both
+   * renders as "No MCP servers found" and would carry [] into the next step if
+   * the user proceeds - registering nothing while reporting success.
+   */
+  const applyDiscovery = useCallback(async (): Promise<boolean> => {
+    const result = (await window.api.mcp.discover()) as {
+      servers: DiscoveredServer[];
+      unsupported: DiscoveredServer[];
+      daemonUnavailable?: boolean;
+    };
+    if (result.daemonUnavailable) {
+      setDaemonDown(true);
+      return false;
+    }
+    setDaemonDown(false);
+    console.log("[AppsStep] Discovered", result.servers.length, "MCP servers,", result.unsupported.length, "unsupported");
+    setDiscoveredServers(result.servers);
+    setUnsupportedServers(result.unsupported);
+    try {
+      const dupes = (await window.api.mcp.findDuplicates()) as DuplicateGroup[];
+      initDuplicateGroups(dupes);
+    } catch {
+      // Duplicate grouping is advisory; a failure here doesn't invalidate the scan.
+    }
+    return true;
+  }, []);
+
   const detectClients = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     try {
       const { clients: detected, daemonUnavailable } = await window.api.mcp.detectClients();
       setDaemonDown(daemonUnavailable);
+      if (daemonUnavailable) {
+        // Same reasoning as applyDiscovery: keep what we already know. The
+        // 30-second refresh runs during onboarding, so replacing this list with
+        // [] on a blip would also discard the app selections the user just made.
+        return;
+      }
       setClients((prev) => {
         // Preserve enabled/expanded state for existing clients
         const prevMap = new Map(prev.map((c) => [c.id, c]));
@@ -108,9 +156,9 @@ export default function AppsStep({
         setClients((prev) =>
           prev.map((c) => {
             if (c.expanded) {
-              window.api.mcp.readConfig(c.id).then((content) => {
+              window.api.mcp.readConfig(c.id).then(({ content, error }) => {
                 setClients((curr) =>
-                  curr.map((cc) => (cc.id === c.id ? { ...cc, configPreview: content ?? "(No config file yet)" } : cc)),
+                  curr.map((cc) => (cc.id === c.id ? { ...cc, configPreview: previewText(content, error) } : cc)),
                 );
               });
             }
@@ -129,11 +177,7 @@ export default function AppsStep({
               }
               return prev;
             });
-            const result = await window.api.mcp.discover() as { servers: DiscoveredServer[]; unsupported: DiscoveredServer[] };
-            setDiscoveredServers(result.servers);
-            setUnsupportedServers(result.unsupported);
-            const dupes = await window.api.mcp.findDuplicates() as DuplicateGroup[];
-            initDuplicateGroups(dupes);
+            await applyDiscovery();
           } catch {
             // Re-scan failed
           }
@@ -145,7 +189,7 @@ export default function AppsStep({
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [applyDiscovery]);
 
   // Detect installed MCP clients on mount, then auto-scan servers
   useEffect(() => {
@@ -172,9 +216,9 @@ export default function AppsStep({
         if (c.id !== id) return c;
         if (!c.expanded && !c.configPreview) {
           // Load config preview on first expand
-          window.api.mcp.readConfig(c.id).then((content) => {
+          window.api.mcp.readConfig(c.id).then(({ content, error }) => {
             setClients((curr) =>
-              curr.map((cc) => (cc.id === id ? { ...cc, configPreview: content ?? "(No config file yet)" } : cc)),
+              curr.map((cc) => (cc.id === id ? { ...cc, configPreview: previewText(content, error) } : cc)),
             );
           });
         }
@@ -186,28 +230,11 @@ export default function AppsStep({
   const handleScan = async () => {
     setScanning(true);
     try {
-      const result = (await window.api.mcp.discover()) as {
-        servers: DiscoveredServer[];
-        unsupported: DiscoveredServer[];
-        daemonUnavailable?: boolean;
-      };
-      if (result.daemonUnavailable) {
-        // Not "no servers" - nobody could look. The banner explains why; don't
-        // mark the scan as done, or the user reads a clean result.
-        setDaemonDown(true);
-        return;
-      }
-      setDaemonDown(false);
-      console.log("[AppsStep] Discovered", result.servers.length, "MCP servers,", result.unsupported.length, "unsupported");
-      setDiscoveredServers(result.servers);
-      setUnsupportedServers(result.unsupported);
+      // No answer means the banner explains why; don't mark the scan as done,
+      // or the user reads a clean result.
+      if (!(await applyDiscovery())) return;
       setScanned(true);
       scannedRef.current = true;
-      // Fetch duplicate groups
-      try {
-        const dupes = await window.api.mcp.findDuplicates() as DuplicateGroup[];
-        initDuplicateGroups(dupes);
-      } catch { /* ignore */ }
     } catch {
       // Scan failed
     } finally {

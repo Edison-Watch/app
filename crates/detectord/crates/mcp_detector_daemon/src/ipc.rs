@@ -198,10 +198,6 @@ async fn dispatch(user: &str, req: Request) -> Reply {
             Request::ListAgents => Reply::Agents {
                 agents: ops::list_agents(user),
             },
-            Request::RemoveLocal { name, agent } => {
-                ops::remove_local(user, &name, agent.as_deref())?;
-                Reply::Ack
-            }
             Request::ApplyIntegrations { agents } => Reply::Integrations {
                 changes: ops::apply_integrations(user, &agents)?,
             },
@@ -215,14 +211,6 @@ async fn dispatch(user: &str, req: Request) -> Reply {
             Request::RestoreQuarantined { name } => {
                 let (restored, errors) = ops::restore_quarantined(user, name.as_deref())?;
                 Reply::Restored { restored, errors }
-            }
-            Request::MarkSeen {
-                name,
-                agent,
-                status,
-            } => {
-                ops::mark_seen(user, &name, agent.as_deref(), &status)?;
-                Reply::Ack
             }
             Request::ListServers => Reply::Servers {
                 servers: ops::list_servers(user)?,

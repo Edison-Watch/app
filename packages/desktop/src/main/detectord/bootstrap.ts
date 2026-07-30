@@ -50,20 +50,37 @@ export interface DetectordEnrollInput {
  * additive). Without `creds` it reads persisted setup; enroll is skipped (with
  * a log) until credentials are available from either source.
  */
-/**
- * Returns whether the daemon ended up enrolled and being observed (subscribed +
- * listed). `false` means we couldn't reach the daemon, or it isn't enrolled and
- * this call didn't enroll it, so a caller (e.g. the `detectord:enroll` IPC) can
- * surface a retry/error instead of assuming success.
- */
-export async function bootstrapDetectord(creds?: DetectordEnrollInput): Promise<boolean> {
+/** The outcome of a bootstrap attempt. */
+export interface DetectordBootstrapOutcome {
+  /**
+   * The daemon ended up enrolled and observed (subscribed + listed), so it can
+   * detect and quarantine. A caller that only needs "is it working" wants this.
+   */
+  ok: boolean
+  /**
+   * THIS call enrolled the daemon with the credentials it was given.
+   *
+   * `false` with `ok: true` means we merely observed a daemon that was already
+   * enrolled from an earlier session - its agents still carry the PREVIOUS
+   * environment, account and key. Callers that changed credentials (env switch,
+   * account switch, key update) must check this, not `ok`: reporting success on
+   * `ok` alone tells the user their apps were re-pointed when they weren't.
+   */
+  applied: boolean
+  /** Why it didn't fully succeed, for logs and error copy. */
+  reason?: string
+}
+
+export async function bootstrapDetectord(
+  creds?: DetectordEnrollInput
+): Promise<DetectordBootstrapOutcome> {
   // The daemon ships for macOS, Windows, and Linux; elsewhere the TS pipeline runs.
   if (
     process.platform !== 'darwin' &&
     process.platform !== 'win32' &&
     process.platform !== 'linux'
   ) {
-    return false
+    return { ok: false, applied: false, reason: `unsupported platform ${process.platform}` }
   }
   const primary = true
   console.log(
@@ -75,7 +92,7 @@ export async function bootstrapDetectord(creds?: DetectordEnrollInput): Promise<
     // Nothing else in the app can do this work, so a failed bootstrap is not a
     // "skip" - it means the machine is unprotected. Raise the warning.
     reportDetectordFailure('bootstrap', ensured.reason ?? 'daemon unavailable')
-    return false
+    return { ok: false, applied: false, reason: ensured.reason ?? 'daemon unavailable' }
   }
   reportDetectordOk()
   const client = ensured.client
@@ -85,7 +102,9 @@ export async function bootstrapDetectord(creds?: DetectordEnrollInput): Promise<
   // the existing one). So we always (re-)enroll whenever credentials are
   // available rather than guarding on prior state; agent/key *additions* still
   // come through here (union) and removals go through unenroll.
+  let applied = true
   if (!(await enrollDaemon(client, primary, creds))) {
+    applied = false
     // enroll didn't run or failed: no credentials yet, or a transient backend
     // error (enroll hits the backend). The daemon may still be enrolled and
     // running/enforcing from a prior session, so don't go blind: if it reports
@@ -97,7 +116,9 @@ export async function bootstrapDetectord(creds?: DetectordEnrollInput): Promise<
       reportDetectordFailure('status', err)
       return null
     })
-    if (!status?.enrolled) return false
+    if (!status?.enrolled) {
+      return { ok: false, applied: false, reason: 'daemon is not enrolled' }
+    }
     console.warn('[detectord] enroll did not run; observing already-enrolled daemon')
   }
 
@@ -107,7 +128,11 @@ export async function bootstrapDetectord(creds?: DetectordEnrollInput): Promise<
   }
 
   await logInitialDetection(client)
-  return true
+  return {
+    ok: true,
+    applied,
+    ...(applied ? {} : { reason: 'enroll did not run; observing an already-enrolled daemon' })
+  }
 }
 
 /**

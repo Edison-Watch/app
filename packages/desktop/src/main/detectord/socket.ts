@@ -20,7 +20,6 @@ import {
   type Reply,
   type Request,
   type SecretOutcome,
-  type SeenStatus,
   type ServerConfig,
   type ServerView,
   type Status
@@ -187,7 +186,11 @@ export class DetectordClient extends EventEmitter {
     })
   }
 
-  /** Install the edison-watch entry + hooks for these agents. */
+  /**
+   * Install the edison-watch entry + session hooks for these agents, and only
+   * these - no other agent's config is touched. The machine-wide hook sweep is
+   * enrollment's job.
+   */
   async applyIntegrations(agents: string[]): Promise<IntegrationChange[]> {
     const r = await this.expect({ op: 'apply_integrations', agents })
     if (r.reply !== 'integrations') throw new DetectordError(`unexpected reply ${r.reply}`)
@@ -213,21 +216,6 @@ export class DetectordClient extends EventEmitter {
     const r = await this.expect({ op: 'restore_quarantined', name })
     if (r.reply !== 'restored') throw new DetectordError(`unexpected reply ${r.reply}`)
     return { restored: r.restored, errors: r.errors }
-  }
-
-  /** Record a submit the app made, keeping the daemon's seen-store authoritative. */
-  async markSeen(name: string, status: SeenStatus, agent?: string): Promise<void> {
-    await this.expect({ op: 'mark_seen', name, agent, status })
-  }
-
-  /**
-   * Remove a server from its local config, leaving seen-state alone. For the
-   * submit paths that already recorded the outcome themselves and only need the
-   * local entry gone; the daemon owns the config write (Claude Code project
-   * scope, Cursor plugin dirs, state DBs included).
-   */
-  async removeLocal(name: string, agent?: string): Promise<void> {
-    await this.expect({ op: 'remove_local', name, agent })
   }
 
   async verifySecret(key: string): Promise<SecretOutcome> {

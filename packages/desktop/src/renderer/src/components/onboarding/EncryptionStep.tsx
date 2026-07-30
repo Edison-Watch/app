@@ -164,6 +164,16 @@ export default function EncryptionStep({
         edisonSecretKey: compositeKey || undefined,
         apps: selectedApps,
       });
+      if (!result.success) {
+        // Advancing here would land the user on Finish - which reports the
+        // setup as done - while none of their apps route through Edison Watch.
+        setApplyError(
+          result.errors?.length
+            ? `Couldn't configure your apps: ${result.errors.join("; ")}`
+            : "Couldn't apply the Edison Watch configuration to your apps.",
+        );
+        return;
+      }
       onNext(compositeKey, result.modifiedConfigs);
     } catch (err) {
       setApplyError(err instanceof Error ? err.message : "Failed to apply configuration");

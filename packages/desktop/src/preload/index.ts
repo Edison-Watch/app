@@ -94,8 +94,11 @@ const api = {
       configPath?: string
     }): Promise<{ success: boolean; error?: string }> =>
       ipcRenderer.invoke('mcp:resubmitServer', params),
-    /** An agent's user-scope config file, read by the daemon (which owns it). */
-    readConfig: (client: string): Promise<string | null> =>
+    /**
+     * An agent's user-scope config file, read by the daemon (which owns it).
+     * `content: null` with no `error` means the file doesn't exist yet.
+     */
+    readConfig: (client: string): Promise<{ content: string | null; error?: string }> =>
       ipcRenderer.invoke('mcp:readConfig', client),
     applyAppIntegrations: (args: {
       serverAddress: string

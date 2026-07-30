@@ -139,10 +139,14 @@ export function registerMcpSubmitHandlers(): void {
     try {
       const daemon = getDetectordClient();
       await daemon.connect();
-      return (await daemon.readConfig(toAgentName(client))).content;
+      return { content: (await daemon.readConfig(toAgentName(client))).content };
     } catch (err) {
-      console.warn(`[mcp:readConfig] ${client}: ${String(err)}`);
-      return null;
+      // A read that failed is not an empty config: the daemon reports absence
+      // as null content and anything else (permissions, a directory, non-UTF-8)
+      // as an error, so pass the reason on rather than rendering "no config".
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn(`[mcp:readConfig] ${client}: ${message}`);
+      return { content: null, error: message };
     }
   });
 

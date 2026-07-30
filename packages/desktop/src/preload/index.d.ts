@@ -57,7 +57,7 @@ interface EdisonAPI {
       client?: string
       configPath?: string
     }) => Promise<{ success: boolean; error?: string }>
-    readConfig: (client: string) => Promise<string | null>
+    readConfig: (client: string) => Promise<{ content: string | null; error?: string }>
     applyAppIntegrations: (args: {
       serverAddress: string
       mcpBaseUrl: string
@@ -67,6 +67,8 @@ interface EdisonAPI {
     }) => Promise<{
       success: boolean
       modifiedConfigs: Array<{ appId: string; configPath: string; backupPath: string }>
+      /** Per-agent reasons when `success` is false. */
+      errors?: string[]
     }>
     applyForSecretKey: (edisonSecretKey: string) => Promise<{
       success: boolean

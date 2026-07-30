@@ -231,8 +231,26 @@ export function buildTrayMenuItems(deps: TrayMenuDeps): MenuItemConstructorOptio
             // getCredentialsForEnv(), and the daemon stamps every agent config
             // with whatever it gets - so a persistence gap would silently
             // rewrite them all with the PREVIOUS secret.
-            if (!getMcpBaseUrl() || !getCredentialsForEnv()?.apiKey) return
-            await bootstrapDetectord({ edisonSecretKey: compositeKey })
+            //
+            // Throwing is the contract with the dialog: it shows its success
+            // view unless this rejects. Returning quietly when the key wasn't
+            // applied would tell the user their apps use the new key while
+            // every one of them still sends the old header.
+            if (!getMcpBaseUrl() || !getCredentialsForEnv()?.apiKey) {
+              throw new Error(
+                'Sign in to Edison Watch before updating keys - your apps were not changed.'
+              )
+            }
+            const outcome = await bootstrapDetectord({ edisonSecretKey: compositeKey })
+            // `applied` is the only proof the new key reached the agents: a
+            // daemon still enrolled from before reports ok=true while every
+            // agent keeps the old secret header.
+            if (!outcome.applied) {
+              throw new Error(
+                "Couldn't apply the new key - the Edison Watch detector daemon did not accept it, " +
+                  `so your apps still use the previous key. ${outcome.reason ?? ''}`.trim()
+              )
+            }
           }
         )
     },

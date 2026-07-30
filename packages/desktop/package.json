@@ -61,6 +61,7 @@
     "electron-builder": "^26.15.5",
     "electron-vite": "^5.0.0",
     "http-server": "^14.1.1",
+    "jsdom": "^29.1.1",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "storybook": "^10.2.14",

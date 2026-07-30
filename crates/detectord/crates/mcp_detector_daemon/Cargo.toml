@@ -32,3 +32,7 @@ notify-debouncer-full = "0.7.0"
 # kill); cfg-gated out on Windows, which has no such model.
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
+
+[dev-dependencies]
+# Temp dirs for the pure-function tests (matches the sibling crates' version).
+tempfile = "3.27.0"

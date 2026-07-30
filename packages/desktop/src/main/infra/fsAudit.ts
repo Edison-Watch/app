@@ -30,6 +30,7 @@ import { appendFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { homedir, tmpdir } from 'node:os'
 import { basename, dirname, join, resolve, sep } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 import { app } from 'electron'
 
@@ -113,8 +114,13 @@ function buildAllowedRoots(): string[] {
     // /dev/fd: stdiod/controller.ts counts open descriptors there.
     '/dev',
     // The dev tree only exists when running unpackaged (electron-vite serves
-    // main from out/ and resolves deps from node_modules).
-    ...(app.isPackaged ? [] : [resolve(process.cwd(), 'node_modules'), resolve(process.cwd(), 'out')])
+    // main from out/ and resolves deps from node_modules). cwd itself is listed
+    // too, since relative reads resolve against it and in a dev run that tree is
+    // ours. NEVER when packaged: cwd is often `/` there, which would allowlist
+    // the entire filesystem.
+    ...(app.isPackaged
+      ? []
+      : [process.cwd(), resolve(process.cwd(), 'node_modules'), resolve(process.cwd(), 'out')])
   ].filter((p): p is string => !!p)
   // Deliberately NOT allowlisted: /System, /usr/lib, /usr/share, /proc. Electron
   // and Chromium read those from native code, which never passes through the
@@ -163,20 +169,38 @@ function dumpInventory(): void {
   }
 }
 
-function classify(target: unknown): { path: string; root: string | null } | null {
+/**
+ * The path an fs argument refers to, or null when it isn't one we can judge.
+ *
+ * Skipped: file descriptors (numbers) and non-file URLs. NOT skipped: relative
+ * strings - they resolve against cwd, so treating them as unjudgeable would let
+ * anything read outside an allowed root just by omitting the leading slash, and
+ * the audit would still call the run clean.
+ */
+function toPath(target: unknown): string | null {
+  if (typeof target === 'number') return null
+  if (Buffer.isBuffer(target)) return target.toString('utf8')
+  if (target instanceof URL) return target.protocol === 'file:' ? safe(() => fileURLToPath(target)) : null
   if (typeof target !== 'string' || target.length === 0) return null
-  // File descriptors and URLs aren't paths we can judge.
-  if (!target.startsWith('/') && !target.startsWith('~') && !/^[A-Za-z]:[\\/]/.test(target)) {
-    return null
-  }
+  return target
+}
+
+function classify(target: unknown): { path: string; root: string | null } | null {
+  const raw = toPath(target)
+  if (raw === null) return null
+  // `~` is shell syntax, not something fs expands; resolve it the way a user
+  // reading the log would expect rather than against cwd.
+  const expanded = raw.startsWith('~/') ? join(homedir(), raw.slice(2)) : raw
+  // resolve() makes relative paths absolute against cwd - the whole point of
+  // classifying them.
+  const full = resolve(expanded)
   // A file that doesn't exist yet can't be realpath'd, but its directory can -
   // without this, the first write to a new file under a symlinked parent
   // (/tmp -> /private/tmp on macOS) is misreported as foreign.
-  const direct = safe(() => realpathSync(target))
+  const direct = safe(() => realpathSync(full))
   const abs =
     direct ??
     (() => {
-      const full = resolve(target)
       const parent = safe(() => realpathSync(dirname(full)))
       return parent ? join(parent, basename(full)) : full
     })()
@@ -228,6 +252,25 @@ export function installFsAudit(): void {
   for (const name of WATCHED) {
     patch(realFs, name, name)
     patch(realFsPromises, name, `promises.${name}`)
+  }
+
+  // The audit intercepts at property lookup on the shared `fs` module object,
+  // which is what the bundle's call sites use (`node_fs.existsSync(...)`, from
+  // named imports). That holds only while every fs specifier resolves to that
+  // one object: an `import * as fs` anywhere would give Rollup a reason to emit
+  // a frozen namespace COPY, whose properties keep the originals and silently
+  // escape the audit. Check rather than assume - a quiet log that covers less
+  // than it claims is worse than no log.
+  for (const specifier of ['fs', 'node:fs', 'fs/promises', 'node:fs/promises']) {
+    const mod = safe(() => req(specifier) as Record<string, unknown>)
+    if (!mod) continue
+    const sample = specifier.includes('promises') ? realFsPromises.readFile : realFs.readFile
+    if (mod.readFile !== sample) {
+      record(
+        `WARNING: '${specifier}' resolves to a different object than the one patched - ` +
+          'call sites importing from it are NOT audited'
+      )
+    }
   }
 
   record(

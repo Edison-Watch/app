@@ -38,7 +38,7 @@ export const WithDetectedClients: Story = {
   decorators: [
     (Story) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (window as any).api.mcp.detectClients = async () => MOCK_CLIENTS;
+      (window as any).api.mcp.detectClients = async () => ({ clients: MOCK_CLIENTS, daemonUnavailable: false });
       return (
         <div style={{ width: '400px' }}>
           <Story />
@@ -53,7 +53,7 @@ export const NoClientsDetected: Story = {
   decorators: [
     (Story) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (window as any).api.mcp.detectClients = async () => [];
+      (window as any).api.mcp.detectClients = async () => ({ clients: [], daemonUnavailable: false });
       return (
         <div style={{ width: '400px' }}>
           <Story />
