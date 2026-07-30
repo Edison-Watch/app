@@ -135,14 +135,28 @@ pub enum Reply {
     Status(Status),
     // Struct-shaped (not `Vec` newtypes): an internally-tagged enum can't hold a
     // bare sequence.
-    Agents { agents: Vec<AgentInfo> },
-    Servers { servers: Vec<ServerView> },
+    Agents {
+        agents: Vec<AgentInfo>,
+    },
+    Servers {
+        servers: Vec<ServerView>,
+    },
     Secret(SecretOutcome),
-    Integrations { changes: Vec<IntegrationChange> },
-    Config { path: String, content: Option<String> },
-    Restored { restored: u32, errors: Vec<String> },
+    Integrations {
+        changes: Vec<IntegrationChange>,
+    },
+    Config {
+        path: String,
+        content: Option<String>,
+    },
+    Restored {
+        restored: u32,
+        errors: Vec<String>,
+    },
     Ack,
-    Error { message: String },
+    Error {
+        message: String,
+    },
 }
 
 /// The outcome of installing or removing the `edison-watch` entry for one agent.

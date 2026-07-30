@@ -108,6 +108,8 @@ function buildAllowedRoots(): string[] {
     resolve(homedir(), 'Library', 'Application Support', 'edison-watch-detectord'),
     resolve(homedir(), 'Library', 'LaunchAgents'),
     resolve(homedir(), 'Library', 'Logs', 'Edison Watch'),
+    resolve(homedir(), 'Library', 'Logs', 'edison-stdiod'),
+    resolve(homedir(), '.local', 'state', 'edison-stdiod'),
     // /dev/fd: stdiod/controller.ts counts open descriptors there.
     '/dev',
     // The dev tree only exists when running unpackaged (electron-vite serves

@@ -74,7 +74,10 @@ fn edison_entry_url(config: &ServerConfig) -> Option<String> {
 /// Install the `edison-watch` entry + hooks for `agents`, reporting what
 /// changed per agent. The agents are added to the enrolled selection, so a
 /// later self-heal keeps them installed.
-pub fn apply_integrations(user: &str, agents_to_add: &[String]) -> anyhow::Result<Vec<IntegrationChange>> {
+pub fn apply_integrations(
+    user: &str,
+    agents_to_add: &[String],
+) -> anyhow::Result<Vec<IntegrationChange>> {
     let mut e = Enrollment::load_for(user)?.ok_or_else(|| anyhow::anyhow!("not enrolled"))?;
     for a in agents_to_add {
         if !e.selected_agents.contains(a) {
@@ -92,7 +95,10 @@ pub fn apply_integrations(user: &str, agents_to_add: &[String]) -> anyhow::Resul
 
 /// Remove the `edison-watch` entry for `agents` and drop them from the enrolled
 /// selection, so the self-heal doesn't put them straight back.
-pub fn revert_integrations(user: &str, agents_to_remove: &[String]) -> anyhow::Result<Vec<IntegrationChange>> {
+pub fn revert_integrations(
+    user: &str,
+    agents_to_remove: &[String],
+) -> anyhow::Result<Vec<IntegrationChange>> {
     let mut changes = Vec::new();
     let home = user_home(user);
     for agent in agents::build() {
@@ -472,7 +478,9 @@ fn install_edison_entries_for(
 ) -> Vec<IntegrationChange> {
     let Some(mcp_base) = e.mcp_base_url.as_deref() else {
         if !wanted.is_empty() {
-            tracing::warn!("agents selected but no mcp_base_url set — skipping edison-watch install");
+            tracing::warn!(
+                "agents selected but no mcp_base_url set — skipping edison-watch install"
+            );
         }
         return Vec::new();
     };
@@ -485,22 +493,23 @@ fn install_edison_entries_for(
         for inst in agent.edison_installs(home) {
             // Claude Code goes through its own CLI (as the user); the file write
             // is the fallback.
-            let done_via_cli = inst.prefer_cli && {
-                let url = mcp_quarantine::edison_url(mcp_base, &e.api_key, &inst.client_id);
-                match crate::claude_cli::install(user, &url, secret) {
-                    Ok(()) => {
-                        tracing::info!(
-                            agent = agent.name(),
-                            "installed edison-watch (via claude CLI)"
-                        );
-                        true
+            let done_via_cli = inst.prefer_cli
+                && {
+                    let url = mcp_quarantine::edison_url(mcp_base, &e.api_key, &inst.client_id);
+                    match crate::claude_cli::install(user, &url, secret) {
+                        Ok(()) => {
+                            tracing::info!(
+                                agent = agent.name(),
+                                "installed edison-watch (via claude CLI)"
+                            );
+                            true
+                        }
+                        Err(err) => {
+                            tracing::warn!(agent = agent.name(), error = %err, "claude CLI failed; writing the file directly");
+                            false
+                        }
                     }
-                    Err(err) => {
-                        tracing::warn!(agent = agent.name(), error = %err, "claude CLI failed; writing the file directly");
-                        false
-                    }
-                }
-            };
+                };
             if done_via_cli {
                 changes.push(IntegrationChange {
                     agent: agent.name().to_string(),

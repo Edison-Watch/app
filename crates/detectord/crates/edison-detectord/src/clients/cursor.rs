@@ -481,13 +481,9 @@ mod tests {
         )
         .unwrap();
 
-        let servers = Cursor::from_paths(
-            Some(user_cfg),
-            None,
-            [home.to_path_buf(), proj.clone()],
-        )
-        .discover()
-        .unwrap();
+        let servers = Cursor::from_paths(Some(user_cfg), None, [home.to_path_buf(), proj.clone()])
+            .discover()
+            .unwrap();
 
         assert_eq!(servers.len(), 2, "global counted once, project once");
         let scopes: Vec<_> = servers.iter().map(|s| s.scope.clone()).collect();

@@ -456,9 +456,7 @@ fn cmd_restore(needle: Option<String>, all: bool) -> anyhow::Result<()> {
     let needle = if all {
         None
     } else {
-        Some(needle.ok_or_else(|| {
-            anyhow::anyhow!("provide a server name/fingerprint, or --all")
-        })?)
+        Some(needle.ok_or_else(|| anyhow::anyhow!("provide a server name/fingerprint, or --all"))?)
     };
     let (restored, errors) = ops::restore_quarantined(&cli_user(), needle.as_deref())?;
     for e in &errors {
