@@ -2,7 +2,7 @@
 //! user. Returning protocol DTOs keeps the two front-ends in sync.
 
 use anyhow::Context;
-use edison_detectord::{DiscoveredServer, ServerConfig, fingerprint};
+use edison_detectord::{DiscoveredServer, EdisonInstall, ServerConfig, fingerprint};
 use mcp_backend::{BackendClient, Error as BackendError, KnownStatus, SubmitRequest};
 use mcp_quarantine::{
     Action as SeenAction, ConfigStore, FileConfigStore, SeenStore, is_edison_entry,
@@ -28,6 +28,7 @@ pub fn list_agents(user: &str) -> Vec<AgentInfo> {
     agents::build()
         .iter()
         .map(|a| {
+            let installs = a.edison_installs(&home);
             let targets = a.hook_workspace_targets(&home);
             let workspace_hooks_installed = targets
                 .iter()
@@ -44,17 +45,40 @@ pub fn list_agents(user: &str) -> Vec<AgentInfo> {
                 hooks_installed,
                 workspace_hooks_total: targets.len() as u32,
                 workspace_hooks_installed,
-                edison_url: observed
-                    .iter()
-                    .find(|s| s.client == a.name() && is_edison_entry(s))
+                edison_url: installed_edison_entry(a.name(), &installs, &observed)
                     .and_then(|s| edison_entry_url(&s.config)),
-                config_path: a
-                    .edison_installs(&home)
-                    .first()
-                    .map(|i| i.path.display().to_string()),
+                config_path: installs.first().map(|i| i.path.display().to_string()),
             }
         })
         .collect()
+}
+
+/// The `edison-watch` entry that lives exactly where this agent's install
+/// writes one, if there is one.
+///
+/// Matching is on the (file, key-path) pair, not the file alone: Claude Code
+/// keeps user-scope and project-scope servers in the SAME file
+/// (`~/.claude.json`, under `mcpServers` and `projects.<dir>.mcpServers`), so a
+/// path-only check would accept a project entry as ours. It also keeps
+/// `edison_url` consistent with the `config_path` reported alongside it - the
+/// UI shows one and previews the other, and they have to describe the same
+/// entry.
+///
+/// Deliberately strict: an entry that exists only in some project's config is
+/// not reported. It covers that one project, and calling the agent "configured"
+/// on the strength of it would tell the user they're protected everywhere.
+fn installed_edison_entry<'a>(
+    agent_name: &str,
+    installs: &[EdisonInstall],
+    observed: &'a [DiscoveredServer],
+) -> Option<&'a DiscoveredServer> {
+    observed.iter().find(|s| {
+        s.client == agent_name
+            && is_edison_entry(s)
+            && installs
+                .iter()
+                .any(|i| i.path == s.location.path && i.key_path == s.location.key_path)
+    })
 }
 
 /// The upstream URL of an `edison-watch` entry, whichever shape it was written
@@ -934,5 +958,133 @@ fn conflict_detail(err: &BackendError, name: &str) -> String {
             detail: Some(d), ..
         } if !d.is_empty() => d.clone(),
         _ => format!("'{name}' is already registered at Edison Watch"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use edison_detectord::{ConfigLocation, EdisonStyle, HttpKind, Scope, SourceKind, Transport};
+    use std::path::PathBuf;
+
+    fn install(path: &str, key_path: &[&str]) -> EdisonInstall {
+        EdisonInstall {
+            path: PathBuf::from(path),
+            key_path: key_path.iter().map(|s| s.to_string()).collect(),
+            style: EdisonStyle::Http,
+            client_id: "test".into(),
+            prefer_cli: false,
+        }
+    }
+
+    fn entry(
+        client: &'static str,
+        name: &str,
+        path: &str,
+        key_path: &[&str],
+        scope: Scope,
+        url: &str,
+    ) -> DiscoveredServer {
+        DiscoveredServer {
+            client,
+            name: name.into(),
+            transport: Transport::Remote,
+            scope,
+            config: ServerConfig::Http {
+                url: url.into(),
+                headers: Default::default(),
+                kind: HttpKind::Http,
+            },
+            location: ConfigLocation {
+                kind: SourceKind::Json,
+                path: PathBuf::from(path),
+                key_path: key_path.iter().map(|s| s.to_string()).collect(),
+                server_key: name.into(),
+                extra: Default::default(),
+            },
+        }
+    }
+
+    #[test]
+    fn reports_the_entry_in_our_own_install_location() {
+        let installs = vec![install("/home/u/.cursor/mcp.json", &["mcpServers"])];
+        let observed = vec![entry(
+            "cursor",
+            "edison-watch",
+            "/home/u/.cursor/mcp.json",
+            &["mcpServers"],
+            Scope::Global,
+            "https://mcp.edison.watch/mcp?client=cursor",
+        )];
+        let found = installed_edison_entry("cursor", &installs, &observed);
+        assert_eq!(
+            found.and_then(|s| edison_entry_url(&s.config)).as_deref(),
+            Some("https://mcp.edison.watch/mcp?client=cursor")
+        );
+    }
+
+    /// Claude Code keeps both scopes in `~/.claude.json`, so a project entry
+    /// shares the install file and only the key path distinguishes them. Taking
+    /// it would report "configured" for the whole agent on the strength of one
+    /// project's config.
+    #[test]
+    fn ignores_a_project_entry_that_shares_the_install_file() {
+        let installs = vec![install("/home/u/.claude.json", &["mcpServers"])];
+        let observed = vec![entry(
+            "claude_code",
+            "edison-watch",
+            "/home/u/.claude.json",
+            &["projects", "/home/u/work/app", "mcpServers"],
+            Scope::Project(PathBuf::from("/home/u/work/app")),
+            "https://stale.example/mcp",
+        )];
+        assert!(installed_edison_entry("claude_code", &installs, &observed).is_none());
+    }
+
+    #[test]
+    fn ignores_a_project_entry_in_a_different_file() {
+        let installs = vec![install("/home/u/.cursor/mcp.json", &["mcpServers"])];
+        let observed = vec![entry(
+            "cursor",
+            "edison-watch",
+            "/home/u/work/app/.cursor/mcp.json",
+            &["mcpServers"],
+            Scope::Project(PathBuf::from("/home/u/work/app")),
+            "https://team-gateway.example/mcp",
+        )];
+        assert!(installed_edison_entry("cursor", &installs, &observed).is_none());
+    }
+
+    /// The URL reported for one agent must not come from another's config.
+    #[test]
+    fn ignores_another_agents_entry() {
+        let installs = vec![install("/home/u/.cursor/mcp.json", &["mcpServers"])];
+        let observed = vec![entry(
+            "vscode",
+            "edison-watch",
+            "/home/u/.cursor/mcp.json",
+            &["mcpServers"],
+            Scope::Global,
+            "https://mcp.edison.watch/mcp?client=vscode",
+        )];
+        assert!(installed_edison_entry("cursor", &installs, &observed).is_none());
+    }
+
+    #[test]
+    fn picks_the_url_out_of_a_stdio_shim_entry() {
+        // Claude Desktop/Cowork wrap the URL in `npx -y mcp-remote <url>`.
+        let config = ServerConfig::Stdio {
+            command: "npx".into(),
+            args: vec![
+                "-y".into(),
+                "mcp-remote".into(),
+                "https://mcp.edison.watch/mcp?client=claude-desktop".into(),
+            ],
+            env: Default::default(),
+        };
+        assert_eq!(
+            edison_entry_url(&config).as_deref(),
+            Some("https://mcp.edison.watch/mcp?client=claude-desktop")
+        );
     }
 }
