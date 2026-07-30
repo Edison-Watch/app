@@ -8,6 +8,13 @@
  * inspects until a visual diff turns red. Every namespace the renderer touches
  * should exist here, with shapes that match `preload/index.d.ts`.
  *
+ * "Should" was doing too much work there, so the shapes are now checked: the
+ * return type is derived from the real API, and a stub that answers with the
+ * wrong shape fails typecheck. Destructuring is what made the old arrangement
+ * dangerous - `readConfig` returned a bare `''` while callers read
+ * `{ content, error }` from it, which yields `undefined` for both and silently
+ * exercises a branch production never takes, no error anywhere.
+ *
  * Callers override individual members per story/test.
  */
 
@@ -17,15 +24,34 @@ export interface MockClient {
   configPath: string
 }
 
+type Api = Window['api']
+
+/**
+ * Every member the stub defines must have production's type; members it leaves
+ * out are its own business.
+ */
+type PartialApi = { [K in keyof Api]?: Partial<Api[K]> }
+
+const IDLE_UPDATE_STATE = {
+  status: 'idle',
+  version: null,
+  percent: null,
+  error: null,
+  autoDownload: true,
+  autoInstallOnQuit: true
+} as const
+
 /** A permissive stub: every call resolves to a harmless empty result. */
-export function createMockApi(): Record<string, unknown> {
+export function createMockApi(): PartialApi {
   const noopUnsubscribe = (): (() => void) => () => {}
 
   return {
     platform: 'darwin',
     getVersion: () => '0.0.0-test',
     setup: {
-      getData: async () => null,
+      // Production always resolves an object (`getSetupData()`); `null` here
+      // sent stories down a branch that cannot happen.
+      getData: async () => ({ completed: false }),
       complete: () => {},
       update: async () => ({ ok: true }),
       reachedFinal: () => {},
@@ -49,7 +75,7 @@ export function createMockApi(): Record<string, unknown> {
       findDuplicates: async () => [],
       removeServers: async () => ({ removed: [], errors: [] }),
       resubmitServer: async () => ({ success: true }),
-      readConfig: async () => '',
+      readConfig: async () => ({ content: null }),
       applyAppIntegrations: async () => ({ success: true, modifiedConfigs: [] }),
       applyForSecretKey: async () => ({ success: true, modifiedConfigs: [] }),
       revertAppIntegrations: async () => ({ reverted: 0, errors: [] }),
@@ -89,15 +115,8 @@ export function createMockApi(): Record<string, unknown> {
       popupApp: async () => {}
     },
     updates: {
-      getState: async () => ({
-        status: 'idle',
-        version: null,
-        percent: null,
-        error: null,
-        autoDownload: true,
-        autoInstallOnQuit: true
-      }),
-      check: async () => ({ status: 'idle' }),
+      getState: async () => IDLE_UPDATE_STATE,
+      check: async () => IDLE_UPDATE_STATE,
       download: async () => {},
       install: async () => {},
       getSettings: async () => ({ autoDownload: true, autoInstallOnQuit: true }),
@@ -116,7 +135,15 @@ export function createMockApi(): Record<string, unknown> {
       onHealth: noopUnsubscribe
     },
     stdiod: {
-      status: async () => ({ installed: false, running: false }),
+      // `running` was never a field on StdiodStatus - the tray reads
+      // `loggedIn` and `state`, which the old stub left undefined.
+      status: async () => ({
+        binaryAvailable: false,
+        installed: false,
+        loggedIn: false,
+        state: null,
+        stateAgeMs: null
+      }),
       install: async () => ({ ok: true }),
       login: async () => ({ ok: true }),
       uninstall: async () => ({ ok: true }),

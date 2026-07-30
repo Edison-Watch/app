@@ -161,7 +161,14 @@ interface EdisonAPI {
   }
   accounts: {
     list: () => Promise<Array<{ userId: string; userEmail: string; savedAt: string }>>
-    switch: (userId: string) => Promise<{ ok: boolean }>
+    /**
+     * `ok` is whether the app switched accounts; `agentsRepointed` is whether the
+     * MCP clients on the machine were re-pointed at it. They can differ - the
+     * daemon can fail to re-enroll while the switch itself stands.
+     */
+    switch: (
+      userId: string
+    ) => Promise<{ ok: boolean; agentsRepointed?: boolean; reason?: string }>
     remove: (userId: string) => Promise<{ ok: boolean }>
   }
   menu: {

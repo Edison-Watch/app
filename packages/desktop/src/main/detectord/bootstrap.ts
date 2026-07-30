@@ -9,6 +9,8 @@
 // quarantine logs" even though the daemon is the one doing the work. Install /
 // enroll use a `[detectord]` prefix.
 
+import { app, BrowserWindow, dialog } from 'electron'
+
 import {
   getApiBaseUrl,
   getCredentialsForEnv,
@@ -133,6 +135,41 @@ export async function bootstrapDetectord(
     applied,
     ...(applied ? {} : { reason: 'enroll did not run; observing an already-enrolled daemon' })
   }
+}
+
+/**
+ * Tell the user their agents were left pointing at the previous credentials.
+ *
+ * Interrupting is the point. A caller that changed credentials and got
+ * `applied: false` is in a state the user cannot see and would not guess: the
+ * app has switched, but every MCP client on the machine still carries the old
+ * account's URL and key, so their traffic keeps routing through the account
+ * they just left. A console line does not reach them, and the renderer reloads
+ * itself right after an account switch - anything staged in renderer state is
+ * gone before it can be read. A main-process dialog survives that reload, which
+ * is why the missing-binary case uses one too.
+ */
+export async function warnAgentsNotRepointed(what: string, reason?: string): Promise<void> {
+  console.error(`[detectord] agents were NOT re-pointed at ${what}: ${reason ?? 'enrollment failed'}`)
+  const options = {
+    type: 'warning' as const,
+    title: 'Your apps were not updated',
+    message: `Edison Watch switched to ${what}, but your MCP apps were not updated.`,
+    detail:
+      'The detector daemon kept the previous credentials, so your apps still connect using ' +
+      'them until this is repaired.\n\n' +
+      `Reason: ${reason ?? 'enrollment failed'}\n\n` +
+      'Restart Edison Watch to retry. If it keeps failing, check your network connection.',
+    buttons: ['OK'],
+    defaultId: 0,
+    noLink: true
+  }
+  const show = async (): Promise<void> => {
+    const parent = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed())
+    await (parent ? dialog.showMessageBox(parent, options) : dialog.showMessageBox(options))
+  }
+  if (app.isReady()) await show()
+  else await app.whenReady().then(show)
 }
 
 /**

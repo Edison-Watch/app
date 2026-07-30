@@ -1,6 +1,8 @@
 //! Operations behind both the CLI and the IPC server, each scoped to an OS
 //! user. Returning protocol DTOs keeps the two front-ends in sync.
 
+use std::path::PathBuf;
+
 use anyhow::Context;
 use edison_detectord::{DiscoveredServer, EdisonInstall, ServerConfig, fingerprint};
 use mcp_backend::{BackendClient, Error as BackendError, KnownStatus, SubmitRequest};
@@ -484,7 +486,11 @@ fn purge_shadowing_edison_entries(user: &str) {
         }
     };
 
-    let mut recorded = false;
+    // What this pass took out, kept so it can be put back. The whole point of
+    // recording these is that the user can `restore` them, so a removal whose
+    // record never reaches disk is worse than no removal at all: the entry is
+    // gone from the config, the sidecar exists, and nothing points at it.
+    let mut undo: Vec<(PathBuf, QuarantineRecord)> = Vec::new();
     for server in agents::discover_all(&agents::build()) {
         if server.client != "cursor" || !is_edison_entry(&server) {
             continue;
@@ -498,8 +504,8 @@ fn purge_shadowing_edison_entries(user: &str) {
                 // user's own manual setup, so "remove and forget" would leave
                 // them with no way back through `restore` - only the CLI's
                 // disk-scanning `recover`, which restores everything at once.
+                undo.push((project.clone(), record.clone()));
                 q.upsert(quarantined_entry(&server, record));
-                recorded = true;
                 tracing::info!(
                     project = %project.display(),
                     "removed shadowing project-scoped edison-watch entry (restorable)"
@@ -512,9 +518,62 @@ fn purge_shadowing_edison_entries(user: &str) {
             ),
         }
     }
-    if recorded && let Err(err) = q.save_for(user) {
-        tracing::warn!(error = %err, "could not persist shadow-purge quarantine records");
+    commit_purge(&undo, || q.save_for(user));
+}
+
+/// Finish a purge pass: persist the records, or undo every removal if that
+/// fails. Returns whether the removals stand.
+///
+/// The save is injected so the failure path is reachable in a test - it is the
+/// branch that matters, and the one that cannot be provoked through the real
+/// state file.
+fn commit_purge(
+    undo: &[(PathBuf, QuarantineRecord)],
+    save: impl FnOnce() -> anyhow::Result<()>,
+) -> bool {
+    if undo.is_empty() {
+        return true;
     }
+    let Err(err) = save() else { return true };
+    // The records did not reach disk, so put every entry back. The shadowing
+    // entry returns with it - the user keeps seeing "edison-watch not
+    // recognized" until the next `apply_install` retries - but that is a
+    // visible, retryable problem, where a removal nothing recorded is silent
+    // and permanent.
+    tracing::warn!(
+        error = %err,
+        count = undo.len(),
+        "could not persist shadow-purge quarantine records; restoring the entries"
+    );
+    restore_purged(undo);
+    false
+}
+
+/// Put back entries a purge pass removed but could not record. Returns how many
+/// made it back.
+fn restore_purged(undo: &[(PathBuf, QuarantineRecord)]) -> usize {
+    let mut restored = 0;
+    for (project, rec) in undo {
+        match FileConfigStore.restore(rec) {
+            Ok(()) => {
+                restored += 1;
+                tracing::info!(
+                    project = %project.display(),
+                    "restored shadowing entry after failed record save"
+                )
+            }
+            // Both halves failed. This is the stranded case the rollback exists
+            // to prevent, so name the sidecar: it is the only remaining way
+            // back, via the CLI's disk-scanning `recover`.
+            Err(err) => tracing::error!(
+                project = %project.display(),
+                error = %err,
+                sidecar = %rec.disabled_path.display(),
+                "entry is quarantined with no record and could not be restored"
+            ),
+        }
+    }
+    restored
 }
 
 /// The quarantine record for a server we just removed from a config.
@@ -1102,6 +1161,119 @@ mod tests {
                 extra: Default::default(),
             },
         }
+    }
+
+    /// Removing a shadowing entry and failing to record it would strand it: the
+    /// sidecar exists, the entry is gone from the config, and `restore` has
+    /// nothing pointing at it. The rollback has to genuinely put it back, so
+    /// this drives the real store against a real file rather than a stub.
+    #[test]
+    fn purge_rollback_returns_the_entry_to_its_config() {
+        let d = tempfile::tempdir().unwrap();
+        let project = d.path().join("work/app");
+        let cfg = project.join(".cursor/mcp.json");
+        std::fs::create_dir_all(cfg.parent().unwrap()).unwrap();
+        std::fs::write(
+            &cfg,
+            r#"{"mcpServers":{"edison-watch":{"url":"https://mcp.edison.watch/mcp"},"other":{"url":"https://x"}}}"#,
+        )
+        .unwrap();
+
+        let loc = ConfigLocation {
+            kind: SourceKind::Json,
+            path: cfg.clone(),
+            key_path: vec!["mcpServers".into()],
+            server_key: "edison-watch".into(),
+            extra: Default::default(),
+        };
+        let config = ServerConfig::Http {
+            url: "https://mcp.edison.watch/mcp".into(),
+            headers: Default::default(),
+            kind: HttpKind::Http,
+        };
+
+        let record = FileConfigStore.quarantine(&loc, &config).unwrap();
+        let after: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&cfg).unwrap()).unwrap();
+        assert!(
+            after["mcpServers"].get("edison-watch").is_none(),
+            "precondition: the purge removed it"
+        );
+
+        // The save failed, so everything this pass took out goes back.
+        let restored = restore_purged(&[(project.clone(), record)]);
+
+        assert_eq!(restored, 1);
+        let back: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&cfg).unwrap()).unwrap();
+        assert_eq!(
+            back["mcpServers"]["edison-watch"]["url"], "https://mcp.edison.watch/mcp",
+            "the entry did not come back - it is stranded with no record"
+        );
+        assert!(
+            back["mcpServers"].get("other").is_some(),
+            "rollback clobbered an unrelated server"
+        );
+    }
+
+    /// The wiring, not just the rollback: a failed save must undo the pass, and
+    /// a successful one must leave it alone.
+    #[test]
+    fn purge_commit_undoes_the_pass_only_when_the_save_fails() {
+        for (label, save_ok) in [("save failed", false), ("save succeeded", true)] {
+            let d = tempfile::tempdir().unwrap();
+            let project = d.path().join("work/app");
+            let cfg = project.join(".cursor/mcp.json");
+            std::fs::create_dir_all(cfg.parent().unwrap()).unwrap();
+            std::fs::write(
+                &cfg,
+                r#"{"mcpServers":{"edison-watch":{"url":"https://mcp.edison.watch/mcp"}}}"#,
+            )
+            .unwrap();
+            let loc = ConfigLocation {
+                kind: SourceKind::Json,
+                path: cfg.clone(),
+                key_path: vec!["mcpServers".into()],
+                server_key: "edison-watch".into(),
+                extra: Default::default(),
+            };
+            let config = ServerConfig::Http {
+                url: "https://mcp.edison.watch/mcp".into(),
+                headers: Default::default(),
+                kind: HttpKind::Http,
+            };
+            let record = FileConfigStore.quarantine(&loc, &config).unwrap();
+
+            let stands = commit_purge(&[(project, record)], || {
+                if save_ok {
+                    Ok(())
+                } else {
+                    Err(anyhow::anyhow!("disk full"))
+                }
+            });
+
+            let v: serde_json::Value =
+                serde_json::from_str(&std::fs::read_to_string(&cfg).unwrap()).unwrap();
+            let present = v["mcpServers"].get("edison-watch").is_some();
+            assert_eq!(stands, save_ok, "{label}: wrong commit result");
+            assert_eq!(
+                present, !save_ok,
+                "{label}: entry present={present} - a removal with no record is unrecoverable"
+            );
+        }
+    }
+
+    /// A rollback that cannot run is the one case worth shouting about; it must
+    /// report honestly rather than counting a failure as a restore.
+    #[test]
+    fn purge_rollback_reports_what_it_could_not_restore() {
+        let d = tempfile::tempdir().unwrap();
+        let missing = d.path().join("gone/.cursor/mcp.json");
+        let restored = restore_purged(&[(
+            d.path().join("gone"),
+            quarantine_record(&missing.display().to_string()),
+        )]);
+        assert_eq!(restored, 0, "nothing was restorable; must not claim it was");
     }
 
     #[test]

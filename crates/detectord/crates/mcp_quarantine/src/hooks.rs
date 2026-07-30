@@ -9,6 +9,7 @@
 use std::path::{Path, PathBuf};
 
 use edison_detectord::{HookBinding, HookInstall, HookScriptKind, HookStyle};
+use regex::Regex;
 use serde_json::{Map, Value, json};
 
 use crate::configstore::{backup_path, parse, read, serialize, write};
@@ -395,17 +396,66 @@ fn group_runs_script(group: &Value, kind: HookScriptKind) -> bool {
         .is_some_and(|hs| hs.iter().any(|h| command_has_script(h, kind)))
 }
 
+/// Tool names that stand in for a binding's scope.
+///
+/// Coverage is "does this group fire everywhere the binding needs it to", and
+/// the only way to answer that for a regex is to run it. Comparing matcher
+/// strings cannot: `mcp__.*` and `mcp__*` select the same MCP calls while
+/// sharing no useful equality, and `.*` covers every binding there is.
+///
+/// So each binding names tools that must be matched. An MCP-scoped binding is
+/// satisfied by anything that fires for MCP calls; an unscoped one has to fire
+/// for ordinary tools too, which is why a `mcp__*` group does not cover it.
+fn scope_samples(binding: &HookBinding) -> &'static [&'static str] {
+    match binding.matcher.as_deref() {
+        Some(m) if m.starts_with("mcp__") => &["mcp__edison_watch__list", "mcp__github__search"],
+        // No matcher, `*`, or anything else: the binding wants every tool.
+        _ => &["mcp__edison_watch__list", "Bash", "Edit", "Read"],
+    }
+}
+
 /// Whether a group's matcher covers the binding's scope.
 ///
 /// Claude only runs a group for tools its `matcher` selects, so a group scoped
 /// elsewhere does not satisfy the binding no matter what command it holds - the
 /// `PreToolUse`/`mcp__*` binding is the one that makes MCP calls observable at
 /// all. An absent matcher (or `*`) means every tool, which covers any binding.
+///
+/// Everything else is a regex, matched unscoped against the tool name, the way
+/// Claude matches it. A matcher this crate cannot compile is reported as NOT
+/// covering: the module's rule is never to claim coverage nobody verified, and
+/// the caller responds by installing a correctly scoped group rather than
+/// trusting one it could not read.
 fn matcher_covers(group: &Value, binding: &HookBinding) -> bool {
-    match group.get("matcher").and_then(Value::as_str) {
-        None | Some("*") => true,
-        Some(m) => Some(m) == binding.matcher.as_deref(),
+    let Some(m) = group.get("matcher").and_then(Value::as_str) else {
+        return true;
+    };
+    if m == "*" {
+        return true;
     }
+    // Cheap exact hit first - the common case is our own previous install.
+    if Some(m) == binding.matcher.as_deref() {
+        return true;
+    }
+    let Ok(re) = Regex::new(m) else { return false };
+    scope_samples(binding).iter().all(|t| re.is_match(t))
+}
+
+/// Whether the group's scope is *demonstrably* outside the binding.
+///
+/// Stricter than `!matcher_covers`, and deliberately so: that returns false for
+/// a matcher we could not compile, which means "unread", not "wrong". Rewriting
+/// on unread would discard a scope the user may have chosen on purpose, so only
+/// a matcher that compiled and then failed to fire for the binding's tools
+/// earns a repair.
+fn matcher_known_not_to_cover(group: &Value, binding: &HookBinding) -> bool {
+    let Some(m) = group.get("matcher").and_then(Value::as_str) else {
+        return false;
+    };
+    if m == "*" || Some(m) == binding.matcher.as_deref() {
+        return false;
+    }
+    Regex::new(m).is_ok_and(|re| !scope_samples(binding).iter().all(|t| re.is_match(t)))
 }
 
 /// Whether every command in the group is one of ours, so its matcher can be
@@ -458,16 +508,33 @@ fn inject_claude(install: &HookInstall, scripts: &HookScripts) -> Result<bool> {
         }
         // A wrongly-scoped group of ours (an older install, a hand-edit): fix
         // its matcher rather than adding a second one, but only when the whole
-        // group is ours - otherwise we'd move somebody else's hook too.
-        if let Some(g) = arr
-            .iter_mut()
-            .find(|g| group_runs_script(g, b.script) && group_is_exclusively_ours(g))
-            && let Some(obj) = g.as_object_mut()
+        // group is ours - otherwise we'd move somebody else's hook too - and
+        // only when its scope is KNOWN to miss the binding. A matcher this
+        // crate cannot compile is not known-wrong, just unread, so it keeps
+        // whatever the user meant by it and we add our own group beside it.
+        if let Some(g) = arr.iter_mut().find(|g| {
+            group_runs_script(g, b.script)
+                && group_is_exclusively_ours(g)
+                && matcher_known_not_to_cover(g, b)
+        }) && let Some(obj) = g.as_object_mut()
         {
             match &b.matcher {
                 Some(m) => obj.insert("matcher".into(), json!(m)),
                 None => obj.remove("matcher"),
             };
+            // Ownership is decided by script *filename*, so the group we just
+            // rescoped may still name a path from somewhere else entirely - an
+            // older install, a moved home directory, a settings.json carried
+            // between machines in a dotfiles repo. Correcting the matcher alone
+            // would leave it scoped perfectly at a script that isn't there, so
+            // the command is refreshed in the same pass.
+            if let Some(hs) = obj.get_mut("hooks").and_then(Value::as_array_mut) {
+                for h in hs.iter_mut().filter(|h| command_has_script(h, b.script)) {
+                    if let Some(ho) = h.as_object_mut() {
+                        ho.insert("command".into(), json!(command_for(b, scripts, install)));
+                    }
+                }
+            }
             changed = true;
             continue;
         }
@@ -1247,6 +1314,59 @@ mod tests {
         assert!(installed >= 1, "now genuinely covered");
     }
 
+    /// Rescoping a group is pointless if it still names a script that is not
+    /// there. Ownership is matched on filename, so a group from an older
+    /// install - or a settings.json synced from another machine - looks like
+    /// ours while pointing into a directory that no longer exists.
+    #[test]
+    fn claude_repair_refreshes_a_stale_script_path() {
+        let d = tempdir().unwrap();
+        let settings = d.path().join("settings.json");
+        std::fs::write(
+            &settings,
+            r#"{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"/gone/edison-session-hook.py"}]}]}}"#,
+        )
+        .unwrap();
+        let install = claude_install(&settings);
+        let scripts = fake_scripts(d.path());
+
+        assert!(inject_hooks(&install, &scripts).unwrap());
+        let v: Value = serde_json::from_str(&std::fs::read_to_string(&settings).unwrap()).unwrap();
+        let groups = v["hooks"]["PreToolUse"].as_array().unwrap();
+        assert_eq!(groups.len(), 1, "repaired in place, not duplicated");
+        assert_eq!(groups[0]["matcher"], "mcp__*");
+        let cmd = groups[0]["hooks"][0]["command"].as_str().unwrap();
+        assert!(
+            !cmd.contains("/gone/"),
+            "kept the dead path: {cmd} - correctly scoped at a script that isn't there"
+        );
+        assert!(
+            cmd.contains(&scripts.session_hook.display().to_string()),
+            "expected the current script path, got {cmd}"
+        );
+    }
+
+    /// The refresh is confined to the repair: a second pass has nothing left to
+    /// correct, so it must not rewrite the file again.
+    #[test]
+    fn claude_repair_settles_after_one_pass() {
+        let d = tempdir().unwrap();
+        let settings = d.path().join("settings.json");
+        std::fs::write(
+            &settings,
+            r#"{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"/gone/edison-session-hook.py"}]}]}}"#,
+        )
+        .unwrap();
+        let install = claude_install(&settings);
+        let scripts = fake_scripts(d.path());
+
+        assert!(inject_hooks(&install, &scripts).unwrap());
+        assert!(
+            !inject_hooks(&install, &scripts).unwrap(),
+            "repair is not idempotent - it would rewrite settings.json on every run"
+        );
+    }
+
     /// Repair must not drag a user's own hook into our scope.
     #[test]
     fn claude_injection_leaves_a_shared_group_alone_and_adds_its_own() {
@@ -1267,6 +1387,99 @@ mod tests {
         let user_group = groups.iter().find(|g| g["matcher"] == "Bash").unwrap();
         assert_eq!(user_group["hooks"].as_array().unwrap().len(), 2);
         assert!(groups.iter().any(|g| g["matcher"] == "mcp__*"));
+    }
+
+    /// A matcher that is written differently but selects the same MCP calls is
+    /// coverage. `mcp__.*` is the form Claude's own docs use; treating it as
+    /// wrongly-scoped meant rewriting a config that was already correct.
+    #[test]
+    fn claude_equivalent_matchers_count_as_coverage() {
+        let d = tempdir().unwrap();
+        for (label, matcher) in [
+            ("regex-form", "mcp__.*"),
+            ("catch-all-regex", ".*"),
+            ("alternation", "mcp__.*|Bash"),
+            ("narrower-prefix-plus-wildcard", "mcp__[a-z_]+__.*"),
+        ] {
+            let settings = d.path().join(format!("settings-{label}.json"));
+            std::fs::write(
+                &settings,
+                format!(
+                    r#"{{"hooks":{{"PreToolUse":[{{"matcher":"{matcher}","hooks":[{{"type":"command","command":"/x/edison-session-hook.py"}}]}}]}}}}"#
+                ),
+            )
+            .unwrap();
+            let (installed, _) = hooks_status(&claude_install(&settings));
+            assert_eq!(installed, 1, "{label} ({matcher}) fires for MCP calls");
+        }
+    }
+
+    /// ...and injection must leave such a config exactly as the user wrote it.
+    #[test]
+    fn claude_injection_does_not_rewrite_an_equivalent_matcher() {
+        let d = tempdir().unwrap();
+        let settings = d.path().join("settings.json");
+        std::fs::write(
+            &settings,
+            r#"{"hooks":{"PreToolUse":[{"matcher":"mcp__.*","hooks":[{"type":"command","command":"/x/edison-session-hook.py"}]}]}}"#,
+        )
+        .unwrap();
+        let install = claude_install(&settings);
+        let scripts = fake_scripts(d.path());
+
+        inject_hooks(&install, &scripts).unwrap();
+        let v: Value = serde_json::from_str(&std::fs::read_to_string(&settings).unwrap()).unwrap();
+        let groups = v["hooks"]["PreToolUse"].as_array().unwrap();
+        assert_eq!(groups.len(), 1, "no second PreToolUse group added");
+        assert_eq!(
+            groups[0]["matcher"], "mcp__.*",
+            "the user's matcher was rewritten"
+        );
+    }
+
+    /// A matcher we cannot read is not a matcher we know to be wrong. Adding a
+    /// correctly scoped group beside it keeps the hook working without
+    /// discarding a scope the user may have meant.
+    #[test]
+    fn claude_injection_leaves_an_uncompilable_matcher_alone() {
+        let d = tempdir().unwrap();
+        let settings = d.path().join("settings.json");
+        std::fs::write(
+            &settings,
+            r#"{"hooks":{"PreToolUse":[{"matcher":"mcp__[","hooks":[{"type":"command","command":"/old/edison-session-hook.py"}]}]}}"#,
+        )
+        .unwrap();
+        let install = claude_install(&settings);
+        let scripts = fake_scripts(d.path());
+
+        assert!(inject_hooks(&install, &scripts).unwrap());
+        let v: Value = serde_json::from_str(&std::fs::read_to_string(&settings).unwrap()).unwrap();
+        let groups = v["hooks"]["PreToolUse"].as_array().unwrap();
+        assert_eq!(groups.len(), 2, "ours added beside the unreadable one");
+        assert!(
+            groups.iter().any(|g| g["matcher"] == "mcp__["),
+            "kept as-is"
+        );
+        assert!(groups.iter().any(|g| g["matcher"] == "mcp__*"));
+    }
+
+    /// An MCP-scoped group does NOT cover a binding that has to run for every
+    /// tool - coverage is directional, and the samples enforce that.
+    #[test]
+    fn claude_mcp_scoped_group_does_not_cover_an_unscoped_binding() {
+        let d = tempdir().unwrap();
+        let settings = d.path().join("settings.json");
+        std::fs::write(
+            &settings,
+            r#"{"hooks":{"UserPromptSubmit":[{"matcher":"mcp__.*","hooks":[{"type":"command","command":"/x/edison-hook.sh"}]}]}}"#,
+        )
+        .unwrap();
+        let install = claude_install(&settings);
+        let (installed, _) = hooks_status(&install);
+        assert_eq!(
+            installed, 0,
+            "UserPromptSubmit must fire for every prompt, not just MCP tools"
+        );
     }
 
     #[test]

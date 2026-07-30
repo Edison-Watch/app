@@ -196,7 +196,9 @@ const api = {
   accounts: {
     list: (): Promise<Array<{ userId: string; userEmail: string; savedAt: string }>> =>
       ipcRenderer.invoke('accounts:list'),
-    switch: (userId: string): Promise<{ ok: boolean }> =>
+    switch: (
+      userId: string
+    ): Promise<{ ok: boolean; agentsRepointed?: boolean; reason?: string }> =>
       ipcRenderer.invoke('accounts:switch', userId),
     remove: (userId: string): Promise<{ ok: boolean }> =>
       ipcRenderer.invoke('accounts:remove', userId)

@@ -15,7 +15,11 @@ import { getAgentFacts } from '../detectord/agents'
 import { getDetectordHealth } from '../detectord/health'
 import { getDetectordClient } from '../detectord/lifecycle'
 import { CLIENT_DISPLAY } from '../clients/displayMeta'
-import { bootstrapDetectord, setDetectordSecret } from '../detectord/bootstrap'
+import {
+  bootstrapDetectord,
+  setDetectordSecret,
+  warnAgentsNotRepointed
+} from '../detectord/bootstrap'
 import { uninstallService as uninstallDetectord } from '../detectord/controller'
 import {
   getUpdateState,
@@ -303,19 +307,23 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       console.error('[accounts:switch] Failed to update MCP integrations:', err)
       return null
     })
-    if (!reEnrolled?.applied) {
-      // The daemon may still be enrolled under the PREVIOUS account, in which
-      // case its agents keep that account's URL and key.
-      console.error(
-        `[accounts:switch] agents were NOT re-pointed at the new account: ${reEnrolled?.reason ?? 'enrollment failed'}`
-      )
-    }
+    const agentsRepointed = reEnrolled?.applied === true
 
     // Re-point the daemon at the new account (or stop it) so it doesn't keep
     // tunneling under the old credentials.
     await reprovisionStdiodForActiveAccount()
 
-    return { ok: true }
+    if (!agentsRepointed) {
+      // `ok` stays true and that is deliberate: the switch DID happen. Persisted
+      // setup, the event subscription and stdiod are all on the new account, and
+      // the renderer bails out of its reload on `ok: false` - reporting failure
+      // here would leave the window showing the account we already left, with
+      // the outgoing installation credential never revoked. The partial failure
+      // is a separate fact, so it gets a separate field.
+      await warnAgentsNotRepointed('the new account', reEnrolled?.reason)
+    }
+
+    return { ok: true, agentsRepointed, ...(agentsRepointed ? {} : { reason: reEnrolled?.reason }) }
   })
 
   ipcMain.handle('accounts:remove', (_event, userId: string) => {
