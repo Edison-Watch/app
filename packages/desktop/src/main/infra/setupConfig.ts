@@ -141,15 +141,24 @@ export function markSetupComplete(data?: Partial<SetupData>): void {
   const existing = getSetupData();
   const merged: SetupData = { ...existing, ...data, completed: true };
 
-  // Persist the current apiKey into the per-env credential map so
-  // switching environments later can recall the correct key.
+  // Persist the current credentials into the per-env map so switching
+  // environments later recalls the right ones.
+  //
+  // The apiKey may exist ONLY in this map: a returning login keeps it in the
+  // renderer's auth state and never writes it top-level. Gating this block on
+  // the top-level key therefore skipped the update for exactly those setups, so
+  // saving a new org key left `envCredentials[env].edisonSecretKey` stale - and
+  // getCredentialsForEnv() prefers that entry, so every later reader (daemon
+  // enrollment included) kept handing out the OLD secret.
   const env = getActiveEnv();
-  if (merged.apiKey) {
-    const envCreds = merged.envCredentials ?? {};
-    const existingEnvEntry = envCreds[env];
-    const resolvedSecret = data?.edisonSecretKey ?? existingEnvEntry?.edisonSecretKey ?? merged.edisonSecretKey;
+  const envCreds = merged.envCredentials ?? {};
+  const existingEnvEntry = envCreds[env];
+  const resolvedApiKey = data?.apiKey ?? existingEnvEntry?.apiKey ?? merged.apiKey;
+  const resolvedSecret =
+    data?.edisonSecretKey ?? existingEnvEntry?.edisonSecretKey ?? merged.edisonSecretKey;
+  if (resolvedApiKey) {
     envCreds[env] = {
-      apiKey: data?.apiKey ?? existingEnvEntry?.apiKey ?? merged.apiKey,
+      apiKey: resolvedApiKey,
       ...(resolvedSecret && { edisonSecretKey: resolvedSecret }),
     };
     merged.envCredentials = envCreds;

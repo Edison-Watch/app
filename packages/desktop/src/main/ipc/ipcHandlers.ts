@@ -7,24 +7,19 @@
 
 import { app, BrowserWindow, ipcMain, safeStorage, shell } from 'electron'
 import { promises as fs } from 'fs'
-import { dirname, join } from 'path'
+import { join } from 'path'
 
+import { getHookStatus } from '../runtime/hookStatus'
+import { applyIntegrations, integrationErrors } from '../detectord/integrations'
+import { getAgentFacts } from '../detectord/agents'
+import { getDetectordHealth } from '../detectord/health'
+import { getDetectordClient } from '../detectord/lifecycle'
+import { CLIENT_DISPLAY } from '../clients/displayMeta'
 import {
-  getJetBrainsMcpConfigPaths,
-  macAppExists,
-  getVscodeUserMcpPath,
-  getCursorConfigPath,
-  getClaudeCodeUserSettingsPath,
-  getClaudeDesktopConfigPath,
-  getClaudeCoworkConfigPath,
-  getWindsurfConfigPath,
-  getZedConfigPath
-} from '../discovery/mcpDiscovery'
-import {
-  getHookStatus,
-  getCodexConfigPath
-} from '../runtime/hookInjection'
-import { bootstrapDetectord, setDetectordSecret } from '../detectord/bootstrap'
+  bootstrapDetectord,
+  setDetectordSecret,
+  warnAgentsNotRepointed
+} from '../detectord/bootstrap'
 import { uninstallService as uninstallDetectord } from '../detectord/controller'
 import {
   getUpdateState,
@@ -35,8 +30,6 @@ import {
   updateSettings as setUpdateSettings
 } from '../infra/updateManager'
 import { showFeedbackWindow } from '../dialogs/feedbackWindow'
-import { restoreAllQuarantinedServers } from '../runtime/mcpConfigActions'
-import { applyAppIntegrations } from '../runtime/mcpConfigWriter'
 import {
   reprovisionStdiodForActiveAccount,
   teardownStdiodForSignOut
@@ -201,11 +194,13 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       _event,
       input: { apiUrl?: string; mcpUrl?: string; apiKey?: string; edisonSecretKey?: string }
     ) => {
-      const ok = await bootstrapDetectord(input).catch((err) => {
+      const outcome = await bootstrapDetectord(input).catch((err) => {
         console.error('[detectord] enroll (push) failed:', err)
-        return false
+        return null
       })
-      return { ok }
+      // This caller only needs "is the daemon usable" - it isn't changing
+      // credentials, so `ok` (not `applied`) is the right question.
+      return { ok: outcome?.ok === true }
     }
   )
 
@@ -256,22 +251,33 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   // empty configuredApps falls back to ALL_SUPPORTED_APPS, otherwise older
   // setups would rewrite no client configs and the new key wouldn't take effect.
   ipcMain.handle('mcp:applyForSecretKey', async (_event, args: { edisonSecretKey: string }) => {
-    const mcpBaseUrl = getMcpBaseUrl()
-    const creds = getCredentialsForEnv()
-    if (!mcpBaseUrl || !creds?.apiKey) {
-      return { success: false, modifiedConfigs: [] }
-    }
     const setup = getSetupData()
     const apps = setup.configuredApps?.length ? setup.configuredApps : ALL_SUPPORTED_APPS
     console.log('[mcp:applyForSecretKey]', apps, DRY_RUN ? '(dry-run)' : '')
-    return await applyAppIntegrations({
-      serverAddress: setup.serverAddress ?? '',
-      mcpBaseUrl,
-      apiKey: creds.apiKey,
-      edisonSecretKey: args.edisonSecretKey,
-      apps,
-      dryRun: DRY_RUN
-    })
+    if (DRY_RUN) return { success: true, modifiedConfigs: [] }
+
+    // Adopt the key BEFORE anything writes a config. The daemon stamps the
+    // secret header from its enrollment, so installing first would write the
+    // previous key (or none) into every agent - and a caller that then fails to
+    // adopt would leave those stale headers behind while the UI reported
+    // success. verify_secret validates against the backend before adopting, so
+    // requiring it here also means we never write an unverified key.
+    const adopted = await setDetectordSecret(args.edisonSecretKey)
+    if (!adopted.ok || adopted.outcome?.valid === false) {
+      const reason = adopted.reason ?? 'the detector daemon did not accept the key'
+      console.error(`[mcp:applyForSecretKey] not applying: ${reason}`)
+      return { success: false, modifiedConfigs: [], errors: [reason] }
+    }
+
+    // Adopting already re-installs for the *enrolled* agents; this covers the
+    // caller's app list too (and unions it into the enrollment).
+    try {
+      const changes = await applyIntegrations(apps)
+      const errors = integrationErrors(changes)
+      return { success: errors.length === 0, modifiedConfigs: [], ...(errors.length ? { errors } : {}) }
+    } catch (err) {
+      return { success: false, modifiedConfigs: [], errors: [String(err)] }
+    }
   })
 
   // Multi-account management
@@ -293,34 +299,31 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     // Restart background services for the new account
     startEventSubscription()
 
-    // Re-apply MCP integrations so client configs point to the new account's URL.
-    // Without this, configs would keep the previous account's server/API key.
-    const newSetup = getSetupData()
-    const mcpBaseUrl = getMcpBaseUrl()
-    const creds = getCredentialsForEnv()
-    if (mcpBaseUrl && creds?.apiKey) {
-      try {
-        await applyAppIntegrations({
-          serverAddress: newSetup.serverAddress ?? '',
-          mcpBaseUrl,
-          apiKey: creds.apiKey,
-          edisonSecretKey: creds.edisonSecretKey,
-          apps: (newSetup.configuredApps?.length
-            ? newSetup.configuredApps
-            : ALL_SUPPORTED_APPS
-          ).filter((app) => ALL_SUPPORTED_APPS.includes(app))
-        })
-        console.log('[accounts:switch] MCP integrations updated for new account')
-      } catch (err) {
-        console.error('[accounts:switch] Failed to update MCP integrations:', err)
-      }
-    }
+    // Re-point the agents at the new account: re-enrolling hands the daemon the
+    // new credentials, and its install step rewrites the edison-watch entry
+    // with the new URL and key. Without this the configs would keep the
+    // previous account's.
+    const reEnrolled = await bootstrapDetectord().catch((err) => {
+      console.error('[accounts:switch] Failed to update MCP integrations:', err)
+      return null
+    })
+    const agentsRepointed = reEnrolled?.applied === true
 
     // Re-point the daemon at the new account (or stop it) so it doesn't keep
     // tunneling under the old credentials.
     await reprovisionStdiodForActiveAccount()
 
-    return { ok: true }
+    if (!agentsRepointed) {
+      // `ok` stays true and that is deliberate: the switch DID happen. Persisted
+      // setup, the event subscription and stdiod are all on the new account, and
+      // the renderer bails out of its reload on `ok: false` - reporting failure
+      // here would leave the window showing the account we already left, with
+      // the outgoing installation credential never revoked. The partial failure
+      // is a separate fact, so it gets a separate field.
+      await warnAgentsNotRepointed('the new account', reEnrolled?.reason)
+    }
+
+    return { ok: true, agentsRepointed, ...(agentsRepointed ? {} : { reason: reEnrolled?.reason }) }
   })
 
   ipcMain.handle('accounts:remove', (_event, userId: string) => {
@@ -398,87 +401,28 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     return getMcpUrl()
   })
 
-  // MCP: Discover installed clients
+  // MCP: which agents are installed. The daemon probes for them - it already
+  // enumerates every agent, and the probe used to stat other apps' support
+  // directories.
   ipcMain.handle('mcp:detectClients', async () => {
+    const facts = await getAgentFacts()
+    // Distinguish "no agents installed" from "nobody answered": the renderer
+    // shows the daemon warning for the latter instead of an empty app list.
+    if (!facts) return { clients: [], daemonUnavailable: true }
     const clients: Array<{ id: string; name: string; configPath: string }> = []
-
-    const checks: Array<{
-      id: string
-      name: string
-      getPath: () => Promise<string>
-      // Override detection dir (defaults to dirname of configPath).
-      detectDir?: (configPath: string) => string
-    }> = [
-      {
-        id: 'vscode',
-        name: 'VS Code',
-        getPath: () => Promise.resolve(getVscodeUserMcpPath()),
-        detectDir: (configPath) => dirname(dirname(configPath)) // ~/Library/Application Support/Code/
-      },
-      { id: 'cursor', name: 'Cursor', getPath: () => Promise.resolve(getCursorConfigPath()) },
-      {
-        id: 'claude-code',
-        name: 'Claude Code',
-        getPath: () => Promise.resolve(getClaudeCodeUserSettingsPath())
-      },
-      {
-        id: 'claude-desktop',
-        name: 'Claude Desktop',
-        getPath: () => Promise.resolve(getClaudeDesktopConfigPath())
-        // detectDir defaults to dirname(configPath) which is what we want:
-        // ~/Library/Application Support/Claude/ exists iff Claude Desktop
-        // has been launched at least once.
-      },
-      {
-        id: 'claude-cowork',
-        name: 'Claude Cowork',
-        getPath: () => Promise.resolve(getClaudeCoworkConfigPath()),
-        // Cowork shares the .app bundle and config file with Claude Desktop.
-        // The discriminator is `vm_bundles/`, written on first Cowork launch.
-        // Pointing detectDir at it makes fs.access fail (and Cowork drop
-        // out of the list) when only Desktop has been used.
-        detectDir: (configPath) => join(dirname(configPath), 'vm_bundles')
-      },
-      { id: 'windsurf', name: 'Windsurf', getPath: () => Promise.resolve(getWindsurfConfigPath()) },
-      { id: 'zed', name: 'Zed', getPath: () => Promise.resolve(getZedConfigPath()) },
-      {
-        id: 'codex',
-        name: 'Codex',
-        getPath: () => Promise.resolve(getCodexConfigPath())
-        // Codex is a CLI tool - detected by ~/.codex/ dir (macAppExists returns true for CLI-only clients)
-      }
-    ]
-
-    for (const check of checks) {
-      try {
-        const configPath = await check.getPath()
-        const checkDir = check.detectDir ? check.detectDir(configPath) : dirname(configPath)
-        await fs.access(checkDir)
-        if (!(await macAppExists(check.id))) continue
-        clients.push({ id: check.id, name: check.name, configPath })
-      } catch {
-        // Client not installed
-      }
+    for (const [id, f] of facts) {
+      if (!f.installed) continue
+      clients.push({
+        id,
+        name: CLIENT_DISPLAY[id]?.name ?? id,
+        configPath: f.configPath ?? ''
+      })
     }
-
-    // JetBrains IDEs: scan for installed instances
-    try {
-      const jbPaths = await getJetBrainsMcpConfigPaths()
-      const nameMap: Record<string, string> = {
-        intellij: 'IntelliJ IDEA',
-        pycharm: 'PyCharm',
-        webstorm: 'WebStorm'
-      }
-      for (const { client, path } of jbPaths) {
-        if (!(await macAppExists(client))) continue
-        clients.push({ id: client, name: nameMap[client] ?? client, configPath: path })
-      }
-    } catch {
-      // JetBrains not installed
-    }
-
-    return clients
+    return { clients, daemonUnavailable: false }
   })
+
+  // Daemon health: the renderer shows a persistent warning while it's down.
+  ipcMain.handle('detectord:health', () => getDetectordHealth())
 
   // MCP discovery, submission, removal, and config management handlers
   registerMcpSubmitHandlers()
@@ -488,7 +432,15 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   ipcMain.handle('mcp:getHookStatus', async () => {
     const claudeCodeMcpStatus = await checkClaudeCodeMcpConnection()
-    return await getHookStatus(getMcpUrl(), getIsServerOnline(), claudeCodeMcpStatus)
+    try {
+      const statuses = await getHookStatus(getMcpUrl(), getIsServerOnline(), claudeCodeMcpStatus)
+      return { statuses, daemonUnavailable: false }
+    } catch {
+      // getHookStatus only fails when the daemon didn't answer, and it already
+      // reported that to the health tracker. Say so rather than claiming every
+      // client is unhooked.
+      return { statuses: [], daemonUnavailable: true }
+    }
   })
 
   // Keychain: store/load the user's personal encryption key via OS keychain (safeStorage)
@@ -525,7 +477,11 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   // Debug window actions
   ipcMain.handle('debug:resetQuarantine', async () => {
     try {
-      const result = await restoreAllQuarantinedServers()
+      // The daemon quarantined them (it holds the records and the writers), so
+      // it is what puts them back.
+      const daemon = getDetectordClient()
+      await daemon.connect()
+      const result = await daemon.restoreQuarantined()
       return { success: true, restored: result.restored, errors: result.errors }
     } catch (err) {
       return {

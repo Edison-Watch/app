@@ -29,10 +29,17 @@ const SECRET_KEY_RESET_PATH: &str = "/api/v1/user/secret-key/reset";
 pub enum Error {
     #[error("http: {0}")]
     Http(#[from] reqwest::Error),
-    #[error("backend returned {status} for {path}")]
+    #[error("backend returned {status} for {path}{}", detail.as_deref().map(|d| format!(": {d}")).unwrap_or_default())]
     Status {
         status: reqwest::StatusCode,
         path: String,
+        /// The response body, when there was a readable one.
+        ///
+        /// Kept because the status alone is often ambiguous: two different 409s
+        /// mean "a server with that name is already registered" and "you
+        /// already have a pending request for it", and the UI has to tell the
+        /// user which - the first calls for a rename, the second for waiting.
+        detail: Option<String>,
     },
     #[error("decoding {path}: {message}")]
     Decode { path: String, message: String },
@@ -200,10 +207,7 @@ impl BackendClient {
             .send()
             .await?;
         if !resp.status().is_success() {
-            return Err(Error::Status {
-                status: resp.status(),
-                path: SECRET_KEY_REGISTER_PATH.into(),
-            });
+            return Err(status_error(resp, SECRET_KEY_REGISTER_PATH).await);
         }
         Ok(())
     }
@@ -220,10 +224,7 @@ impl BackendClient {
             .send()
             .await?;
         if !resp.status().is_success() {
-            return Err(Error::Status {
-                status: resp.status(),
-                path: SECRET_KEY_VERIFY_PATH.into(),
-            });
+            return Err(status_error(resp, SECRET_KEY_VERIFY_PATH).await);
         }
         Ok(resp.json().await?)
     }
@@ -246,10 +247,7 @@ impl BackendClient {
             .send()
             .await?;
         if !resp.status().is_success() {
-            return Err(Error::Status {
-                status: resp.status(),
-                path: SECRET_KEY_RESET_PATH.into(),
-            });
+            return Err(status_error(resp, SECRET_KEY_RESET_PATH).await);
         }
         Ok(resp.json().await?)
     }
@@ -264,10 +262,7 @@ impl BackendClient {
             .send()
             .await?;
         if !resp.status().is_success() {
-            return Err(Error::Status {
-                status: resp.status(),
-                path: MCP_REQUESTS_PATH.into(),
-            });
+            return Err(status_error(resp, MCP_REQUESTS_PATH).await);
         }
         Ok(())
     }
@@ -281,13 +276,48 @@ impl BackendClient {
             .send()
             .await?;
         if !resp.status().is_success() {
-            return Err(Error::Status {
-                status: resp.status(),
-                path: path.into(),
-            });
+            return Err(status_error(resp, path).await);
         }
         Ok(resp.text().await?)
     }
+}
+
+/// Build a [`Error::Status`] from a non-success response, keeping its body.
+///
+/// Consumes the response, so callers must not have read it already.
+async fn status_error(resp: reqwest::Response, path: &str) -> Error {
+    let status = resp.status();
+    let detail = resp.text().await.ok().and_then(|raw| extract_detail(&raw));
+    Error::Status {
+        status,
+        path: path.into(),
+        detail,
+    }
+}
+
+/// The human-readable part of an error body: the `detail` field of the
+/// backend's JSON error shape, else the raw text. Truncated - this ends up in
+/// log lines and dialog copy, not in a report.
+fn extract_detail(raw: &str) -> Option<String> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    let text = serde_json::from_str::<serde_json::Value>(trimmed)
+        .ok()
+        .and_then(|v| {
+            v.get("detail").and_then(|d| {
+                d.as_str()
+                    .map(str::to_owned)
+                    .or_else(|| Some(d.to_string()))
+            })
+        })
+        .unwrap_or_else(|| trimmed.to_owned());
+    let mut text = text.replace('\n', " ");
+    if text.chars().count() > 300 {
+        text = text.chars().take(300).collect::<String>() + "…";
+    }
+    Some(text)
 }
 
 /// SHA-256 hex of a composite key's **user part** — the base64 between `user:`
@@ -530,5 +560,66 @@ mod tests {
         assert_eq!(user_part_hash("user:abc.admin:xyz"), SHA256_ABC);
         // A bare key (no prefix) hashes as-is.
         assert_eq!(user_part_hash("abc"), SHA256_ABC);
+    }
+
+    #[test]
+    fn extract_detail_prefers_the_json_detail_field() {
+        // The backend's error shape. This string is what distinguishes a
+        // "name taken" 409 from a "you already have a request pending" one.
+        assert_eq!(
+            extract_detail(r#"{"detail":"You already have a pending request for this server"}"#)
+                .as_deref(),
+            Some("You already have a pending request for this server")
+        );
+    }
+
+    #[test]
+    fn extract_detail_falls_back_to_raw_text_and_drops_empties() {
+        assert_eq!(
+            extract_detail("plain failure").as_deref(),
+            Some("plain failure")
+        );
+        assert_eq!(extract_detail("   "), None);
+        assert_eq!(extract_detail(""), None);
+        // Non-string `detail` (e.g. FastAPI validation arrays) still yields text.
+        assert!(extract_detail(r#"{"detail":[{"msg":"bad"}]}"#).is_some());
+    }
+
+    #[test]
+    fn extract_detail_truncates_and_flattens() {
+        let long = "x".repeat(500);
+        let out = extract_detail(&format!("{long}\nsecond line")).unwrap();
+        assert!(
+            out.chars().count() <= 301,
+            "got {} chars",
+            out.chars().count()
+        );
+        assert!(
+            !out.contains('\n'),
+            "newlines would break single-line log/dialog copy"
+        );
+    }
+
+    #[test]
+    fn status_error_display_includes_the_detail() {
+        let err = Error::Status {
+            status: reqwest::StatusCode::CONFLICT,
+            path: "/api/v1/mcp-requests".into(),
+            detail: Some("You already have a pending request".into()),
+        };
+        assert!(
+            err.to_string()
+                .contains("You already have a pending request")
+        );
+        // …and stays readable when there was no body.
+        let bare = Error::Status {
+            status: reqwest::StatusCode::CONFLICT,
+            path: "/api/v1/mcp-requests".into(),
+            detail: None,
+        };
+        assert_eq!(
+            bare.to_string(),
+            "backend returned 409 Conflict for /api/v1/mcp-requests"
+        );
     }
 }

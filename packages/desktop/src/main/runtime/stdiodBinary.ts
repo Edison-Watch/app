@@ -24,10 +24,18 @@ function getBundledStdiodBinaryPath(): string {
   if (app.isPackaged) {
     return path.join(process.resourcesPath, 'bin', exe)
   }
-  // __dirname in dev is <pkg>/out/main; three steps up reaches
-  // the repo root (out/main -> out -> <pkg>).
-  const repoRoot = path.resolve(__dirname, '..', '..', '..')
-  return path.join(repoRoot, 'stdiod', 'target', 'release', exe)
+  // __dirname in dev is <pkg>/out/main, so three steps up is `packages/`, not
+  // the repo root. Check the monorepo location first (crates/stdiod), then the
+  // binary staged by scripts/build-stdiod.sh, then the pre-monorepo sibling
+  // checkout. Mirrors detectord/binary.ts.
+  const packagesDir = path.resolve(__dirname, '..', '..', '..')
+  const repoRoot = path.resolve(packagesDir, '..')
+  const candidates = [
+    path.join(repoRoot, 'crates', 'stdiod', 'target', 'release', exe),
+    path.join(__dirname, '..', '..', 'bin', exe),
+    path.join(packagesDir, 'stdiod', 'target', 'release', exe)
+  ]
+  return candidates.find(existsSync) ?? candidates[0]!
 }
 
 // Stable on-disk home for the daemon on packaged Linux. The AppImage mount path

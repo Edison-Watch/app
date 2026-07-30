@@ -1,6 +1,7 @@
 import type { ElectronAPI } from '@electron-toolkit/preload'
 
 import type { SecretOutcome } from '../main/detectord/protocol'
+import type { DetectordHealth } from '../main/detectord/health'
 import type { StdiodLoginInput, StdiodResult, StdiodStatus } from '../main/stdiod/types'
 import type { UpdateState } from '../main/infra/updateManager'
 import type { UpdateSettings } from '../main/infra/updateSettings'
@@ -32,8 +33,16 @@ interface EdisonAPI {
     openExternal: (url: string) => Promise<void>
   }
   mcp: {
-    detectClients: () => Promise<Array<{ id: string; name: string; configPath: string }>>
-    discover: () => Promise<{ servers: unknown[]; unsupported: unknown[] }>
+    detectClients: () => Promise<{
+      clients: Array<{ id: string; name: string; configPath: string }>
+      daemonUnavailable: boolean
+    }>
+    discover: () => Promise<{
+      servers: unknown[]
+      unsupported: unknown[]
+      daemonUnavailable?: boolean
+      error?: string
+    }>
     findDuplicates: () => Promise<unknown[]>
     removeServers: (
       targets: Array<string | { name: string; client: string }>
@@ -48,7 +57,7 @@ interface EdisonAPI {
       client?: string
       configPath?: string
     }) => Promise<{ success: boolean; error?: string }>
-    readConfig: (configPath: string) => Promise<string | null>
+    readConfig: (client: string) => Promise<{ content: string | null; error?: string }>
     applyAppIntegrations: (args: {
       serverAddress: string
       mcpBaseUrl: string
@@ -58,6 +67,8 @@ interface EdisonAPI {
     }) => Promise<{
       success: boolean
       modifiedConfigs: Array<{ appId: string; configPath: string; backupPath: string }>
+      /** Per-agent reasons when `success` is false. */
+      errors?: string[]
     }>
     applyForSecretKey: (edisonSecretKey: string) => Promise<{
       success: boolean
@@ -93,7 +104,7 @@ interface EdisonAPI {
       failures?: Array<{
         name: string
         client: string
-        reason: 'conflict' | 'error' | 'already-on-backend'
+        reason: 'conflict' | 'already-pending' | 'error' | 'already-on-backend'
         message: string
         config?: Record<string, unknown>
         configPath?: string
@@ -130,14 +141,14 @@ interface EdisonAPI {
       failures?: Array<{
         name: string
         client: string
-        reason: 'conflict' | 'error' | 'already-on-backend'
+        reason: 'conflict' | 'already-pending' | 'error' | 'already-on-backend'
         message: string
         config?: Record<string, unknown>
         configPath?: string
         backendStatus?: 'registered' | 'requested'
       }>
     }>
-    getHookStatus: () => Promise<unknown[]>
+    getHookStatus: () => Promise<{ statuses: unknown[]; daemonUnavailable: boolean }>
   }
   config: {
     getEffectiveBaseUrls: () => Promise<{
@@ -150,7 +161,14 @@ interface EdisonAPI {
   }
   accounts: {
     list: () => Promise<Array<{ userId: string; userEmail: string; savedAt: string }>>
-    switch: (userId: string) => Promise<{ ok: boolean }>
+    /**
+     * `ok` is whether the app switched accounts; `agentsRepointed` is whether the
+     * MCP clients on the machine were re-pointed at it. They can differ - the
+     * daemon can fail to re-enroll while the switch itself stands.
+     */
+    switch: (
+      userId: string
+    ) => Promise<{ ok: boolean; agentsRepointed?: boolean; reason?: string }>
     remove: (userId: string) => Promise<{ ok: boolean }>
   }
   menu: {
@@ -187,6 +205,8 @@ interface EdisonAPI {
     }) => Promise<{ ok: boolean }>
     setSecret: (key: string) => Promise<{ ok: boolean; outcome?: SecretOutcome; reason?: string }>
     uninstall: (opts?: { purge?: boolean }) => Promise<{ ok: boolean; stdout: string; stderr: string }>
+    health: () => Promise<DetectordHealth>
+    onHealth: (callback: (h: DetectordHealth) => void) => () => void
   }
   stdiod: {
     status: () => Promise<StdiodStatus>

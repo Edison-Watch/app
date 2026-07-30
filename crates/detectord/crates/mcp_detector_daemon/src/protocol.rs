@@ -64,6 +64,36 @@ pub enum Request {
         /// locally retained raw config (for secret injection) is unaffected.
         #[serde(default)]
         submit_config: Option<ServerConfig>,
+        /// For SendToEw: register directly (`Some(true)`) or leave the request
+        /// pending approval (`Some(false)`), overriding the role-derived
+        /// default. The UI offers an admin both, so their explicit choice has
+        /// to survive the trip.
+        #[serde(default)]
+        register: Option<bool>,
+    },
+    /// Install the `edison-watch` entry + session hooks for these agents, and
+    /// only these agents. Additive: they join the enrolled selection, so a
+    /// later self-heal keeps them installed.
+    ///
+    /// Nothing outside `agents` is written. The machine-wide hook sweep (every
+    /// installed agent, whether or not it is registered with the gateway)
+    /// belongs to enrollment, which runs on every app start.
+    ///
+    /// The daemon is the only component that writes agent configs.
+    ApplyIntegrations { agents: Vec<String> },
+    /// Remove the `edison-watch` entry for these agents and drop them from the
+    /// enrolled selection.
+    ///
+    /// Session hooks are deliberately left in place: they are how Edison
+    /// observes an agent's activity and are not tied to gateway registration.
+    /// `unenroll` is what tears them down.
+    RevertIntegrations { agents: Vec<String> },
+    /// The text of an agent's user-scope config file, for display.
+    ReadConfig { agent: String },
+    /// Put quarantined servers back: one by name/fingerprint, or all of them.
+    RestoreQuarantined {
+        #[serde(default)]
+        name: Option<String>,
     },
     /// Force a policy + known-set refresh.
     RefreshPolicy,
@@ -96,11 +126,42 @@ pub enum Reply {
     Status(Status),
     // Struct-shaped (not `Vec` newtypes): an internally-tagged enum can't hold a
     // bare sequence.
-    Agents { agents: Vec<AgentInfo> },
-    Servers { servers: Vec<ServerView> },
+    Agents {
+        agents: Vec<AgentInfo>,
+    },
+    Servers {
+        servers: Vec<ServerView>,
+    },
     Secret(SecretOutcome),
+    Integrations {
+        changes: Vec<IntegrationChange>,
+    },
+    Config {
+        path: String,
+        content: Option<String>,
+    },
+    Restored {
+        restored: u32,
+        errors: Vec<String>,
+    },
     Ack,
-    Error { message: String },
+    Error {
+        message: String,
+    },
+}
+
+/// The outcome of installing or removing the `edison-watch` entry for one agent.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IntegrationChange {
+    pub agent: String,
+    /// The config file written, when there was one (Claude Code goes through
+    /// its CLI, which owns the path).
+    pub path: Option<String>,
+    /// The backup taken before the first edit of that file, if any.
+    pub backup_path: Option<String>,
+    pub ok: bool,
+    #[serde(default)]
+    pub error: Option<String>,
 }
 
 /// Outcome of a verify (`valid`/`expired` set) or reset (`deleted` set).
@@ -133,6 +194,31 @@ pub struct Status {
 pub struct AgentInfo {
     pub name: String,
     pub installed: bool,
+    /// Hook bindings this agent has, and how many are already injected. The
+    /// counts come from the same presence checks the injector uses, so the UI
+    /// never has to open an agent's hook file to report coverage.
+    #[serde(default)]
+    pub hooks_total: u32,
+    #[serde(default)]
+    pub hooks_installed: u32,
+    /// The URL of the installed `edison-watch` entry, or `None` when the agent
+    /// has no entry. The UI compares it with the URL it expects instead of
+    /// reading and parsing the agent's config itself.
+    #[serde(default)]
+    pub edison_url: Option<String>,
+    /// The agent's user-scope config file, so the UI can name it (and ask for
+    /// its contents via `read_config`) without resolving paths of its own.
+    #[serde(default)]
+    pub config_path: Option<String>,
+    /// Workspace-level hook targets this agent has (e.g. one `.vscode/tasks.json`
+    /// per enumerated VSCode workspace), and how many already carry the Edison
+    /// Watch task. The UI renders hook coverage from these instead of walking
+    /// the user's project directories itself. Zero for agents with no
+    /// workspace hook surface.
+    #[serde(default)]
+    pub workspace_hooks_total: u32,
+    #[serde(default)]
+    pub workspace_hooks_installed: u32,
 }
 
 /// One discovered server instance (not deduped — carries its source path).
@@ -201,12 +287,14 @@ mod tests {
                 choice,
                 rename,
                 submit_config,
+                register,
             } => {
                 assert_eq!(name, "foo");
                 assert_eq!(agent.as_deref(), Some("cursor"));
                 assert!(matches!(choice, Choice::SendToEw));
                 assert_eq!(rename.as_deref(), Some("foo2"));
                 assert!(submit_config.is_none());
+                assert_eq!(register, None, "absent register defers to the role");
             }
             other => panic!("wrong variant: {other:?}"),
         }

@@ -5,15 +5,13 @@
 import { app, BrowserWindow, Menu } from 'electron'
 import type { MenuItemConstructorOptions } from 'electron'
 
-import { applyAppIntegrations } from '../runtime/mcpConfigWriter'
+import { bootstrapDetectord } from '../detectord/bootstrap'
 import {
-  ALL_SUPPORTED_APPS,
   DEBUG_ENV_NAMES,
   getBuildDefaultEnv,
   getCredentialsForEnv,
   getDebugEnvOverride,
   getMcpBaseUrl,
-  getSetupData,
   setDebugEnvOverride,
   startServerStatusChecks
 } from '../infra/setupConfig'
@@ -47,24 +45,26 @@ export function buildAppMenu(deps: AppMenuDeps): Menu {
       deps.updateAppMenu()
       deps.getMainWindow()?.webContents.send('env:changed', name)
 
-      // Re-apply MCP integrations so client configs point to the new env's URL.
-      const setup = getSetupData()
-      const mcpBaseUrl = getMcpBaseUrl()
+      // Re-point the agents at the new env: re-enrolling hands the daemon the
+      // env's credentials, and its install step rewrites the edison-watch entry
+      // with the new URL. The daemon owns those config writes.
       const creds = getCredentialsForEnv(name)
-      if (mcpBaseUrl && creds?.apiKey) {
-        try {
-          await applyAppIntegrations({
-            serverAddress: setup.serverAddress ?? '',
-            mcpBaseUrl,
-            apiKey: creds.apiKey,
-            edisonSecretKey: creds.edisonSecretKey,
-            apps: setup.configuredApps?.length ? setup.configuredApps : ALL_SUPPORTED_APPS
-          })
-          deps.slog(`[env:switch] MCP integrations updated for ${name}`)
-        } catch (err) {
+      if (getMcpBaseUrl() && creds?.apiKey) {
+        const outcome = await bootstrapDetectord().catch((err) => {
           deps.slog(`[env:switch] Failed to update MCP integrations: ${err}`)
+          return null
+        })
+        // `applied`, not `ok`: a daemon still enrolled from the previous env
+        // reports ok=true while its agents keep the old env's URL and key.
+        if (outcome?.applied) {
+          deps.slog(`[env:switch] MCP integrations updated for ${name}`)
+        } else {
+          deps.slog(
+            `[env:switch] MCP integrations NOT updated for ${name} - agents still point at the ` +
+              `previous environment: ${outcome?.reason ?? 'enrollment failed'}`
+          )
         }
-      } else if (mcpBaseUrl && !creds?.apiKey) {
+      } else if (getMcpBaseUrl() && !creds?.apiKey) {
         deps.slog(`[env:switch] No API key stored for env "${name}" - MCP integrations not updated`)
       }
 

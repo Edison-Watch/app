@@ -49,7 +49,6 @@ const optimizer = {
 import windowStateKeeper from 'electron-window-state'
 import { initSentry } from './infra/sentry'
 import { initUpdateManager, stopUpdateManager } from './infra/updateManager'
-import { warmOrgIdCacheOnStartup } from './infra/orgIdCache'
 import {
   getBuildDefaultEnv,
   getActiveEnv,
@@ -87,6 +86,8 @@ import trayIconPath from '../../resources/icon_tray.png?asset'
 // at small sizes and isn't picked up unpackaged). macOS/Linux use the exe/.icns.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import winIconPath from '../../resources/icon.ico?asset'
+import { onDetectordHealthChange } from './detectord/health'
+import { installFsAudit } from './infra/fsAudit'
 
 // Baked at build time by electron.vite.config.ts (define). true = compact Linux
 // tray menu; false = full menu. Default build is compact; EDISON_TRAY_COMPACT=0
@@ -165,6 +166,9 @@ function createTray(): void {
     tray.on('right-click', showMenu)
   }
 
+  // Redraw the tray whenever daemon health flips, so its warning row appears
+  // and clears without waiting for another poll.
+  onDetectordHealthChange(() => updateTrayMenu())
   startServerStatusChecks(updateTrayMenu)
   startStdiodStatusCacheRefresh(10_000, updateTrayMenu)
 
@@ -431,6 +435,10 @@ initApprovalsHandler(
   updateTrayMenu
 )
 
+// EDISON_FS_AUDIT=1 patches fs to report any read outside the app's own
+// territory. Installed before anything else runs so nothing escapes it.
+installFsAudit()
+
 app.whenReady().then(async () => {
   // Doomed second instance (lost the lock) - already forwarded its argv and
   // quitting; never build a window.
@@ -504,7 +512,6 @@ app.whenReady().then(async () => {
     createTray()
     startEventSubscription()
 
-    await warmOrgIdCacheOnStartup()
 
     slog('tray/subscription/monitor ok')
   } else {

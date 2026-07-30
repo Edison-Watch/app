@@ -13,6 +13,7 @@ import type {
 } from '../discovery/types'
 
 import { getDetectordClient } from './lifecycle'
+import { withDetectordHealth } from './health'
 import type { ServerConfig, ServerView } from './protocol'
 
 // Daemon agent ids use underscores (`claude_code`); client ids use dashes.
@@ -53,20 +54,26 @@ function toDiscovered(v: ServerView): DiscoveredMcpServer | null {
 }
 
 /**
- * The daemon's discovered servers as DiscoveredMcpServer[], or `null` to signal
- * "fall back to local discovery" when the daemon is unreachable or not yet
- * enrolled (e.g. before login, when it has nothing to report anyway).
+ * The daemon's discovered servers, or `null` when it didn't answer.
+ *
+ * This is the only source - the app no longer scans config files itself - so
+ * the null case must stay distinguishable from an empty list all the way up to
+ * the UI. "We couldn't look" and "we looked and found nothing" mean opposite
+ * things to someone deciding whether their machine is protected.
+ *
+ * `list_servers` deliberately does NOT require enrollment: onboarding asks
+ * before the user has logged in, and the daemon answers from live discovery
+ * (classifying everything as unknown, since there's no seen-store yet).
  */
 export async function discoverViaDetectord(): Promise<DiscoveredMcpServer[] | null> {
-  const client = getDetectordClient()
   try {
-    await client.connect()
-    const status = await client.status()
-    if (!status.enrolled) return null
-    const servers = await client.listServers()
-    return servers.map(toDiscovered).filter((s): s is DiscoveredMcpServer => s !== null)
-  } catch (err) {
-    console.warn(`[detectord] discovery via daemon failed; using local scan: ${String(err)}`)
+    return await withDetectordHealth('list_servers', async () => {
+      const client = getDetectordClient()
+      await client.connect()
+      const servers = await client.listServers()
+      return servers.map(toDiscovered).filter((s): s is DiscoveredMcpServer => s !== null)
+    })
+  } catch {
     return null
   }
 }

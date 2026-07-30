@@ -4,7 +4,9 @@ export default defineConfig({
   test: {
     environment: "node",
     globals: true,
-    include: ["src/main/__tests__/**/*.test.ts"],
+    // Main-process tests run in node; renderer tests opt into jsdom with a
+    // `@vitest-environment jsdom` docblock (they render React).
+    include: ["src/main/__tests__/**/*.test.ts", "src/renderer/**/__tests__/**/*.test.tsx"],
     coverage: {
       provider: "v8",
       reporter: ["text", "json-summary", "lcov"],

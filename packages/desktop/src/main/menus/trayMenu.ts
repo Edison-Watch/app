@@ -17,7 +17,6 @@ import {
   quitAndInstall
 } from '../infra/updateManager'
 import {
-  ALL_SUPPORTED_APPS,
   getApiBaseUrl,
   getCredentialsForEnv,
   getIsServerOnline,
@@ -28,7 +27,8 @@ import {
   markSetupComplete
 } from '../infra/setupConfig'
 import { isSseConnected, pendingApprovals, showPendingApprovalsDialog } from '../ipc/approvalsHandler'
-import { applyAppIntegrations } from '../runtime/mcpConfigWriter'
+import { bootstrapDetectord } from '../detectord/bootstrap'
+import { getDetectordHealth } from '../detectord/health'
 import { buildStdiodMenuItems } from '../stdiod/trayMenu'
 import { handleStdiodReset } from '../stdiod/trayReset'
 
@@ -54,8 +54,26 @@ export function buildTrayMenuItems(deps: TrayMenuDeps): MenuItemConstructorOptio
   // Linux compact build trims the menu (native GTK rows are tall + uncollapsible).
   const compactTray = process.platform === 'linux' && __TRAY_COMPACT__
 
+  // The daemon is what detects and quarantines. If it's down, say so at the
+  // top of the menu - the tray is the only surface a user sees with the window
+  // closed, and silence there reads as "all clear".
+  const daemonHealth = getDetectordHealth()
+
   const items: MenuItemConstructorOptions[] = [
     { label: 'Open Edison Watch', click: () => deps.showMainWindow() },
+    ...(daemonHealth.ok
+      ? []
+      : ([
+          { type: 'separator' },
+          {
+            label:
+              daemonHealth.kind === 'missing-binary'
+                ? '\u26A0 Detector daemon missing - not protected'
+                : '\u26A0 Detector daemon unreachable - not protected',
+            enabled: false
+          },
+          { label: 'Details…', click: () => deps.showMainWindow() }
+        ] as MenuItemConstructorOptions[])),
     // Linux compact: drop the "Enabled"/status block (shown in the main window).
     ...(compactTray
       ? []
@@ -208,18 +226,31 @@ export function buildTrayMenuItems(deps: TrayMenuDeps): MenuItemConstructorOptio
           getSetupData,
           (key) => markSetupComplete({ edisonSecretKey: key }),
           async (compositeKey) => {
-            const setup = getSetupData()
-            const mcpBaseUrl = getMcpBaseUrl()
-            const creds = getCredentialsForEnv()
-            const serverAddress = setup.serverAddress ?? ''
-            if (!mcpBaseUrl || !creds?.apiKey) return
-            await applyAppIntegrations({
-              serverAddress,
-              mcpBaseUrl,
-              apiKey: creds.apiKey,
-              edisonSecretKey: compositeKey,
-              apps: setup.configuredApps?.length ? setup.configuredApps : ALL_SUPPORTED_APPS
-            })
+            // Hand the key straight to the enrollment rather than relying on
+            // what was just persisted. Enrollment otherwise reads it back via
+            // getCredentialsForEnv(), and the daemon stamps every agent config
+            // with whatever it gets - so a persistence gap would silently
+            // rewrite them all with the PREVIOUS secret.
+            //
+            // Throwing is the contract with the dialog: it shows its success
+            // view unless this rejects. Returning quietly when the key wasn't
+            // applied would tell the user their apps use the new key while
+            // every one of them still sends the old header.
+            if (!getMcpBaseUrl() || !getCredentialsForEnv()?.apiKey) {
+              throw new Error(
+                'Sign in to Edison Watch before updating keys - your apps were not changed.'
+              )
+            }
+            const outcome = await bootstrapDetectord({ edisonSecretKey: compositeKey })
+            // `applied` is the only proof the new key reached the agents: a
+            // daemon still enrolled from before reports ok=true while every
+            // agent keeps the old secret header.
+            if (!outcome.applied) {
+              throw new Error(
+                "Couldn't apply the new key - the Edison Watch detector daemon did not accept it, " +
+                  `so your apps still use the previous key. ${outcome.reason ?? ''}`.trim()
+              )
+            }
           }
         )
     },

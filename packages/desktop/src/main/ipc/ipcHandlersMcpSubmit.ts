@@ -4,82 +4,23 @@
  * Extracted from ipcHandlers.ts to stay under the 800-line CI limit.
  */
 
-import { app, ipcMain } from "electron";
-import { execFile } from "child_process";
-import { promisify } from "util";
-import { promises as fs } from "fs";
-import { homedir } from "os";
-import { resolve, sep } from "path";
-
-const execFileAsync = promisify(execFile);
+import { ipcMain } from "electron";
 
 import { discoverMcpServers, describeUnsupportedReason } from "../discovery/mcpDiscovery";
 import type { DiscoveredMcpServer, McpClientId, McpServerConfig } from "../discovery/mcpDiscovery";
-import { submitServersViaDetectord, resubmitServerViaDetectord } from "../detectord/submit";
-import { removeServerFromConfig } from "../runtime/mcpConfigActions";
-import { quarantineCursorPlugin } from "../clients/cursor/quarantinePlugins";
 import {
-  fetchUserRole,
-  submitServerRequest,
-  submitServerWithOverrides,
-  approveServerRequest,
-  fetchBackendFingerprints,
-  findBackendFingerprintMatch,
-  type BackendFingerprintEntry,
-} from "../discovery/mcpServerSubmit";
+  submitServersViaDetectord,
+  resubmitServerViaDetectord,
+  submitOneViaDetectord,
+} from "../detectord/submit";
+import { getDetectordClient } from "../detectord/lifecycle";
+import { toAgentName } from "../detectord/agents";
+import { applyIntegrations, revertIntegrations, integrationErrors } from "../detectord/integrations";
 import { detectSecrets } from "../discovery/secretDetection";
 import type { TemplatizedConfig } from "../discovery/secretDetection";
 import { filterOutEdisonWatchServers } from "../runtime/mcpConfigMonitor";
-import { applyAppIntegrations } from "../runtime/mcpConfigWriter";
 import { deduplicateServers, findDuplicateGroups } from "../discovery/serverDeduplication";
 import { DRY_RUN, getApiBaseUrl, getSetupData, getCredentialsForEnv } from "../infra/setupConfig";
-import { getSharedSeenStore } from "../discovery/seenServersStore";
-import { getCachedOrgId, refreshOrgIdFromBackend } from "../infra/orgIdCache";
-import { logClaudeCmd } from "../runtime/monitorLog";
-
-/**
- * Caller's org_id for seen-store writes: cached if warm, else an inline backend
- * refresh. Explicit apiBaseUrl/apiKey lets onboarding work before
- * getCredentialsForEnv() is populated (keychain not written yet).
- */
-async function getOrRefreshOrgId(
-  apiBaseUrl: string | null | undefined,
-  apiKey: string | null | undefined,
-): Promise<string | null> {
-  const cached = getCachedOrgId();
-  if (cached) {
-    console.log(`[mcp:submit] org_id cache hit: ${cached}`);
-    return cached;
-  }
-  if (!apiBaseUrl || !apiKey) {
-    console.warn(`[mcp:submit] org_id cache miss and no apiBaseUrl/apiKey available to refresh`);
-    return null;
-  }
-  console.log(`[mcp:submit] org_id cache miss - refreshing from ${apiBaseUrl}`);
-  const orgId = await refreshOrgIdFromBackend(apiBaseUrl, apiKey);
-  if (!orgId) console.warn(`[mcp:submit] org_id refresh returned null - /user/profile is missing org_id`);
-  return orgId;
-}
-
-/** Remove or disable a server from its config. Cursor plugins are disabled via project dir renames.
- *  Claude Code project-scoped servers are removed via `claude mcp remove` CLI. */
-async function removeOrDisableServer(server: DiscoveredMcpServer): Promise<void> {
-  if (server.source === 'plugin' && server.client === 'cursor') {
-    await quarantineCursorPlugin(server);
-  } else if (server.client === 'claude-code' && server.source === 'project' && server.projectName) {
-    const name = server.originalName ?? server.name;
-    console.log(`[MCP Config] Removing Claude Code project-scoped server "${name}" via CLI (project=${server.projectName})`);
-    const removeArgs = ['mcp', 'remove', name];
-    logClaudeCmd(removeArgs, { cwd: server.projectName });
-    await execFileAsync('claude', removeArgs, {
-      timeout: 10_000,
-      cwd: server.projectName,
-    });
-    console.log(`[MCP Config] Removed "${name}" via claude mcp remove`);
-  } else {
-    await removeServerFromConfig(server);
-  }
-}
 
 // ── Discovery cache ─────────────────────────────────────────────────────
 // Populated by mcp:discover; consumed by submit/resubmit so they never re-discover.
@@ -99,34 +40,40 @@ function getCachedDiscovery() {
   return discoveryCache ?? { servers: [] as DiscoveredMcpServer[], raw: [] as DiscoveredMcpServer[], unsupported: [] as DiscoveredMcpServer[] };
 }
 
-/**
- * Fingerprint already on the backend: skip the submit, but still update the
- * seen-store (so quarantine recognises it) and remove the local config entry so
- * traffic flows through Edison Watch. `removalMap` omitted (single-server path)
- * falls back to removing the discovered server itself.
- */
-async function handleAlreadyOnBackend(
-  server: DiscoveredMcpServer,
-  match: BackendFingerprintEntry,
-  apiBaseUrl: string,
-  apiKey: string,
-  removalMap?: Map<string, DiscoveredMcpServer[]>,
-): Promise<void> {
-  const orgId = await getOrRefreshOrgId(apiBaseUrl, apiKey);
-  if (orgId) {
-    try {
-      await getSharedSeenStore().markSeen(orgId, server, match.status);
-    } catch { /* non-fatal */ }
-  }
-  const entries = removalMap?.get(server.name) ?? [server];
-  for (const entry of entries) {
-    try { await removeOrDisableServer(entry); } catch { /* non-fatal */ }
-  }
+/** One config the daemon changed, in the shape the onboarding UI renders. */
+export interface ModifiedConfig {
+  appId: string;
+  configPath: string;
+  backupPath: string;
+}
+
+function toModifiedConfig(c: { agent: string; path?: string | null; backup_path?: string | null }): ModifiedConfig {
+  return {
+    appId: c.agent.replace(/_/g, "-"),
+    // Claude Code is installed through its own CLI, which owns the path.
+    configPath: c.path ?? "(via claude mcp add)",
+    backupPath: c.backup_path ?? "",
+  };
 }
 
 export function registerMcpSubmitHandlers(): void {
   ipcMain.handle("mcp:discover", async () => {
-    const { servers, unsupported } = await runDiscovery();
+    let discovery;
+    try {
+      discovery = await runDiscovery();
+    } catch (err) {
+      // The daemon is the only source. Reporting an empty list here would tell
+      // the user "no MCP servers found" when the truth is "we couldn't look" -
+      // so the renderer gets the failure and shows the warning instead.
+      console.error(`[mcp:discover] discovery unavailable: ${String(err)}`);
+      return {
+        servers: [],
+        unsupported: [],
+        daemonUnavailable: true,
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+    const { servers, unsupported } = discovery;
     console.log(`[mcp:discover] Found ${servers.length} servers, ${unsupported.length} unsupported`);
     for (const s of servers) {
       console.log(`[mcp:discover]   supported: ${s.name}@${s.client} source=${s.source} path=${s.path}`);
@@ -135,7 +82,7 @@ export function registerMcpSubmitHandlers(): void {
       const reason = describeUnsupportedReason(s) ?? 'unknown';
       console.log(`[mcp:discover]   unsupported: ${s.name}@${s.client} source=${s.source} path=${s.path} reason=${reason}`);
     }
-    return { servers, unsupported };
+    return { servers, unsupported, daemonUnavailable: false };
   });
 
   ipcMain.handle("mcp:findDuplicates", async () => {
@@ -186,69 +133,66 @@ export function registerMcpSubmitHandlers(): void {
     return { removed: [], errors: [] };
   });
 
-  ipcMain.handle("mcp:readConfig", async (_event, configPath: string) => {
+  // Show an agent's config file. The daemon reads it: it owns agent files, and
+  // this used to take an arbitrary path from the renderer.
+  ipcMain.handle("mcp:readConfig", async (_event, client: string) => {
     try {
-      return await fs.readFile(configPath, "utf-8");
-    } catch {
-      return null;
+      const daemon = getDetectordClient();
+      await daemon.connect();
+      return { content: (await daemon.readConfig(toAgentName(client))).content };
+    } catch (err) {
+      // A read that failed is not an empty config: the daemon reports absence
+      // as null content and anything else (permissions, a directory, non-UTF-8)
+      // as an error, so pass the reason on rather than rendering "no config".
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn(`[mcp:readConfig] ${client}: ${message}`);
+      return { content: null, error: message };
     }
   });
 
   ipcMain.handle("mcp:applyAppIntegrations", async (_event, args: {
-    serverAddress: string;
-    mcpBaseUrl: string;
-    apiKey: string;
+    serverAddress?: string;
+    mcpBaseUrl?: string;
+    apiKey?: string;
     edisonSecretKey?: string;
     apps: string[];
-  }) => {
+  }): Promise<{ success: boolean; modifiedConfigs: ModifiedConfig[]; errors?: string[] }> => {
+    // The daemon installs the edison-watch entry and the hooks: it holds the
+    // credentials in its enrollment and it is the only writer of agent configs.
+    // The URL/key arguments are vestigial - they came from the app's own writer
+    // and are ignored rather than second-guessing the enrollment.
     console.log("[mcp:applyAppIntegrations]", args.apps, DRY_RUN ? "(dry-run)" : "");
-    return await applyAppIntegrations({ ...args, dryRun: DRY_RUN });
+    if (DRY_RUN) return { success: true, modifiedConfigs: [] };
+    try {
+      const changes = await applyIntegrations(args.apps);
+      const errors = integrationErrors(changes);
+      return {
+        success: errors.length === 0,
+        modifiedConfigs: changes.filter((c) => c.ok).map(toModifiedConfig),
+        ...(errors.length > 0 ? { errors } : {}),
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { success: false, modifiedConfigs: [], errors: [message] };
+    }
   });
 
-  // Revert app integrations: restore config files from setup backups
+  // Revert app integrations: the daemon removes the edison-watch entry it
+  // installed (and drops the agent from the enrolled selection so its
+  // self-heal doesn't put it straight back).
   ipcMain.handle("mcp:revertAppIntegrations", async (_event, args: {
-    configs: Array<{ configPath: string; backupPath: string; appId?: string }>;
+    configs: Array<{ appId?: string; configPath?: string; backupPath?: string }>;
   }): Promise<{ reverted: number; errors: string[] }> => {
-    const { configs } = args;
-    let reverted = 0;
-    const errors: string[] = [];
-    const allowedDirs = [homedir(), app.getPath("userData")];
-    const isAllowedPath = (p: string): boolean =>
-      allowedDirs.some((dir) => resolve(p).startsWith(dir + sep));
-
-    for (const { configPath, backupPath, appId } of configs) {
-      try {
-        // Claude Code: use CLI to remove instead of backup restore
-        if (appId === "claude-code" && !backupPath) {
-          const { execFile } = await import("child_process");
-          const { promisify } = await import("util");
-          const execFileAsync = promisify(execFile);
-          const revertArgs = ["mcp", "remove", "edison-watch", "-s", "user"];
-          logClaudeCmd(revertArgs);
-          await execFileAsync("claude", revertArgs, { timeout: 10_000 });
-          reverted++;
-          console.log("[MCP Revert] Removed edison-watch from Claude Code via CLI");
-          continue;
-        }
-
-        if (!isAllowedPath(configPath) || !isAllowedPath(backupPath)) {
-          errors.push(`Path not allowed: ${configPath}`);
-          continue;
-        }
-        if (!backupPath || !(await fs.access(backupPath).then(() => true).catch(() => false))) {
-          errors.push(`No backup found for ${configPath}`);
-          continue;
-        }
-        await fs.copyFile(backupPath, configPath);
-        reverted++;
-        console.log(`[MCP Revert] Restored ${configPath} from ${backupPath}`);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        errors.push(`${configPath}: ${msg}`);
-        console.warn("[MCP Revert] Failed to restore", configPath, err);
-      }
+    const apps = args.configs.map((c) => c.appId).filter((a): a is string => !!a);
+    if (apps.length === 0) {
+      return { reverted: 0, errors: ["No app ids to revert"] };
     }
-    return { reverted, errors };
+    try {
+      const changes = await revertIntegrations(apps);
+      return { reverted: changes.filter((c) => c.ok).length, errors: integrationErrors(changes) };
+    } catch (err) {
+      return { reverted: 0, errors: [err instanceof Error ? err.message : String(err)] };
+    }
   });
 
   // Analyze discovered servers for secrets (without submitting)
@@ -317,7 +261,7 @@ export function registerMcpSubmitHandlers(): void {
     servers?: Array<{ name: string; client: string; clients?: string[]; source: string }>;
     error?: string;
     errors?: string[];
-    failures?: Array<{ name: string; client: string; reason: "conflict" | "error" | "already-on-backend"; message: string; config?: Record<string, unknown>; configPath?: string; backendStatus?: "registered" | "requested" }>;
+    failures?: Array<{ name: string; client: string; reason: "conflict" | "already-pending" | "error" | "already-on-backend"; message: string; config?: Record<string, unknown>; configPath?: string; backendStatus?: "registered" | "requested" }>;
   }> => {
     const setup = getSetupData();
     const creds = getCredentialsForEnv();
@@ -357,7 +301,7 @@ export function registerMcpSubmitHandlers(): void {
     servers?: Array<{ name: string; client: string; clients?: string[]; source: string }>;
     error?: string;
     errors?: string[];
-    failures?: Array<{ name: string; client: string; reason: "conflict" | "error" | "already-on-backend"; message: string; config?: Record<string, unknown>; configPath?: string; backendStatus?: "registered" | "requested" }>;
+    failures?: Array<{ name: string; client: string; reason: "conflict" | "already-pending" | "error" | "already-on-backend"; message: string; config?: Record<string, unknown>; configPath?: string; backendStatus?: "registered" | "requested" }>;
   }> => {
     const setup = getSetupData();
     const creds = getCredentialsForEnv();
@@ -383,7 +327,10 @@ export function registerMcpSubmitHandlers(): void {
     return summary;
   });
 
-  // Handle individual server actions from the registration/quarantine dialogs
+  // Handle individual server actions from the registration/quarantine dialogs.
+  // Registration goes through the daemon, which submits, marks the server known
+  // and removes the local entry in one step - none of which the app can do
+  // without touching an agent's config file.
   ipcMain.handle("mcp:handleServerAction", async (_event, params: {
     fingerprint: string;
     serverName: string;
@@ -400,87 +347,19 @@ export function registerMcpSubmitHandlers(): void {
       end: number;
     }>;
   }) => {
-    // Only submit for registration/request actions - skip dismissed/skipped servers
+    // Dismissed/skipped servers need no submit.
     if (params.action !== "registered" && params.action !== "requested") {
       return { action: params.action };
-    }
-
-    const setup = getSetupData();
-    const creds = getCredentialsForEnv();
-    const apiKey = creds?.apiKey;
-    const apiBaseUrl = getApiBaseUrl();
-
-    if (!apiKey || !apiBaseUrl) {
-      throw new Error("Not signed in or server URL not configured.");
     }
 
     const server: DiscoveredMcpServer = {
       name: params.serverName,
       client: params.sourceApp as McpClientId,
-      source: (params.source as DiscoveredMcpServer['source']) || "user",
+      source: (params.source as DiscoveredMcpServer["source"]) || "user",
       path: params.configPath,
       config: params.config as McpServerConfig,
     };
 
-    // Preflight: if the fingerprint is already on the backend, skip the submit
-    // (same server) and just sync local state, guarding a double-acknowledge.
-    const backendIndex = await fetchBackendFingerprints(apiBaseUrl, apiKey);
-    const backendMatch = findBackendFingerprintMatch(server, backendIndex);
-    if (backendMatch) {
-      await handleAlreadyOnBackend(server, backendMatch, apiBaseUrl, apiKey);
-      return {
-        action: params.action,
-        alreadyOnBackend: true,
-        backendStatus: backendMatch.status,
-        existingName: backendMatch.name,
-      };
-    }
-
-    const submitResult = params.templateOverrides && params.templateOverrides.length > 0
-      ? await submitServerWithOverrides(server, params.templateOverrides, apiBaseUrl, apiKey, setup.userId)
-      : await submitServerRequest(server, apiBaseUrl, apiKey, setup.userId);
-
-    if (submitResult.alreadyPending) {
-      return { action: params.action, alreadyPending: true };
-    }
-    if (submitResult.alreadyExists) {
-      return { action: params.action, alreadyExists: true, errorMessage: submitResult.errorMessage };
-    }
-
-    const { request_id } = submitResult;
-
-    // Auto-approve if user is admin/owner and action is "registered".
-    // The backend already auto-approves admin/owner submissions, so honour
-    // submitResult.autoApproved first and skip the redundant approve call.
-    let autoApproved = submitResult.autoApproved === true;
-    let approveError: string | undefined;
-    if (!autoApproved && params.action === "registered") {
-      const role = await fetchUserRole(apiBaseUrl, apiKey);
-      if (role === "admin" || role === "owner") {
-        try {
-          await approveServerRequest(request_id, apiBaseUrl, apiKey);
-          autoApproved = true;
-        } catch (err) {
-          approveError = err instanceof Error ? err.message : String(err);
-          console.error(`[mcp:handleServerAction] Auto-approval failed for "${params.serverName}":`, err);
-        }
-      }
-    }
-
-    // Mark in seen store so quarantine recognises it as known
-    const seenAction = autoApproved ? "registered" : "requested";
-    {
-      const orgId = await getOrRefreshOrgId(apiBaseUrl, apiKey);
-      if (orgId) {
-        try { await getSharedSeenStore().markSeen(orgId, server, seenAction as "registered" | "requested"); } catch { /* non-fatal */ }
-      } else {
-        console.warn(`[mcp:submit] No org_id available - "${server.name}" won't be marked as seen; next detection will prompt.`);
-      }
-    }
-
-    // Remove server from config after successful submission
-    try { await removeOrDisableServer(server); } catch { /* non-fatal - quarantine manager handles fallback */ }
-
-    return { request_id, action: params.action, autoApproved, approveError };
+    return submitOneViaDetectord(server, params.action, params.templateOverrides);
   });
 }

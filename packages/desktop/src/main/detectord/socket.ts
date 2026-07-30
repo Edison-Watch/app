@@ -16,6 +16,7 @@ import {
   type AgentInfo,
   type Choice,
   type DetectordEvent,
+  type IntegrationChange,
   type Reply,
   type Request,
   type SecretOutcome,
@@ -171,9 +172,50 @@ export class DetectordClient extends EventEmitter {
     choice: Choice,
     agent?: string,
     rename?: string,
-    submitConfig?: ServerConfig
+    submitConfig?: ServerConfig,
+    register?: boolean
   ): Promise<void> {
-    await this.expect({ op: 'disposition', name, agent, choice, rename, submit_config: submitConfig })
+    await this.expect({
+      op: 'disposition',
+      name,
+      agent,
+      choice,
+      rename,
+      submit_config: submitConfig,
+      register
+    })
+  }
+
+  /**
+   * Install the edison-watch entry + session hooks for these agents, and only
+   * these - no other agent's config is touched. The machine-wide hook sweep is
+   * enrollment's job.
+   */
+  async applyIntegrations(agents: string[]): Promise<IntegrationChange[]> {
+    const r = await this.expect({ op: 'apply_integrations', agents })
+    if (r.reply !== 'integrations') throw new DetectordError(`unexpected reply ${r.reply}`)
+    return r.changes
+  }
+
+  /** Remove the edison-watch entry for these agents. */
+  async revertIntegrations(agents: string[]): Promise<IntegrationChange[]> {
+    const r = await this.expect({ op: 'revert_integrations', agents })
+    if (r.reply !== 'integrations') throw new DetectordError(`unexpected reply ${r.reply}`)
+    return r.changes
+  }
+
+  /** An agent's user-scope config file and its contents (null if absent). */
+  async readConfig(agent: string): Promise<{ path: string; content: string | null }> {
+    const r = await this.expect({ op: 'read_config', agent })
+    if (r.reply !== 'config') throw new DetectordError(`unexpected reply ${r.reply}`)
+    return { path: r.path, content: r.content }
+  }
+
+  /** Restore quarantined servers: one by name, or all when name is omitted. */
+  async restoreQuarantined(name?: string): Promise<{ restored: number; errors: string[] }> {
+    const r = await this.expect({ op: 'restore_quarantined', name })
+    if (r.reply !== 'restored') throw new DetectordError(`unexpected reply ${r.reply}`)
+    return { restored: r.restored, errors: r.errors }
   }
 
   async verifySecret(key: string): Promise<SecretOutcome> {

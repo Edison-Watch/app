@@ -3,7 +3,14 @@ import { join } from 'path'
 import type { DiscoveredMcpServer } from '../discovery/mcpDiscovery'
 import { showWhenReady } from './showWindow'
 import { getClientDisplayName } from '../runtime/mcpConfigMonitor'
-import type { ServerAction } from '../discovery/seenServersStore'
+/**
+ * What the user chose for a server in the dialogs:
+ * - 'quarantined': auto-quarantined by the daemon
+ * - 'requested': access requested from an admin
+ * - 'registered': registered directly (admin/owner)
+ * - 'dismissed': left quarantined, don't re-prompt
+ */
+export type ServerAction = 'quarantined' | 'requested' | 'registered' | 'dismissed'
 import {
   BASE_CSS,
   HEADER_CSS,
@@ -369,7 +376,7 @@ export function showQuarantinedServersDialog(
                   showStatusBadge(fp, msg, true)
                   return
                 }
-                if (result && result.alreadyPending) { showConflictRename(fp, sn, sa, act, 'A server with this name already has a pending approval request'); return }
+                if (result && result.alreadyPending) { showAlreadyPendingBadge(fp); return }
                 if (result && result.alreadyExists) { showConflictRename(fp, sn, sa, act, result.errorMessage); return }
                 results.push({ fingerprint: fp, serverName: sn, sourceApp: sa, action: act })
                 if (result && result.approveError) { showStatusBadge(fp, 'Request submitted - auto-approval failed', true); return }
@@ -413,7 +420,7 @@ export function showQuarantinedServersDialog(
               showStatusBadge(fingerprint, msg, true)
               return
             }
-            if (result && result.alreadyPending) { showConflictRename(fingerprint, serverName, sourceApp, action, 'A server with this name already has a pending approval request'); return }
+            if (result && result.alreadyPending) { showAlreadyPendingBadge(fingerprint); return }
             if (result && result.alreadyExists) { showConflictRename(fingerprint, serverName, sourceApp, action, result.errorMessage); return }
             results.push({ fingerprint, serverName, sourceApp, action })
             if (result && result.approveError) { showStatusBadge(fingerprint, 'Request submitted - auto-approval failed', true); return }

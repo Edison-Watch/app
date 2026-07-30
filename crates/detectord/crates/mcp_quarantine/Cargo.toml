@@ -11,6 +11,10 @@ description = "Mutation, persistent state, and the reconcile planner for MCP qua
 # Only the types + fingerprint are needed, not the concrete agents, so the
 # agent features (and their rusqlite cost) are left off.
 edison-detectord = { path = "../edison-detectord", default-features = false }
+# Claude matches a hook group's `matcher` as a regex against the tool name,
+# so deciding whether a group covers a binding means running one. String
+# comparison cannot: `mcp__.*` and `mcp__*` select the same calls.
+regex = "1.11.4"
 rusqlite = { version = "0.40.1", features = ["bundled"] }
 serde = { version = "1.0.228", features = ["derive"] }
 # preserve_order keeps a config's existing server order through a read-modify-

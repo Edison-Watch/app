@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 
 import type { SecretOutcome } from '../main/detectord/protocol'
+import type { DetectordHealth } from '../main/detectord/health'
 import type { StdiodLoginInput, StdiodResult, StdiodStatus } from '../main/stdiod/types'
 import type { UpdateState } from '../main/infra/updateManager'
 import type { UpdateSettings } from '../main/infra/updateSettings'
@@ -12,6 +13,8 @@ import type { UpdateSettings } from '../main/infra/updateSettings'
  * All main ↔ renderer communication goes through these channels.
  * Extend this as new IPC handlers are added to the main process.
  */
+
+
 const api = {
   /** Host platform, e.g. 'win32' | 'darwin' | 'linux'. */
   platform: process.platform as NodeJS.Platform,
@@ -62,9 +65,18 @@ const api = {
 
   /** MCP client discovery and hook management */
   mcp: {
-    detectClients: (): Promise<Array<{ id: string; name: string; configPath: string }>> =>
+    detectClients: (): Promise<{
+      clients: Array<{ id: string; name: string; configPath: string }>
+      daemonUnavailable: boolean
+    }> =>
       ipcRenderer.invoke('mcp:detectClients'),
-    discover: (): Promise<{ servers: unknown[]; unsupported: unknown[] }> =>
+    discover: (): Promise<{
+      servers: unknown[]
+      unsupported: unknown[]
+      /** True when the daemon didn't answer - the lists are unknown, not empty. */
+      daemonUnavailable?: boolean
+      error?: string
+    }> =>
       ipcRenderer.invoke('mcp:discover'),
     findDuplicates: (): Promise<unknown[]> => ipcRenderer.invoke('mcp:findDuplicates'),
     removeServers: (
@@ -82,8 +94,12 @@ const api = {
       configPath?: string
     }): Promise<{ success: boolean; error?: string }> =>
       ipcRenderer.invoke('mcp:resubmitServer', params),
-    readConfig: (configPath: string): Promise<string | null> =>
-      ipcRenderer.invoke('mcp:readConfig', configPath),
+    /**
+     * An agent's user-scope config file, read by the daemon (which owns it).
+     * `content: null` with no `error` means the file doesn't exist yet.
+     */
+    readConfig: (client: string): Promise<{ content: string | null; error?: string }> =>
+      ipcRenderer.invoke('mcp:readConfig', client),
     applyAppIntegrations: (args: {
       serverAddress: string
       mcpBaseUrl: string
@@ -157,7 +173,8 @@ const api = {
       error?: string
       errors?: string[]
     }> => ipcRenderer.invoke('mcp:submitAllDiscovered', params),
-    getHookStatus: (): Promise<unknown[]> => ipcRenderer.invoke('mcp:getHookStatus')
+    getHookStatus: (): Promise<{ statuses: unknown[]; daemonUnavailable: boolean }> =>
+      ipcRenderer.invoke('mcp:getHookStatus')
   },
 
   /** Config: effective base URLs and active env (respects debug env override) */
@@ -179,7 +196,9 @@ const api = {
   accounts: {
     list: (): Promise<Array<{ userId: string; userEmail: string; savedAt: string }>> =>
       ipcRenderer.invoke('accounts:list'),
-    switch: (userId: string): Promise<{ ok: boolean }> =>
+    switch: (
+      userId: string
+    ): Promise<{ ok: boolean; agentsRepointed?: boolean; reason?: string }> =>
       ipcRenderer.invoke('accounts:switch', userId),
     remove: (userId: string): Promise<{ ok: boolean }> =>
       ipcRenderer.invoke('accounts:remove', userId)
@@ -214,6 +233,7 @@ const api = {
     }
   },
 
+
   /** OS keychain (safeStorage) - store/load the personal encryption key */
   keychain: {
     save: (plaintext: string): Promise<{ ok: boolean; error?: string }> =>
@@ -243,7 +263,14 @@ const api = {
       ipcRenderer.invoke('detectord:setSecret', key),
     /** Uninstall the daemon; purge=true also deletes all its data + logs. */
     uninstall: (opts?: { purge?: boolean }): Promise<{ ok: boolean; stdout: string; stderr: string }> =>
-      ipcRenderer.invoke('detectord:uninstall', opts)
+      ipcRenderer.invoke('detectord:uninstall', opts),
+    /** Is the daemon answering? The app can't detect or quarantine without it. */
+    health: (): Promise<DetectordHealth> => ipcRenderer.invoke('detectord:health'),
+    onHealth: (callback: (h: DetectordHealth) => void): (() => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, h: DetectordHealth): void => callback(h)
+      ipcRenderer.on('detectord:health', handler)
+      return () => ipcRenderer.removeListener('detectord:health', handler)
+    }
   },
 
   /** Bundled edison-stdiod daemon (stdio MCP tunnel) */

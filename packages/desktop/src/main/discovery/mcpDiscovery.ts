@@ -7,11 +7,9 @@
  * This module re-exports types and per-client functions so that existing
  * consumers can update their import path without changing named imports.
  */
-import { platform } from 'os'
 import type { DiscoveredMcpServer, DiscoveryResult } from './types'
 import { isOpaqueConfig, hasMalformedHeaders } from './types'
 import { clientAlias } from './serverDeduplication'
-import { MAC_APP_NAMES, macAppExists } from './macAppNames'
 import { discoverViaDetectord } from '../detectord/discovery'
 
 // ── Re-exports (backward compatibility) ────────────────────────────────────
@@ -20,70 +18,39 @@ import { discoverViaDetectord } from '../detectord/discovery'
 export type { McpClientId, McpServerTransport, McpServerConfig, DiscoveredMcpServer, DiscoveryResult } from './types'
 export { isOpaqueConfig, describeUnsupportedReason } from './types'
 
-// Per-client discovery
-export { getVscodeUserMcpPath, getVscodeStateDbPath, discoverVscodeStateMcps, parseVscodeMcpJson } from '../clients/vscode/discovery'
-export { getCursorConfigPath, parseCursorMcpJson, discoverCursor } from '../clients/cursor/discovery'
-export { getCursorStateDbPath, getCursorProjectsDir, discoverCursorMarketplaceMcps } from '../clients/cursor/marketplace'
-export { getWindsurfConfigPath, parseWindsurfMcpJson, discoverWindsurf } from '../clients/windsurf/discovery'
-export { getZedConfigPath, parseZedSettingsJson, discoverZed } from '../clients/zed/discovery'
-export { getJetBrainsMcpConfigPaths, getInstalledJetBrainsIdes, parseJetBrainsServersJson } from '../clients/jetbrains/discovery'
-export {
-  getClaudeCodeUserSettingsPath,
-  getClaudeCodeLocalSettingsPath,
-  getClaudeCodeHomeJsonPath,
-  getClaudeCodeDedicatedMcpPath,
-  getClaudeCodeManagedMcpPath,
-  parseClaudeCodeSettingsJson,
-  parseClaudeCodeMcpJson,
-  parseClaudeHomeJson,
-  parseClaudeDedicatedMcpServers,
-} from '../clients/claude-code/discovery'
-export {
-  getClaudeDesktopConfigPath,
-  parseClaudeDesktopConfig,
-  discoverClaudeDesktop,
-} from '../clients/claude-desktop/discovery'
-export {
-  getClaudeCoworkConfigPath,
-  parseClaudeCoworkConfig,
-  discoverClaudeCowork,
-} from '../clients/claude-cowork/discovery'
-
-// Runtime / project paths
-export {
-  getCursorWorkspaceStoragePath,
-  getCursorProjectMcpPaths,
-  getCursorPluginsInstalledPaths,
-  getCursorPluginMcpPaths,
-  getCursorPluginCachePath,
-  getClaudeCodeProjectMcpPaths,
-  getVsCodeWorkspacePaths,
-} from '../runtime/mcpProjectPaths'
-
-// Seen servers
-export { getServerFingerprint } from './seenServersStore'
+// Fingerprints (pure; the daemon keeps the seen-store)
+export { getServerFingerprint } from './fingerprint'
 
 // ── Imports for aggregator ──────────────────────────────────────────────────
 
-import { CLIENT_LIST } from '../clients/registry'
 import { unwrapStdioShim } from './stdioShim'
 
-// ── macOS app existence check ───────────────────────────────────────────────
-
-export { MAC_APP_NAMES, macAppExists }
-
 // ── Aggregator ──────────────────────────────────────────────────────────────
+
+/** Thrown when the daemon - the only source of servers - didn't answer. */
+export class DetectordUnavailableError extends Error {
+  constructor() {
+    super(
+      "Edison Watch can't reach its detector daemon, so it can't tell which MCP servers are configured."
+    )
+    this.name = 'DetectordUnavailableError'
+  }
+}
 
 export async function discoverMcpServers(): Promise<DiscoveredMcpServer[]>
 export async function discoverMcpServers(opts: { includeRaw: true }): Promise<DiscoveryResult>
 export async function discoverMcpServers(opts?: { includeRaw?: boolean }): Promise<DiscoveredMcpServer[] | DiscoveryResult> {
-  // Primary mode: the daemon is the source of truth (and sees stdio servers the
-  // client can't). Fall back to a local scan only when it returns null (daemon
-  // unreachable / not enrolled). The rest of the pipeline (shim-unwrap,
-  // supported/unsupported split, dedup, installed-app filter) runs unchanged.
+  // The daemon is the only source of truth. It sees stdio servers, it already
+  // watches every config file, and - the reason there is no local fallback -
+  // it is the one component allowed to read the user's project directories.
+  // The rest of the pipeline (shim-unwrap, supported/unsupported split, dedup,
+  // installed-app filter) runs on its answer.
   const daemonServers = await discoverViaDetectord()
-  const results: DiscoveredMcpServer[] =
-    daemonServers ?? (await Promise.all(CLIENT_LIST.map((c) => c.discoverServers()))).flat()
+  // No fallback exists, so "the daemon didn't answer" has to travel as a
+  // failure. Returning [] here would render as "no MCP servers configured",
+  // which is the most dangerous sentence this app could show wrongly.
+  if (daemonServers === null) throw new DetectordUnavailableError()
+  const results: DiscoveredMcpServer[] = daemonServers
 
   // Normalize stdio shims (e.g. `npx -y mcp-remote https://…`) to their
   // URL-shaped equivalents so downstream code (submit, dedup, credential
@@ -94,15 +61,9 @@ export async function discoverMcpServers(opts?: { includeRaw?: boolean }): Promi
   }
 
   // Split supported / unsupported. Unsupported = opaque (Cursor marketplace
-  // and VS Code state-DB shapes) OR local stdio that we can't unwrap into a
-  // URL OR an HTTP server whose `headers` field is the wrong shape (must be
-  // a JSON object).
-  //
-  // Local stdio is "not yet supported" only for the *client's* http-proxy path.
-  // When the list comes from the daemon (primary mode), the daemon can act on
-  // stdio servers, so they're supported (registerable via the daemon); don't
-  // bucket them as unsupported or onboarding would show 0 registerable servers.
-  const daemonSourced = daemonServers !== null
+  // and VS Code state-DB shapes) OR an HTTP server whose `headers` field is the
+  // wrong shape (must be a JSON object). Local stdio is supported: the daemon
+  // can act on stdio servers, and it is what registers them.
   const supported: DiscoveredMcpServer[] = []
   const unsupportedRaw: DiscoveredMcpServer[] = []
   for (const s of results) {
@@ -110,9 +71,6 @@ export async function discoverMcpServers(opts?: { includeRaw?: boolean }): Promi
       unsupportedRaw.push(s)
     } else if (hasMalformedHeaders(s.config)) {
       unsupportedRaw.push(s)
-    } else if ('command' in s.config && s.config.command) {
-      if (daemonSourced) supported.push(s)
-      else unsupportedRaw.push(s)
     } else {
       supported.push(s)
     }
@@ -128,29 +86,18 @@ export async function discoverMcpServers(opts?: { includeRaw?: boolean }): Promi
     }
   }
 
-  // On macOS, filter out servers whose GUI client .app is not actually installed
+  // Everything the daemon reports is shown. It only discovers servers from
+  // config files that exist, so there is no "phantom entry" to filter out - and
+  // the costs are asymmetric: showing a leftover entry from an uninstalled
+  // editor is clutter, while hiding a live one leaves a real MCP server
+  // unreviewed and unquarantined.
+  //
+  // This used to filter on the daemon's per-agent `installed` flag, which is
+  // "the agent's primary config file exists" - a different question. Claude
+  // Code configured through `~/.claude/settings.json` with no `~/.claude.json`
+  // reported installed=false, so its servers vanished from discovery.
   const deduped = deduplicateByNameAndConfig(supported)
-  const wrap = (servers: DiscoveredMcpServer[]) =>
-    opts?.includeRaw ? { servers, raw: supported, unsupported } : servers
-
-  if (platform() !== 'darwin') return wrap(deduped)
-
-  const installedCache = new Map<string, boolean>()
-  const filtered: DiscoveredMcpServer[] = []
-  for (const server of deduped) {
-    const clientsToCheck = server.clients ?? [server.client]
-    let anyInstalled = false
-    for (const c of clientsToCheck) {
-      let installed = installedCache.get(c)
-      if (installed === undefined) {
-        installed = await macAppExists(c)
-        installedCache.set(c, installed)
-      }
-      if (installed) { anyInstalled = true; break }
-    }
-    if (anyInstalled) filtered.push(server)
-  }
-  return wrap(filtered)
+  return opts?.includeRaw ? { servers: deduped, raw: supported, unsupported } : deduped
 }
 
 // ── Deduplication ───────────────────────────────────────────────────────────

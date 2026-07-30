@@ -126,12 +126,13 @@ export default function OrgKeyCard({
         return;
       }
 
-      // Rewrite the MCP client configs FIRST. Only once that succeeds do we
+      // Apply to the MCP client configs FIRST. Only once that succeeds do we
       // persist the composite + mark the key active. Persisting first would
       // leave setup.json claiming an active org key while clients still send
       // the old header if the rewrite fails - and startup self-heal won't fix
-      // it because the MCP URL is unchanged. Main resolves the URL/creds/app
-      // list (with the ALL_SUPPORTED_APPS fallback).
+      // it because the MCP URL is unchanged. Main hands the key to the daemon
+      // (which verifies it, adopts it, then writes the agents' configs with it)
+      // and resolves the app list, with the ALL_SUPPORTED_APPS fallback.
       let applied = false;
       try {
         const apply = await window.api.mcp.applyForSecretKey(composite);
@@ -150,23 +151,11 @@ export default function OrgKeyCard({
       }
 
       // Configs updated - now persist (persist-only IPC, no setup lifecycle
-      // side effects) and mark the key active.
+      // side effects) and mark the key active. The daemon already adopted the
+      // key as part of applying it (main verifies + adopts before it writes
+      // anything), so there is nothing to enroll here.
       cacheSecretKey(composite);
       await window.api.setup.update({ edisonSecretKey: composite });
-      // Adopt the key into the detector daemon's enrollment (explicit "enroll
-      // key" state change). Non-fatal: the org key is already applied to the
-      // client configs above; the daemon will re-verify on its next enroll.
-      try {
-        const res = await window.api.detectord.setSecret(composite);
-        if (!res?.ok) {
-          console.warn(
-            `[OrgKeyCard] detector daemon did not adopt the org key` +
-              `${res?.reason ? `: ${res.reason}` : ""} (will re-verify on next enroll)`,
-          );
-        }
-      } catch (err) {
-        console.error("[OrgKeyCard] detectord setSecret failed:", err);
-      }
 
       setSaved(true);
       setEditing(false);

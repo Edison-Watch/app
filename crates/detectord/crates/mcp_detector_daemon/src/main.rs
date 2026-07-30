@@ -408,6 +408,7 @@ async fn cmd_send_to_ew(name: String, agent: Option<String>) -> anyhow::Result<(
         Choice::SendToEw,
         None,
         None,
+        None, // role decides register-vs-request from the CLI
     )
     .await?;
     println!("Sent {name} to Edison Watch and removed it from the local config.");
@@ -452,49 +453,15 @@ fn cmd_unenroll() -> anyhow::Result<()> {
 }
 
 fn cmd_restore(needle: Option<String>, all: bool) -> anyhow::Result<()> {
-    use mcp_quarantine::{ConfigStore, FileConfigStore, SeenStore};
-
-    let user = cli_user();
-    let mut q = quarantined::QuarantinedState::load_for(&user)?;
-    let mut seen = Enrollment::load_for(&user)?
-        .map(|e| SeenStore::open(paths::seen_store_path(&user), e.org_id))
-        .transpose()?;
-
-    let targets: Vec<_> = if all {
-        q.entries.clone()
+    let needle = if all {
+        None
     } else {
-        let needle =
-            needle.ok_or_else(|| anyhow::anyhow!("provide a server name/fingerprint, or --all"))?;
-        vec![
-            q.take(&needle)
-                .ok_or_else(|| anyhow::anyhow!("no quarantined server matching '{needle}'"))?,
-        ]
+        Some(needle.ok_or_else(|| anyhow::anyhow!("provide a server name/fingerprint, or --all"))?)
     };
-
-    let mut restored = 0;
-    for entry in &targets {
-        match FileConfigStore.restore(&entry.record) {
-            Ok(()) => {
-                // Forget it so the next reconcile pass won't re-quarantine.
-                if let Some(s) = seen.as_mut() {
-                    let _ = s.forget(&entry.fingerprint);
-                }
-                if all {
-                    q.take(&entry.fingerprint);
-                }
-                restored += 1;
-                println!("Restored {} ({}).", entry.name, entry.agent);
-            }
-            Err(e) => eprintln!("failed to restore {} ({}): {e}", entry.name, entry.agent),
-        }
+    let (restored, errors) = ops::restore_quarantined(&cli_user(), needle.as_deref())?;
+    for e in &errors {
+        eprintln!("failed to restore {e}");
     }
-
-    q.save_for(&user)?;
-    if all {
-        println!(
-            "Restored {restored}/{} quarantined server(s).",
-            targets.len()
-        );
-    }
+    println!("Restored {restored} quarantined server(s).");
     Ok(())
 }

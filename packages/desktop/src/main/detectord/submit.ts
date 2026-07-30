@@ -62,7 +62,7 @@ function toDaemonSubmitConfig(config: McpServerConfig): ServerConfig | null {
 export interface DetectordSubmitFailure {
   name: string
   client: string
-  reason: 'conflict' | 'error' | 'already-on-backend'
+  reason: 'conflict' | 'already-pending' | 'error' | 'already-on-backend'
   message: string
   config?: Record<string, unknown>
   configPath?: string
@@ -147,10 +147,13 @@ export async function submitServersViaDetectord(
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       if (/conflict/i.test(message)) {
+        // A pending request is not a name clash: renaming would file a second
+        // request instead of waiting for the first to be approved, so it gets
+        // its own reason and the UI withholds the rename box.
         failures.push({
           name: s.name,
           client: s.client,
-          reason: 'conflict',
+          reason: /pending/i.test(message) ? 'already-pending' : 'conflict',
           message,
           config: s.config as unknown as Record<string, unknown>,
           configPath: s.path
@@ -188,5 +191,73 @@ export async function resubmitServerViaDetectord(
     return { success: true }
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : String(err) }
+  }
+}
+
+/** What one dialog-driven registration did. Mirrors the shape the dialogs render. */
+export interface DetectordSingleSubmit {
+  action: string
+  autoApproved?: boolean
+  /**
+   * This user already has an approval request pending for the server. The
+   * dialogs treat this differently from `alreadyExists` on purpose: the answer
+   * is "wait for an admin", not "pick another name".
+   */
+  alreadyPending?: boolean
+  /** The backend already has a server under this name (offer a rename). */
+  alreadyExists?: boolean
+  errorMessage?: string
+}
+
+/**
+ * A backend 409 arrives as a `conflict: <the backend's own wording>` error from
+ * the daemon. Two causes hide behind that status and they need different UI, so
+ * split on what the backend said.
+ */
+function classifyConflict(action: string, message: string): DetectordSingleSubmit {
+  if (/pending/i.test(message)) {
+    return { action, alreadyPending: true, errorMessage: message }
+  }
+  return { action, alreadyExists: true, errorMessage: message }
+}
+
+/**
+ * Register one server through the daemon, for the tray dialogs.
+ *
+ * `action` is the user's explicit choice: 'registered' asks for it to go live
+ * (the daemon registers directly when their role allows), 'requested' files a
+ * request for approval even when they could have registered it outright. The
+ * daemon submits, marks it known, and removes the local entry in one step, so
+ * no part of this needs the app to touch a config file.
+ */
+export async function submitOneViaDetectord(
+  server: DiscoveredMcpServer,
+  action: 'registered' | 'requested',
+  overrides?: TemplateOverride[]
+): Promise<DetectordSingleSubmit> {
+  const c = getDetectordClient()
+  const daemonName = server.originalName ?? server.name
+  const rename = server.originalName ? server.name : undefined
+  // An explicit (even empty) override list is the user's authoritative
+  // redaction from credential review; absent means "auto-templatize".
+  const submitConfig =
+    overrides !== undefined
+      ? (toDaemonSubmitConfig(applyTemplateOverrides(server.config, overrides)) ?? undefined)
+      : undefined
+  try {
+    await c.connect()
+    await c.disposition(
+      daemonName,
+      'send_to_ew',
+      toAgent(server.client),
+      rename,
+      submitConfig,
+      action === 'registered'
+    )
+    return { action, autoApproved: action === 'registered' }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    if (/conflict/i.test(message)) return classifyConflict(action, message)
+    throw new Error(message)
   }
 }

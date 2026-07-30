@@ -196,8 +196,22 @@ async fn dispatch(user: &str, req: Request) -> Reply {
                 }
             }
             Request::ListAgents => Reply::Agents {
-                agents: ops::list_agents(),
+                agents: ops::list_agents(user),
             },
+            Request::ApplyIntegrations { agents } => Reply::Integrations {
+                changes: ops::apply_integrations(user, &agents)?,
+            },
+            Request::RevertIntegrations { agents } => Reply::Integrations {
+                changes: ops::revert_integrations(user, &agents)?,
+            },
+            Request::ReadConfig { agent } => {
+                let (path, content) = ops::read_config(user, &agent)?;
+                Reply::Config { path, content }
+            }
+            Request::RestoreQuarantined { name } => {
+                let (restored, errors) = ops::restore_quarantined(user, name.as_deref())?;
+                Reply::Restored { restored, errors }
+            }
             Request::ListServers => Reply::Servers {
                 servers: ops::list_servers(user)?,
             },
@@ -207,6 +221,7 @@ async fn dispatch(user: &str, req: Request) -> Reply {
                 choice,
                 rename,
                 submit_config,
+                register,
             } => {
                 ops::disposition(
                     user,
@@ -215,6 +230,7 @@ async fn dispatch(user: &str, req: Request) -> Reply {
                     choice,
                     rename.as_deref(),
                     submit_config,
+                    register,
                 )
                 .await?;
                 Reply::Ack

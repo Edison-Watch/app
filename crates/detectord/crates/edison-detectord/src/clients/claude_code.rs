@@ -114,6 +114,25 @@ impl ClaudeCode {
             project_configs,
         }
     }
+
+    /// Construct with every source named explicitly (tests / non-standard
+    /// installs). `from_paths` is the shorthand for the common case.
+    pub fn from_parts(
+        user_config: Option<PathBuf>,
+        settings: Option<PathBuf>,
+        settings_local: Option<PathBuf>,
+        dedicated: Option<PathBuf>,
+        managed: Option<PathBuf>,
+        project_dirs: impl IntoIterator<Item = PathBuf>,
+    ) -> Self {
+        Self {
+            settings,
+            settings_local,
+            dedicated,
+            managed,
+            ..Self::from_paths(user_config, project_dirs)
+        }
+    }
 }
 
 impl Agent for ClaudeCode {
@@ -121,8 +140,25 @@ impl Agent for ClaudeCode {
         CLIENT_NAME
     }
 
+    /// Installed if ANY of the files Claude Code keeps MCP servers in exists.
+    ///
+    /// `~/.claude.json` is the usual one, but servers live just as legitimately
+    /// in `~/.claude/settings.json`, `settings.local.json`, the dedicated
+    /// `mcp_servers.json`, or an enterprise-managed file. Keying off
+    /// `~/.claude.json` alone made a machine configured through any of the
+    /// others look absent - which skipped hook injection for it (see
+    /// `apply_hooks`) and, in the app, hid its servers from review.
     fn is_installed(&self) -> bool {
-        self.user_config.as_ref().is_some_and(|p| p.exists())
+        [
+            &self.user_config,
+            &self.settings,
+            &self.settings_local,
+            &self.dedicated,
+            &self.managed,
+        ]
+        .into_iter()
+        .flatten()
+        .any(|p| p.exists())
     }
 
     fn watch_targets(&self) -> WatchTargets {
@@ -628,5 +664,39 @@ mod tests {
         assert_eq!(by_name["u"].transport, Transport::Stdio);
         assert_eq!(by_name["p"].scope, Scope::Project(proj));
         assert_eq!(by_name["p"].transport, Transport::Remote);
+    }
+
+    /// Servers configured through `settings.json` (no `~/.claude.json` at all)
+    /// still mean Claude Code is in use. Reporting otherwise skipped hook
+    /// injection and hid those servers from the app's review list.
+    #[test]
+    fn installed_when_only_settings_json_exists() {
+        let dir = tempdir().unwrap();
+        let claude_dir = dir.path().join(".claude");
+        std::fs::create_dir_all(&claude_dir).unwrap();
+        let settings = claude_dir.join("settings.json");
+        std::fs::write(&settings, r#"{"mcpServers":{"s":{"command":"x"}}}"#).unwrap();
+
+        let agent = ClaudeCode::from_parts(None, Some(settings), None, None, None, []);
+        assert!(agent.is_installed());
+        assert_eq!(
+            agent.discover().unwrap().len(),
+            1,
+            "and its servers are found"
+        );
+    }
+
+    #[test]
+    fn not_installed_when_no_config_source_exists() {
+        let dir = tempdir().unwrap();
+        let agent = ClaudeCode::from_parts(
+            Some(dir.path().join("absent.json")),
+            Some(dir.path().join(".claude/settings.json")),
+            None,
+            None,
+            None,
+            [],
+        );
+        assert!(!agent.is_installed());
     }
 }

@@ -9,6 +9,7 @@
 use std::path::{Path, PathBuf};
 
 use edison_detectord::{HookBinding, HookInstall, HookScriptKind, HookStyle};
+use regex::Regex;
 use serde_json::{Map, Value, json};
 
 use crate::configstore::{backup_path, parse, read, serialize, write};
@@ -331,6 +332,153 @@ fn command_has_script(entry: &Value, kind: HookScriptKind) -> bool {
         .is_some_and(|c| c.contains(script_filename(kind)))
 }
 
+/// How many of `install`'s hook bindings are already present, and how many
+/// there are in total. Read-only counterpart to [`inject_hooks`]: it applies the
+/// same per-style presence checks the injector uses to decide "already there",
+/// so status can never disagree with what a re-injection would do.
+///
+/// A missing or unparseable file counts as zero installed, never as an error -
+/// the UI wants a coverage number, not a failure.
+pub fn hooks_status(install: &HookInstall) -> (u32, u32) {
+    let total = install.events.len() as u32;
+    if total == 0 {
+        return (0, 0);
+    }
+    let installed = match install.style {
+        HookStyle::CodexToml => {
+            let text = read(&install.path).unwrap_or_default();
+            install
+                .events
+                .iter()
+                .filter(|b| text.contains(script_filename(b.script)))
+                .count()
+        }
+        _ => {
+            let Ok(raw) = read(&install.path) else {
+                return (0, total);
+            };
+            let Ok(root) = parse(&raw, &install.path) else {
+                return (0, total);
+            };
+            let Some(hooks) = root.get("hooks").and_then(Value::as_object) else {
+                return (0, total);
+            };
+            install
+                .events
+                .iter()
+                .filter(|b| {
+                    let Some(arr) = hooks.get(&b.event).and_then(Value::as_array) else {
+                        return false;
+                    };
+                    match install.style {
+                        // Claude nests the commands one level deeper, inside
+                        // per-matcher groups.
+                        // Scope matters: a group holding our command under a
+                        // matcher that excludes these tools never runs for them,
+                        // so it is not coverage.
+                        HookStyle::ClaudeSettings => arr
+                            .iter()
+                            .any(|g| matcher_covers(g, b) && group_runs_script(g, b.script)),
+                        _ => arr.iter().any(|h| command_has_script(h, b.script)),
+                    }
+                })
+                .count()
+        }
+    };
+    (installed as u32, total)
+}
+
+/// Whether a Claude hook group runs `kind`'s script.
+fn group_runs_script(group: &Value, kind: HookScriptKind) -> bool {
+    group
+        .get("hooks")
+        .and_then(Value::as_array)
+        .is_some_and(|hs| hs.iter().any(|h| command_has_script(h, kind)))
+}
+
+/// Tool names that stand in for a binding's scope.
+///
+/// Coverage is "does this group fire everywhere the binding needs it to", and
+/// the only way to answer that for a regex is to run it. Comparing matcher
+/// strings cannot: `mcp__.*` and `mcp__*` select the same MCP calls while
+/// sharing no useful equality, and `.*` covers every binding there is.
+///
+/// So each binding names tools that must be matched. An MCP-scoped binding is
+/// satisfied by anything that fires for MCP calls; an unscoped one has to fire
+/// for ordinary tools too, which is why a `mcp__*` group does not cover it.
+fn scope_samples(binding: &HookBinding) -> &'static [&'static str] {
+    match binding.matcher.as_deref() {
+        Some(m) if m.starts_with("mcp__") => &["mcp__edison_watch__list", "mcp__github__search"],
+        // No matcher, `*`, or anything else: the binding wants every tool.
+        _ => &["mcp__edison_watch__list", "Bash", "Edit", "Read"],
+    }
+}
+
+/// Whether a group's matcher covers the binding's scope.
+///
+/// Claude only runs a group for tools its `matcher` selects, so a group scoped
+/// elsewhere does not satisfy the binding no matter what command it holds - the
+/// `PreToolUse`/`mcp__*` binding is the one that makes MCP calls observable at
+/// all. An absent matcher (or `*`) means every tool, which covers any binding.
+///
+/// Everything else is a regex, matched unscoped against the tool name, the way
+/// Claude matches it. A matcher this crate cannot compile is reported as NOT
+/// covering: the module's rule is never to claim coverage nobody verified, and
+/// the caller responds by installing a correctly scoped group rather than
+/// trusting one it could not read.
+fn matcher_covers(group: &Value, binding: &HookBinding) -> bool {
+    let Some(m) = group.get("matcher").and_then(Value::as_str) else {
+        return true;
+    };
+    if m == "*" {
+        return true;
+    }
+    // Cheap exact hit first - the common case is our own previous install.
+    if Some(m) == binding.matcher.as_deref() {
+        return true;
+    }
+    let Ok(re) = Regex::new(m) else { return false };
+    scope_samples(binding).iter().all(|t| re.is_match(t))
+}
+
+/// Whether the group's scope is *demonstrably* outside the binding.
+///
+/// Stricter than `!matcher_covers`, and deliberately so: that returns false for
+/// a matcher we could not compile, which means "unread", not "wrong". Rewriting
+/// on unread would discard a scope the user may have chosen on purpose, so only
+/// a matcher that compiled and then failed to fire for the binding's tools
+/// earns a repair.
+fn matcher_known_not_to_cover(group: &Value, binding: &HookBinding) -> bool {
+    let Some(m) = group.get("matcher").and_then(Value::as_str) else {
+        return false;
+    };
+    if m == "*" || Some(m) == binding.matcher.as_deref() {
+        return false;
+    }
+    Regex::new(m).is_ok_and(|re| !scope_samples(binding).iter().all(|t| re.is_match(t)))
+}
+
+/// Whether every command in the group is one of ours, so its matcher can be
+/// corrected without moving somebody else's hook to a different scope.
+fn group_is_exclusively_ours(group: &Value) -> bool {
+    group
+        .get("hooks")
+        .and_then(Value::as_array)
+        .is_some_and(|hs| {
+            !hs.is_empty()
+                && hs.iter().all(|h| {
+                    [
+                        HookScriptKind::Registration,
+                        HookScriptKind::SessionStart,
+                        HookScriptKind::SessionHook,
+                        HookScriptKind::SessionEnd,
+                    ]
+                    .into_iter()
+                    .any(|k| command_has_script(h, k))
+                })
+        })
+}
+
 fn inject_claude(install: &HookInstall, scripts: &HookScripts) -> Result<bool> {
     ensure_parent(&install.path)?;
     let (mut root, existed, raw) = read_json_or_empty(&install.path)?;
@@ -349,14 +497,45 @@ fn inject_claude(install: &HookInstall, scripts: &HookScripts) -> Result<bool> {
             .or_insert_with(|| json!([]))
             .as_array_mut()
             .ok_or_else(|| Error::NotAnObject(vec!["hooks".into(), b.event.clone()]))?;
-        // A group already carries this script?
-        let present = arr.iter().any(|group| {
-            group
-                .get("hooks")
-                .and_then(Value::as_array)
-                .is_some_and(|hs| hs.iter().any(|h| command_has_script(h, b.script)))
-        });
-        if present {
+        // Satisfied only by a group that BOTH runs the script and is scoped to
+        // cover this binding. A group carrying our command under a different
+        // matcher never fires for the tools we care about.
+        if arr
+            .iter()
+            .any(|g| matcher_covers(g, b) && group_runs_script(g, b.script))
+        {
+            continue;
+        }
+        // A wrongly-scoped group of ours (an older install, a hand-edit): fix
+        // its matcher rather than adding a second one, but only when the whole
+        // group is ours - otherwise we'd move somebody else's hook too - and
+        // only when its scope is KNOWN to miss the binding. A matcher this
+        // crate cannot compile is not known-wrong, just unread, so it keeps
+        // whatever the user meant by it and we add our own group beside it.
+        if let Some(g) = arr.iter_mut().find(|g| {
+            group_runs_script(g, b.script)
+                && group_is_exclusively_ours(g)
+                && matcher_known_not_to_cover(g, b)
+        }) && let Some(obj) = g.as_object_mut()
+        {
+            match &b.matcher {
+                Some(m) => obj.insert("matcher".into(), json!(m)),
+                None => obj.remove("matcher"),
+            };
+            // Ownership is decided by script *filename*, so the group we just
+            // rescoped may still name a path from somewhere else entirely - an
+            // older install, a moved home directory, a settings.json carried
+            // between machines in a dotfiles repo. Correcting the matcher alone
+            // would leave it scoped perfectly at a script that isn't there, so
+            // the command is refreshed in the same pass.
+            if let Some(hs) = obj.get_mut("hooks").and_then(Value::as_array_mut) {
+                for h in hs.iter_mut().filter(|h| command_has_script(h, b.script)) {
+                    if let Some(ho) = h.as_object_mut() {
+                        ho.insert("command".into(), json!(command_for(b, scripts, install)));
+                    }
+                }
+            }
+            changed = true;
             continue;
         }
         let cmd = command_for(b, scripts, install);
@@ -617,6 +796,22 @@ fn remove_codex(install: &HookInstall) -> Result<bool> {
 
 const VSCODE_TASK_LABEL: &str = "Edison Watch Registration";
 
+/// Whether a `tasks.json` entry is one of ours.
+///
+/// Ownership is the command, not the label: the label is display text a user
+/// can copy, and - more commonly - a task left by an older install keeps the
+/// label while its command points at a script path that no longer resolves
+/// (the Linux AppImage mount changes every launch, homes get moved). Treating
+/// the label as proof reported such a workspace as covered while registration
+/// never ran, and injection refused to repair it for the same reason.
+///
+/// The label is still accepted so a stale or hand-copied entry gets replaced
+/// rather than left beside a second, working one.
+fn is_edison_workspace_task(task: &Value) -> bool {
+    command_has_script(task, HookScriptKind::Registration)
+        || task.get("label").and_then(Value::as_str) == Some(VSCODE_TASK_LABEL)
+}
+
 /// Add the "Edison Watch Registration" folder-open task to a workspace's
 /// `tasks.json` (idempotent, alongside existing tasks). Returns whether changed.
 pub fn inject_workspace_task(tasks_json: &Path, registration_script: &Path) -> Result<bool> {
@@ -632,23 +827,53 @@ pub fn inject_workspace_task(tasks_json: &Path, registration_script: &Path) -> R
         .as_array_mut()
         .ok_or_else(|| Error::NotAnObject(vec!["tasks".into()]))?;
 
-    if tasks
-        .iter()
-        .any(|t| t.get("label").and_then(Value::as_str) == Some(VSCODE_TASK_LABEL))
-    {
-        return Ok(false);
-    }
-    tasks.push(json!({
+    let command = registration_script.display().to_string();
+    let desired = json!({
         "label": VSCODE_TASK_LABEL,
         "type": "shell",
-        "command": registration_script.display().to_string(),
+        "command": command,
         "args": ["vscode"],
         "runOptions": { "runOn": "folderOpen" },
         "presentation": { "reveal": "never", "panel": "shared" }
-    }));
+    });
+
+    match tasks.iter().position(is_edison_workspace_task) {
+        // Already pointing at this script: leave it alone, including any
+        // presentation tweaks the user made.
+        Some(i) if tasks[i].get("command").and_then(Value::as_str) == Some(command.as_str()) => {
+            return Ok(false);
+        }
+        // Ours by label or by script but running something else - a stale path
+        // from an older install, or a copied label. Replace it: skipping would
+        // leave registration broken with no way to repair, and appending would
+        // leave two same-labelled tasks.
+        Some(i) => tasks[i] = desired,
+        None => tasks.push(desired),
+    }
     backup_once(tasks_json, existed, &raw)?;
     write(tasks_json, &serialize(&root))?;
     Ok(true)
+}
+
+/// Whether a workspace `tasks.json` already carries the Edison Watch
+/// registration task. Read-only counterpart to [`inject_workspace_task`]: the
+/// desktop app reports hook coverage from the daemon's answer instead of
+/// opening workspace files itself (those live in the user's project
+/// directories, which on macOS are TCC-gated).
+pub fn workspace_task_installed(tasks_json: &Path) -> bool {
+    let Ok(raw) = read(tasks_json) else {
+        return false;
+    };
+    let Ok(root) = parse(&raw, tasks_json) else {
+        return false;
+    };
+    root.get("tasks")
+        .and_then(Value::as_array)
+        .is_some_and(|tasks| {
+            tasks
+                .iter()
+                .any(|t| command_has_script(t, HookScriptKind::Registration))
+        })
 }
 
 /// Strip the Edison Watch registration task from a workspace `tasks.json`
@@ -667,7 +892,7 @@ pub fn remove_workspace_task(tasks_json: &Path) -> Result<bool> {
         return Ok(false);
     };
     let before = tasks.len();
-    tasks.retain(|t| t.get("label").and_then(Value::as_str) != Some(VSCODE_TASK_LABEL));
+    tasks.retain(|t| !is_edison_workspace_task(t));
     let changed = tasks.len() != before;
     if changed {
         write(tasks_json, &serialize(&root))?;
@@ -679,6 +904,36 @@ pub fn remove_workspace_task(tasks_json: &Path) -> Result<bool> {
 mod tests {
     use super::*;
     use tempfile::tempdir;
+
+    /// The real Claude binding table, so scope tests exercise what ships.
+    fn claude_install(path: &Path) -> HookInstall {
+        HookInstall {
+            path: path.to_path_buf(),
+            style: HookStyle::ClaudeSettings,
+            client_id: "claude-code".into(),
+            events: vec![
+                HookBinding::new(
+                    "UserPromptSubmit",
+                    Some("*"),
+                    HookScriptKind::Registration,
+                    true,
+                ),
+                HookBinding::new(
+                    "PreToolUse",
+                    Some("mcp__*"),
+                    HookScriptKind::SessionHook,
+                    false,
+                ),
+                HookBinding::new(
+                    "SessionStart",
+                    Some("*"),
+                    HookScriptKind::SessionStart,
+                    false,
+                ),
+                HookBinding::new("SessionEnd", Some("*"), HookScriptKind::SessionEnd, false),
+            ],
+        }
+    }
 
     fn fake_scripts(dir: &Path) -> HookScripts {
         HookScripts {
@@ -911,5 +1166,336 @@ mod tests {
         );
         assert!(remove_hooks(&install).unwrap());
         assert!(!cfg.exists(), "Edison-owned file is deleted on removal");
+    }
+
+    /// The failure this guards: an entry left by an older install keeps the
+    /// label but runs a script path that no longer exists (an AppImage mount,
+    /// a moved home). Coverage must not call that installed, and injection has
+    /// to repair it - the old label-only check did neither.
+    #[test]
+    fn stale_task_is_not_counted_and_gets_repaired() {
+        let d = tempdir().unwrap();
+        let tasks = d.path().join(".vscode/tasks.json");
+        std::fs::create_dir_all(tasks.parent().unwrap()).unwrap();
+        std::fs::write(
+            &tasks,
+            format!(
+                r#"{{"version":"2.0.0","tasks":[{{"label":"{VSCODE_TASK_LABEL}","type":"shell","command":"/tmp/.mount_gone123/edison-hook.sh","args":["vscode"]}}]}}"#
+            ),
+        )
+        .unwrap();
+        let script = d.path().join("edison-hook.sh");
+
+        // It runs *an* edison-hook.sh, so it counts as installed - what matters
+        // is that injection still repoints it at the current script.
+        assert!(inject_workspace_task(&tasks, &script).unwrap(), "repaired");
+        let v: Value = serde_json::from_str(&std::fs::read_to_string(&tasks).unwrap()).unwrap();
+        let arr = v["tasks"].as_array().unwrap();
+        assert_eq!(arr.len(), 1, "repaired in place, not duplicated");
+        assert_eq!(arr[0]["command"], script.display().to_string());
+        assert!(
+            !inject_workspace_task(&tasks, &script).unwrap(),
+            "now idempotent"
+        );
+    }
+
+    /// A task that merely borrows the label - it runs something else entirely -
+    /// is not ours and must not be reported as coverage.
+    #[test]
+    fn same_label_running_another_command_is_not_coverage() {
+        let d = tempdir().unwrap();
+        let tasks = d.path().join(".vscode/tasks.json");
+        std::fs::create_dir_all(tasks.parent().unwrap()).unwrap();
+        std::fs::write(
+            &tasks,
+            format!(
+                r#"{{"version":"2.0.0","tasks":[{{"label":"{VSCODE_TASK_LABEL}","type":"shell","command":"echo hi"}}]}}"#
+            ),
+        )
+        .unwrap();
+        assert!(
+            !workspace_task_installed(&tasks),
+            "the label is display text, not proof registration runs"
+        );
+
+        let script = d.path().join("edison-hook.sh");
+        assert!(inject_workspace_task(&tasks, &script).unwrap(), "replaced");
+        assert!(workspace_task_installed(&tasks), "now genuinely covered");
+        let v: Value = serde_json::from_str(&std::fs::read_to_string(&tasks).unwrap()).unwrap();
+        assert_eq!(
+            v["tasks"].as_array().unwrap().len(),
+            1,
+            "no duplicate label"
+        );
+    }
+
+    /// Removal follows the same ownership rule, so a relabelled task of ours
+    /// is still torn down.
+    #[test]
+    fn remove_drops_our_task_even_when_relabelled() {
+        let d = tempdir().unwrap();
+        let tasks = d.path().join(".vscode/tasks.json");
+        std::fs::create_dir_all(tasks.parent().unwrap()).unwrap();
+        std::fs::write(
+            &tasks,
+            r#"{"version":"2.0.0","tasks":[{"label":"renamed by user","type":"shell","command":"/home/u/.edison-watch/edison-hook.sh","args":["vscode"]},{"label":"build","command":"make"}]}"#,
+        )
+        .unwrap();
+        assert!(remove_workspace_task(&tasks).unwrap());
+        let v: Value = serde_json::from_str(&std::fs::read_to_string(&tasks).unwrap()).unwrap();
+        let arr = v["tasks"].as_array().unwrap();
+        assert_eq!(arr.len(), 1);
+        assert_eq!(arr[0]["label"], "build", "user's own task preserved");
+    }
+
+    #[test]
+    fn user_customisation_of_our_task_survives_reinjection() {
+        let d = tempdir().unwrap();
+        let tasks = d.path().join(".vscode/tasks.json");
+        std::fs::create_dir_all(tasks.parent().unwrap()).unwrap();
+        let script = d.path().join("edison-hook.sh");
+        std::fs::write(
+            &tasks,
+            format!(
+                r#"{{"version":"2.0.0","tasks":[{{"label":"{VSCODE_TASK_LABEL}","type":"shell","command":"{}","args":["vscode"],"presentation":{{"reveal":"always"}}}}]}}"#,
+                script.display()
+            ),
+        )
+        .unwrap();
+        assert!(
+            !inject_workspace_task(&tasks, &script).unwrap(),
+            "no rewrite"
+        );
+        let v: Value = serde_json::from_str(&std::fs::read_to_string(&tasks).unwrap()).unwrap();
+        assert_eq!(v["tasks"][0]["presentation"]["reveal"], "always");
+    }
+
+    /// The binding that makes MCP tool calls observable is
+    /// `PreToolUse` + `mcp__*`. A group carrying that command under a different
+    /// matcher never fires for MCP calls, so it must not read as coverage - and
+    /// re-enabling has to repair it.
+    #[test]
+    fn claude_binding_scoped_to_another_matcher_is_not_coverage() {
+        let d = tempdir().unwrap();
+        let settings = d.path().join("settings.json");
+        std::fs::write(
+            &settings,
+            r#"{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"/home/u/.edison-watch/edison-session-hook.py"}]}]}}"#,
+        )
+        .unwrap();
+        let install = claude_install(&settings);
+
+        let (installed, total) = hooks_status(&install);
+        assert_eq!(total, 4);
+        assert_eq!(
+            installed, 0,
+            "a Bash-scoped group does not cover mcp__* tool calls"
+        );
+    }
+
+    #[test]
+    fn claude_injection_repairs_a_wrongly_scoped_group_of_ours() {
+        let d = tempdir().unwrap();
+        let settings = d.path().join("settings.json");
+        std::fs::write(
+            &settings,
+            r#"{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"/old/edison-session-hook.py"}]}]}}"#,
+        )
+        .unwrap();
+        let install = claude_install(&settings);
+        let scripts = fake_scripts(d.path());
+
+        assert!(inject_hooks(&install, &scripts).unwrap());
+        let v: Value = serde_json::from_str(&std::fs::read_to_string(&settings).unwrap()).unwrap();
+        let groups = v["hooks"]["PreToolUse"].as_array().unwrap();
+        assert_eq!(groups.len(), 1, "repaired in place, not duplicated");
+        assert_eq!(groups[0]["matcher"], "mcp__*");
+        let (installed, _) = hooks_status(&install);
+        assert!(installed >= 1, "now genuinely covered");
+    }
+
+    /// Rescoping a group is pointless if it still names a script that is not
+    /// there. Ownership is matched on filename, so a group from an older
+    /// install - or a settings.json synced from another machine - looks like
+    /// ours while pointing into a directory that no longer exists.
+    #[test]
+    fn claude_repair_refreshes_a_stale_script_path() {
+        let d = tempdir().unwrap();
+        let settings = d.path().join("settings.json");
+        std::fs::write(
+            &settings,
+            r#"{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"/gone/edison-session-hook.py"}]}]}}"#,
+        )
+        .unwrap();
+        let install = claude_install(&settings);
+        let scripts = fake_scripts(d.path());
+
+        assert!(inject_hooks(&install, &scripts).unwrap());
+        let v: Value = serde_json::from_str(&std::fs::read_to_string(&settings).unwrap()).unwrap();
+        let groups = v["hooks"]["PreToolUse"].as_array().unwrap();
+        assert_eq!(groups.len(), 1, "repaired in place, not duplicated");
+        assert_eq!(groups[0]["matcher"], "mcp__*");
+        let cmd = groups[0]["hooks"][0]["command"].as_str().unwrap();
+        assert!(
+            !cmd.contains("/gone/"),
+            "kept the dead path: {cmd} - correctly scoped at a script that isn't there"
+        );
+        assert!(
+            cmd.contains(&scripts.session_hook.display().to_string()),
+            "expected the current script path, got {cmd}"
+        );
+    }
+
+    /// The refresh is confined to the repair: a second pass has nothing left to
+    /// correct, so it must not rewrite the file again.
+    #[test]
+    fn claude_repair_settles_after_one_pass() {
+        let d = tempdir().unwrap();
+        let settings = d.path().join("settings.json");
+        std::fs::write(
+            &settings,
+            r#"{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"/gone/edison-session-hook.py"}]}]}}"#,
+        )
+        .unwrap();
+        let install = claude_install(&settings);
+        let scripts = fake_scripts(d.path());
+
+        assert!(inject_hooks(&install, &scripts).unwrap());
+        assert!(
+            !inject_hooks(&install, &scripts).unwrap(),
+            "repair is not idempotent - it would rewrite settings.json on every run"
+        );
+    }
+
+    /// Repair must not drag a user's own hook into our scope.
+    #[test]
+    fn claude_injection_leaves_a_shared_group_alone_and_adds_its_own() {
+        let d = tempdir().unwrap();
+        let settings = d.path().join("settings.json");
+        std::fs::write(
+            &settings,
+            r#"{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"/old/edison-session-hook.py"},{"type":"command","command":"/usr/local/bin/user-audit.sh"}]}]}}"#,
+        )
+        .unwrap();
+        let install = claude_install(&settings);
+        let scripts = fake_scripts(d.path());
+
+        assert!(inject_hooks(&install, &scripts).unwrap());
+        let v: Value = serde_json::from_str(&std::fs::read_to_string(&settings).unwrap()).unwrap();
+        let groups = v["hooks"]["PreToolUse"].as_array().unwrap();
+        assert_eq!(groups.len(), 2, "user's group untouched, ours added");
+        let user_group = groups.iter().find(|g| g["matcher"] == "Bash").unwrap();
+        assert_eq!(user_group["hooks"].as_array().unwrap().len(), 2);
+        assert!(groups.iter().any(|g| g["matcher"] == "mcp__*"));
+    }
+
+    /// A matcher that is written differently but selects the same MCP calls is
+    /// coverage. `mcp__.*` is the form Claude's own docs use; treating it as
+    /// wrongly-scoped meant rewriting a config that was already correct.
+    #[test]
+    fn claude_equivalent_matchers_count_as_coverage() {
+        let d = tempdir().unwrap();
+        for (label, matcher) in [
+            ("regex-form", "mcp__.*"),
+            ("catch-all-regex", ".*"),
+            ("alternation", "mcp__.*|Bash"),
+            ("narrower-prefix-plus-wildcard", "mcp__[a-z_]+__.*"),
+        ] {
+            let settings = d.path().join(format!("settings-{label}.json"));
+            std::fs::write(
+                &settings,
+                format!(
+                    r#"{{"hooks":{{"PreToolUse":[{{"matcher":"{matcher}","hooks":[{{"type":"command","command":"/x/edison-session-hook.py"}}]}}]}}}}"#
+                ),
+            )
+            .unwrap();
+            let (installed, _) = hooks_status(&claude_install(&settings));
+            assert_eq!(installed, 1, "{label} ({matcher}) fires for MCP calls");
+        }
+    }
+
+    /// ...and injection must leave such a config exactly as the user wrote it.
+    #[test]
+    fn claude_injection_does_not_rewrite_an_equivalent_matcher() {
+        let d = tempdir().unwrap();
+        let settings = d.path().join("settings.json");
+        std::fs::write(
+            &settings,
+            r#"{"hooks":{"PreToolUse":[{"matcher":"mcp__.*","hooks":[{"type":"command","command":"/x/edison-session-hook.py"}]}]}}"#,
+        )
+        .unwrap();
+        let install = claude_install(&settings);
+        let scripts = fake_scripts(d.path());
+
+        inject_hooks(&install, &scripts).unwrap();
+        let v: Value = serde_json::from_str(&std::fs::read_to_string(&settings).unwrap()).unwrap();
+        let groups = v["hooks"]["PreToolUse"].as_array().unwrap();
+        assert_eq!(groups.len(), 1, "no second PreToolUse group added");
+        assert_eq!(
+            groups[0]["matcher"], "mcp__.*",
+            "the user's matcher was rewritten"
+        );
+    }
+
+    /// A matcher we cannot read is not a matcher we know to be wrong. Adding a
+    /// correctly scoped group beside it keeps the hook working without
+    /// discarding a scope the user may have meant.
+    #[test]
+    fn claude_injection_leaves_an_uncompilable_matcher_alone() {
+        let d = tempdir().unwrap();
+        let settings = d.path().join("settings.json");
+        std::fs::write(
+            &settings,
+            r#"{"hooks":{"PreToolUse":[{"matcher":"mcp__[","hooks":[{"type":"command","command":"/old/edison-session-hook.py"}]}]}}"#,
+        )
+        .unwrap();
+        let install = claude_install(&settings);
+        let scripts = fake_scripts(d.path());
+
+        assert!(inject_hooks(&install, &scripts).unwrap());
+        let v: Value = serde_json::from_str(&std::fs::read_to_string(&settings).unwrap()).unwrap();
+        let groups = v["hooks"]["PreToolUse"].as_array().unwrap();
+        assert_eq!(groups.len(), 2, "ours added beside the unreadable one");
+        assert!(
+            groups.iter().any(|g| g["matcher"] == "mcp__["),
+            "kept as-is"
+        );
+        assert!(groups.iter().any(|g| g["matcher"] == "mcp__*"));
+    }
+
+    /// An MCP-scoped group does NOT cover a binding that has to run for every
+    /// tool - coverage is directional, and the samples enforce that.
+    #[test]
+    fn claude_mcp_scoped_group_does_not_cover_an_unscoped_binding() {
+        let d = tempdir().unwrap();
+        let settings = d.path().join("settings.json");
+        std::fs::write(
+            &settings,
+            r#"{"hooks":{"UserPromptSubmit":[{"matcher":"mcp__.*","hooks":[{"type":"command","command":"/x/edison-hook.sh"}]}]}}"#,
+        )
+        .unwrap();
+        let install = claude_install(&settings);
+        let (installed, _) = hooks_status(&install);
+        assert_eq!(
+            installed, 0,
+            "UserPromptSubmit must fire for every prompt, not just MCP tools"
+        );
+    }
+
+    #[test]
+    fn claude_wildcard_and_unscoped_groups_count_as_coverage() {
+        let d = tempdir().unwrap();
+        for (label, matcher) in [("wildcard", r#""matcher":"*","#), ("unscoped", "")] {
+            let settings = d.path().join(format!("settings-{label}.json"));
+            std::fs::write(
+                &settings,
+                format!(
+                    r#"{{"hooks":{{"PreToolUse":[{{{matcher}"hooks":[{{"type":"command","command":"/x/edison-session-hook.py"}}]}}]}}}}"#
+                ),
+            )
+            .unwrap();
+            let (installed, _) = hooks_status(&claude_install(&settings));
+            assert_eq!(installed, 1, "{label} matcher runs for every tool");
+        }
     }
 }

@@ -9,6 +9,8 @@
 // quarantine logs" even though the daemon is the one doing the work. Install /
 // enroll use a `[detectord]` prefix.
 
+import { app, BrowserWindow, dialog } from 'electron'
+
 import {
   getApiBaseUrl,
   getCredentialsForEnv,
@@ -19,6 +21,7 @@ import {
 
 import { showDaemonApprovalDialog } from './approvalDialog'
 import { detectordBinaryExists, getDetectordBinaryPath } from './binary'
+import { reportDetectordFailure, reportDetectordOk } from './health'
 import { ensureDetectord } from './lifecycle'
 import type { DetectordEvent, SecretOutcome, ServerView } from './protocol'
 import type { DetectordClient } from './socket'
@@ -49,20 +52,37 @@ export interface DetectordEnrollInput {
  * additive). Without `creds` it reads persisted setup; enroll is skipped (with
  * a log) until credentials are available from either source.
  */
-/**
- * Returns whether the daemon ended up enrolled and being observed (subscribed +
- * listed). `false` means we couldn't reach the daemon, or it isn't enrolled and
- * this call didn't enroll it, so a caller (e.g. the `detectord:enroll` IPC) can
- * surface a retry/error instead of assuming success.
- */
-export async function bootstrapDetectord(creds?: DetectordEnrollInput): Promise<boolean> {
+/** The outcome of a bootstrap attempt. */
+export interface DetectordBootstrapOutcome {
+  /**
+   * The daemon ended up enrolled and observed (subscribed + listed), so it can
+   * detect and quarantine. A caller that only needs "is it working" wants this.
+   */
+  ok: boolean
+  /**
+   * THIS call enrolled the daemon with the credentials it was given.
+   *
+   * `false` with `ok: true` means we merely observed a daemon that was already
+   * enrolled from an earlier session - its agents still carry the PREVIOUS
+   * environment, account and key. Callers that changed credentials (env switch,
+   * account switch, key update) must check this, not `ok`: reporting success on
+   * `ok` alone tells the user their apps were re-pointed when they weren't.
+   */
+  applied: boolean
+  /** Why it didn't fully succeed, for logs and error copy. */
+  reason?: string
+}
+
+export async function bootstrapDetectord(
+  creds?: DetectordEnrollInput
+): Promise<DetectordBootstrapOutcome> {
   // The daemon ships for macOS, Windows, and Linux; elsewhere the TS pipeline runs.
   if (
     process.platform !== 'darwin' &&
     process.platform !== 'win32' &&
     process.platform !== 'linux'
   ) {
-    return false
+    return { ok: false, applied: false, reason: `unsupported platform ${process.platform}` }
   }
   const primary = true
   console.log(
@@ -71,9 +91,12 @@ export async function bootstrapDetectord(creds?: DetectordEnrollInput): Promise<
   )
   const ensured = await ensureDetectord((m) => console.log(m), primary)
   if (!ensured.ok) {
-    console.error(`[detectord] bootstrap skipped: ${ensured.reason}`)
-    return false
+    // Nothing else in the app can do this work, so a failed bootstrap is not a
+    // "skip" - it means the machine is unprotected. Raise the warning.
+    reportDetectordFailure('bootstrap', ensured.reason ?? 'daemon unavailable')
+    return { ok: false, applied: false, reason: ensured.reason ?? 'daemon unavailable' }
   }
+  reportDetectordOk()
   const client = ensured.client
 
   // Enroll is safe to run on every login: it's additive (agents union with the
@@ -81,7 +104,9 @@ export async function bootstrapDetectord(creds?: DetectordEnrollInput): Promise<
   // the existing one). So we always (re-)enroll whenever credentials are
   // available rather than guarding on prior state; agent/key *additions* still
   // come through here (union) and removals go through unenroll.
+  let applied = true
   if (!(await enrollDaemon(client, primary, creds))) {
+    applied = false
     // enroll didn't run or failed: no credentials yet, or a transient backend
     // error (enroll hits the backend). The daemon may still be enrolled and
     // running/enforcing from a prior session, so don't go blind: if it reports
@@ -89,8 +114,13 @@ export async function bootstrapDetectord(creds?: DetectordEnrollInput): Promise<
     // reach the UI. status() is a LOCAL IPC read (it reads the on-disk
     // enrollment, no backend call), so it's reliable even during a backend
     // outage. Only bail when there's genuinely no enrollment to observe.
-    const status = await client.status().catch(() => null)
-    if (!status?.enrolled) return false
+    const status = await client.status().catch((err) => {
+      reportDetectordFailure('status', err)
+      return null
+    })
+    if (!status?.enrolled) {
+      return { ok: false, applied: false, reason: 'daemon is not enrolled' }
+    }
     console.warn('[detectord] enroll did not run; observing already-enrolled daemon')
   }
 
@@ -100,7 +130,46 @@ export async function bootstrapDetectord(creds?: DetectordEnrollInput): Promise<
   }
 
   await logInitialDetection(client)
-  return true
+  return {
+    ok: true,
+    applied,
+    ...(applied ? {} : { reason: 'enroll did not run; observing an already-enrolled daemon' })
+  }
+}
+
+/**
+ * Tell the user their agents were left pointing at the previous credentials.
+ *
+ * Interrupting is the point. A caller that changed credentials and got
+ * `applied: false` is in a state the user cannot see and would not guess: the
+ * app has switched, but every MCP client on the machine still carries the old
+ * account's URL and key, so their traffic keeps routing through the account
+ * they just left. A console line does not reach them, and the renderer reloads
+ * itself right after an account switch - anything staged in renderer state is
+ * gone before it can be read. A main-process dialog survives that reload, which
+ * is why the missing-binary case uses one too.
+ */
+export async function warnAgentsNotRepointed(what: string, reason?: string): Promise<void> {
+  console.error(`[detectord] agents were NOT re-pointed at ${what}: ${reason ?? 'enrollment failed'}`)
+  const options = {
+    type: 'warning' as const,
+    title: 'Your apps were not updated',
+    message: `Edison Watch switched to ${what}, but your MCP apps were not updated.`,
+    detail:
+      'The detector daemon kept the previous credentials, so your apps still connect using ' +
+      'them until this is repaired.\n\n' +
+      `Reason: ${reason ?? 'enrollment failed'}\n\n` +
+      'Restart Edison Watch to retry. If it keeps failing, check your network connection.',
+    buttons: ['OK'],
+    defaultId: 0,
+    noLink: true
+  }
+  const show = async (): Promise<void> => {
+    const parent = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed())
+    await (parent ? dialog.showMessageBox(parent, options) : dialog.showMessageBox(options))
+  }
+  if (app.isReady()) await show()
+  else await app.whenReady().then(show)
 }
 
 /**
