@@ -86,9 +86,14 @@ export async function getHookStatus(
     let mcpRuntimeStatus: ClaudeCodeMcpStatus | undefined
     if (client.id === 'claude-code') {
       mcpRuntimeStatus = claudeCodeMcpStatus
-      // Claude Code reports its own live connection state; prefer it over the
-      // "configured and the server answers" approximation.
-      if (claudeCodeMcpStatus && claudeCodeMcpStatus !== 'unknown') {
+      // Claude Code reports its own live connection state (`claude mcp get
+      // edison-watch`), which is better than the "configured and the server
+      // answers" approximation - but only once we know the entry points at the
+      // gateway we expect. That probe reports on whatever URL sits under the
+      // name `edison-watch`, so a leftover entry from another account or
+      // environment answers "connected" quite happily. Letting that satisfy
+      // setup would paint a client green while its traffic goes elsewhere.
+      if (mcpConfigured && claudeCodeMcpStatus && claudeCodeMcpStatus !== 'unknown') {
         mcpConnected = claudeCodeMcpStatus === 'connected'
       }
     }

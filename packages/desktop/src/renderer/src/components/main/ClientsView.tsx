@@ -88,6 +88,11 @@ function getIssueDetail(client: ClientInfo): string {
       issues.push("MCP server needs authentication");
     } else if (client.mcpRuntimeStatus === "not-found") {
       issues.push("MCP server not registered in client");
+    } else if (client.mcpRuntimeStatus === "connected" && !client.mcpConfigured) {
+      // The client connects, just not to us: a leftover edison-watch entry from
+      // another account or environment. "Not configured" would be misleading
+      // when there is plainly an entry, and a working one.
+      issues.push("MCP gateway points at a different server - re-apply to fix");
     } else {
       issues.push(client.mcpConfigured ? "MCP gateway unreachable" : "MCP gateway not configured");
     }
