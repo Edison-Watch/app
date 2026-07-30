@@ -4,8 +4,9 @@ import { describe, it, expect, vi } from "vitest";
 // resolves a socket path via Electron's `app.getPath` (absent under vitest).
 // These tests cover the shape it returns and the pure fingerprinting, so the
 // daemon reports nothing.
+let daemonServers: unknown[] | null = [];
 vi.mock("../detectord/discovery", () => ({
-  discoverViaDetectord: () => Promise.resolve([]),
+  discoverViaDetectord: () => Promise.resolve(daemonServers),
 }));
 import { discoverMcpServers, getServerFingerprint } from "../discovery/mcpDiscovery";
 import type { DiscoveredMcpServer } from "../discovery/mcpDiscovery";
@@ -93,3 +94,22 @@ describe("discoverMcpServers and fingerprinting", () => {
   });
 });
 
+describe("what discovery hides", () => {
+  it("keeps a server the daemon found even for an agent it calls not-installed", async () => {
+    // Claude Code with servers in ~/.claude/settings.json and no ~/.claude.json
+    // reports installed=false, but the server is real and needs reviewing.
+    // Discovery must not drop it.
+    daemonServers = [
+      {
+        name: "sqlite",
+        client: "claude-code",
+        source: "user",
+        path: "/home/u/.claude/settings.json",
+        config: { command: "npx", args: ["-y", "mcp-sqlite"] },
+      },
+    ];
+    const servers = await discoverMcpServers();
+    expect(servers.map((s) => s.name)).toContain("sqlite");
+    daemonServers = [];
+  });
+});

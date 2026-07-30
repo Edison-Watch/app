@@ -11,8 +11,6 @@ import type { DiscoveredMcpServer, DiscoveryResult } from './types'
 import { isOpaqueConfig, hasMalformedHeaders } from './types'
 import { clientAlias } from './serverDeduplication'
 import { discoverViaDetectord } from '../detectord/discovery'
-import { getAgentFacts } from '../detectord/agents'
-import type { McpClientId as McpClientIdLocal } from './types'
 
 // ── Re-exports (backward compatibility) ────────────────────────────────────
 
@@ -88,20 +86,18 @@ export async function discoverMcpServers(opts?: { includeRaw?: boolean }): Promi
     }
   }
 
-  // Drop servers whose host app isn't actually installed: a leftover config
-  // from an uninstalled editor isn't something the user can act on. The daemon
-  // answers "is it installed" - it probes for the app, so the app doesn't have
-  // to. If the daemon reports nothing (unreachable), don't filter: showing an
-  // extra entry beats hiding a real one.
+  // Everything the daemon reports is shown. It only discovers servers from
+  // config files that exist, so there is no "phantom entry" to filter out - and
+  // the costs are asymmetric: showing a leftover entry from an uninstalled
+  // editor is clutter, while hiding a live one leaves a real MCP server
+  // unreviewed and unquarantined.
+  //
+  // This used to filter on the daemon's per-agent `installed` flag, which is
+  // "the agent's primary config file exists" - a different question. Claude
+  // Code configured through `~/.claude/settings.json` with no `~/.claude.json`
+  // reported installed=false, so its servers vanished from discovery.
   const deduped = deduplicateByNameAndConfig(supported)
-  const wrap = (servers: DiscoveredMcpServer[]) =>
-    opts?.includeRaw ? { servers, raw: supported, unsupported } : servers
-
-  const facts = await getAgentFacts()
-  if (!facts || facts.size === 0) return wrap(deduped)
-
-  const installed = (c: McpClientIdLocal): boolean => facts.get(c)?.installed ?? false
-  return wrap(deduped.filter((s) => (s.clients ?? [s.client]).some(installed)))
+  return opts?.includeRaw ? { servers: deduped, raw: supported, unsupported } : deduped
 }
 
 // ── Deduplication ───────────────────────────────────────────────────────────
