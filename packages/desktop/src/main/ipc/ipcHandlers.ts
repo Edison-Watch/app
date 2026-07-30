@@ -245,14 +245,26 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   // empty configuredApps falls back to ALL_SUPPORTED_APPS, otherwise older
   // setups would rewrite no client configs and the new key wouldn't take effect.
   ipcMain.handle('mcp:applyForSecretKey', async (_event, args: { edisonSecretKey: string }) => {
-    // The key itself reaches the daemon through setDetectordSecret (verify +
-    // adopt); this re-installs the edison-watch entry so the agents' configs
-    // carry the new secret header. The daemon does the writing.
     const setup = getSetupData()
     const apps = setup.configuredApps?.length ? setup.configuredApps : ALL_SUPPORTED_APPS
     console.log('[mcp:applyForSecretKey]', apps, DRY_RUN ? '(dry-run)' : '')
     if (DRY_RUN) return { success: true, modifiedConfigs: [] }
-    void args.edisonSecretKey
+
+    // Adopt the key BEFORE anything writes a config. The daemon stamps the
+    // secret header from its enrollment, so installing first would write the
+    // previous key (or none) into every agent - and a caller that then fails to
+    // adopt would leave those stale headers behind while the UI reported
+    // success. verify_secret validates against the backend before adopting, so
+    // requiring it here also means we never write an unverified key.
+    const adopted = await setDetectordSecret(args.edisonSecretKey)
+    if (!adopted.ok || adopted.outcome?.valid === false) {
+      const reason = adopted.reason ?? 'the detector daemon did not accept the key'
+      console.error(`[mcp:applyForSecretKey] not applying: ${reason}`)
+      return { success: false, modifiedConfigs: [], errors: [reason] }
+    }
+
+    // Adopting already re-installs for the *enrolled* agents; this covers the
+    // caller's app list too (and unions it into the enrollment).
     try {
       const changes = await applyIntegrations(apps)
       const errors = integrationErrors(changes)
