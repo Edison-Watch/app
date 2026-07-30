@@ -179,9 +179,13 @@ pub fn restore_quarantined(user: &str, needle: Option<&str>) -> anyhow::Result<(
         .map(|e| SeenStore::open(paths::seen_store_path(user), e.org_id))
         .transpose()?;
 
+    // Select without removing. A restore that fails - unreadable config, a
+    // read-only file, a path that moved - has to leave the record in place, or
+    // the server stays quarantined with nothing left to retry from.
     let targets: Vec<QuarantinedEntry> = match needle {
         Some(n) => vec![
-            q.take(n)
+            q.find(n)
+                .cloned()
                 .ok_or_else(|| anyhow::anyhow!("no quarantined server matching '{n}'"))?,
         ],
         None => q.entries.clone(),
@@ -195,9 +199,8 @@ pub fn restore_quarantined(user: &str, needle: Option<&str>) -> anyhow::Result<(
                 if let Some(s) = seen.as_mut() {
                     let _ = s.forget(&entry.fingerprint);
                 }
-                if needle.is_none() {
-                    q.take(&entry.fingerprint);
-                }
+                // Only now is the record spent.
+                q.take(&entry.fingerprint);
                 restored += 1;
                 tracing::info!(server = %entry.name, agent = %entry.agent, "restored");
             }

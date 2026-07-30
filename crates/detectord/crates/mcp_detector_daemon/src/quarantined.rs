@@ -60,6 +60,17 @@ impl QuarantinedState {
         self.entries.push(entry);
     }
 
+    /// The entry matching `name` or `fingerprint`, left in place.
+    ///
+    /// Use this to select a target for an operation that can fail; `take`
+    /// removes on selection, which would drop the record even when the
+    /// operation didn't happen.
+    pub fn find(&self, needle: &str) -> Option<&QuarantinedEntry> {
+        self.entries
+            .iter()
+            .find(|e| e.name == needle || e.fingerprint == needle)
+    }
+
     /// Remove and return the entry matching `name` or `fingerprint`.
     pub fn take(&mut self, needle: &str) -> Option<QuarantinedEntry> {
         let idx = self
@@ -67,5 +78,62 @@ impl QuarantinedState {
             .iter()
             .position(|e| e.name == needle || e.fingerprint == needle)?;
         Some(self.entries.remove(idx))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use mcp_quarantine::QuarantineRecord;
+    use std::path::PathBuf;
+
+    fn entry(name: &str, fingerprint: &str) -> QuarantinedEntry {
+        QuarantinedEntry {
+            name: name.into(),
+            agent: "cursor".into(),
+            fingerprint: fingerprint.into(),
+            config: None,
+            record: QuarantineRecord {
+                kind: edison_detectord::SourceKind::Json,
+                source_path: PathBuf::from("/home/u/.cursor/mcp.json"),
+                disabled_path: PathBuf::from("/home/u/.cursor/ewd-disabled_mcp.json"),
+                backup_path: PathBuf::from("/home/u/.cursor/mcp.json.ew-backup"),
+                key_path: vec!["mcpServers".into()],
+                server_key: name.into(),
+                extra: Default::default(),
+            },
+        }
+    }
+
+    fn state() -> QuarantinedState {
+        QuarantinedState {
+            entries: vec![entry("sqlite", "fp-sqlite"), entry("github", "fp-github")],
+        }
+    }
+
+    /// `find` is what a fallible operation selects with: losing the record on a
+    /// failed restore leaves the server quarantined and unrecoverable.
+    #[test]
+    fn find_matches_by_name_or_fingerprint_and_keeps_the_entry() {
+        let q = state();
+        assert_eq!(
+            q.find("sqlite").map(|e| e.fingerprint.as_str()),
+            Some("fp-sqlite")
+        );
+        assert_eq!(q.find("fp-github").map(|e| e.name.as_str()), Some("github"));
+        assert!(q.find("absent").is_none());
+        assert_eq!(q.entries.len(), 2, "find must not consume");
+    }
+
+    #[test]
+    fn take_removes_the_matched_entry_only() {
+        let mut q = state();
+        assert_eq!(
+            q.take("fp-sqlite").map(|e| e.name),
+            Some("sqlite".to_string())
+        );
+        assert_eq!(q.entries.len(), 1);
+        assert_eq!(q.entries[0].name, "github");
+        assert!(q.take("fp-sqlite").is_none(), "already taken");
     }
 }
