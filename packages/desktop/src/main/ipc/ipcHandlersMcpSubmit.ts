@@ -257,7 +257,7 @@ export function registerMcpSubmitHandlers(): void {
     servers?: Array<{ name: string; client: string; clients?: string[]; source: string }>;
     error?: string;
     errors?: string[];
-    failures?: Array<{ name: string; client: string; reason: "conflict" | "error" | "already-on-backend"; message: string; config?: Record<string, unknown>; configPath?: string; backendStatus?: "registered" | "requested" }>;
+    failures?: Array<{ name: string; client: string; reason: "conflict" | "already-pending" | "error" | "already-on-backend"; message: string; config?: Record<string, unknown>; configPath?: string; backendStatus?: "registered" | "requested" }>;
   }> => {
     const setup = getSetupData();
     const creds = getCredentialsForEnv();
@@ -297,7 +297,7 @@ export function registerMcpSubmitHandlers(): void {
     servers?: Array<{ name: string; client: string; clients?: string[]; source: string }>;
     error?: string;
     errors?: string[];
-    failures?: Array<{ name: string; client: string; reason: "conflict" | "error" | "already-on-backend"; message: string; config?: Record<string, unknown>; configPath?: string; backendStatus?: "registered" | "requested" }>;
+    failures?: Array<{ name: string; client: string; reason: "conflict" | "already-pending" | "error" | "already-on-backend"; message: string; config?: Record<string, unknown>; configPath?: string; backendStatus?: "registered" | "requested" }>;
   }> => {
     const setup = getSetupData();
     const creds = getCredentialsForEnv();

@@ -912,7 +912,10 @@ async fn submit_to_ew(
         Ok(()) if register => Ok(SeenAction::Registered),
         Ok(()) => Ok(SeenAction::Requested),
         Err(err) if is_conflict(&err) => {
-            anyhow::bail!("conflict: '{name}' is already registered at Edison Watch")
+            // Pass the backend's own wording through: a 409 can mean "that name
+            // is taken" or "you already have a pending request for it", and the
+            // UI shows the user different next steps for each.
+            anyhow::bail!("conflict: {}", conflict_detail(&err, name))
         }
         Err(err) => Err(anyhow::Error::new(err).context("submitting to backend")),
     }
@@ -921,4 +924,15 @@ async fn submit_to_ew(
 /// Whether a backend error is a 409 name conflict.
 fn is_conflict(err: &BackendError) -> bool {
     matches!(err, BackendError::Status { status, .. } if status.as_u16() == 409)
+}
+
+/// The 409's explanation: the backend's `detail` when it sent one, else a
+/// generic line naming the server.
+fn conflict_detail(err: &BackendError, name: &str) -> String {
+    match err {
+        BackendError::Status {
+            detail: Some(d), ..
+        } if !d.is_empty() => d.clone(),
+        _ => format!("'{name}' is already registered at Edison Watch"),
+    }
 }

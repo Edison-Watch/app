@@ -102,7 +102,7 @@ interface EdisonAPI {
       failures?: Array<{
         name: string
         client: string
-        reason: 'conflict' | 'error' | 'already-on-backend'
+        reason: 'conflict' | 'already-pending' | 'error' | 'already-on-backend'
         message: string
         config?: Record<string, unknown>
         configPath?: string
@@ -139,7 +139,7 @@ interface EdisonAPI {
       failures?: Array<{
         name: string
         client: string
-        reason: 'conflict' | 'error' | 'already-on-backend'
+        reason: 'conflict' | 'already-pending' | 'error' | 'already-on-backend'
         message: string
         config?: Record<string, unknown>
         configPath?: string

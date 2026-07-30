@@ -1,16 +1,16 @@
 import { useEffect, useState } from 'react'
 
-import marketplaceIndex from '../assets/marketplace/index.json'
-import atlassianLogo from '../assets/logos/atlassian.png'
-import claudeLogo from '../assets/logos/claude.png'
-import cursorLogo from '../assets/logos/cursor.png'
-import edisonLogo from '../assets/logos/edison.png'
-import githubLogo from '../assets/logos/github.png'
-import mcpLogo from '../assets/logos/mcp.png'
-import playwrightLogo from '../assets/logos/playwright.png'
-import slackLogo from '../assets/logos/slack.png'
-import supabaseLogo from '../assets/logos/supabase.png'
-import windsurfLogo from '../assets/logos/windsurf.png'
+import marketplaceIndex from '../../assets/marketplace/index.json'
+import atlassianLogo from '../../assets/logos/atlassian.png'
+import claudeLogo from '../../assets/logos/claude.png'
+import cursorLogo from '../../assets/logos/cursor.png'
+import edisonLogo from '../../assets/logos/edison.png'
+import githubLogo from '../../assets/logos/github.png'
+import mcpLogo from '../../assets/logos/mcp.png'
+import playwrightLogo from '../../assets/logos/playwright.png'
+import slackLogo from '../../assets/logos/slack.png'
+import supabaseLogo from '../../assets/logos/supabase.png'
+import windsurfLogo from '../../assets/logos/windsurf.png'
 
 interface MarketplaceIndexEntry {
   id: string
@@ -42,7 +42,7 @@ const SERVER_LOGOS: Record<string, string> = {
 // Eager-glob marketplace icons so Vite emits them as bundled URLs we
 // can index by the relative path emitted by marketplace/index.json
 // (e.g. "icons/github.png").
-const marketplaceIconModules = import.meta.glob('../assets/marketplace/icons/*.{png,svg}', {
+const marketplaceIconModules = import.meta.glob('../../assets/marketplace/icons/*.{png,svg}', {
   eager: true,
   import: 'default',
   query: '?url'

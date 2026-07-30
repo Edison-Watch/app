@@ -3,7 +3,7 @@ import { useState } from "react";
 interface SubmitFailure {
   name: string;
   client: string;
-  reason: "conflict" | "error" | "already-on-backend";
+  reason: "conflict" | "already-pending" | "error" | "already-on-backend";
   message: string;
   config?: Record<string, unknown>;
   configPath?: string;
@@ -142,8 +142,15 @@ export default function ScanResultsPanel({
                     <span className="text-[var(--text-muted)] text-[10px]">{f.client}</span>
                   </div>
                   <p className="text-[10px] text-red-400/80 mt-0.5">
-                    {f.reason === "conflict" ? "Conflict: " : "Error: "}{f.message}
+                    {f.reason === "conflict"
+                      ? "Conflict: "
+                      : f.reason === "already-pending"
+                        ? "Pending approval: "
+                        : "Error: "}
+                    {f.message}
                   </p>
+                  {/* Only a name clash is fixable by renaming. A pending
+                      request needs an admin, so no input is offered. */}
                   {f.reason === "conflict" && (() => {
                     const val = renameInputs[f.name] ?? "";
                     const isValid = val.trim().length > 0 && NAME_PATTERN.test(val.trim());

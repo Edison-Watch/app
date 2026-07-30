@@ -1,6 +1,6 @@
 import StepIndicator from "./StepIndicator";
-import logoDark from "../assets/logo-dark.png";
-import DaemonWarningBanner from "./DaemonWarningBanner";
+import logoDark from "../../assets/logo-dark.png";
+import DaemonWarningBanner from "../DaemonWarningBanner";
 
 interface WizardLayoutProps {
   currentStep: number;

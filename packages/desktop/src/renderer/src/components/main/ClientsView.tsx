@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { Badge } from "@edison-watch/shared/ui";
-import { AppLogo } from "./AppLogo";
+import { AppLogo } from "../AppLogo";
 
 // Source of truth: ClaudeCodeMcpStatus in client_2/src/main/setupConfig.ts
 // Duplicated here because renderer cannot import main-process modules directly.

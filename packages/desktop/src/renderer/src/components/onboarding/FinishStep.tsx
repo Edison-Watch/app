@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button, Card, Badge } from "@edison-watch/shared/ui";
 
-import StdiodEnableCard from "./StdiodEnableCard";
+import StdiodEnableCard from "../StdiodEnableCard";
 
 const APP_ID_TO_NAME: Record<string, string> = {
   vscode: "VS Code",

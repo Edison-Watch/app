@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
-import WizardLayout from "./components/WizardLayout";
-import WelcomeStep from "./components/WelcomeStep";
-import AppsStep from "./components/AppsStep";
-import type { ModifiedConfig, DiscoveredServer, RemovalTarget, DuplicateSelections } from "./components/AppsStep";
-import EncryptionStep from "./components/EncryptionStep";
-import FinishStep from "./components/FinishStep";
-import MainMenu from "./components/MainMenu";
+import WizardLayout from "./components/onboarding/WizardLayout";
+import WelcomeStep from "./components/onboarding/WelcomeStep";
+import AppsStep from "./components/onboarding/AppsStep";
+import type { ModifiedConfig, DiscoveredServer, RemovalTarget, DuplicateSelections } from "./components/onboarding/AppsStep";
+import EncryptionStep from "./components/onboarding/EncryptionStep";
+import FinishStep from "./components/onboarding/FinishStep";
+import MainMenu from "./components/main/MainMenu";
 import useAuth from "./hooks/useAuth";
 
 export default function App(): React.ReactNode {

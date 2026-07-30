@@ -2,8 +2,8 @@ import { useState } from "react";
 import { Button, Input, Badge } from "@edison-watch/shared/ui";
 import { supabase } from "@edison-watch/shared/auth";
 import { clearCachedSecretKey } from "@edison-watch/shared/crypto";
-import PromptInjectionAnimation from "./PromptInjectionAnimation";
-import type { AuthState } from "../hooks/useAuth";
+import PromptInjectionAnimation from "../animations/PromptInjectionAnimation";
+import type { AuthState } from "../../hooks/useAuth";
 
 function GoogleIcon() {
   return (
