@@ -225,12 +225,14 @@ export function buildTrayMenuItems(deps: TrayMenuDeps): MenuItemConstructorOptio
         showUpdateKeysWindow(
           getSetupData,
           (key) => markSetupComplete({ edisonSecretKey: key }),
-          async () => {
-            // markSetupComplete (above) persisted the new key; re-enrolling
-            // hands it to the daemon, which rewrites the agents' edison-watch
-            // entries with the new secret header.
+          async (compositeKey) => {
+            // Hand the key straight to the enrollment rather than relying on
+            // what was just persisted. Enrollment otherwise reads it back via
+            // getCredentialsForEnv(), and the daemon stamps every agent config
+            // with whatever it gets - so a persistence gap would silently
+            // rewrite them all with the PREVIOUS secret.
             if (!getMcpBaseUrl() || !getCredentialsForEnv()?.apiKey) return
-            await bootstrapDetectord()
+            await bootstrapDetectord({ edisonSecretKey: compositeKey })
           }
         )
     },
