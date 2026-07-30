@@ -112,7 +112,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   // Auth: expose dev localhost callback URL (null in production)
   ipcMain.handle('auth:getLoopbackUrl', () => getAuthLoopbackUrl())
 
-  // Config: active env name (for renderer to sync its localStorage/Supabase creds)
+  // Config: active env name (for renderer to sync its localStorage env override)
   ipcMain.handle('config:getActiveEnv', () => getActiveEnv())
 
   // Config: effective base URLs (respects debug env override)

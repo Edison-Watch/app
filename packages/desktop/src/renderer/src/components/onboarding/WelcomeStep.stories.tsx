@@ -17,22 +17,20 @@ const baseAuth: Parameters<typeof WelcomeStep>[0]['auth'] = {
   error: '',
   warning: '',
   awaitingBrowserCallback: false,
-  pendingAuthMethod: null,
+  pendingUserCode: '',
+  pendingVerificationUri: '',
   signedIn: false,
   email: '',
   userId: '',
   apiKey: '',
   mcpBaseUrl: '',
   apiBaseUrl: '',
-  ssoOnly: false,
   autoQuarantineOtherMcpServers: false,
   serverStatus: 'checking',
-  signInWithSSO: async () => {},
-  signInWithGoogle: async () => {},
-  signInWithMicrosoft: async () => {},
-  signInWithPassword: async () => {},
-  checkDomain: () => {},
+  signInWithBrowser: async () => {},
+  reopenVerificationPage: () => {},
   cancelPendingAuth: () => {},
+  signOut: async () => {},
 };
 
 export const SignInForm: Story = {
@@ -49,9 +47,15 @@ export const SignInForm: Story = {
   ],
 };
 
-export const SSOOnly: Story = {
+export const AwaitingApproval: Story = {
   args: {
-    auth: { ...baseAuth, ssoOnly: true },
+    auth: {
+      ...baseAuth,
+      loading: true,
+      awaitingBrowserCallback: true,
+      pendingUserCode: 'ABCD-EFGH',
+      pendingVerificationUri: 'https://dashboard.edison.watch/device?user_code=ABCD-EFGH',
+    },
     onNext: () => {},
   },
   decorators: [
@@ -79,7 +83,7 @@ export const Loading: Story = {
 
 export const WithError: Story = {
   args: {
-    auth: { ...baseAuth, error: 'Invalid credentials. Please try again.' },
+    auth: { ...baseAuth, error: 'The sign-in request was denied.' },
     onNext: () => {},
   },
   decorators: [
