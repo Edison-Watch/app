@@ -14,7 +14,7 @@ import {
   submitOneViaDetectord,
 } from "../detectord/submit";
 import { getDetectordClient } from "../detectord/lifecycle";
-import { toAgentName } from "../detectord/agents";
+import { toAgentName, getAgentFacts } from "../detectord/agents";
 import { applyIntegrations, revertIntegrations, integrationErrors } from "../detectord/integrations";
 import { CLIENT_DISPLAY } from "../clients/displayMeta";
 import { detectSecrets } from "../discovery/secretDetection";
@@ -137,14 +137,15 @@ export function registerMcpSubmitHandlers(): void {
   // Show an agent's config file. The daemon reads it: it owns agent files, and
   // this used to take an arbitrary path from the renderer.
   ipcMain.handle("mcp:readConfig", async (_event, client: string) => {
-    // A connector-only client has no local config, so asking the daemon for one
+    // An unmanageable client has no local config, so asking the daemon for one
     // only produces an error the user can do nothing about. Say what's actually
-    // going on instead.
-    const display = CLIENT_DISPLAY[client as McpClientId];
-    if (display?.connectorOnly) {
+    // going on instead. The daemon is the authority on which those are.
+    const facts = await getAgentFacts();
+    if (facts?.get(client as McpClientId)?.manageable === false) {
+      const name = CLIENT_DISPLAY[client as McpClientId]?.name ?? client;
       return {
         content:
-          `${display.name} keeps its MCP servers as Connectors in your account, not in a ` +
+          `${name} keeps its MCP servers as Connectors in your account, not in a ` +
           `local config file. There is nothing here for Edison Watch to read or protect.`,
       };
     }

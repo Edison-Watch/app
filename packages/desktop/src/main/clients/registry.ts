@@ -20,22 +20,3 @@ export const CLIENT_LIST: ClientEntry[] = (
 ).map((id) => ({ id, display: CLIENT_DISPLAY[id] }))
 
 export const CLIENT_IDS: McpClientId[] = CLIENT_LIST.map((c) => c.id)
-
-/**
- * The clients Edison can actually manage - i.e. everything except the
- * connector-only ones (ChatGPT), whose MCP servers live in the user's account.
- *
- * Setup status is reported over this list rather than `CLIENT_LIST`, because
- * every answer it could give for a connector-only client is wrong: "gateway not
- * configured" blames the user for something they can't fix, and "nothing
- * applicable, all good" paints an unprotected app green. It gets detected and
- * flagged in the onboarding wizard instead.
- */
-export const MANAGED_CLIENT_LIST: ClientEntry[] = CLIENT_LIST.filter(
-  (c) => !c.display.connectorOnly
-)
-
-/** Whether this client is detect-only (server-side Connectors, no local config). */
-export function isConnectorOnly(clientId: string): boolean {
-  return CLIENT_DISPLAY[clientId as McpClientId]?.connectorOnly === true
-}

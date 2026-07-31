@@ -9,7 +9,6 @@
 import { getDetectordClient } from './lifecycle'
 import { toAgentName } from './agents'
 import { withDetectordHealth } from './health'
-import { isConnectorOnly } from '../clients/registry'
 import type { IntegrationChange } from './protocol'
 
 export type { IntegrationChange }
@@ -17,20 +16,15 @@ export type { IntegrationChange }
 /**
  * Install the edison-watch entry + hooks for these client ids.
  *
- * Connector-only clients (ChatGPT) are dropped first. The wizard selects every
- * detected app by default, so they arrive here routinely - and asking the
- * daemon to install into one would add it to the enrolled selection, which the
- * self-heal then revisits forever, all to write a config file that does not
- * exist. Silently skipping matches what the user is told about them: detected,
- * not managed.
+ * Unmanageable clients are not filtered here. The daemon drops them, because
+ * it is not the only caller: enroll sends the saved app selection on every
+ * start, and a guard in front of one caller left the other wide open.
  */
 export async function applyIntegrations(clients: string[]): Promise<IntegrationChange[]> {
-  const installable = clients.filter((c) => !isConnectorOnly(c))
-  if (installable.length === 0) return []
   return withDetectordHealth('apply_integrations', async () => {
     const daemon = getDetectordClient()
     await daemon.connect()
-    return daemon.applyIntegrations(installable.map(toAgentName))
+    return daemon.applyIntegrations(clients.map(toAgentName))
   })
 }
 

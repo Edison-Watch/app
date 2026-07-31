@@ -22,6 +22,8 @@ export interface MockClient {
   id: string
   name: string
   configPath: string
+  /** False for hosts Edison can only detect, never configure (ChatGPT). */
+  manageable: boolean
 }
 
 type Api = Window['api']

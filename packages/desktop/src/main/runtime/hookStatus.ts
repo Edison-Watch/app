@@ -10,7 +10,7 @@
 
 import { getAgentFacts, type AgentFacts } from '../detectord/agents'
 import { DetectordUnavailableError } from '../discovery/mcpDiscovery'
-import { MANAGED_CLIENT_LIST } from '../clients/registry'
+import { CLIENT_LIST } from '../clients/registry'
 import type { McpClientId } from '../discovery/types'
 import type { ClaudeCodeMcpStatus } from '../infra/setupConfig'
 
@@ -24,6 +24,13 @@ export interface HookStatusEntry {
   mcpConfigured: boolean
   mcpApplicable: boolean
   hooksApplicable: boolean
+  /**
+   * False when Edison can only see this client, not configure it (ChatGPT's
+   * server-side Connectors). Reported rather than filtered out: the wizard is
+   * seen once, this list is the permanent surface, and a client silently
+   * missing from it is how a user ends up assuming they're covered.
+   */
+  manageable: boolean
   mcpRuntimeStatus?: ClaudeCodeMcpStatus
 }
 
@@ -61,9 +68,7 @@ export async function getHookStatus(
   // would read as a broken installation. Say we don't know instead.
   if (!facts) throw new DetectordUnavailableError()
 
-  // Connector-only clients are excluded: there is no hook surface and no
-  // gateway entry to install, so any status line for them misleads.
-  return MANAGED_CLIENT_LIST.map((client) => {
+  return CLIENT_LIST.map((client) => {
     const f = facts.get(client.id)
     if (!f) {
       // The daemon didn't report this agent (unreachable, or too old to know
@@ -77,7 +82,8 @@ export async function getHookStatus(
         mcpConnected: false,
         mcpConfigured: false,
         mcpApplicable: true,
-        hooksApplicable: false
+        hooksApplicable: false,
+        manageable: true
       }
     }
 
@@ -108,8 +114,12 @@ export async function getHookStatus(
       totalHooks,
       mcpConnected,
       mcpConfigured,
-      mcpApplicable: true,
-      hooksApplicable: totalHooks > 0,
+      // An unmanageable client has no gateway entry and no hook surface, so
+      // neither condition applies to it. The UI renders it as its own state
+      // rather than scoring it against conditions it can never meet.
+      mcpApplicable: f.manageable,
+      hooksApplicable: f.manageable && totalHooks > 0,
+      manageable: f.manageable,
       ...(mcpRuntimeStatus !== undefined ? { mcpRuntimeStatus } : {})
     }
   })

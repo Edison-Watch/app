@@ -29,6 +29,12 @@ export interface AgentFacts {
   edisonUrl: string | null
   /** The agent's user-scope config file, when it has one. */
   configPath: string | null
+  /**
+   * Whether Edison can manage this agent, or only report that it's installed.
+   * False for connector-only hosts (ChatGPT), whose MCP servers live in the
+   * vendor's account rather than in a file on this machine.
+   */
+  manageable: boolean
 }
 
 const UNKNOWN: AgentFacts = {
@@ -38,7 +44,8 @@ const UNKNOWN: AgentFacts = {
   workspaceHooksInstalled: 0,
   workspaceHooksTotal: 0,
   edisonUrl: null,
-  configPath: null
+  configPath: null,
+  manageable: true
 }
 
 function toFacts(a: AgentInfo): AgentFacts {
@@ -49,7 +56,9 @@ function toFacts(a: AgentInfo): AgentFacts {
     workspaceHooksInstalled: a.workspace_hooks_installed ?? 0,
     workspaceHooksTotal: a.workspace_hooks_total ?? 0,
     edisonUrl: a.edison_url ?? null,
-    configPath: a.config_path ?? null
+    configPath: a.config_path ?? null,
+    // Absent means an older daemon, where every agent was manageable.
+    manageable: a.manageable ?? true
   }
 }
 

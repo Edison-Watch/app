@@ -47,6 +47,10 @@ impl Agent for ChatGpt {
         self.candidates.iter().any(|p| p.exists())
     }
 
+    fn is_manageable(&self) -> bool {
+        false
+    }
+
     fn watch_targets(&self) -> WatchTargets {
         // No local config exists, so there is no file whose change could mean
         // "a connector was added". Watching the app bundle would only report
@@ -71,10 +75,11 @@ impl Agent for ChatGpt {
 
 fn default_app_paths() -> Vec<PathBuf> {
     if cfg!(target_os = "macos") {
-        // Post-2026 Codex↔ChatGPT merger: the unified Chat + Work + Codex app
-        // ships as `ChatGPT.app`; the older standalone chat app is
-        // `ChatGPT Classic.app`. (The Codex *CLI* is a separate, fully
-        // supported agent — see `clients/codex.rs`.)
+        // Both bundle names OpenAI has shipped the desktop app under. Probing
+        // for both is cheap; picking wrong is not, because the failure is
+        // silent - a user with ChatGPT installed just never sees the warning
+        // and has nothing to report. (The Codex *CLI* is a separate, fully
+        // supported agent - see `clients/codex.rs`.)
         const NAMES: [&str; 2] = ["ChatGPT.app", "ChatGPT Classic.app"];
         let mut out: Vec<PathBuf> = NAMES
             .iter()
@@ -85,10 +90,11 @@ fn default_app_paths() -> Vec<PathBuf> {
         }
         out
     } else if cfg!(target_os = "windows") {
-        // Shipped through the Microsoft Store (product id 9NT1R1C2HH7J), which
-        // registers a `ChatGPT.exe` app-execution alias under
-        // `%LOCALAPPDATA%\Microsoft\WindowsApps`. The `Programs` path covers a
-        // direct (non-Store) install.
+        // A Store install registers an app-execution alias under
+        // `%LOCALAPPDATA%\Microsoft\WindowsApps`; `Programs` covers a direct
+        // one. The alias is assumed to be named `ChatGPT.exe` (the MSIX
+        // convention) - unverified against a real Windows install, and the
+        // one line to change if detection turns out never to fire there.
         match dirs::data_local_dir() {
             Some(local) => vec![
                 local
@@ -122,31 +128,74 @@ mod tests {
     }
 
     #[test]
-    fn is_usable_as_a_shared_trait_object() {
-        // How the daemon holds it: `Vec<Arc<dyn Agent>>`, shared across the
-        // watcher's threads. Compile-time check that nothing here broke `Send`.
-        let agent: std::sync::Arc<dyn Agent> =
-            std::sync::Arc::new(ChatGpt::discover().expect("infallible"));
-        assert_eq!(agent.name(), CLIENT_NAME);
-    }
-
-    #[test]
-    fn never_installed_without_candidates() {
-        // The Linux case: no official desktop app, so no paths to probe.
-        assert!(!ChatGpt::from_paths(Vec::new()).is_installed());
-    }
-
-    #[test]
     fn discovers_nothing_and_is_not_an_install_target() {
+        // The null-object contract the whole app-side design rests on: ChatGPT
+        // is reported as present and nothing else. If any of these ever returns
+        // something, the app has to stop calling it unmanageable.
         let dir = tempdir().unwrap();
         let app = dir.path().join("ChatGPT.app");
         std::fs::create_dir(&app).unwrap();
         let agent = ChatGpt::from_paths(vec![app]);
 
         assert!(agent.is_installed());
+        assert!(!agent.is_manageable());
         assert!(agent.discover().unwrap().is_empty());
         assert!(agent.edison_installs(dir.path()).is_empty());
         assert!(agent.hook_install(dir.path()).is_none());
         assert!(agent.watch_targets().files.is_empty());
+    }
+
+    // `default_app_paths` is the only part of this file with real logic, and
+    // the only way it can fail is silently: probe the wrong place and ChatGPT
+    // is simply never detected, which no user reports because all they see is
+    // the absence of a warning. The platform it runs on is the platform under
+    // test - these run in CI on all three.
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn macos_probes_both_bundles_in_both_application_dirs() {
+        let paths = default_app_paths();
+        let ends_with = |name: &str| {
+            paths
+                .iter()
+                .filter(|p| p.file_name().is_some_and(|f| f == name))
+                .count()
+        };
+        // Both names, under /Applications and ~/Applications.
+        assert_eq!(ends_with("ChatGPT.app"), 2);
+        assert_eq!(ends_with("ChatGPT Classic.app"), 2);
+        assert!(paths.iter().any(|p| p.starts_with("/Applications")));
+        let home = dirs::home_dir().expect("a home dir");
+        assert!(
+            paths
+                .iter()
+                .any(|p| p.starts_with(home.join("Applications")))
+        );
+    }
+
+    #[test]
+    #[cfg(target_os = "windows")]
+    fn windows_probes_the_store_alias_and_a_direct_install() {
+        let paths = default_app_paths();
+        assert!(
+            paths
+                .iter()
+                .any(|p| p.ends_with("Microsoft\\WindowsApps\\ChatGPT.exe"))
+        );
+        assert!(
+            paths
+                .iter()
+                .any(|p| p.ends_with("Programs\\ChatGPT\\ChatGPT.exe"))
+        );
+    }
+
+    #[test]
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    fn linux_probes_nothing_so_chatgpt_is_never_reported() {
+        // There is no official Linux desktop app. Detecting one would put an
+        // unremovable "partially supported" warning in front of a user who
+        // cannot possibly have it installed.
+        assert!(default_app_paths().is_empty());
+        assert!(!ChatGpt::discover().unwrap().is_installed());
     }
 }

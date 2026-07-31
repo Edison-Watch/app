@@ -52,13 +52,40 @@ describe('AppsStep', () => {
   it('renders the clients the daemon reports', async () => {
     const api = installMockApi()
     ;(api.mcp as Record<string, unknown>).detectClients = async () => ({
-      clients: [{ id: 'cursor', name: 'Cursor', configPath: '/home/u/.cursor/mcp.json' }],
+      clients: [
+        { id: 'cursor', name: 'Cursor', configPath: '/home/u/.cursor/mcp.json', manageable: true }
+      ],
       daemonUnavailable: false
     })
 
     render(<AppsStep onNext={() => {}} />)
 
     expect(await screen.findByText('Cursor')).toBeTruthy()
+    expectNoRenderErrors()
+  })
+
+  it('offers no selection for a client it cannot configure', async () => {
+    // A checked checkbox whose value is thrown away downstream told the user
+    // ChatGPT was about to be configured, and inflated the "Configure N Apps"
+    // count on the next step by one.
+    const api = installMockApi()
+    ;(api.mcp as Record<string, unknown>).detectClients = async () => ({
+      clients: [
+        { id: 'cursor', name: 'Cursor', configPath: '/home/u/.cursor/mcp.json', manageable: true },
+        { id: 'chatgpt', name: 'ChatGPT', configPath: 'Connectors', manageable: false }
+      ],
+      daemonUnavailable: false
+    })
+
+    render(<AppsStep onNext={() => {}} />)
+
+    // Shown, and shown as unprotected - not quietly dropped from the list.
+    expect(await screen.findByText('ChatGPT')).toBeTruthy()
+    expect(screen.getByText(/not protected/i)).toBeTruthy()
+    // Only Cursor is selectable, so only Cursor is counted.
+    await waitFor(() => {
+      expect(screen.getByText(/Continue with 1 App$/)).toBeTruthy()
+    })
     expectNoRenderErrors()
   })
 
