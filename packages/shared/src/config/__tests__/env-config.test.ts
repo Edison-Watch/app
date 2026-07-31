@@ -60,6 +60,17 @@ describe('custom backend env resolution', () => {
     expect(getStoredCustomBackend()).toBeNull()
   })
 
+  it('drops a malformed mcpBaseUrl instead of crashing resolution', () => {
+    localStorage.setItem(
+      CUSTOM_BACKEND_STORAGE_KEY,
+      '{"apiBaseUrl": "https://edison.example.com", "mcpBaseUrl": 123}'
+    )
+    localStorage.setItem(STORAGE_KEY, 'custom')
+    expect(getStoredCustomBackend()).toEqual({ apiBaseUrl: 'https://edison.example.com' })
+    // MCP falls back to the API origin.
+    expect(getEnv().MCP_BASE_URL).toBe('https://edison.example.com')
+  })
+
   it('clears the mirror', () => {
     storeCustomBackend({ apiBaseUrl: 'https://edison.example.com' })
     clearStoredCustomBackend()

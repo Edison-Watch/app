@@ -114,7 +114,11 @@ export function getStoredCustomBackend(): CustomBackendUrls | null {
     if (!raw) return null
     const parsed = JSON.parse(raw) as CustomBackendUrls
     if (typeof parsed?.apiBaseUrl !== 'string' || !parsed.apiBaseUrl) return null
-    return parsed
+    // A malformed optional field must not survive into resolveCustomConfig,
+    // where a non-string would crash URL trimming.
+    const mcpBaseUrl =
+      typeof parsed.mcpBaseUrl === 'string' && parsed.mcpBaseUrl ? parsed.mcpBaseUrl : undefined
+    return { apiBaseUrl: parsed.apiBaseUrl, ...(mcpBaseUrl ? { mcpBaseUrl } : {}) }
   } catch {
     return null
   }

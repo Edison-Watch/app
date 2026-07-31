@@ -73,6 +73,28 @@ describe('custom backend persistence', () => {
     expect(getDebugEnvOverride()).toBeNull()
   })
 
+  it('keeps the stored URL when the override is cleared entirely', () => {
+    // "Use the default Edison server instead" must not delete the custom URL:
+    // the Developer menu needs it to offer switching back later.
+    setCustomBackend('https://edison.example.com')
+    setDebugEnvOverride(null)
+
+    expect(getDebugEnvOverride()).toBeNull()
+    expect(getCustomBackend()).toEqual({
+      apiBaseUrl: 'https://edison.example.com',
+      mcpBaseUrl: 'https://edison.example.com'
+    })
+  })
+
+  it('survives a corrupted override file', () => {
+    // JSON.parse succeeds on all of these - none may crash env resolution.
+    for (const content of ['null', '[1,2]', '"custom"', '42']) {
+      writeFileSync(getDebugEnvOverridePath(), content, 'utf-8')
+      expect(getDebugEnvOverride()).toBeNull()
+      expect(getCustomBackend()).toBeNull()
+    }
+  })
+
   it('ignores a stale temp-local-stack override from an older build', () => {
     writeFileSync(getDebugEnvOverridePath(), JSON.stringify({ env: 'temp-local-stack' }), 'utf-8')
     expect(getDebugEnvOverride()).toBeNull()
@@ -83,6 +105,14 @@ describe('custom backend persistence', () => {
     expect(parseCustomBackendUrl('not a url')).toBeNull()
     expect(() => setCustomBackend('file:///etc/passwd')).toThrow()
     expect(getCustomBackend()).toBeNull()
+  })
+
+  it('rejects URLs with embedded credentials, query strings, or fragments', () => {
+    // Credentials would end up in logs and menus; query/fragment would break
+    // every appended endpoint path.
+    expect(parseCustomBackendUrl('https://user:pass@edison.example.com')).toBeNull()
+    expect(parseCustomBackendUrl('https://edison.example.com?tenant=a')).toBeNull()
+    expect(parseCustomBackendUrl('https://edison.example.com#section')).toBeNull()
   })
 
   it('normalizes trailing slashes and whitespace', () => {

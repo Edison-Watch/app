@@ -77,7 +77,10 @@ function readDebugEnvOverrideFile(): DebugEnvOverrideFile {
   try {
     const p = getDebugEnvOverridePath();
     if (!existsSync(p)) return {};
-    return JSON.parse(readFileSync(p, "utf-8")) as DebugEnvOverrideFile;
+    const parsed: unknown = JSON.parse(readFileSync(p, "utf-8"));
+    // JSON.parse("null") and friends succeed - only a plain object is usable.
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    return parsed as DebugEnvOverrideFile;
   } catch {
     return {};
   }
@@ -94,13 +97,19 @@ export function getDebugEnvOverride(): DebugEnvName | null {
 export function setDebugEnvOverride(env: DebugEnvName | null): void {
   try {
     const p = getDebugEnvOverridePath();
+    // Keep the stored custom URLs when toggling between environments (or
+    // clearing the override) so switching away from "custom" and back does
+    // not lose the URL. The file is only removed when nothing else is in it.
+    const existing = readDebugEnvOverrideFile();
     if (env === null) {
-      if (existsSync(p)) unlinkSync(p);
+      delete existing.env;
+      if (Object.keys(existing).length > 0) {
+        writeFileSync(p, JSON.stringify(existing), "utf-8");
+      } else if (existsSync(p)) {
+        unlinkSync(p);
+      }
       return;
     }
-    // Keep the stored custom URLs when toggling between environments so
-    // switching away from "custom" and back does not lose the URL.
-    const existing = readDebugEnvOverrideFile();
     writeFileSync(p, JSON.stringify({ ...existing, env }), "utf-8");
   } catch {
     // best effort only
@@ -124,6 +133,11 @@ export function parseCustomBackendUrl(raw: string): string | null {
   try {
     const parsed = new URL(candidate);
     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
+    // No embedded credentials: the URL is logged and shown in menus, and the
+    // backend never needs them. No query/fragment either - endpoint paths are
+    // appended to this value, so either would silently break every API call.
+    if (parsed.username || parsed.password) return null;
+    if (parsed.search || parsed.hash) return null;
     return candidate;
   } catch {
     return null;
