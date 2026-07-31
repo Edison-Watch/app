@@ -5,49 +5,25 @@ import path from 'node:path'
 
 import { app } from 'electron'
 
-// Dev-mode locations of the daemon binary, most-preferred first. `outMainDir` is
-// the caller's __dirname (<pkg>/out/main), passed in rather than read here so a
-// test can drive it: baking in __dirname is what let this list rot unnoticed
-// when the daemon moved into the monorepo. Mirrors runtime/stdiodBinary.ts.
-//
-//   1. crates/detectord  - the monorepo location, plain `cargo build --release`
-//   2. desktop/bin       - staged by scripts/build-detectord.sh
-//   3. packages/detectord - pre-monorepo sibling checkout, kept as a fallback
-//
-// Note the rename: cargo emits `mcp_detector_daemon`, the staged/shipped binary
-// is `edison-detectord`.
-export function devDetectordCandidates(
-  outMainDir: string,
-  win = process.platform === 'win32'
-): string[] {
-  const packagesDir = path.resolve(outMainDir, '..', '..', '..')
-  const repoRoot = path.resolve(packagesDir, '..')
-  const cargoBin = win ? 'mcp_detector_daemon.exe' : 'mcp_detector_daemon'
-  return [
-    path.join(repoRoot, 'crates', 'detectord', 'target', 'release', cargoBin),
-    path.resolve(outMainDir, '..', '..', 'bin', win ? 'edison-detectord.exe' : 'edison-detectord'),
-    path.join(packagesDir, 'detectord', 'target', 'release', cargoBin)
-  ]
-}
+import { DETECTORD, devDaemonCandidates, shippedExeName } from '../runtime/daemonPaths'
 
 // Resolve the absolute path to the mcp_detector_daemon (edison-detectord) binary
 // as it ships inside the app.
 //
 // Packaged: <resources>/bin/edison-detectord (staged by the build-detectord*
-// scripts, copied via the extraResources rule in electron-builder.yml). Dev: see
-// devDetectordCandidates above; run `cargo build --release` in crates/detectord
-// (or a build-detectord script) once.
+// scripts, copied via the extraResources rule in electron-builder.yml). Dev: the
+// candidates in runtime/daemonPaths.ts; run `cargo build --release` in
+// crates/detectord (or a build-detectord script) once.
 //
 // On Linux this path is EPHEMERAL: the AppImage mounts at a different
 // /tmp/.mount_* directory every launch, so it must not be baked into anything
 // long-lived (e.g. a systemd unit's ExecStart). Use getDetectordBinaryPath() for
 // that - it returns the stable copy. This function is the source for staging.
 function getBundledDetectordBinaryPath(): string {
-  const win = process.platform === 'win32'
   if (app.isPackaged) {
-    return path.join(process.resourcesPath, 'bin', win ? 'edison-detectord.exe' : 'edison-detectord')
+    return path.join(process.resourcesPath, 'bin', shippedExeName(DETECTORD))
   }
-  const candidates = devDetectordCandidates(__dirname, win)
+  const candidates = devDaemonCandidates(DETECTORD, __dirname)
   return candidates.find(existsSync) ?? candidates[0]!
 }
 
