@@ -273,7 +273,11 @@ export default function AppsStep({
 
   const selectedCount = clients.filter((c) => c.enabled).length;
 
-  const PARTIALLY_SUPPORTED_IDS = new Set(["claude-desktop", "claude-cowork"]);
+  // Clients whose MCP config lives server-side as hosted Connectors (Claude
+  // account / OpenAI account), not in a local file Edison can proxy. We can
+  // detect the app but not protect its connectors, so we surface the warning
+  // below and ask the user to remove connectors + request equivalents.
+  const PARTIALLY_SUPPORTED_IDS = new Set(["claude-desktop", "claude-cowork", "chatgpt"]);
   const fullySupportedClients = clients.filter((c) => !PARTIALLY_SUPPORTED_IDS.has(c.id));
   const partiallySupportedClients = clients.filter((c) => PARTIALLY_SUPPORTED_IDS.has(c.id));
 
@@ -401,7 +405,7 @@ export default function AppsStep({
               <div className="mb-3 rounded-md border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs text-amber-100/90">
                 We currently only support local MCP servers, not Connectors. You
                 should remove your connectors manually for your safety and request
-                a equivalent server in Edison Watch from your admin.
+                an equivalent server in Edison Watch from your admin.
               </div>
               <div className="flex flex-col gap-2">
                 {partiallySupportedClients.map(renderClientCard)}

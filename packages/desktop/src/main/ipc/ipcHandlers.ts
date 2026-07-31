@@ -415,7 +415,9 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       clients.push({
         id,
         name: CLIENT_DISPLAY[id]?.name ?? id,
-        configPath: f.configPath ?? ''
+        // Connector-only clients have no path to report - they get an advisory
+        // label saying where their MCP config actually lives instead.
+        configPath: f.configPath ?? CLIENT_DISPLAY[id]?.configLabel ?? ''
       })
     }
     return { clients, daemonUnavailable: false }

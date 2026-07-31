@@ -31,6 +31,19 @@ const MOCK_CLIENTS = [
     name: 'Windsurf',
     configPath: '/Users/alice/.windsurf/mcp.json',
   },
+  // Connector-only clients: detected, but their MCP servers live in the user's
+  // account, so they render in the "partially supported" section with the
+  // remove-your-connectors warning instead of as configurable apps.
+  {
+    id: 'claude-desktop',
+    name: 'Claude Desktop',
+    configPath: '/Users/alice/Library/Application Support/Claude/claude_desktop_config.json',
+  },
+  {
+    id: 'chatgpt',
+    name: 'ChatGPT',
+    configPath: 'Connectors · managed server-side in your ChatGPT account',
+  },
 ];
 
 /** Two detected MCP clients ready to configure. */

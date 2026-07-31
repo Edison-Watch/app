@@ -10,7 +10,7 @@
 
 import { getAgentFacts, type AgentFacts } from '../detectord/agents'
 import { DetectordUnavailableError } from '../discovery/mcpDiscovery'
-import { CLIENT_LIST } from '../clients/registry'
+import { MANAGED_CLIENT_LIST } from '../clients/registry'
 import type { McpClientId } from '../discovery/types'
 import type { ClaudeCodeMcpStatus } from '../infra/setupConfig'
 
@@ -61,7 +61,9 @@ export async function getHookStatus(
   // would read as a broken installation. Say we don't know instead.
   if (!facts) throw new DetectordUnavailableError()
 
-  return CLIENT_LIST.map((client) => {
+  // Connector-only clients are excluded: there is no hook surface and no
+  // gateway entry to install, so any status line for them misleads.
+  return MANAGED_CLIENT_LIST.map((client) => {
     const f = facts.get(client.id)
     if (!f) {
       // The daemon didn't report this agent (unreachable, or too old to know

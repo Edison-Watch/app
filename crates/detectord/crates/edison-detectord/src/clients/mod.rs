@@ -31,6 +31,11 @@ mod transport;
 #[cfg(any(feature = "vscode", feature = "cursor"))]
 mod statedb;
 
+// ChatGPT is presence-detection only - server-side Connectors, no local config
+// to parse - so it is deliberately absent from the `common`/`transport` gates
+// above.
+#[cfg(feature = "chatgpt")]
+pub mod chatgpt;
 #[cfg(feature = "claude_code")]
 pub mod claude_code;
 #[cfg(feature = "claude_cowork")]
@@ -50,6 +55,8 @@ pub mod windsurf;
 #[cfg(feature = "zed")]
 pub mod zed;
 
+#[cfg(feature = "chatgpt")]
+pub use chatgpt::ChatGpt;
 #[cfg(feature = "claude_code")]
 pub use claude_code::ClaudeCode;
 #[cfg(feature = "claude_cowork")]

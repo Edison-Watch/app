@@ -11,6 +11,20 @@ import type { McpClientId } from '../discovery/types'
 export interface ClientDisplay {
   name: string
   brandColor: string
+  /**
+   * The client keeps its MCP servers as hosted Connectors in the user's account
+   * rather than in a local config file. Edison can see the app is installed but
+   * has nothing to read, write, hook, or proxy - so these clients are detected
+   * and flagged, never managed.
+   */
+  connectorOnly?: boolean
+  /**
+   * What to show where a config path would go, for `connectorOnly` clients.
+   * The daemon reports no path for them (there isn't one), and a blank line
+   * under the app name reads as "we couldn't find it" rather than "there is
+   * nothing to find".
+   */
+  configLabel?: string
 }
 
 export const CLIENT_DISPLAY: Record<McpClientId, ClientDisplay> = {
@@ -25,4 +39,10 @@ export const CLIENT_DISPLAY: Record<McpClientId, ClientDisplay> = {
   intellij: { name: 'IntelliJ IDEA', brandColor: '#000000' },
   pycharm: { name: 'PyCharm', brandColor: '#21D789' },
   webstorm: { name: 'WebStorm', brandColor: '#07C3F2' },
+  chatgpt: {
+    name: 'ChatGPT',
+    brandColor: '#000000',
+    connectorOnly: true,
+    configLabel: 'Connectors · managed server-side in your ChatGPT account',
+  },
 }

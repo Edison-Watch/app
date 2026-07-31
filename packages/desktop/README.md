@@ -53,6 +53,8 @@ Modern AI tools (Claude, Cursor, VS Code, and friends) connect to MCP servers th
 
 Claude Code · Claude Desktop · Claude Cowork · Cursor · VS Code · Windsurf · Zed · JetBrains IDEs · Codex
 
+The ChatGPT desktop app is detected but not managed: its MCP servers are Connectors hosted in your OpenAI account rather than in a local config file, so the setup wizard flags them for you to remove instead of claiming to protect them.
+
 ## Getting Started
 
 1. **Install** the app - see [Installation](#installation) (or [build from source](#build-from-source) until signed installers ship).

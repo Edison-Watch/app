@@ -16,6 +16,7 @@ import {
 import { getDetectordClient } from "../detectord/lifecycle";
 import { toAgentName } from "../detectord/agents";
 import { applyIntegrations, revertIntegrations, integrationErrors } from "../detectord/integrations";
+import { CLIENT_DISPLAY } from "../clients/displayMeta";
 import { detectSecrets } from "../discovery/secretDetection";
 import type { TemplatizedConfig } from "../discovery/secretDetection";
 import { filterOutEdisonWatchServers } from "../runtime/mcpConfigMonitor";
@@ -136,6 +137,17 @@ export function registerMcpSubmitHandlers(): void {
   // Show an agent's config file. The daemon reads it: it owns agent files, and
   // this used to take an arbitrary path from the renderer.
   ipcMain.handle("mcp:readConfig", async (_event, client: string) => {
+    // A connector-only client has no local config, so asking the daemon for one
+    // only produces an error the user can do nothing about. Say what's actually
+    // going on instead.
+    const display = CLIENT_DISPLAY[client as McpClientId];
+    if (display?.connectorOnly) {
+      return {
+        content:
+          `${display.name} keeps its MCP servers as Connectors in your account, not in a ` +
+          `local config file. There is nothing here for Edison Watch to read or protect.`,
+      };
+    }
     try {
       const daemon = getDetectordClient();
       await daemon.connect();
