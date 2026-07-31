@@ -11,17 +11,39 @@ import {
   type DeviceCodeGrant,
   type DeviceTokenResponse,
 } from "@edison-watch/shared/auth";
-import { getEnv, getActiveEnvName, STORAGE_KEY } from "@edison-watch/shared/config";
+import {
+  getEnv,
+  getActiveEnvName,
+  getStoredCustomBackend,
+  storeCustomBackend,
+  STORAGE_KEY,
+} from "@edison-watch/shared/config";
+
+// The main process owns the custom (self-hosted) backend URLs; mirror them
+// into localStorage so getEnv() can resolve the "custom" environment.
+// Returns true when the mirror changed (the page must reload to pick it up).
+async function syncCustomBackendMirror(): Promise<boolean> {
+  const urls = await window.api.config.getCustomBackend();
+  if (!urls) return false;
+  const mirrored = getStoredCustomBackend();
+  if (mirrored?.apiBaseUrl === urls.apiBaseUrl && mirrored?.mcpBaseUrl === urls.mcpBaseUrl) {
+    return false;
+  }
+  storeCustomBackend(urls);
+  return true;
+}
 
 // Sync active env from main process on startup - reload if it differs from
 // localStorage so the device-auth backend URLs are resolved for the right env.
 (async () => {
   try {
     const activeEnv = await window.api.config.getActiveEnv();
-    // "dev" uses the demo backend - clear any localStorage override so we fall back to build default.
+    // "dev" uses the localhost backend - clear any localStorage override so we fall back to build default.
     const normalized = activeEnv === "dev" ? null : activeEnv;
     const current = localStorage.getItem(STORAGE_KEY) ?? null;
-    if (current !== normalized) {
+    let needsReload = current !== normalized;
+    if (normalized === "custom" && (await syncCustomBackendMirror())) needsReload = true;
+    if (needsReload) {
       if (normalized) localStorage.setItem(STORAGE_KEY, normalized);
       else localStorage.removeItem(STORAGE_KEY);
       window.location.reload();
@@ -34,10 +56,19 @@ import { getEnv, getActiveEnvName, STORAGE_KEY } from "@edison-watch/shared/conf
 // Reload whenever the user switches env via the menu.
 try {
   window.api.config.onEnvChanged((envName: string) => {
-    const normalized = envName === "dev" ? null : envName;
-    if (normalized) localStorage.setItem(STORAGE_KEY, normalized);
-    else localStorage.removeItem(STORAGE_KEY);
-    window.location.reload();
+    void (async () => {
+      const normalized = envName === "dev" ? null : envName;
+      if (normalized === "custom") {
+        try {
+          await syncCustomBackendMirror();
+        } catch {
+          // keep whatever mirror exists
+        }
+      }
+      if (normalized) localStorage.setItem(STORAGE_KEY, normalized);
+      else localStorage.removeItem(STORAGE_KEY);
+      window.location.reload();
+    })();
   });
 } catch {
   // Not running in Electron - ignore.

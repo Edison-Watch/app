@@ -22,9 +22,10 @@ if (DRY_RUN) console.log("[dry-run] Dry-run mode enabled - config files will not
 
 // ── Debug environment switcher ───────────────────────────────────────
 
-// "temp-local-stack" = Railway-hosted offline stack (local-stack-backend in the
-// edison-watch demo project); URLs come from the shared TEMP_LOCAL_STACK_CONFIG.
-export const DEBUG_ENV_NAMES = ["demo", "release", "dev", "temp-local-stack"] as const;
+// "custom" = a self-hosted Edison deployment the user points the app at by
+// URL (docker-compose stack, Railway instance, ...). Its URLs live alongside
+// the env name in the override file - see getCustomBackend().
+export const DEBUG_ENV_NAMES = ["demo", "release", "dev", "custom"] as const;
 export type DebugEnvName = (typeof DEBUG_ENV_NAMES)[number];
 
 function isDebugEnvName(v: string | undefined): v is DebugEnvName {
@@ -51,7 +52,13 @@ export const ENV_MCP_URL: string = import.meta.env.VITE_MCP_BASE_URL ?? "";
 export const ENV_DOCS_URL: string = import.meta.env.VITE_DOCS_BASE_URL ?? "https://docs.edison.watch";
 
 // Derive per-env URLs from the shared config (single source of truth).
+// "custom" is resolved here, not in the shared package: the main process has
+// no localStorage, so the custom URLs live in the override file instead.
 function getEnvUrls(env: string): { api: string; mcp: string } | null {
+  if (env === "custom") {
+    const custom = getCustomBackend();
+    return custom ? { api: custom.apiBaseUrl, mcp: custom.mcpBaseUrl } : null;
+  }
   const cfg = getEnvByName(env);
   return cfg ? { api: cfg.API_BASE_URL, mcp: cfg.MCP_BASE_URL } : null;
 }
@@ -60,17 +67,28 @@ export function getDebugEnvOverridePath(): string {
   return join(app.getPath("userData"), "edison_debug_env.json");
 }
 
-export function getDebugEnvOverride(): DebugEnvName | null {
+interface DebugEnvOverrideFile {
+  env?: string;
+  customApiBaseUrl?: string;
+  customMcpBaseUrl?: string;
+}
+
+function readDebugEnvOverrideFile(): DebugEnvOverrideFile {
   try {
     const p = getDebugEnvOverridePath();
-    if (!existsSync(p)) return null;
-    const raw = readFileSync(p, "utf-8");
-    const data = JSON.parse(raw) as { env?: string };
-    if (isDebugEnvName(data.env)) return data.env;
-    return null;
+    if (!existsSync(p)) return {};
+    return JSON.parse(readFileSync(p, "utf-8")) as DebugEnvOverrideFile;
   } catch {
-    return null;
+    return {};
   }
+}
+
+export function getDebugEnvOverride(): DebugEnvName | null {
+  const data = readDebugEnvOverrideFile();
+  if (!isDebugEnvName(data.env)) return null;
+  // "custom" without stored URLs is meaningless - treat as no override.
+  if (data.env === "custom" && !getCustomBackend()) return null;
+  return data.env;
 }
 
 export function setDebugEnvOverride(env: DebugEnvName | null): void {
@@ -80,10 +98,66 @@ export function setDebugEnvOverride(env: DebugEnvName | null): void {
       if (existsSync(p)) unlinkSync(p);
       return;
     }
-    writeFileSync(p, JSON.stringify({ env }), "utf-8");
+    // Keep the stored custom URLs when toggling between environments so
+    // switching away from "custom" and back does not lose the URL.
+    const existing = readDebugEnvOverrideFile();
+    writeFileSync(p, JSON.stringify({ ...existing, env }), "utf-8");
   } catch {
     // best effort only
   }
+}
+
+// ── Custom (self-hosted) backend ─────────────────────────────────────
+
+export interface CustomBackendUrls {
+  apiBaseUrl: string;
+  mcpBaseUrl: string;
+}
+
+function normalizeOrigin(url: string): string {
+  return url.trim().replace(/\/+$/, "");
+}
+
+/** Validate a candidate custom backend URL; returns the normalized form or null. */
+export function parseCustomBackendUrl(raw: string): string | null {
+  const candidate = normalizeOrigin(raw);
+  try {
+    const parsed = new URL(candidate);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
+    return candidate;
+  } catch {
+    return null;
+  }
+}
+
+/** The stored custom backend URLs, or null when never configured. */
+export function getCustomBackend(): CustomBackendUrls | null {
+  const data = readDebugEnvOverrideFile();
+  const api = typeof data.customApiBaseUrl === "string" ? data.customApiBaseUrl : "";
+  if (!api) return null;
+  // The backend serves /mcp/<key>/ same-origin, so one URL covers both.
+  const mcp = typeof data.customMcpBaseUrl === "string" && data.customMcpBaseUrl
+    ? data.customMcpBaseUrl
+    : api;
+  return { apiBaseUrl: api, mcpBaseUrl: mcp };
+}
+
+/**
+ * Persist the custom backend URLs and make "custom" the active environment.
+ * Throws on an invalid URL - callers surface the message to the user.
+ */
+export function setCustomBackend(apiBaseUrl: string, mcpBaseUrl?: string): CustomBackendUrls {
+  const api = parseCustomBackendUrl(apiBaseUrl);
+  if (!api) throw new Error(`Not a valid http(s) URL: ${apiBaseUrl}`);
+  const mcp = mcpBaseUrl ? parseCustomBackendUrl(mcpBaseUrl) : api;
+  if (!mcp) throw new Error(`Not a valid http(s) URL: ${mcpBaseUrl}`);
+  const existing = readDebugEnvOverrideFile();
+  writeFileSync(
+    getDebugEnvOverridePath(),
+    JSON.stringify({ ...existing, env: "custom", customApiBaseUrl: api, customMcpBaseUrl: mcp }),
+    "utf-8",
+  );
+  return { apiBaseUrl: api, mcpBaseUrl: mcp };
 }
 
 // ── Setup data persistence ──────────────────────────────────────────
@@ -303,7 +377,9 @@ export function getCredentialsForEnv(env?: string): EnvCredentials | null {
 // ── URL helpers ─────────────────────────────────────────────────────
 
 export function getActiveEnv(): string {
-  return getDebugEnvOverride() ?? getBuildDefaultEnv() ?? "demo";
+  // Release is the safe default: a packaged build with no baked env must talk
+  // to the production backend, not the demo one.
+  return getDebugEnvOverride() ?? getBuildDefaultEnv() ?? "release";
 }
 
 export function getApiBaseUrl(): string | null {

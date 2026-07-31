@@ -185,6 +185,16 @@ const api = {
       docsBaseUrl: string
     }> => ipcRenderer.invoke('config:getEffectiveBaseUrls'),
     getActiveEnv: (): Promise<string> => ipcRenderer.invoke('config:getActiveEnv'),
+    getCustomBackend: (): Promise<{ apiBaseUrl: string; mcpBaseUrl: string } | null> =>
+      ipcRenderer.invoke('config:getCustomBackend'),
+    setCustomBackend: (
+      apiBaseUrl: string
+    ): Promise<
+      | { ok: true; urls: { apiBaseUrl: string; mcpBaseUrl: string } }
+      | { ok: false; error: string }
+    > => ipcRenderer.invoke('config:setCustomBackend', apiBaseUrl),
+    useDefaultBackend: (): Promise<{ env: string }> =>
+      ipcRenderer.invoke('config:useDefaultBackend'),
     onEnvChanged: (callback: (env: string) => void): (() => void) => {
       const handler = (_event: Electron.IpcRendererEvent, env: string): void => callback(env)
       ipcRenderer.on('env:changed', handler)

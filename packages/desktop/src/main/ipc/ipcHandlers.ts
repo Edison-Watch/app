@@ -54,7 +54,10 @@ import {
   getSavedAccounts,
   switchToAccount,
   removeAccount,
-  getCredentialsForEnv
+  getCredentialsForEnv,
+  getCustomBackend,
+  setCustomBackend,
+  setDebugEnvOverride
 } from '../infra/setupConfig'
 import { handleApproval, pendingApprovals, resizeApprovalWindow } from './approvalsHandler'
 
@@ -136,6 +139,44 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       apiBaseUrl,
       docsBaseUrl: ENV_DOCS_URL
     }
+  })
+
+  // Config: stored custom (self-hosted) backend URLs, if any
+  ipcMain.handle('config:getCustomBackend', () => getCustomBackend())
+
+  // Config: connect to a custom (self-hosted) backend. Persists the URLs,
+  // switches the active env to "custom" and tells the renderer to reload.
+  // The same daemon re-enrollment as the menu's env switcher runs afterwards
+  // so already-configured agents get repointed at the new backend.
+  ipcMain.handle('config:setCustomBackend', async (_event, apiBaseUrl: string) => {
+    let urls: { apiBaseUrl: string; mcpBaseUrl: string }
+    try {
+      urls = setCustomBackend(apiBaseUrl)
+    } catch (err) {
+      return { ok: false as const, error: err instanceof Error ? err.message : String(err) }
+    }
+    console.log(`[config:setCustomBackend] custom backend set to ${urls.apiBaseUrl}`)
+    getMainWindow()?.webContents.send('env:changed', 'custom')
+    if (getCredentialsForEnv('custom')?.apiKey) {
+      const outcome = await bootstrapDetectord().catch((err) => {
+        console.error('[config:setCustomBackend] MCP integrations update failed:', err)
+        return null
+      })
+      if (!outcome?.applied) {
+        console.warn(
+          '[config:setCustomBackend] MCP integrations NOT updated - agents still point at the previous backend'
+        )
+      }
+    }
+    return { ok: true as const, urls }
+  })
+
+  // Config: drop the env override and return to the build's default backend.
+  ipcMain.handle('config:useDefaultBackend', () => {
+    setDebugEnvOverride(null)
+    const env = getActiveEnv()
+    getMainWindow()?.webContents.send('env:changed', env)
+    return { env }
   })
 
   // Setup: get persisted setup data
