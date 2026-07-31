@@ -5,6 +5,8 @@ import path from 'node:path'
 
 import { app } from 'electron'
 
+import { STDIOD, devDaemonCandidates, shippedExeName } from './daemonPaths'
+
 // Resolve the absolute path to the edison-stdiod binary as it ships inside the
 // app.
 //
@@ -13,28 +15,17 @@ import { app } from 'electron'
 // in electron-builder.yml). In dev we point at the cargo target directory
 // inside the repo so `npm run dev` works without a full package build - the dev
 // workflow expects the developer to have run `cargo build --release` (or a
-// build-stdiod script) at least once.
+// build-stdiod script) at least once. See runtime/daemonPaths.ts.
 //
 // On Linux this path is EPHEMERAL: the AppImage mounts at a different
 // /tmp/.mount_* directory every launch, so it must not be baked into anything
 // long-lived (e.g. a systemd unit's ExecStart). Use getStdiodBinaryPath() for
 // that - it returns the stable copy. This function is the source for staging.
 function getBundledStdiodBinaryPath(): string {
-  const exe = process.platform === 'win32' ? 'edison-stdiod.exe' : 'edison-stdiod'
   if (app.isPackaged) {
-    return path.join(process.resourcesPath, 'bin', exe)
+    return path.join(process.resourcesPath, 'bin', shippedExeName(STDIOD))
   }
-  // __dirname in dev is <pkg>/out/main, so three steps up is `packages/`, not
-  // the repo root. Check the monorepo location first (crates/stdiod), then the
-  // binary staged by scripts/build-stdiod.sh, then the pre-monorepo sibling
-  // checkout. Mirrors detectord/binary.ts.
-  const packagesDir = path.resolve(__dirname, '..', '..', '..')
-  const repoRoot = path.resolve(packagesDir, '..')
-  const candidates = [
-    path.join(repoRoot, 'crates', 'stdiod', 'target', 'release', exe),
-    path.join(__dirname, '..', '..', 'bin', exe),
-    path.join(packagesDir, 'stdiod', 'target', 'release', exe)
-  ]
+  const candidates = devDaemonCandidates(STDIOD, __dirname)
   return candidates.find(existsSync) ?? candidates[0]!
 }
 
