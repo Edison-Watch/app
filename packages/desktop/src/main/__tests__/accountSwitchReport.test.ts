@@ -134,7 +134,8 @@ describe('accounts:switch reporting', () => {
       getMainWindow: () => null,
       getAuthLoopbackUrl: () => null,
       createTray: () => {},
-      startEventSubscription: () => {}
+      startEventSubscription: () => {},
+      updateAppMenu: () => {}
     })
   })
 

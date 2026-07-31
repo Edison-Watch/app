@@ -1,6 +1,7 @@
 import { Button, Badge } from "@edison-watch/shared/ui";
 import { clearCachedSecretKey } from "@edison-watch/shared/crypto";
 import PromptInjectionAnimation from "../animations/PromptInjectionAnimation";
+import CustomServerConnect from "./CustomServerConnect";
 import type { AuthState } from "../../hooks/useAuth";
 
 function BrowserIcon() {
@@ -165,6 +166,9 @@ export default function WelcomeStep({ auth, onNext }: WelcomeStepProps): React.R
           </div>
         )}
       </div>
+
+      {/* Self-hosted deployments: connect to any Edison backend by URL. */}
+      {!auth.awaitingBrowserCallback && <CustomServerConnect />}
     </div>
   );
 }

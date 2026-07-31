@@ -105,6 +105,9 @@ export function createMockApi(): PartialApi {
         docsBaseUrl: ''
       }),
       getActiveEnv: async () => 'demo',
+      getCustomBackend: async () => null,
+      setCustomBackend: async () => ({ ok: false as const, error: 'not available in stories' }),
+      useDefaultBackend: async () => ({ env: 'demo' }),
       onEnvChanged: noopUnsubscribe
     },
     accounts: { list: async () => [], switch: async () => ({ ok: true }), remove: async () => ({ ok: true }) },

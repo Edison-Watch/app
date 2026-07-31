@@ -157,6 +157,14 @@ interface EdisonAPI {
       docsBaseUrl: string
     }>
     getActiveEnv: () => Promise<string>
+    getCustomBackend: () => Promise<{ apiBaseUrl: string; mcpBaseUrl: string } | null>
+    setCustomBackend: (
+      apiBaseUrl: string
+    ) => Promise<
+      | { ok: true; urls: { apiBaseUrl: string; mcpBaseUrl: string } }
+      | { ok: false; error: string }
+    >
+    useDefaultBackend: () => Promise<{ env: string }>
     onEnvChanged: (callback: (env: string) => void) => () => void
   }
   accounts: {

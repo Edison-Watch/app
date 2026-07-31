@@ -8,11 +8,13 @@
  */
 export async function fetchAutoQuarantineEnabled(
   apiBaseUrl: string,
-  apiKey: string
+  apiKey: string,
+  options?: { signal?: AbortSignal }
 ): Promise<boolean> {
   try {
     const resp = await fetch(`${apiBaseUrl}/api/v1/user/domain-config`, {
       headers: { Authorization: `Bearer ${apiKey}` },
+      signal: options?.signal,
     });
     if (!resp.ok) return false;
     const config = (await resp.json()) as { auto_quarantine_other_mcp_servers?: boolean };

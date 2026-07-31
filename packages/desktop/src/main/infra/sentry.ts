@@ -3,6 +3,8 @@
 // which crashes because electron.app is undefined until after app.ready.
 import { app } from 'electron'
 
+import { getActiveEnv } from './setupConfig'
+
 type SentryElectronMain = typeof import('@sentry/electron/main')
 
 const SENTRY_DSN =
@@ -29,6 +31,12 @@ export function initSentry(): void {
   // crashes in Sentry anyway. See scripts/test-autoupdate.sh.
   if (process.env.EW_UPDATE_TEST) {
     console.log('[Sentry] Disabled for auto-update test')
+    return
+  }
+  // Custom (self-hosted) backend: no telemetry to Edison's Sentry project.
+  // Checked once at startup - switching envs takes effect on the next launch.
+  if (getActiveEnv() === 'custom') {
+    console.log('[Sentry] Disabled for custom (self-hosted) backend')
     return
   }
 
