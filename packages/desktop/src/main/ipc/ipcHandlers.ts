@@ -156,8 +156,12 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       return null
     })
     if (!outcome?.applied) {
-      console.warn(
-        `[${context}] MCP integrations NOT updated - agents still point at the previous backend`
+      // Same visible warning the account switcher uses: a silent partial
+      // failure would leave agents talking to the previous backend while the
+      // app claims the switch succeeded.
+      await warnAgentsNotRepointed(
+        env === 'custom' ? 'the self-hosted server' : `the ${env} environment`,
+        outcome?.reason
       )
     }
   }
