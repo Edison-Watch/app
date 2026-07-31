@@ -13,6 +13,21 @@
 
 export const STORAGE_KEY = 'edison_debug_env'
 
+/**
+ * localStorage key holding the custom (self-hosted) backend URLs as JSON:
+ * `{ "apiBaseUrl": "...", "mcpBaseUrl": "..." }`. The Electron main process
+ * owns the canonical copy (in its debug-env override file); the renderer
+ * mirrors it here so getEnv() can resolve the "custom" environment.
+ */
+export const CUSTOM_BACKEND_STORAGE_KEY = 'edison_custom_backend'
+
+/** URLs of a custom (self-hosted) backend. */
+export interface CustomBackendUrls {
+  apiBaseUrl: string
+  /** Defaults to apiBaseUrl - the backend serves /mcp/<key>/ same-origin. */
+  mcpBaseUrl?: string
+}
+
 export interface EnvConfig {
   SENTRY_DSN: string
   POSTHOG_API_KEY: string
@@ -90,12 +105,69 @@ function resolveLocalConfig(): EnvConfig {
   }
 }
 
+// ── Custom (self-hosted) backend ─────────────────────────────────────
+
+/** Read the mirrored custom backend URLs; null when unset or malformed. */
+export function getStoredCustomBackend(): CustomBackendUrls | null {
+  try {
+    const raw = localStorage.getItem(CUSTOM_BACKEND_STORAGE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as CustomBackendUrls
+    if (typeof parsed?.apiBaseUrl !== 'string' || !parsed.apiBaseUrl) return null
+    // A malformed optional field must not survive into resolveCustomConfig,
+    // where a non-string would crash URL trimming.
+    const mcpBaseUrl =
+      typeof parsed.mcpBaseUrl === 'string' && parsed.mcpBaseUrl ? parsed.mcpBaseUrl : undefined
+    return { apiBaseUrl: parsed.apiBaseUrl, ...(mcpBaseUrl ? { mcpBaseUrl } : {}) }
+  } catch {
+    return null
+  }
+}
+
+export function storeCustomBackend(urls: CustomBackendUrls): void {
+  try {
+    localStorage.setItem(CUSTOM_BACKEND_STORAGE_KEY, JSON.stringify(urls))
+  } catch {
+    // localStorage unavailable
+  }
+}
+
+export function clearStoredCustomBackend(): void {
+  try {
+    localStorage.removeItem(CUSTOM_BACKEND_STORAGE_KEY)
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * Build the "custom" environment from the stored URLs. Telemetry stays off:
+ * a self-hosted instance is someone else's deployment, so nothing is
+ * reported to our Sentry/PostHog projects and there is no update feed.
+ */
+function resolveCustomConfig(): EnvConfig | null {
+  const stored = getStoredCustomBackend()
+  if (!stored) return null
+  const trim = (url: string): string => url.replace(/\/$/, '')
+  return {
+    SENTRY_DSN: '',
+    POSTHOG_API_KEY: '',
+    POSTHOG_FEEDBACK_SURVEY_ID: '',
+    DEPLOY_ENV: 'custom',
+    API_BASE_URL: trim(stored.apiBaseUrl),
+    MCP_BASE_URL: trim(stored.mcpBaseUrl || stored.apiBaseUrl),
+    RELEASES_BASE_URL: ''
+  }
+}
+
 const BUILD_TIME_ENV: string =
-  (import.meta as unknown as { env?: { VITE_DEPLOY_ENV?: string } }).env?.VITE_DEPLOY_ENV ?? 'demo'
+  (import.meta as unknown as { env?: { VITE_DEPLOY_ENV?: string } }).env?.VITE_DEPLOY_ENV ??
+  'release'
 
 export function getActiveEnvName(): string {
   try {
     const override = localStorage.getItem(STORAGE_KEY)
+    if (override === 'custom' && getStoredCustomBackend()) return 'custom'
     if (override && override in CONFIGS) return override
   } catch {
     // localStorage unavailable
@@ -106,11 +178,13 @@ export function getActiveEnvName(): string {
 export function getEnv(): EnvConfig {
   const name = getActiveEnvName()
   if (name === 'local') return resolveLocalConfig()
-  return CONFIGS[name] ?? CONFIGS['demo']!
+  if (name === 'custom') return resolveCustomConfig() ?? RELEASE_CONFIG
+  return CONFIGS[name] ?? RELEASE_CONFIG
 }
 
 /** Look up config by explicit name - safe for Node/main-process (no localStorage). */
 export function getEnvByName(name: string): EnvConfig | undefined {
   if (name === 'local') return resolveLocalConfig()
+  if (name === 'custom') return resolveCustomConfig() ?? undefined
   return CONFIGS[name]
 }

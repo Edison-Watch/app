@@ -10,6 +10,7 @@ import {
   DEBUG_ENV_NAMES,
   getBuildDefaultEnv,
   getCredentialsForEnv,
+  getCustomBackend,
   getDebugEnvOverride,
   getMcpBaseUrl,
   setDebugEnvOverride,
@@ -30,15 +31,22 @@ export function buildAppMenu(deps: AppMenuDeps): Menu {
   // Hide the Developer menu (which includes the env switcher) on release builds.
   const showDeveloperMenu = getBuildDefaultEnv() !== 'release'
   const currentEnv = getDebugEnvOverride() ?? getBuildDefaultEnv()
+  // "custom" is only selectable once a self-hosted URL has been stored (the
+  // welcome screen's "Connect by URL" flow writes it); switching to it here
+  // reuses that URL.
+  const customBackend = getCustomBackend()
   const envSubmenu: MenuItemConstructorOptions[] = DEBUG_ENV_NAMES.map((name) => ({
     label:
       name === 'dev'
         ? 'dev (localhost)'
-        : name === 'temp-local-stack'
-          ? 'temp-local-stack (railway offline)'
+        : name === 'custom'
+          ? customBackend
+            ? `custom (${customBackend.apiBaseUrl})`
+            : 'custom (set via the sign-in screen)'
           : name,
     type: 'radio' as const,
     checked: currentEnv === name,
+    enabled: name !== 'custom' || customBackend !== null,
     click: async () => {
       setDebugEnvOverride(name)
       deps.logEnvConfig(`switch→${name}`)

@@ -97,7 +97,7 @@ TLDR: a design-system half and a client-services half; browse [`src/`](src) for 
 - **Animations** ([`src/animations/`](src/animations)): self-contained SVG + CSS-keyframe animations for product and threat explainers. See [`src/animations/CLAUDE.md`](src/animations/CLAUDE.md) for the design language and copywriting conventions.
 - **SVG assets** ([`src/svg/`](src/svg)): logo, app-icon, and connector SVG path data.
 - **Auth** ([`src/auth/`](src/auth)): browser-side authentication and the shared Supabase client.
-- **Config** ([`src/config/`](src/config)): runtime environment configuration with demo/release/local switching.
+- **Config** ([`src/config/`](src/config)): runtime environment configuration with demo/release/local switching, plus a "custom" environment for self-hosted backends.
 - **Crypto** ([`src/crypto/`](src/crypto)): client-side encryption and secret-key API helpers.
 - **Agent registry** ([`src/agent-registry/`](src/agent-registry)): display names, brand colors, and icon data for supported coding agents.
 
@@ -105,17 +105,14 @@ TLDR: a design-system half and a client-services half; browse [`src/`](src) for 
 
 ## Configuration scope
 
-The client configuration in [`src/config/env-config.ts`](src/config/env-config.ts) intentionally contains Edison Watch service endpoints and browser-facing values. This keeps client behavior auditable and supports the apps that consume the package. Both `demo` and `release` configs are baked into the bundle at build time, and a `local` config resolves against the page origin for the fully-offline stack.
+The client configuration in [`src/config/env-config.ts`](src/config/env-config.ts) intentionally contains Edison Watch service endpoints and browser-facing values. This keeps client behavior auditable and supports the apps that consume the package. Both `demo` and `release` configs are baked into the bundle at build time, a `local` config resolves against the page origin for the fully-offline stack, and a `custom` config resolves from URLs stored under `CUSTOM_BACKEND_STORAGE_KEY` when the user points the app at a self-hosted deployment (telemetry values stay empty for it).
 
 ```ts
 export interface EnvConfig {
-  SUPABASE_URL: string // GoTrue / Supabase auth origin (supabase-js base URL)
-  SUPABASE_ANON_KEY: string // Publishable anon key (safe in client bundles)
-  FUNCTIONS_URL: string // Base URL for Supabase edge functions
   SENTRY_DSN: string // Error reporting DSN
   POSTHOG_API_KEY: string // Product analytics key
   POSTHOG_FEEDBACK_SURVEY_ID: string
-  DEPLOY_ENV: string // "demo" | "release" | "local"
+  DEPLOY_ENV: string // "demo" | "release" | "local" | "custom"
   API_BASE_URL: string // Default API server base URL
   MCP_BASE_URL: string // Default MCP server base URL
   RELEASES_BASE_URL: string // Desktop release bucket (electron-updater feed)

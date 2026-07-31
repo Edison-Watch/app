@@ -492,7 +492,8 @@ app.whenReady().then(async () => {
     getMainWindow: () => mainWindow,
     getAuthLoopbackUrl: () => getAuthLoopbackUrl(),
     createTray,
-    startEventSubscription
+    startEventSubscription,
+    updateAppMenu
   })
   slog('registerIpcHandlers ok')
 

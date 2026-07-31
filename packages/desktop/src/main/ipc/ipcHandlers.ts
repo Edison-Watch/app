@@ -54,7 +54,10 @@ import {
   getSavedAccounts,
   switchToAccount,
   removeAccount,
-  getCredentialsForEnv
+  getCredentialsForEnv,
+  getCustomBackend,
+  setCustomBackend,
+  setDebugEnvOverride
 } from '../infra/setupConfig'
 import { handleApproval, pendingApprovals, resizeApprovalWindow } from './approvalsHandler'
 
@@ -63,6 +66,8 @@ export interface IpcHandlerDeps {
   getAuthLoopbackUrl: () => string | null
   createTray: () => void
   startEventSubscription: () => void
+  /** Rebuild the native app menu (env switcher state) after config changes. */
+  updateAppMenu: () => void
 }
 
 export function registerIpcHandlers(deps: IpcHandlerDeps): void {
@@ -70,7 +75,8 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     getMainWindow,
     getAuthLoopbackUrl,
     createTray,
-    startEventSubscription
+    startEventSubscription,
+    updateAppMenu
   } = deps
 
   // Auth: open SAML/SSO URL in a separate BrowserWindow
@@ -136,6 +142,61 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       apiBaseUrl,
       docsBaseUrl: ENV_DOCS_URL
     }
+  })
+
+  // Re-enroll the detector daemon so already-configured agents follow an env
+  // switch (same contract as the Developer menu's switcher): enrollment hands
+  // the daemon the target env's credentials and its install step rewrites the
+  // edison-watch entry with the new URL. Skipped when the target env has no
+  // stored API key yet - there is nothing to repoint agents to.
+  const repointAgents = async (env: string, context: string): Promise<void> => {
+    if (!getCredentialsForEnv(env)?.apiKey || !getMcpBaseUrl()) return
+    const outcome = await bootstrapDetectord().catch((err) => {
+      console.error(`[${context}] MCP integrations update failed:`, err)
+      return null
+    })
+    if (!outcome?.applied) {
+      // Same visible warning the account switcher uses: a silent partial
+      // failure would leave agents talking to the previous backend while the
+      // app claims the switch succeeded.
+      await warnAgentsNotRepointed(
+        env === 'custom' ? 'the self-hosted server' : `the ${env} environment`,
+        outcome?.reason
+      )
+    }
+  }
+
+  // Config: stored custom (self-hosted) backend URLs, if any
+  ipcMain.handle('config:getCustomBackend', () => getCustomBackend())
+
+  // Config: connect to a custom (self-hosted) backend. Persists the URLs,
+  // switches the active env to "custom" and tells the renderer to reload.
+  // The same daemon re-enrollment as the menu's env switcher runs afterwards
+  // so already-configured agents get repointed at the new backend.
+  ipcMain.handle('config:setCustomBackend', async (_event, apiBaseUrl: string) => {
+    let urls: { apiBaseUrl: string; mcpBaseUrl: string }
+    try {
+      urls = setCustomBackend(apiBaseUrl)
+    } catch (err) {
+      return { ok: false as const, error: err instanceof Error ? err.message : String(err) }
+    }
+    console.log(`[config:setCustomBackend] custom backend set to ${urls.apiBaseUrl}`)
+    updateAppMenu()
+    getMainWindow()?.webContents.send('env:changed', 'custom')
+    await repointAgents('custom', 'config:setCustomBackend')
+    return { ok: true as const, urls }
+  })
+
+  // Config: drop the env override and return to the build's default backend.
+  // The stored custom URLs survive (setDebugEnvOverride only clears the env),
+  // so the Developer menu can switch back to them later.
+  ipcMain.handle('config:useDefaultBackend', async () => {
+    setDebugEnvOverride(null)
+    const env = getActiveEnv()
+    updateAppMenu()
+    getMainWindow()?.webContents.send('env:changed', env)
+    await repointAgents(env, 'config:useDefaultBackend')
+    return { env }
   })
 
   // Setup: get persisted setup data
