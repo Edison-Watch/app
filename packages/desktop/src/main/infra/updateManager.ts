@@ -25,7 +25,7 @@ import { app, BrowserWindow } from 'electron'
 import electronUpdater, { type UpdateInfo, type ProgressInfo } from 'electron-updater'
 import { getBuildDefaultEnv } from './setupConfig'
 import { getUpdateSettings, setUpdateSettings, type UpdateSettings } from './updateSettings'
-import { bypassQuitConfirmation } from '../runtime/quitConfirmation'
+import { bypassQuitConfirmation, resetQuitConfirmationBypass } from '../runtime/quitConfirmation'
 
 // electron-updater is CJS; under electron-vite a named import resolves to
 // undefined, so take the default export and destructure it.
@@ -240,6 +240,9 @@ export function quitAndInstall(): void {
     // (isSilent=false, isForceRunAfter=true) so the app relaunches after install.
     autoUpdater.quitAndInstall(false, true)
   } catch (err) {
+    // The quit never happened, so disarm the bypass - otherwise the next
+    // Cmd+Q would silently skip the confirmation dialog.
+    resetQuitConfirmationBypass()
     console.error('[update] quitAndInstall failed:', err)
   }
 }

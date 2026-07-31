@@ -35,29 +35,46 @@ export function buildQuitConfirmationDetail(quarantineEnabled: boolean): string 
   return quarantineEnabled ? `${QUIT_BASE_DETAIL}\n\n${QUIT_QUARANTINE_DETAIL}` : QUIT_BASE_DETAIL
 }
 
-let quitConfirmed = false
+// One-shot: consumed by the next 'before-quit'. Never left armed across a
+// failed quit, so a bypassed quit that doesn't happen (e.g. the updater threw)
+// can't silently disable the dialog for the rest of the process lifetime.
+let skipConfirmationOnce = false
 let confirmationInFlight = false
 
 /**
- * Skip the confirmation dialog for the next quit. Used by flows where the quit
- * is an explicit, already-confirmed action (e.g. installing a downloaded update).
+ * Skip the confirmation dialog for the NEXT quit only. Used by flows where the
+ * quit is an explicit, already-confirmed action (e.g. installing a downloaded
+ * update). Callers whose quit attempt fails without ever firing 'before-quit'
+ * should call resetQuitConfirmationBypass() so the bypass doesn't stay armed.
  */
 export function bypassQuitConfirmation(): void {
-  quitConfirmed = true
+  skipConfirmationOnce = true
+}
+
+/** Undo bypassQuitConfirmation() after a quit attempt that failed to quit. */
+export function resetQuitConfirmationBypass(): void {
+  skipConfirmationOnce = false
 }
 
 /** Best-effort org quarantine flag, bounded so the dialog never hangs on network. */
 async function isQuarantineEnabled(): Promise<boolean> {
+  const controller = new AbortController()
+  // Abort the request when the deadline hits (fetchAutoQuarantineEnabled maps
+  // the abort to false), rather than racing a timer and leaving the fetch
+  // running in the background. unref so a pending timer can't hold the process.
+  const timer = setTimeout(() => controller.abort(), QUARANTINE_LOOKUP_TIMEOUT_MS)
+  timer.unref?.()
   try {
     const apiBaseUrl = getApiBaseUrl()
     const creds = getCredentialsForEnv()
     if (!apiBaseUrl || !creds?.apiKey) return false
-    return await Promise.race([
-      fetchAutoQuarantineEnabled(apiBaseUrl, creds.apiKey),
-      new Promise<boolean>((resolve) => setTimeout(() => resolve(false), QUARANTINE_LOOKUP_TIMEOUT_MS))
-    ])
+    return await fetchAutoQuarantineEnabled(apiBaseUrl, creds.apiKey, {
+      signal: controller.signal
+    })
   } catch {
     return false
+  } finally {
+    clearTimeout(timer)
   }
 }
 
@@ -73,7 +90,7 @@ async function confirmQuit(): Promise<void> {
     detail: buildQuitConfirmationDetail(quarantineEnabled)
   })
   if (response === 1) {
-    quitConfirmed = true
+    skipConfirmationOnce = true
     app.quit()
   }
 }
@@ -86,13 +103,24 @@ async function confirmQuit(): Promise<void> {
 export function initQuitConfirmation(): void {
   if (process.platform !== 'darwin') return
   app.on('before-quit', (event) => {
-    if (quitConfirmed) return
+    if (skipConfirmationOnce) {
+      skipConfirmationOnce = false
+      return
+    }
     event.preventDefault()
     // A second Cmd+Q while the dialog is up must not stack another dialog.
     if (confirmationInFlight) return
     confirmationInFlight = true
-    void confirmQuit().finally(() => {
-      confirmationInFlight = false
-    })
+    void confirmQuit()
+      .catch((err) => {
+        // The dialog itself failed (not a user cancel). Never trap the user in
+        // an app they can't quit: log and let this quit proceed unconfirmed.
+        console.error('[QuitConfirmation] dialog failed - quitting without confirmation:', err)
+        skipConfirmationOnce = true
+        app.quit()
+      })
+      .finally(() => {
+        confirmationInFlight = false
+      })
   })
 }

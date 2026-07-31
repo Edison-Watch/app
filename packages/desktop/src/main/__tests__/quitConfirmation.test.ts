@@ -161,4 +161,48 @@ describe('quitConfirmation', () => {
     expect(preventDefault).not.toHaveBeenCalled()
     expect(showMessageBoxMock).not.toHaveBeenCalled()
   })
+
+  it('bypass is one-shot: the quit after a bypassed quit asks again', async () => {
+    showMessageBoxMock.mockResolvedValue({ response: 0 })
+    const mod = await loadModule()
+    mod.initQuitConfirmation()
+    const handler = getBeforeQuitHandler()!
+
+    mod.bypassQuitConfirmation()
+    handler({ preventDefault: vi.fn() })
+
+    const preventDefault = vi.fn()
+    handler({ preventDefault })
+    await flushAsync()
+    expect(preventDefault).toHaveBeenCalled()
+    expect(showMessageBoxMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('resetQuitConfirmationBypass disarms a pending bypass', async () => {
+    showMessageBoxMock.mockResolvedValue({ response: 0 })
+    const mod = await loadModule()
+    mod.initQuitConfirmation()
+
+    mod.bypassQuitConfirmation()
+    mod.resetQuitConfirmationBypass()
+
+    const preventDefault = vi.fn()
+    getBeforeQuitHandler()!({ preventDefault })
+    await flushAsync()
+    expect(preventDefault).toHaveBeenCalled()
+    expect(showMessageBoxMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('quits without confirmation if the dialog itself fails', async () => {
+    showMessageBoxMock.mockRejectedValue(new Error('dialog broken'))
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const mod = await loadModule()
+    mod.initQuitConfirmation()
+
+    getBeforeQuitHandler()!({ preventDefault: vi.fn() })
+    await flushAsync()
+
+    expect(appQuitMock).toHaveBeenCalledTimes(1)
+    consoleError.mockRestore()
+  })
 })
