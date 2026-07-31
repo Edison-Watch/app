@@ -11,9 +11,14 @@ import {
   shippedExeName
 } from '../runtime/daemonPaths'
 
+// Fixtures and expectations are both built with path.join so they compare
+// like-for-like on Windows, where node:path emits backslashes and anchors an
+// absolute path to the current drive. The `win` argument below only controls
+// the .exe suffix, never the separators.
+const REPO_ROOT = path.resolve(path.sep, 'repo')
 // Where electron-vite emits the main bundle, i.e. the __dirname the real
 // callers pass in.
-const OUT_MAIN = '/repo/packages/desktop/out/main'
+const OUT_MAIN = path.join(REPO_ROOT, 'packages', 'desktop', 'out', 'main')
 
 const DAEMONS = [STDIOD, DETECTORD]
 
@@ -23,19 +28,19 @@ describe.each(DAEMONS)('devDaemonCandidates($crate)', (spec) => {
     // move to crates/ that every dev build reported "Degraded: the agent and
     // MCP detection daemon is missing".
     expect(devDaemonCandidates(spec, OUT_MAIN, false)[0]).toBe(
-      `/repo/crates/${spec.crate}/target/release/${spec.cargoBin}`
+      path.join(REPO_ROOT, 'crates', spec.crate, 'target', 'release', spec.cargoBin)
     )
   })
 
   it('includes the path scripts/build-<daemon>.sh stages to', () => {
     expect(devDaemonCandidates(spec, OUT_MAIN, false)).toContain(
-      `/repo/packages/desktop/bin/${spec.shippedName}`
+      path.join(REPO_ROOT, 'packages', 'desktop', 'bin', spec.shippedName)
     )
   })
 
   it('keeps the pre-monorepo sibling checkout as a fallback', () => {
     expect(devDaemonCandidates(spec, OUT_MAIN, false)).toContain(
-      `/repo/packages/${spec.crate}/target/release/${spec.cargoBin}`
+      path.join(REPO_ROOT, 'packages', spec.crate, 'target', 'release', spec.cargoBin)
     )
   })
 
@@ -55,7 +60,8 @@ describe.each(DAEMONS)('devDaemonCandidates($crate)', (spec) => {
 
   it('never resolves outside the repo root', () => {
     for (const candidate of devDaemonCandidates(spec, OUT_MAIN, false)) {
-      expect(candidate.startsWith('/repo/')).toBe(true)
+      expect(path.isAbsolute(candidate)).toBe(true)
+      expect(path.relative(REPO_ROOT, candidate).startsWith('..')).toBe(false)
     }
   })
 
