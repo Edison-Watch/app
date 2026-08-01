@@ -17,6 +17,7 @@ import {
   getCredentialsForEnv
 } from '../infra/setupConfig'
 import { buildApprovalDialogHtml, renderAgentIconSvg } from '../dialogs/approvalDialogView'
+import { approvalWindowMs, hasExpired } from './approvalExpiry'
 
 // ── SSE state ───────────────────────────────────────────────────────
 
@@ -27,10 +28,9 @@ let reconnectAttempts = 0
 const MAX_RECONNECT_ATTEMPTS = 10
 let desktopLoginRegistered = false
 const RECONNECT_DELAY_MS = 1000
-// Backend auto-denies a pending approval after EDISON_APPROVAL_TIMEOUT_S (default
-// 30s); a later click would act on an already-denied request, so expire locally to
-// match. Keep in sync with APPROVAL_TIMEOUT_MS in dialogs/approvalDialogView.ts.
-const APPROVAL_EXPIRY_MS = 30_000
+// A pending approval is dropped locally once the backend has stopped holding the
+// call, because a later click would act on an already-resolved request. How long
+// that is varies per approval - see approvalExpiry.ts.
 let expiryTimer: ReturnType<typeof setInterval> | null = null
 
 // Approval window sizing. The window fits its rendered content (variable per
@@ -89,6 +89,8 @@ export interface PendingApproval {
   /** Pretty-printed tool-call arguments, shown in an expandable details block. */
   argumentsPreview?: string
   timestamp: number
+  /** How long the backend holds *this* call, in ms - not a global constant. */
+  timeoutMs: number
   agentName?: string
 }
 
@@ -101,6 +103,8 @@ export interface TrifectaEventData {
   arguments_preview?: string
   user_id?: string
   agent_name?: string
+  /** Effective hold window the backend declared for this approval, in seconds. */
+  approval_timeout_s?: number
 }
 
 // References to windows managed by the caller (index.ts) - populated via initApprovalsHandler.
@@ -270,6 +274,7 @@ function handleTrifectaEvent(data: TrifectaEventData): void {
     risk,
     argumentsPreview: arguments_preview,
     timestamp: Date.now(),
+    timeoutMs: approvalWindowMs(data.approval_timeout_s),
     agentName: agent_name
   }
   pendingApprovals.set(approvalId, pending)
@@ -287,6 +292,7 @@ function handleTrifectaEvent(data: TrifectaEventData): void {
       risk,
       argumentsPreview: arguments_preview,
       timestamp: pending.timestamp,
+      timeoutMs: pending.timeoutMs,
       agentName: agent_name,
       agentIconSvg: renderAgentIconSvg(agent_name)
     })
@@ -383,7 +389,7 @@ function sweepExpiredApprovals(): void {
   const now = Date.now()
   const expired: string[] = []
   for (const [id, approval] of pendingApprovals) {
-    if (now - approval.timestamp >= APPROVAL_EXPIRY_MS) {
+    if (hasExpired(approval, now)) {
       expired.push(id)
     }
   }
