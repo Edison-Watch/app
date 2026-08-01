@@ -40,7 +40,7 @@
     "electron-window-state": "^5.0.0",
     "eventsource": "^4.1.0",
     "jsonc-parser": "^3.3.1",
-    "smol-toml": "^1.6.1"
+    "smol-toml": "^1.7.1"
   },
   "devDependencies": {
     "@edison-watch/shared": "^0.1.0",
