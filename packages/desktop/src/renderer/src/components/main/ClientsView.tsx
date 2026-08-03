@@ -38,21 +38,23 @@ interface ClientInfo {
 }
 
 // Map client IDs (from McpClientId) to display names. Every id the daemon can
-// report needs an entry - a missing one renders as the raw id.
-const CLIENT_NAMES: Record<string, string> = {
-  "claude-code": "Claude Code",
-  "claude-desktop": "Claude Desktop",
-  "claude-cowork": "Claude Cowork",
-  chatgpt: "ChatGPT",
-  cursor: "Cursor",
-  windsurf: "Windsurf (early alpha)",
-  codex: "Codex",
-  vscode: "VS Code",
-  zed: "Zed (early alpha)",
-  intellij: "IntelliJ IDEA (early alpha)",
-  pycharm: "PyCharm",
-  webstorm: "WebStorm",
-};
+// report needs an entry - a missing one renders as the raw id. A Map for the
+// same reason as UNMANAGEABLE_REASON below: the key comes from the daemon, and
+// an object lookup would answer `constructor` with a function to render.
+const CLIENT_NAMES = new Map<string, string>([
+  ["claude-code", "Claude Code"],
+  ["claude-desktop", "Claude Desktop"],
+  ["claude-cowork", "Claude Cowork"],
+  ["chatgpt", "ChatGPT"],
+  ["cursor", "Cursor"],
+  ["windsurf", "Windsurf (early alpha)"],
+  ["codex", "Codex"],
+  ["vscode", "VS Code"],
+  ["zed", "Zed (early alpha)"],
+  ["intellij", "IntelliJ IDEA (early alpha)"],
+  ["pycharm", "PyCharm"],
+  ["webstorm", "WebStorm"],
+]);
 
 /**
  * `unmanaged` is installed-and-outside-our-reach: a client whose MCP servers
@@ -73,23 +75,34 @@ type ClientStatus = "connected" | "partial-setup" | "installed" | "unmanaged" | 
  * specific advice is keyed by client and the fallback claims only what the flag
  * itself guarantees.
  */
-const UNMANAGEABLE_REASON: Record<string, { row: string; tooltip: string }> = {
-  chatgpt: {
-    row: "Connectors are managed in your account - Edison Watch can't proxy them",
-    tooltip:
-      "This app's MCP servers are Connectors held in your account, not local " +
-      "config Edison Watch can proxy. Remove them and request equivalents from " +
-      "your admin.",
-  },
-};
+interface UnmanageableReason {
+  row: string;
+  tooltip: string;
+}
 
-const FALLBACK_REASON = {
+// A Map, not an object literal: the key is an id the daemon chose, and an
+// object lookup answers inherited keys as though they were entries - a client
+// named `constructor` would take a function where the fallback belongs.
+const UNMANAGEABLE_REASON = new Map<string, UnmanageableReason>([
+  [
+    "chatgpt",
+    {
+      row: "Connectors are managed in your account - Edison Watch can't proxy them",
+      tooltip:
+        "This app's MCP servers are Connectors held in your account, not local " +
+        "config Edison Watch can proxy. Remove them and request equivalents from " +
+        "your admin.",
+    },
+  ],
+]);
+
+const FALLBACK_REASON: UnmanageableReason = {
   row: "Edison Watch can't configure this app",
   tooltip: "Edison Watch can see this app but cannot configure or protect it.",
 };
 
-const unmanageableReason = (id: string): { row: string; tooltip: string } =>
-  UNMANAGEABLE_REASON[id] ?? FALLBACK_REASON;
+const unmanageableReason = (id: string): UnmanageableReason =>
+  UNMANAGEABLE_REASON.get(id) ?? FALLBACK_REASON;
 
 function StatusDot({ status }: { status: ClientStatus }) {
   const colors: Record<ClientStatus, string> = {
@@ -229,7 +242,7 @@ export default function ClientsView(): React.ReactNode {
       setClients(
         statuses.map((s) => ({
           id: s.client,
-          name: CLIENT_NAMES[s.client] ?? s.client,
+          name: CLIENT_NAMES.get(s.client) ?? s.client,
           installed: s.installed,
           hasHook: s.hasHook,
           hookCount: s.hookCount ?? 0,

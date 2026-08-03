@@ -16,6 +16,7 @@ vi.mock('../components/onboarding/PersonalKeyCard', () => ({
 }))
 import AppsStep from '../components/onboarding/AppsStep'
 import MainMenu from '../components/main/MainMenu'
+import ClientsView from '../components/main/ClientsView'
 import EncryptionStep from '../components/onboarding/EncryptionStep'
 
 /**
@@ -147,6 +148,45 @@ describe('MainMenu', () => {
     await waitFor(() => {
       expect(screen.getByRole('alert').textContent).toMatch(/Degraded/i)
     })
+    expectNoRenderErrors()
+  })
+})
+
+describe('ClientsView', () => {
+  const status = (over: Record<string, unknown>) => ({
+    installed: true,
+    hasHook: true,
+    hookCount: 4,
+    totalHooks: 4,
+    mcpConnected: true,
+    mcpConfigured: true,
+    mcpApplicable: true,
+    hooksApplicable: true,
+    manageable: true,
+    ...over
+  })
+
+  it('explains an unmanageable client it knows, and one it does not', async () => {
+    // `manageable` is a capability the daemon can set on any client, so the
+    // copy cannot assume ChatGPT's reason. An unrecognised id has to fall back
+    // to what the flag alone guarantees rather than borrowing that wording.
+    //
+    // `constructor` is the unrecognised id on purpose: the ids are chosen by
+    // the daemon, and an object lookup answers inherited keys as if they were
+    // entries, so it would take a function where the fallback belongs.
+    const api = installMockApi()
+    ;(api.mcp as Record<string, unknown>).getHookStatus = async () => ({
+      statuses: [
+        status({ client: 'chatgpt', manageable: false, mcpApplicable: false, hooksApplicable: false }),
+        status({ client: 'constructor', manageable: false, mcpApplicable: false, hooksApplicable: false })
+      ],
+      daemonUnavailable: false
+    })
+
+    render(<ClientsView />)
+
+    expect(await screen.findByText(/Connectors are managed in your account/)).toBeTruthy()
+    expect(screen.getByText(/^Edison Watch can't configure this app$/)).toBeTruthy()
     expectNoRenderErrors()
   })
 })
