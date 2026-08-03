@@ -121,7 +121,7 @@ jobs:
       # which can't be cross-built to musl with the stock toolchain. Mirrors the
       # desktop app's scripts/build-stdiod-linux.sh.
       - uses: mlugg/setup-zig@v2
-      - uses: taiki-e/install-action@v2
+      - uses: taiki-e/install-action@v2.85.5
         with:
           tool: cargo-zigbuild
 
