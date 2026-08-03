@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import ClientsView from './ClientsView';
 
@@ -35,31 +36,44 @@ const status = (over: Record<string, unknown>) => ({
 export const WithAnUnmanageableClient: Story = {
   decorators: [
     (Story) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (window as any).api.mcp.getHookStatus = async () => ({
-        statuses: [
-          status({ client: 'claude-code' }),
-          status({ client: 'cursor' }),
-          status({
-            client: 'vscode',
-            hasHook: false,
-            hookCount: 2,
-            mcpConnected: false,
-          }),
-          status({
-            client: 'chatgpt',
-            manageable: false,
-            mcpApplicable: false,
-            hooksApplicable: false,
-            hasHook: false,
-            hookCount: 0,
-            totalHooks: 0,
-            mcpConnected: false,
-            mcpConfigured: false,
-          }),
-        ],
-        daemonUnavailable: false,
+      // Storybook keeps every story in a file on one page, so a stub assigned
+      // here outlives the story that set it - the next story added to this file
+      // would silently inherit these four clients. Swap in the initialiser and
+      // restore on unmount: reading the previous value on every render would
+      // capture this stub as the "original" on the second one.
+      const [restore] = useState(() => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const mcp = (window as any).api.mcp;
+        const previous = mcp.getHookStatus;
+        mcp.getHookStatus = async () => ({
+          statuses: [
+            status({ client: 'claude-code' }),
+            status({ client: 'cursor' }),
+            status({
+              client: 'vscode',
+              hasHook: false,
+              hookCount: 2,
+              mcpConnected: false,
+            }),
+            status({
+              client: 'chatgpt',
+              manageable: false,
+              mcpApplicable: false,
+              hooksApplicable: false,
+              hasHook: false,
+              hookCount: 0,
+              totalHooks: 0,
+              mcpConnected: false,
+              mcpConfigured: false,
+            }),
+          ],
+          daemonUnavailable: false,
+        });
+        return () => {
+          mcp.getHookStatus = previous;
+        };
       });
+      useEffect(() => restore, [restore]);
       return (
         <div style={{ width: '520px' }}>
           <Story />

@@ -37,8 +37,13 @@ vi.mock('electron', () => ({
 }))
 
 let readConfigResult: () => Promise<{ content: string | null }> = async () => ({ content: '{}' })
+let listAgentsResult: Record<string, unknown>[] = []
 vi.mock('../detectord/lifecycle', () => ({
-  getDetectordClient: () => ({ connect: async () => {}, readConfig: () => readConfigResult() })
+  getDetectordClient: () => ({
+    connect: async () => {},
+    readConfig: () => readConfigResult(),
+    listAgents: async () => listAgentsResult
+  })
 }))
 
 import { getHookStatus } from '../runtime/hookStatus'
@@ -95,6 +100,30 @@ describe('unmanageable clients', () => {
     // drop every real client out of setup reporting.
     const { UNKNOWN_AGENT_FACTS } = await import('../detectord/agents')
     expect(UNKNOWN_AGENT_FACTS.manageable).toBe(true)
+  })
+})
+
+/**
+ * The wire-to-app hop, which the tests above mock past. `manageable` crosses
+ * here as snake-case JSON from a daemon that may predate the field, and nothing
+ * upstream of this point is typechecked - the payload is parsed, not compiled.
+ */
+describe('AgentInfo -> AgentFacts', () => {
+  // The real module; the rest of this file replaces getAgentFacts with a stub.
+  const real = async () => await vi.importActual<typeof import('../detectord/agents')>('../detectord/agents')
+
+  it('carries an unmanageable agent through as unmanageable', async () => {
+    listAgentsResult = [{ name: 'chatgpt', installed: true, manageable: false }]
+    const facts = await (await real()).getAgentFacts()
+    expect(facts?.get('chatgpt' as McpClientId)?.manageable).toBe(false)
+  })
+
+  it('reads an omitted field as manageable, not as false', async () => {
+    // The older-daemon case. Defaulting to false here would strip every client
+    // of its setup conditions the moment the app outran the daemon.
+    listAgentsResult = [{ name: 'cursor', installed: true }]
+    const facts = await (await real()).getAgentFacts()
+    expect(facts?.get('cursor' as McpClientId)?.manageable).toBe(true)
   })
 })
 

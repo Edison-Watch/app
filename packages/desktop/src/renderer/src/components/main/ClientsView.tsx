@@ -64,6 +64,33 @@ const CLIENT_NAMES: Record<string, string> = {
  */
 type ClientStatus = "connected" | "partial-setup" | "installed" | "unmanaged" | "missing";
 
+/**
+ * Why a given client can't be managed, and what to do about it.
+ *
+ * `manageable` is a capability, not an identity: the daemon can mark any client
+ * unmanageable, and each will be unmanageable for its own reason. Wording that
+ * assumes ChatGPT's reason would quietly become wrong for the next one, so the
+ * specific advice is keyed by client and the fallback claims only what the flag
+ * itself guarantees.
+ */
+const UNMANAGEABLE_REASON: Record<string, { row: string; tooltip: string }> = {
+  chatgpt: {
+    row: "Connectors are managed in your account - Edison Watch can't proxy them",
+    tooltip:
+      "This app's MCP servers are Connectors held in your account, not local " +
+      "config Edison Watch can proxy. Remove them and request equivalents from " +
+      "your admin.",
+  },
+};
+
+const FALLBACK_REASON = {
+  row: "Edison Watch can't configure this app",
+  tooltip: "Edison Watch can see this app but cannot configure or protect it.",
+};
+
+const unmanageableReason = (id: string): { row: string; tooltip: string } =>
+  UNMANAGEABLE_REASON[id] ?? FALLBACK_REASON;
+
 function StatusDot({ status }: { status: ClientStatus }) {
   const colors: Record<ClientStatus, string> = {
     connected: "bg-emerald-400",
@@ -137,9 +164,7 @@ function ConditionTooltip({ client }: { client: ClientInfo }) {
             Not protected
           </p>
           <p className="text-[11px] text-[var(--text-secondary)]">
-            This app&apos;s MCP servers are Connectors held in your account, not
-            local config Edison Watch can proxy. Remove them and request
-            equivalents from your admin.
+            {unmanageableReason(client.id).tooltip}
           </p>
         </div>
       </div>
@@ -393,7 +418,7 @@ export default function ClientsView(): React.ReactNode {
             status === "partial-setup"
               ? getIssueDetail(client)
               : status === "unmanaged"
-                ? "Connectors are managed in your account - Edison Watch can't proxy them"
+                ? unmanageableReason(client.id).row
                 : null;
 
           return (
