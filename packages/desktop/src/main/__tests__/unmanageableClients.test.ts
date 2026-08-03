@@ -15,15 +15,31 @@ import type { McpClientId } from '../discovery/types'
  */
 
 let facts: Map<McpClientId, AgentFacts> | null = new Map()
+/** `list_agents` is a full discovery pass, so who asks for it matters. */
+let factsCalls = 0
 
 vi.mock('../detectord/agents', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../detectord/agents')>()),
-  getAgentFacts: () => Promise.resolve(facts)
+  getAgentFacts: () => {
+    factsCalls += 1
+    return Promise.resolve(facts)
+  }
 }))
 
 // hookStatus reaches DetectordUnavailableError through mcpDiscovery, whose
-// import graph ends up in electron.
-vi.mock('electron', () => ({ app: { getPath: () => '/tmp' }, BrowserWindow: { getAllWindows: () => [] } }))
+// import graph ends up in electron. `ipcMain` is a registry the readConfig
+// tests below reach into to get at the handler.
+const handlers = new Map<string, (event: unknown, ...args: unknown[]) => unknown>()
+vi.mock('electron', () => ({
+  app: { getPath: () => '/tmp' },
+  BrowserWindow: { getAllWindows: () => [] },
+  ipcMain: { handle: (channel: string, fn: never) => handlers.set(channel, fn) }
+}))
+
+let readConfigResult: () => Promise<{ content: string | null }> = async () => ({ content: '{}' })
+vi.mock('../detectord/lifecycle', () => ({
+  getDetectordClient: () => ({ connect: async () => {}, readConfig: () => readConfigResult() })
+}))
 
 import { getHookStatus } from '../runtime/hookStatus'
 
@@ -79,5 +95,45 @@ describe('unmanageable clients', () => {
     // drop every real client out of setup reporting.
     const { UNKNOWN_AGENT_FACTS } = await import('../detectord/agents')
     expect(UNKNOWN_AGENT_FACTS.manageable).toBe(true)
+  })
+})
+
+describe('mcp:readConfig', () => {
+  let readConfig: (event: unknown, client: string) => Promise<{ content: string | null; error?: string }>
+
+  beforeEach(async () => {
+    factsCalls = 0
+    facts = new Map([['chatgpt' as McpClientId, agent({ manageable: false })]])
+    const { registerMcpSubmitHandlers } = await import('../ipc/ipcHandlersMcpSubmit')
+    registerMcpSubmitHandlers()
+    readConfig = handlers.get('mcp:readConfig') as typeof readConfig
+  })
+
+  it('explains Connectors instead of surfacing an error nobody can act on', async () => {
+    readConfigResult = async () => {
+      throw new Error("agent 'chatgpt' has no user-scope config")
+    }
+    const { content, error } = await readConfig(null, 'chatgpt')
+    expect(content).toMatch(/Connectors in your account/)
+    expect(error).toBeUndefined()
+  })
+
+  it('costs no extra discovery pass when the read succeeds', async () => {
+    // The check used to run first, so every successful read paid for a
+    // `list_agents` - and AppsStep re-reads every expanded client on refresh,
+    // turning one wasted scan into one per open panel.
+    readConfigResult = async () => ({ content: '{"mcpServers":{}}' })
+    const { content } = await readConfig(null, 'cursor')
+    expect(content).toBe('{"mcpServers":{}}')
+    expect(factsCalls).toBe(0)
+  })
+
+  it('still passes a real failure through for a manageable client', async () => {
+    readConfigResult = async () => {
+      throw new Error('permission denied')
+    }
+    const { content, error } = await readConfig(null, 'cursor')
+    expect(content).toBeNull()
+    expect(error).toBe('permission denied')
   })
 })

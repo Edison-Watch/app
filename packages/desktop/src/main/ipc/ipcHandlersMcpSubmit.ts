@@ -137,18 +137,6 @@ export function registerMcpSubmitHandlers(): void {
   // Show an agent's config file. The daemon reads it: it owns agent files, and
   // this used to take an arbitrary path from the renderer.
   ipcMain.handle("mcp:readConfig", async (_event, client: string) => {
-    // An unmanageable client has no local config, so asking the daemon for one
-    // only produces an error the user can do nothing about. Say what's actually
-    // going on instead. The daemon is the authority on which those are.
-    const facts = await getAgentFacts();
-    if (facts?.get(client as McpClientId)?.manageable === false) {
-      const name = CLIENT_DISPLAY[client as McpClientId]?.name ?? client;
-      return {
-        content:
-          `${name} keeps its MCP servers as Connectors in your account, not in a ` +
-          `local config file. There is nothing here for Edison Watch to read or protect.`,
-      };
-    }
     try {
       const daemon = getDetectordClient();
       await daemon.connect();
@@ -158,6 +146,24 @@ export function registerMcpSubmitHandlers(): void {
       // as null content and anything else (permissions, a directory, non-UTF-8)
       // as an error, so pass the reason on rather than rendering "no config".
       const message = err instanceof Error ? err.message : String(err);
+
+      // An unmanageable client has no local config, so the failure above is
+      // expected and its message is one the user can do nothing about. Say
+      // what's actually going on instead. The daemon is the authority on which
+      // clients those are, so this asks it - but only here, on a path that has
+      // already failed. Asking up front cost a `list_agents` (a full discovery
+      // pass, plus a workspace hook scan) on every successful read, and the
+      // refresh in AppsStep re-reads every expanded client at once.
+      const facts = await getAgentFacts();
+      if (facts?.get(client as McpClientId)?.manageable === false) {
+        const name = CLIENT_DISPLAY[client as McpClientId]?.name ?? client;
+        return {
+          content:
+            `${name} keeps its MCP servers as Connectors in your account, not in a ` +
+            `local config file. There is nothing here for Edison Watch to read or protect.`,
+        };
+      }
+
       console.warn(`[mcp:readConfig] ${client}: ${message}`);
       return { content: null, error: message };
     }

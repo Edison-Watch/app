@@ -2,6 +2,7 @@
 //! user. Returning protocol DTOs keeps the two front-ends in sync.
 
 use std::path::PathBuf;
+use std::sync::LazyLock;
 
 use anyhow::Context;
 use edison_detectord::{DiscoveredServer, EdisonInstall, ServerConfig, fingerprint};
@@ -18,6 +19,22 @@ use crate::platform;
 use crate::protocol::{AgentInfo, Choice, IntegrationChange, ServerView, Status};
 use crate::quarantined::{QuarantinedEntry, QuarantinedState};
 
+/// Agent names this build cannot manage, computed once.
+///
+/// `is_manageable()` is declared per agent type, so unlike the rest of what
+/// `agents::build()` reports it cannot change while the process runs - no
+/// filesystem state feeds it. Deriving it on every selection filter meant
+/// `apply_integrations` alone rebuilt the whole agent set twice more per
+/// request, re-running each constructor's discovery and re-emitting any
+/// "discover failed" warning with it.
+static UNMANAGEABLE: LazyLock<Vec<&'static str>> = LazyLock::new(|| {
+    agents::build()
+        .iter()
+        .filter(|a| !a.is_manageable())
+        .map(|a| a.name())
+        .collect()
+});
+
 /// Drop agent names Edison cannot manage (ChatGPT and any future host whose
 /// MCP servers live in the vendor's account) from a selection list.
 ///
@@ -25,13 +42,8 @@ use crate::quarantined::{QuarantinedEntry, QuarantinedState};
 /// compile in, and silently dropping it would erase a selection that a fuller
 /// build understands.
 fn retain_manageable(agents: &mut Vec<String>) {
-    let unmanageable: Vec<&'static str> = agents::build()
-        .iter()
-        .filter(|a| !a.is_manageable())
-        .map(|a| a.name())
-        .collect();
     agents.retain(|name| {
-        let keep = !unmanageable.iter().any(|u| u == name);
+        let keep = !UNMANAGEABLE.iter().any(|u| u == name);
         if !keep {
             tracing::debug!(agent = %name, "dropping unmanageable agent from selection");
         }

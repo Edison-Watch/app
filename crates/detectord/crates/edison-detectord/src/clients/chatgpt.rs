@@ -161,16 +161,25 @@ mod tests {
                 .filter(|p| p.file_name().is_some_and(|f| f == name))
                 .count()
         };
-        // Both names, under /Applications and ~/Applications.
-        assert_eq!(ends_with("ChatGPT.app"), 2);
-        assert_eq!(ends_with("ChatGPT Classic.app"), 2);
+        // `/Applications` is unconditional; `~/Applications` needs a home dir,
+        // which the code treats as optional - so the test does too. Asserting
+        // more than the code promises fails on the code's own valid states.
         assert!(paths.iter().any(|p| p.starts_with("/Applications")));
-        let home = dirs::home_dir().expect("a home dir");
-        assert!(
-            paths
-                .iter()
-                .any(|p| p.starts_with(home.join("Applications")))
-        );
+        match dirs::home_dir() {
+            Some(home) => {
+                assert_eq!(ends_with("ChatGPT.app"), 2);
+                assert_eq!(ends_with("ChatGPT Classic.app"), 2);
+                assert!(
+                    paths
+                        .iter()
+                        .any(|p| p.starts_with(home.join("Applications")))
+                );
+            }
+            None => {
+                assert_eq!(ends_with("ChatGPT.app"), 1);
+                assert_eq!(ends_with("ChatGPT Classic.app"), 1);
+            }
+        }
     }
 
     #[test]
