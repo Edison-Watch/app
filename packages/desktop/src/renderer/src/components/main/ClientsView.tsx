@@ -174,7 +174,7 @@ function ConditionTooltip({ client }: { client: ClientInfo }) {
       <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 z-50 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-150">
         <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-raised)] px-3 py-2 shadow-lg max-w-[260px]">
           <p className="text-[10px] font-semibold text-[var(--text-muted)] mb-1.5 uppercase tracking-wider">
-            Not protected
+            Partially supported
           </p>
           <p className="text-[11px] text-[var(--text-secondary)]">
             {unmanageableReason(client.id).tooltip}
