@@ -347,7 +347,7 @@ export default function ClientsView(): React.ReactNode {
           { status: "installed" as ClientStatus, items: noSetup, label: "not set up",
             bg: "bg-red-500/10", text: "text-red-400",
             activeBorder: "border-red-500/40 ring-1 ring-red-500/20", show: noSetup.length > 0 },
-          { status: "unmanaged" as ClientStatus, items: unmanaged, label: "not protected",
+          { status: "unmanaged" as ClientStatus, items: unmanaged, label: "partially supported",
             bg: "bg-amber-500/10", text: "text-amber-400",
             activeBorder: "border-amber-500/40 ring-1 ring-amber-500/20", show: unmanaged.length > 0 },
           { status: "missing" as ClientStatus, items: notInstalled, label: "not found",
@@ -407,7 +407,7 @@ export default function ClientsView(): React.ReactNode {
             connected: "Connected",
             "partial-setup": "Incomplete",
             installed: "Not Set Up",
-            unmanaged: "Not Protected",
+            unmanaged: "Partially Supported",
             missing: "Not Installed",
           };
 

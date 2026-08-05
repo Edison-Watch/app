@@ -29,7 +29,8 @@ const status = (over: Record<string, unknown>) => ({
  * The permanent client surface, including a host Edison can only see.
  *
  * ChatGPT keeps its MCP servers as Connectors in the user's account, so it is
- * reported as `manageable: false` and lands in its own "Not Protected" state -
+ * reported as `manageable: false` and lands in its own "Partially Supported"
+ * state, matching how onboarding groups it with Claude Desktop and Cowork -
  * neither scored against setup conditions it can never meet, nor dropped from
  * the list, which would leave an unprotected app invisible after onboarding.
  */
