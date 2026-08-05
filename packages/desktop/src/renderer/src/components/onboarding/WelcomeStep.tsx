@@ -153,12 +153,12 @@ export default function WelcomeStep({ auth, onNext }: WelcomeStepProps): React.R
               type="button"
               onClick={() => void auth.signInWithBrowser()}
               disabled={auth.loading}
-              className="w-full flex items-center justify-center gap-2.5 bg-[var(--accent)] text-white font-medium py-2 px-4 rounded-md border border-[var(--accent)] hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+              className="w-full flex items-center justify-center gap-2.5 bg-[var(--accent)] text-[var(--bg-base)] font-medium py-2 px-4 rounded-md border border-[var(--accent)] hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed text-sm"
             >
               <BrowserIcon />
               Sign in with your browser
             </button>
-            <p className="text-center text-xs text-[var(--text-muted)]">
+            <p className="text-center text-xs text-[var(--text-secondary)]">
               Your browser opens the Edison dashboard, where you sign in as usual
               (Google, Microsoft, SSO, or email) and approve this device.
             </p>
