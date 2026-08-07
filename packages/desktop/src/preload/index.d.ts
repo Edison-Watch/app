@@ -34,7 +34,7 @@ interface EdisonAPI {
   }
   mcp: {
     detectClients: () => Promise<{
-      clients: Array<{ id: string; name: string; configPath: string }>
+      clients: Array<{ id: string; name: string; configPath: string; manageable: boolean }>
       daemonUnavailable: boolean
     }>
     discover: () => Promise<{

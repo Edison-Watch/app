@@ -470,13 +470,18 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     // Distinguish "no agents installed" from "nobody answered": the renderer
     // shows the daemon warning for the latter instead of an empty app list.
     if (!facts) return { clients: [], daemonUnavailable: true }
-    const clients: Array<{ id: string; name: string; configPath: string }> = []
+    const clients: Array<{ id: string; name: string; configPath: string; manageable: boolean }> = []
     for (const [id, f] of facts) {
       if (!f.installed) continue
       clients.push({
         id,
         name: CLIENT_DISPLAY[id]?.name ?? id,
-        configPath: f.configPath ?? ''
+        // A client with no local config gets an advisory label in place of the
+        // path, saying where its MCP config actually lives.
+        configPath: f.configPath ?? CLIENT_DISPLAY[id]?.configLabel ?? '',
+        // Drives whether the wizard offers a checkbox at all: selecting a
+        // client Edison can't configure does nothing.
+        manageable: f.manageable
       })
     }
     return { clients, daemonUnavailable: false }

@@ -1,7 +1,8 @@
 /**
  * Display metadata (name + brand color) for every supported client.
  *
- * Mirrors the entries in `@edison-watch/shared/agent-registry`. Duplicated here so
+ * `name` and `brandColor` mirror `@edison-watch/shared/agent-registry`; `configLabel`
+ * is app-local copy with no counterpart there. Duplicated here so
  * main-process code can build ClientIntegration objects without dragging the
  * shared package into test module graphs (vitest can't resolve subpath
  * exports of an unbuilt package). Keep in sync with the shared registry.
@@ -11,6 +12,16 @@ import type { McpClientId } from '../discovery/types'
 export interface ClientDisplay {
   name: string
   brandColor: string
+  /**
+   * What to show where a config path would go, for clients that have none.
+   * The daemon reports a null path for them (there is no file), and a blank
+   * line under the app name reads as "we couldn't find it" rather than "there
+   * is nothing to find".
+   *
+   * Display copy only - whether Edison can manage a client is the daemon's
+   * `manageable`, never the presence of this string.
+   */
+  configLabel?: string
 }
 
 export const CLIENT_DISPLAY: Record<McpClientId, ClientDisplay> = {
@@ -25,4 +36,9 @@ export const CLIENT_DISPLAY: Record<McpClientId, ClientDisplay> = {
   intellij: { name: 'IntelliJ IDEA', brandColor: '#000000' },
   pycharm: { name: 'PyCharm', brandColor: '#21D789' },
   webstorm: { name: 'WebStorm', brandColor: '#07C3F2' },
+  chatgpt: {
+    name: 'ChatGPT',
+    brandColor: '#000000',
+    configLabel: 'Connectors · managed server-side in your ChatGPT account',
+  },
 }

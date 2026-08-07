@@ -219,6 +219,15 @@ pub struct AgentInfo {
     pub workspace_hooks_total: u32,
     #[serde(default)]
     pub workspace_hooks_installed: u32,
+    /// Whether Edison can manage this agent at all, or only report that it is
+    /// there. False for hosts whose MCP servers are Connectors in the vendor's
+    /// account (ChatGPT), where there is no local config to read or write.
+    ///
+    /// Defaults to `true` — what every agent predating this field is. An older
+    /// daemon omitting it must not make the app treat real clients as
+    /// unmanageable and quietly stop reporting their setup status.
+    #[serde(default = "default_true")]
+    pub manageable: bool,
 }
 
 /// One discovered server instance (not deduped — carries its source path).

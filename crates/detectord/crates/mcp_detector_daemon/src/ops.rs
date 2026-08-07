@@ -2,6 +2,7 @@
 //! user. Returning protocol DTOs keeps the two front-ends in sync.
 
 use std::path::PathBuf;
+use std::sync::LazyLock;
 
 use anyhow::Context;
 use edison_detectord::{DiscoveredServer, EdisonInstall, ServerConfig, fingerprint};
@@ -17,6 +18,38 @@ use crate::paths;
 use crate::platform;
 use crate::protocol::{AgentInfo, Choice, IntegrationChange, ServerView, Status};
 use crate::quarantined::{QuarantinedEntry, QuarantinedState};
+
+/// Agent names this build cannot manage, computed once.
+///
+/// `is_manageable()` is declared per agent type, so unlike the rest of what
+/// `agents::build()` reports it cannot change while the process runs - no
+/// filesystem state feeds it. Deriving it on every selection filter meant
+/// `apply_integrations` alone rebuilt the whole agent set twice more per
+/// request, re-running each constructor's discovery and re-emitting any
+/// "discover failed" warning with it.
+static UNMANAGEABLE: LazyLock<Vec<&'static str>> = LazyLock::new(|| {
+    agents::build()
+        .iter()
+        .filter(|a| !a.is_manageable())
+        .map(|a| a.name())
+        .collect()
+});
+
+/// Drop agent names Edison cannot manage (ChatGPT and any future host whose
+/// MCP servers live in the vendor's account) from a selection list.
+///
+/// An unknown name is kept: it is most likely an agent this build doesn't
+/// compile in, and silently dropping it would erase a selection that a fuller
+/// build understands.
+fn retain_manageable(agents: &mut Vec<String>) {
+    agents.retain(|name| {
+        let keep = !UNMANAGEABLE.iter().any(|u| u == name);
+        if !keep {
+            tracing::debug!(agent = %name, "dropping unmanageable agent from selection");
+        }
+        keep
+    });
+}
 
 /// Which agents are present on the machine, with their workspace hook coverage.
 ///
@@ -60,6 +93,7 @@ pub fn list_agents(user: &str) -> Vec<AgentInfo> {
                 edison_url: installed_edison_entry(a.name(), &installs, &observed)
                     .and_then(|s| edison_entry_url(&s.config)),
                 config_path: installs.first().map(|i| i.path.display().to_string()),
+                manageable: a.is_manageable(),
             }
         })
         .collect()
@@ -116,20 +150,29 @@ pub fn apply_integrations(
     user: &str,
     agents_to_add: &[String],
 ) -> anyhow::Result<Vec<IntegrationChange>> {
+    // Same guard as `enroll`: an unmanageable agent has nothing to install into,
+    // and the selection is additive, so letting one in means carrying it for
+    // good. Dropped up front so it reaches neither the selection nor the
+    // installer. The app selects every detected app by default, so this is the
+    // ordinary path, not an edge case.
+    let mut wanted = agents_to_add.to_vec();
+    retain_manageable(&mut wanted);
+
     let mut e = Enrollment::load_for(user)?.ok_or_else(|| anyhow::anyhow!("not enrolled"))?;
-    for a in agents_to_add {
+    for a in &wanted {
         if !e.selected_agents.contains(a) {
             e.selected_agents.push(a.clone());
         }
     }
+    retain_manageable(&mut e.selected_agents);
     e.save_for(user)?;
 
     let home = user_home(user);
-    let changes = install_edison_entries_for(user, &e, &home, agents_to_add);
+    let changes = install_edison_entries_for(user, &e, &home, &wanted);
     purge_shadowing_edison_entries(user);
     // Hooks only for what was asked for. The machine-wide sweep is enroll's job
     // (`apply_install`), which runs on every app start.
-    apply_hooks_for(&home, Some(agents_to_add));
+    apply_hooks_for(&home, Some(&wanted));
     Ok(changes)
 }
 
@@ -385,7 +428,7 @@ pub async fn enroll(
         .as_ref()
         .map(|e| e.selected_agents.clone())
         .unwrap_or_default();
-    let new_agents = match selected_agents {
+    let mut new_agents = match selected_agents {
         Some(provided) => {
             let mut set = old_agents.clone();
             for a in provided {
@@ -397,6 +440,12 @@ pub async fn enroll(
         }
         None => old_agents,
     };
+    // Selecting an unmanageable agent is meaningless - there is nothing to
+    // install into - and it does not stay harmless: the selection is additive
+    // and only `unenroll` removes from it, so one such name would sit in every
+    // later self-heal pass forever. Filtering the whole union (not just what
+    // was provided) also prunes any that a previous version let through.
+    retain_manageable(&mut new_agents);
     let mcp_base_url =
         mcp_base_url.or_else(|| existing.as_ref().and_then(|e| e.mcp_base_url.clone()));
     let edison_secret_key =
@@ -703,6 +752,12 @@ pub fn heal_edison_install(user: &str, e: &Enrollment) -> usize {
         if present.contains(agent.name()) {
             continue; // already installed — don't rewrite (avoids fs-watch churn)
         }
+        // Count and report only what was actually written. An agent with no
+        // install targets (JetBrains with no IDE on the machine) reaches here
+        // and writes nothing; logging it as healed anyway made the self-heal
+        // signal permanently non-zero, so a real heal - somebody's config got
+        // clobbered - was indistinguishable from the every-20s background hum.
+        let mut wrote = false;
         for inst in agent.edison_installs(&home) {
             let done_via_cli = inst.prefer_cli && {
                 let url = mcp_quarantine::edison_url(mcp_base, &e.api_key, &inst.client_id);
@@ -711,6 +766,10 @@ pub fn heal_edison_install(user: &str, e: &Enrollment) -> usize {
             if !done_via_cli {
                 let _ = mcp_quarantine::install_edison(&inst, mcp_base, &e.api_key, secret);
             }
+            wrote = true;
+        }
+        if !wrote {
+            continue;
         }
         tracing::info!(
             agent = agent.name(),
@@ -1034,6 +1093,33 @@ fn conflict_detail(err: &BackendError, name: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn selection_drops_unmanageable_agents_but_keeps_everything_else() {
+        // The app sends its saved app selection on every start (enroll) as well
+        // as on apply, and the selection is additive - only `unenroll` empties
+        // it. So one unmanageable name getting in is permanent, and it used to
+        // make every self-heal pass report a heal that never happened.
+        let mut agents = vec![
+            "claude_code".to_string(),
+            "chatgpt".to_string(),
+            "cursor".to_string(),
+        ];
+        retain_manageable(&mut agents);
+        assert_eq!(
+            agents,
+            vec!["claude_code".to_string(), "cursor".to_string()]
+        );
+    }
+
+    #[test]
+    fn selection_keeps_names_this_build_does_not_know() {
+        // An agent compiled out of this build is not the same as one we refuse
+        // to manage; dropping it would erase a selection a fuller build honours.
+        let mut agents = vec!["some_future_agent".to_string()];
+        retain_manageable(&mut agents);
+        assert_eq!(agents, vec!["some_future_agent".to_string()]);
+    }
 
     fn quarantine_record(path: &str) -> QuarantineRecord {
         QuarantineRecord {

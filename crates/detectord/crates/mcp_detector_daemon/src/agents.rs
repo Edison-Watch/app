@@ -4,7 +4,8 @@ use std::sync::Arc;
 
 use edison_detectord::Agent;
 use edison_detectord::clients::{
-    ClaudeCode, ClaudeCowork, ClaudeDesktop, Codex, Cursor, JetBrains, VsCode, Windsurf, Zed,
+    ChatGpt, ClaudeCode, ClaudeCowork, ClaudeDesktop, Codex, Cursor, JetBrains, VsCode, Windsurf,
+    Zed,
 };
 
 /// Discover the locally-available agents. An agent whose `discover()`
@@ -29,6 +30,10 @@ pub fn build() -> Vec<Arc<dyn Agent>> {
     add!(Windsurf::discover(), "windsurf");
     add!(Zed::discover(), "zed");
     add!(Codex::discover(), "codex");
+    // Detect-only: reports whether the ChatGPT desktop app is installed so the
+    // app can warn that its Connectors are outside Edison's reach. It
+    // contributes no servers and is never an install target.
+    add!(ChatGpt::discover(), "chatgpt");
     add!(JetBrains::intellij(), "intellij");
     add!(JetBrains::pycharm(), "pycharm");
     add!(JetBrains::webstorm(), "webstorm");

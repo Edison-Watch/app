@@ -31,6 +31,7 @@ function agent(over: Partial<AgentFacts> = {}): AgentFacts {
     workspaceHooksTotal: 0,
     edisonUrl: EXPECTED_URL,
     configPath: '/home/u/.claude.json',
+    manageable: true,
     ...over
   }
 }

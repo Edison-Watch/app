@@ -13,7 +13,13 @@ import type { IntegrationChange } from './protocol'
 
 export type { IntegrationChange }
 
-/** Install the edison-watch entry + hooks for these client ids. */
+/**
+ * Install the edison-watch entry + hooks for these client ids.
+ *
+ * Unmanageable clients are not filtered here. The daemon drops them, because
+ * it is not the only caller: enroll sends the saved app selection on every
+ * start, and a guard in front of one caller left the other wide open.
+ */
 export async function applyIntegrations(clients: string[]): Promise<IntegrationChange[]> {
   return withDetectordHealth('apply_integrations', async () => {
     const daemon = getDetectordClient()

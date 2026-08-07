@@ -14,6 +14,10 @@ export type McpClientId =
   | 'intellij'
   | 'pycharm'
   | 'webstorm'
+  // Detect-only: its MCP servers are server-side Connectors, so it never
+  // appears as the `client` of a discovered server - only in the installed-app
+  // list, where the wizard flags it as partially supported.
+  | 'chatgpt'
 
 export type McpServerTransport = 'stdio' | 'http' | 'sse'
 

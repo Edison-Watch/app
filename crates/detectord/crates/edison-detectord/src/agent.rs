@@ -26,6 +26,25 @@ pub trait Agent: Send + Sync {
     /// produces no servers.
     fn is_installed(&self) -> bool;
 
+    /// Whether Edison can manage this agent at all: install the `edison-watch`
+    /// entry, inject hooks, read a config back. False for presence-only agents
+    /// whose MCP servers live in the vendor's account (ChatGPT's Connectors)
+    /// rather than in a file on this machine.
+    ///
+    /// Declared, not inferred from an empty
+    /// [`edison_installs`](Agent::edison_installs): "no install target right
+    /// now" and "never has one" are different facts. JetBrains reports no
+    /// targets when no IDE is installed and is still perfectly manageable the
+    /// moment one appears.
+    ///
+    /// An unmanageable agent is dropped from the enrolled selection, so nothing
+    /// downstream tries to install into it or reports it as unconfigured. It is
+    /// still discovered and still reported as installed - the app's job is to
+    /// tell the user it is there and outside Edison's reach.
+    fn is_manageable(&self) -> bool {
+        true
+    }
+
     /// Filesystem locations to watch for this agent's MCP config.
     ///
     /// A driver subscribes to each [`files`](WatchTargets::files) entry's
