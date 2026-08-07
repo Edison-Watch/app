@@ -26,13 +26,18 @@ const status = (over: Record<string, unknown>) => ({
 });
 
 /**
- * The permanent client surface, including a host Edison can only see.
+ * The permanent client surface, covering both routes into "Partially
+ * Supported" - which are not the same situation.
  *
- * ChatGPT keeps its MCP servers as Connectors in the user's account, so it is
- * reported as `manageable: false` and lands in its own "Partially Supported"
- * state, matching how onboarding groups it with Claude Desktop and Cowork -
- * neither scored against setup conditions it can never meet, nor dropped from
- * the list, which would leave an unprotected app invisible after onboarding.
+ * ChatGPT is `manageable: false`: its servers are Connectors in the user's
+ * account and there is nothing to configure. Claude Desktop and Cowork are
+ * manageable and fully set up, and still land here, because their account-side
+ * Connectors stay unproxied - calling them "Connected" would be the
+ * overstatement this state exists to avoid. The two carry different copy.
+ *
+ * Cowork also carries an unmet setup condition, showing the other half of the
+ * rule: a fixable problem outranks the caveat, so it reports "Incomplete"
+ * rather than hiding a broken gateway behind a caveat the user can't act on.
  */
 export const WithAnUnmanageableClient: Story = {
   decorators: [
@@ -57,6 +62,13 @@ export const WithAnUnmanageableClient: Story = {
           statuses: [
             status({ client: 'claude-code' }),
             status({ client: 'cursor' }),
+            // Manageable and fully set up, so the caveat is what's left to say.
+            status({ client: 'claude-desktop' }),
+            // Manageable but mid-setup: the gateway problem wins over the caveat.
+            status({
+              client: 'claude-cowork',
+              mcpConnected: false,
+            }),
             status({
               client: 'vscode',
               hasHook: false,

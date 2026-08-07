@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Badge } from "@edison-watch/shared/ui";
 import { AppLogo } from "../AppLogo";
+import { CONNECTOR_BACKED_CLIENT_IDS, CONNECTOR_CAVEAT } from "../clientSupport";
 
 // Source of truth: ClaudeCodeMcpStatus in client_2/src/main/setupConfig.ts
 // Duplicated here because renderer cannot import main-process modules directly.
@@ -84,6 +85,10 @@ interface UnmanageableReason {
 // object lookup answers inherited keys as though they were entries - a client
 // named `constructor` would take a function where the fallback belongs.
 const UNMANAGEABLE_REASON = new Map<string, UnmanageableReason>([
+  // Manageable, but connector-backed: their local servers really are proxied,
+  // so they get the narrower caveat rather than ChatGPT's "nothing is covered".
+  ["claude-desktop", CONNECTOR_CAVEAT],
+  ["claude-cowork", CONNECTOR_CAVEAT],
   [
     "chatgpt",
     {
@@ -124,11 +129,8 @@ function StatusDot({ status }: { status: ClientStatus }) {
   );
 }
 
-function getClientStatus(client: ClientInfo): ClientStatus {
-  if (!client.installed) return "missing";
-  // Before the setup conditions, because none of them apply: there is no
-  // gateway entry to install and no hook surface to inject.
-  if (!client.manageable) return "unmanaged";
+/** How far through setup a manageable client is, ignoring Connectors. */
+function getSetupStatus(client: ClientInfo): ClientStatus {
   const needsMcp = client.mcpApplicable;
   const needsHooks = client.hooksApplicable;
   const hooksSatisfied = !needsHooks || client.hasHook;
@@ -136,6 +138,23 @@ function getClientStatus(client: ClientInfo): ClientStatus {
   if (hooksSatisfied && mcpSatisfied) return "connected";
   if ((needsHooks && (client.hasHook || client.hookCount > 0)) || (needsMcp && client.mcpConfigured)) return "partial-setup";
   return "installed";
+}
+
+function getClientStatus(client: ClientInfo): ClientStatus {
+  if (!client.installed) return "missing";
+  // Before the setup conditions, because none of them apply: there is no
+  // gateway entry to install and no hook surface to inject.
+  if (!client.manageable) return "unmanaged";
+  const setup = getSetupStatus(client);
+  // A connector-backed client that is otherwise fully set up is not "Connected"
+  // - its account-side Connectors are still unproxied, and saying Connected
+  // there is the overstatement this whole state exists to avoid.
+  //
+  // Only once setup is done, though: an unreachable gateway is actionable and
+  // outranks a caveat the user can do nothing about right now. Reporting the
+  // caveat over a broken install would bury the fixable problem.
+  if (setup === "connected" && CONNECTOR_BACKED_CLIENT_IDS.has(client.id)) return "unmanaged";
+  return setup;
 }
 
 /** Describes what's missing for a partial-setup client. */
@@ -169,7 +188,10 @@ function getIssueDetail(client: ClientInfo): string {
 
 /** Tooltip showing connection condition checklist on hover. */
 function ConditionTooltip({ client }: { client: ClientInfo }) {
-  if (!client.manageable) {
+  // Keyed on the rendered status, not `manageable`: a connector-backed client
+  // can be manageable and still show this state, and the hover must agree with
+  // the badge beside it.
+  if (getClientStatus(client) === "unmanaged") {
     return (
       <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 z-50 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-150">
         <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-raised)] px-3 py-2 shadow-lg max-w-[260px]">

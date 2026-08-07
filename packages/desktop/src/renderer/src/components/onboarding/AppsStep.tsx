@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Button, Card } from "@edison-watch/shared/ui";
 import { AppLogo } from "../AppLogo";
+import { CONNECTOR_BACKED_CLIENT_IDS } from "../clientSupport";
 
 interface DetectedClient {
   id: string;
@@ -282,15 +283,10 @@ export default function AppsStep({
 
   const selectedCount = clients.filter((c) => c.enabled).length;
 
-  // A presentation grouping, NOT a capability: these are the clients whose
-  // users are likely to be running Connectors, so they get the warning banner
-  // below. Whether Edison can configure a client is `manageable`, which comes
-  // from the daemon - the two overlap here but are not the same question.
-  // Claude Desktop/Cowork are manageable (they have a local config Edison
-  // writes) and still belong under this warning; ChatGPT is neither.
-  const PARTIALLY_SUPPORTED_IDS = new Set(["claude-desktop", "claude-cowork", "chatgpt"]);
-  const fullySupportedClients = clients.filter((c) => !PARTIALLY_SUPPORTED_IDS.has(c.id));
-  const partiallySupportedClients = clients.filter((c) => PARTIALLY_SUPPORTED_IDS.has(c.id));
+  // Shared with ClientsView so the wizard's warning and the permanent view
+  // cannot disagree about which clients carry the Connectors caveat.
+  const fullySupportedClients = clients.filter((c) => !CONNECTOR_BACKED_CLIENT_IDS.has(c.id));
+  const partiallySupportedClients = clients.filter((c) => CONNECTOR_BACKED_CLIENT_IDS.has(c.id));
 
   const renderClientCard = (client: DetectedClient) => (
     <div
