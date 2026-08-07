@@ -16,9 +16,12 @@
  * leaves no trace there. Promoting this to a daemon-reported fact would need a
  * coverage model richer than one boolean - see the discussion on PR #30.
  *
- * Consumed by the onboarding wizard (`AppsStep`, which groups these under one
- * warning) and the permanent clients view (`ClientsView`, which shows the same
- * caveat per row). Keep it here so those two surfaces cannot drift apart.
+ * What this set shares between surfaces is **membership only**, not wording:
+ * `AppsStep` puts these clients under one warning banner, `ClientsView` gives
+ * each its own row state. The copy diverges by design - the manageable members
+ * take `CONNECTOR_CAVEAT` below, while ChatGPT keeps its own wording in
+ * `ClientsView` because nothing of its is proxied. Keep the ids here so the two
+ * surfaces cannot disagree about who belongs in the group.
  */
 export const CONNECTOR_BACKED_CLIENT_IDS: ReadonlySet<string> = new Set([
   "claude-desktop",
