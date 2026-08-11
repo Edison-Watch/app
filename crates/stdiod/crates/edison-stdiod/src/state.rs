@@ -47,12 +47,18 @@ pub enum ConnectionState {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ServerStatus {
-    /// Subprocess is starting (post-spawn, pre-first-frame).
+    /// Reserved. No value the daemon can observe distinguishes "starting"
+    /// from "running": a stdio MCP server stays silent until the backend
+    /// opens a session against it, so a first-frame rule would leave healthy
+    /// idle children here forever. Readers MUST still accept the value; a
+    /// client class with a real activation step (the in-process mobile
+    /// client) may produce it. See PROTOCOL.md T-69.
     Starting,
-    /// Subprocess is alive and the tunnel is forwarding frames.
+    /// Subprocess was spawned and no pump has reported it dead.
     Running,
-    /// Subprocess exited; the supervisor may retry on the next desired-state
-    /// change.
+    /// Subprocess exited. A pump observed the death and reported
+    /// `server_offline`; the supervisor respawns on the next desired-state
+    /// change that names it.
     Crashed,
 }
 
@@ -181,6 +187,20 @@ mod tests {
         ));
         assert_eq!(parsed.servers.len(), 1);
         assert_eq!(parsed.servers[0].pid, Some(12345));
+    }
+
+    #[test]
+    fn server_statuses_keep_their_wire_spelling() {
+        // The desktop tray parses these strings (`ServerRunState` in
+        // packages/desktop/src/main/stdiod/types.ts), so the spelling is part
+        // of the contract even for the variant the daemon never writes.
+        for (status, expected) in [
+            (ServerStatus::Starting, "\"starting\""),
+            (ServerStatus::Running, "\"running\""),
+            (ServerStatus::Crashed, "\"crashed\""),
+        ] {
+            assert_eq!(serde_json::to_string(&status).unwrap(), expected);
+        }
     }
 
     #[test]

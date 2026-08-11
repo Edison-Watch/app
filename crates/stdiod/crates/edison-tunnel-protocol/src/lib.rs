@@ -11,12 +11,15 @@
 
 use serde::{Deserialize, Serialize};
 
-/// Bumped to 2 when ``server_spec_update`` was added. The backend
-/// handshake check is strict equality (see
-/// ``src/api/v1/routes/stdio_tunnel.py``), so a v1 daemon connecting to a
-/// v2 backend (or vice versa) is rejected at ``client_hello`` time rather
-/// than crashing later on an unknown frame ``type`` - ``TunnelFrame``
-/// uses ``#[serde(tag = "type")]`` and rejects unknown variants.
+/// Bumped to 2 when ``server_spec_update`` was added. The backend accepts a
+/// window of client versions, ``MIN_SUPPORTED_PROTOCOL_VERSION`` through its
+/// own ``PROTOCOL_VERSION`` inclusive (see
+/// ``src/api/v1/routes/stdio_tunnel.py``); both are 2 today. A client outside
+/// the window is rejected at ``client_hello`` time rather than crashing later
+/// on an unknown frame ``type`` - ``TunnelFrame`` uses
+/// ``#[serde(tag = "type")]`` and rejects unknown variants. The version the
+/// backend reports back on ``server_hello`` is informational: the backend has
+/// already judged the pair compatible by accepting the handshake.
 pub const PROTOCOL_VERSION: u32 = 2;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

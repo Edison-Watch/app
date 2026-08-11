@@ -402,11 +402,17 @@ async fn drain_incoming(
                     server_count = servers.len(),
                     "received server_hello"
                 );
+                // The backend is the source of truth on version compatibility:
+                // it accepts a client_hello whose protocol_version falls inside
+                // its supported window and closes with 1008 otherwise. Reaching
+                // server_hello means the pair was judged compatible, so a
+                // differing value here is informational and MUST NOT end the
+                // session (PROTOCOL.md T-09, T-13).
                 if protocol_version != PROTOCOL_VERSION {
-                    warn!(
+                    info!(
                         backend_version = protocol_version,
                         local_version = PROTOCOL_VERSION,
-                        "protocol version mismatch; continuing in v1 MVP"
+                        "backend speaks a different protocol_version; it accepted our handshake, continuing"
                     );
                 }
                 sup.apply_snapshot(servers).await;
@@ -568,6 +574,34 @@ fn jittered(base: Duration) -> Duration {
     Duration::from_millis(final_ms)
 }
 
+/// One `state.json` entry for a supervised child, derived from what the
+/// daemon can actually observe about the process.
+///
+/// Only two of [`ServerStatus`]'s three values are reachable here:
+///
+/// - `crashed` - a pump saw the process go away ([`ChildServer::has_exited`],
+///   the same latch that drives the terminal `server_offline` report). The
+///   child stays in the map until the next reconciliation respawns or drops
+///   it, so this is what the tray sees in the meantime.
+/// - `running` - the process was spawned and no pump has reported it dead.
+///
+/// `starting` has no observable trigger. A stdio MCP server writes nothing
+/// until the backend opens a session against it, which can be minutes or
+/// hours after the spawn, so treating "no output yet" as `starting` would pin
+/// healthy idle children there indefinitely. The daemon would need a health
+/// signal it does not have. See PROTOCOL.md T-69.
+fn child_entry(name: &str, child: &ChildServer) -> ServerEntry {
+    ServerEntry {
+        name: name.to_string(),
+        state: if child.has_exited() {
+            ServerStatus::Crashed
+        } else {
+            ServerStatus::Running
+        },
+        pid: child.pid,
+    }
+}
+
 /// Reconciles desired-state announcements against running children.
 struct Supervisor {
     children: HashMap<String, ChildServer>,
@@ -620,11 +654,7 @@ impl Supervisor {
     fn snapshot_entries(&self) -> Vec<ServerEntry> {
         self.children
             .iter()
-            .map(|(name, child)| ServerEntry {
-                name: name.clone(),
-                state: ServerStatus::Running,
-                pid: child.pid,
-            })
+            .map(|(name, child)| child_entry(name, child))
             .collect()
     }
 
@@ -688,6 +718,7 @@ impl Supervisor {
             &enriched,
             self.tunnel_outgoing.clone(),
             sensitive_arg_values,
+            Some(self.state.clone()),
         ) {
             Ok(child) => {
                 self.children.insert(server_id.clone(), child);
@@ -816,5 +847,110 @@ impl Supervisor {
             }
         }
         self.publish_state().await;
+    }
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+    use edison_tunnel_protocol::TunnelFrame;
+
+    fn desired(server_id: &str, script: &str) -> DesiredServer {
+        DesiredServer {
+            server_id: server_id.into(),
+            name: server_id.into(),
+            command: "/bin/sh".into(),
+            args: vec!["-c".into(), script.into()],
+            env: Default::default(),
+            working_dir: None,
+            enabled: true,
+        }
+    }
+
+    fn env_store_for(test: &str) -> EnvStore {
+        let path = std::env::temp_dir().join(format!(
+            "edison-stdiod-daemon-{}-{test}.json",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        EnvStore::open_at(path).unwrap()
+    }
+
+    fn supervisor_with(test: &str, children: HashMap<String, ChildServer>) -> Supervisor {
+        let mut supervisor = Supervisor::new(
+            OutgoingHandle::new(),
+            StateWriter::new(State::default()),
+            env_store_for(test),
+        );
+        supervisor.children = children;
+        supervisor
+    }
+
+    /// A live child is reported as running, with its PID, so the tray can
+    /// address it.
+    #[tokio::test]
+    async fn snapshot_reports_a_live_child_as_running() {
+        let spec = desired("filesystem", "sleep 30");
+        let child =
+            ChildServer::spawn(&spec, &spec, OutgoingHandle::new(), Vec::new(), None).unwrap();
+        let pid = child.pid;
+        assert!(pid.is_some(), "spawned child should have a PID");
+
+        let supervisor = supervisor_with(
+            "running",
+            HashMap::from([("filesystem".to_string(), child)]),
+        );
+        let entries = supervisor.snapshot_entries();
+
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].name, "filesystem");
+        assert_eq!(entries[0].pid, pid);
+        assert!(matches!(entries[0].state, ServerStatus::Running));
+
+        supervisor
+            .children
+            .into_values()
+            .next()
+            .unwrap()
+            .shutdown()
+            .await;
+    }
+
+    /// A child that exited is reported as crashed rather than staying
+    /// `running` until the next desired-state push happens to arrive. The
+    /// child is still in the map because nothing has respawned it yet, which
+    /// is exactly the window the tray needs to see.
+    #[tokio::test]
+    async fn snapshot_reports_an_exited_child_as_crashed() {
+        let spec = desired("fetch", "exit 3");
+        let outgoing = OutgoingHandle::new();
+        let (wire_tx, mut wire_rx) = mpsc::channel(4);
+        outgoing.set(wire_tx);
+        let child = ChildServer::spawn(&spec, &spec, outgoing, Vec::new(), None).unwrap();
+        let pid = child.pid;
+
+        // The terminal report is what latches ``has_exited``; wait for it so
+        // the assertion is about observed death, not about timing.
+        let frame = tokio::time::timeout(Duration::from_secs(5), wire_rx.recv())
+            .await
+            .expect("child death should be reported")
+            .expect("outgoing channel should stay open");
+        assert!(matches!(frame, TunnelFrame::TunnelError(_)));
+
+        let supervisor = supervisor_with("crashed", HashMap::from([("fetch".to_string(), child)]));
+        let entries = supervisor.snapshot_entries();
+
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].name, "fetch");
+        assert_eq!(entries[0].pid, pid, "a crashed entry keeps its PID");
+        assert!(matches!(entries[0].state, ServerStatus::Crashed));
+    }
+
+    /// No child, no entries: an empty map publishes an empty array rather
+    /// than a stale one.
+    #[test]
+    fn snapshot_of_no_children_is_empty() {
+        let supervisor = supervisor_with("empty", HashMap::new());
+        assert!(supervisor.snapshot_entries().is_empty());
     }
 }
