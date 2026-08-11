@@ -109,6 +109,52 @@ async fn broken_stdin_replays_actionable_terminal_error() {
     );
 }
 
+/// `shutdown` must not return until the stdout pump has finished reporting
+/// the child's death: the terminal `server_offline` is read here with a
+/// non-blocking `try_recv`, so it can only pass if the frame was queued
+/// before `shutdown` returned. That is what lets a caller respawn the same
+/// `server_id` without racing its `server_spawn_result` ahead of this frame
+/// (PROTOCOL.md T-74).
+#[cfg(unix)]
+#[tokio::test]
+async fn shutdown_returns_only_after_the_terminal_report_is_queued() {
+    let desired = DesiredServer {
+        server_id: "server".into(),
+        name: "server".into(),
+        command: "/bin/sh".into(),
+        // Silent and long-lived: nothing reaches the wire until the kill
+        // closes stdout, so anything received afterwards is the pump's
+        // terminal report.
+        args: vec!["-c".into(), "sleep 30".into()],
+        env: Default::default(),
+        working_dir: None,
+        enabled: true,
+    };
+    let outgoing = OutgoingHandle::new();
+    let (wire_tx, mut wire_rx) = mpsc::channel(4);
+    outgoing.set(wire_tx);
+    let child = ChildServer::spawn(&desired, &desired, outgoing, Vec::new(), None).unwrap();
+    assert!(
+        wire_rx.try_recv().is_err(),
+        "a live child should not have reported anything yet"
+    );
+
+    child.shutdown().await;
+
+    let frame = wire_rx
+        .try_recv()
+        .expect("terminal report should be queued before shutdown returns");
+    let TunnelFrame::TunnelError(error) = frame else {
+        panic!("expected terminal tunnel error");
+    };
+    assert_eq!(error.code, "server_offline");
+    assert_eq!(error.server_id.as_deref(), Some("server"));
+    assert!(
+        wire_rx.try_recv().is_err(),
+        "the terminal report is one-shot per child"
+    );
+}
+
 #[cfg(unix)]
 #[tokio::test]
 async fn exited_process_reports_final_stderr_once() {

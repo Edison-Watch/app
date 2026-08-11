@@ -32,6 +32,11 @@ use crate::child_diagnostics::ChildDiagnostics;
 use crate::state::StateWriter;
 use crate::tunnel::OutgoingHandle;
 
+/// How long [`ChildServer::shutdown`] waits for the stdout pump to finish its
+/// terminal report before falling back to aborting it. See the comment at the
+/// join site for why this is a join rather than an abort.
+const PUMP_JOIN_TIMEOUT: Duration = Duration::from_secs(2);
+
 /// Build the base `Command` for a child MCP server.
 ///
 /// On Unix this is just `Command::new(program).args(args)` - the inherited PATH
@@ -485,34 +490,80 @@ impl ChildServer {
         self.diagnostics.has_observed_exit()
     }
 
-    /// Kill the child and abort the pumps.
+    /// Kill the child and wind the pumps down.
+    ///
+    /// Returns only once the stdout pump has run its terminal
+    /// [`report_terminal`] to completion, so by the time this returns the
+    /// child's `server_offline` is already queued on the outbound channel
+    /// (or the one-shot latch says it will never be sent). Callers that
+    /// respawn the same `server_id` therefore cannot enqueue the new child's
+    /// `server_spawn_result` ahead of the old child's terminal error - see
+    /// PROTOCOL.md T-74 and `daemon.rs::Supervisor::try_spawn`.
     pub async fn shutdown(self) {
-        let mut child = self.child.lock().await;
-        if let Some(pid) = child.id() {
-            #[cfg(unix)]
-            {
-                let _ = Command::new("kill")
-                    .args(["-KILL", "--", &format!("-{pid}")])
-                    .status()
-                    .await;
+        let Self {
+            server_id,
+            child,
+            outbound_tx,
+            stdin_pump,
+            mut stdout_pump,
+            stderr_pump,
+            diagnostics,
+            ..
+        } = self;
+        {
+            let mut guard = child.lock().await;
+            if let Some(pid) = guard.id() {
+                #[cfg(unix)]
+                {
+                    let _ = Command::new("kill")
+                        .args(["-KILL", "--", &format!("-{pid}")])
+                        .status()
+                        .await;
+                }
+                #[cfg(windows)]
+                {
+                    let _ = Command::new("taskkill")
+                        .args(["/PID", &pid.to_string(), "/T", "/F"])
+                        .status()
+                        .await;
+                }
             }
-            #[cfg(windows)]
-            {
-                let _ = Command::new("taskkill")
-                    .args(["/PID", &pid.to_string(), "/T", "/F"])
-                    .status()
-                    .await;
-            }
+            let _ = guard.start_kill();
+            let _ = guard.wait().await;
+            // Released before joining the stdout pump: its terminal report
+            // reads the exit status through this same lock and would
+            // otherwise deadlock until the timeout below.
         }
-        let _ = child.start_kill();
-        let _ = child.wait().await;
-        // Reaped here, so the process is observably gone even if no pump
+        // Reaped just above, so the process is observably gone even if no pump
         // ever managed to read an exit status for it.
-        self.diagnostics.mark_observed_exit();
-        drop(child);
-        self.stdin_pump.abort();
-        self.stdout_pump.abort();
-        self.stderr_pump.abort();
+        diagnostics.mark_observed_exit();
+
+        // Closing the frame channel ends the stdin pump at its `recv`. It is
+        // aborted below regardless; this just makes the common case a clean
+        // exit rather than a cancellation.
+        drop(outbound_tx);
+
+        // Join, don't abort: the stdout pump's last act is the terminal
+        // `server_offline` report, and aborting it mid-flight is what made
+        // the ordering against a subsequent respawn a coin flip. The dead
+        // child's pipe is already at EOF, so the pump only has to finish
+        // `report_terminal`: at most ~100ms waiting for stderr to drain,
+        // ~100ms polling for the exit status, then one channel send. Two
+        // seconds is an order of magnitude of headroom over that, and it
+        // still bounds the pathological case where the send blocks because
+        // the outbound channel is full and the WS writer is wedged.
+        if tokio::time::timeout(PUMP_JOIN_TIMEOUT, &mut stdout_pump)
+            .await
+            .is_err()
+        {
+            warn!(
+                server_id = %server_id,
+                "stdout pump did not finish reporting within the shutdown budget; aborting it",
+            );
+            stdout_pump.abort();
+        }
+        stdin_pump.abort();
+        stderr_pump.abort();
     }
 }
 
