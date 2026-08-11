@@ -708,16 +708,33 @@ pub fn heal_edison_install(user: &str, e: &Enrollment) -> usize {
         // and writes nothing; logging it as healed anyway made the self-heal
         // signal permanently non-zero, so a real heal - somebody's config got
         // clobbered - was indistinguishable from the every-20s background hum.
+        //
+        // A failed write does not count either. Claiming a heal for an install
+        // that errored would put the same false signal back for the case that
+        // matters most: the config Edison could not repair. The error was
+        // dropped on the floor here, so log it the way the install path does -
+        // a self-heal that keeps failing is worth seeing.
         let mut wrote = false;
         for inst in agent.edison_installs(&home) {
             let done_via_cli = inst.prefer_cli && {
                 let url = mcp_quarantine::edison_url(mcp_base, &e.api_key, &inst.client_id);
                 crate::claude_cli::install(user, &url, secret).is_ok()
             };
-            if !done_via_cli {
-                let _ = mcp_quarantine::install_edison(&inst, mcp_base, &e.api_key, secret);
+            if done_via_cli {
+                wrote = true;
+                continue;
             }
-            wrote = true;
+            match mcp_quarantine::install_edison(&inst, mcp_base, &e.api_key, secret) {
+                Ok(()) => wrote = true,
+                Err(err) => {
+                    tracing::warn!(
+                        agent = agent.name(),
+                        path = %inst.path.display(),
+                        error = %err,
+                        "self-heal install failed"
+                    )
+                }
+            }
         }
         if !wrote {
             continue;
