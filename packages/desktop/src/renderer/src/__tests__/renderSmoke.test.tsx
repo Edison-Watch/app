@@ -189,6 +189,47 @@ describe('ClientsView', () => {
     expect(screen.getByText(/^Edison Watch can't configure this app$/)).toBeTruthy()
     expectNoRenderErrors()
   })
+
+  it('caveats a fully set up connector-backed client instead of calling it Connected', async () => {
+    // Claude Desktop is manageable and its local servers really are proxied, so
+    // the ChatGPT copy would be false here. What stays true is narrower: the
+    // account-side Connectors are still unproxied, which is why "Connected"
+    // would overstate the coverage.
+    const api = installMockApi()
+    ;(api.mcp as Record<string, unknown>).getHookStatus = async () => ({
+      statuses: [status({ client: 'claude-desktop', hooksApplicable: false })],
+      daemonUnavailable: false
+    })
+
+    render(<ClientsView />)
+
+    expect(await screen.findByText(/account Connectors are not visible/)).toBeTruthy()
+    expect(screen.queryByText('Connected')).toBeNull()
+    // And never the generic copy. This client IS configurable; the downgrade
+    // and the wording come from one lookup now, but the assertion is what
+    // catches it if they are ever split apart again.
+    expect(screen.queryByText(/can't configure this app/)).toBeNull()
+    expectNoRenderErrors()
+  })
+
+  it('reports a broken gateway over the Connectors caveat', async () => {
+    // Precedence: the caveat is permanent and the user can do nothing about it
+    // right now, while an unreachable gateway is theirs to fix. Showing the
+    // caveat here would bury the actionable failure behind a standing one.
+    const api = installMockApi()
+    ;(api.mcp as Record<string, unknown>).getHookStatus = async () => ({
+      statuses: [
+        status({ client: 'claude-desktop', hooksApplicable: false, mcpConnected: false })
+      ],
+      daemonUnavailable: false
+    })
+
+    render(<ClientsView />)
+
+    expect(await screen.findByText(/MCP gateway unreachable/)).toBeTruthy()
+    expect(screen.queryByText(/account Connectors are not visible/)).toBeNull()
+    expectNoRenderErrors()
+  })
 })
 
 describe('EncryptionStep', () => {
