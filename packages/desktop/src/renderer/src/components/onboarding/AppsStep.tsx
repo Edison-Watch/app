@@ -6,6 +6,12 @@ interface DetectedClient {
   id: string;
   name: string;
   configPath: string;
+  /**
+   * Whether Edison can configure this client at all. False for hosts whose MCP
+   * servers are Connectors in the vendor's account - they are shown so the user
+   * knows they're unprotected, but there is nothing to select.
+   */
+  manageable: boolean;
   enabled: boolean;
   configPreview: string | null;
   expanded: boolean;
@@ -144,7 +150,10 @@ export default function AppsStep({
           const defaultEnabled = initialSelectedSet.current ? initialSelectedSet.current.has(c.id) : true;
           return {
             ...c,
-            enabled: existing ? existing.enabled : defaultEnabled,
+            // Never selected: there is nothing to configure, and carrying it
+            // into the selection would inflate the "Configure N Apps" count and
+            // put it in the saved app list.
+            enabled: c.manageable && (existing ? existing.enabled : defaultEnabled),
             // On refresh, clear cached config so it gets re-read when expanded
             configPreview: isRefresh ? null : (existing ? existing.configPreview : null),
             expanded: existing ? existing.expanded : false,
@@ -206,7 +215,7 @@ export default function AppsStep({
 
   const toggleClient = (id: string) => {
     setClients((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, enabled: !c.enabled } : c)),
+      prev.map((c) => (c.id === id && c.manageable ? { ...c, enabled: !c.enabled } : c)),
     );
   };
 
@@ -273,7 +282,13 @@ export default function AppsStep({
 
   const selectedCount = clients.filter((c) => c.enabled).length;
 
-  const PARTIALLY_SUPPORTED_IDS = new Set(["claude-desktop", "claude-cowork"]);
+  // A presentation grouping, NOT a capability: these are the clients whose
+  // users are likely to be running Connectors, so they get the warning banner
+  // below. Whether Edison can configure a client is `manageable`, which comes
+  // from the daemon - the two overlap here but are not the same question.
+  // Claude Desktop/Cowork are manageable (they have a local config Edison
+  // writes) and still belong under this warning; ChatGPT is neither.
+  const PARTIALLY_SUPPORTED_IDS = new Set(["claude-desktop", "claude-cowork", "chatgpt"]);
   const fullySupportedClients = clients.filter((c) => !PARTIALLY_SUPPORTED_IDS.has(c.id));
   const partiallySupportedClients = clients.filter((c) => PARTIALLY_SUPPORTED_IDS.has(c.id));
 
@@ -287,26 +302,33 @@ export default function AppsStep({
         boxShadow: client.enabled ? "0 0 12px 0 rgba(125, 255, 246, 0.08)" : "none",
       }}
     >
-      {/* Clickable row - toggles selection */}
+      {/* Row. Toggles selection for clients Edison can configure; for the rest
+          it is inert text, because a checkbox whose value is discarded is worse
+          than no checkbox. */}
       <button
         type="button"
-        className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-[var(--bg-input)]/40 transition-colors"
+        disabled={!client.manageable}
+        className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${
+          client.manageable ? "hover:bg-[var(--bg-input)]/40" : "cursor-default"
+        }`}
         onClick={() => toggleClient(client.id)}
       >
-        {/* Checkbox indicator */}
-        <div
-          className={`flex h-4 w-4 shrink-0 items-center justify-center rounded transition-all ${
-            client.enabled
-              ? "bg-[var(--accent)] border-[var(--accent)]"
-              : "border-2 border-[var(--border)]"
-          }`}
-        >
-          {client.enabled && (
-            <svg viewBox="0 0 12 12" fill="none" className="h-2.5 w-2.5" aria-hidden="true">
-              <path d="M2 6l3 3 5-5" stroke="var(--bg-base)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          )}
-        </div>
+        {/* Checkbox indicator, only where there is something to check */}
+        {client.manageable && (
+          <div
+            className={`flex h-4 w-4 shrink-0 items-center justify-center rounded transition-all ${
+              client.enabled
+                ? "bg-[var(--accent)] border-[var(--accent)]"
+                : "border-2 border-[var(--border)]"
+            }`}
+          >
+            {client.enabled && (
+              <svg viewBox="0 0 12 12" fill="none" className="h-2.5 w-2.5" aria-hidden="true">
+                <path d="M2 6l3 3 5-5" stroke="var(--bg-base)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            )}
+          </div>
+        )}
 
         {/* App logo */}
         <AppLogo id={client.id} name={client.name} />
@@ -317,8 +339,14 @@ export default function AppsStep({
             <span className="text-sm font-medium text-[var(--text-primary)]">
               {client.name}
             </span>
-            <span className="text-[10px] font-medium text-emerald-400/80 bg-emerald-400/10 px-1.5 py-0.5 rounded">
-              Detected
+            <span
+              className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${
+                client.manageable
+                  ? "text-emerald-400/80 bg-emerald-400/10"
+                  : "text-amber-300/90 bg-amber-400/10"
+              }`}
+            >
+              {client.manageable ? "Detected" : "Not protected"}
             </span>
           </div>
           <p className="text-xs text-[var(--text-muted)] truncate mt-0.5">
@@ -401,7 +429,7 @@ export default function AppsStep({
               <div className="mb-3 rounded-md border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs text-amber-100/90">
                 We currently only support local MCP servers, not Connectors. You
                 should remove your connectors manually for your safety and request
-                a equivalent server in Edison Watch from your admin.
+                an equivalent server in Edison Watch from your admin.
               </div>
               <div className="flex flex-col gap-2">
                 {partiallySupportedClients.map(renderClientCard)}

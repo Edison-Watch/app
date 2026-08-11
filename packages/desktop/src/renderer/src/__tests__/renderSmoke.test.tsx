@@ -16,6 +16,7 @@ vi.mock('../components/onboarding/PersonalKeyCard', () => ({
 }))
 import AppsStep from '../components/onboarding/AppsStep'
 import MainMenu from '../components/main/MainMenu'
+import ClientsView from '../components/main/ClientsView'
 import EncryptionStep from '../components/onboarding/EncryptionStep'
 
 /**
@@ -52,13 +53,40 @@ describe('AppsStep', () => {
   it('renders the clients the daemon reports', async () => {
     const api = installMockApi()
     ;(api.mcp as Record<string, unknown>).detectClients = async () => ({
-      clients: [{ id: 'cursor', name: 'Cursor', configPath: '/home/u/.cursor/mcp.json' }],
+      clients: [
+        { id: 'cursor', name: 'Cursor', configPath: '/home/u/.cursor/mcp.json', manageable: true }
+      ],
       daemonUnavailable: false
     })
 
     render(<AppsStep onNext={() => {}} />)
 
     expect(await screen.findByText('Cursor')).toBeTruthy()
+    expectNoRenderErrors()
+  })
+
+  it('offers no selection for a client it cannot configure', async () => {
+    // A checked checkbox whose value is thrown away downstream told the user
+    // ChatGPT was about to be configured, and inflated the "Configure N Apps"
+    // count on the next step by one.
+    const api = installMockApi()
+    ;(api.mcp as Record<string, unknown>).detectClients = async () => ({
+      clients: [
+        { id: 'cursor', name: 'Cursor', configPath: '/home/u/.cursor/mcp.json', manageable: true },
+        { id: 'chatgpt', name: 'ChatGPT', configPath: 'Connectors', manageable: false }
+      ],
+      daemonUnavailable: false
+    })
+
+    render(<AppsStep onNext={() => {}} />)
+
+    // Shown, and shown as unprotected - not quietly dropped from the list.
+    expect(await screen.findByText('ChatGPT')).toBeTruthy()
+    expect(screen.getByText(/not protected/i)).toBeTruthy()
+    // Only Cursor is selectable, so only Cursor is counted.
+    await waitFor(() => {
+      expect(screen.getByText(/Continue with 1 App$/)).toBeTruthy()
+    })
     expectNoRenderErrors()
   })
 
@@ -120,6 +148,45 @@ describe('MainMenu', () => {
     await waitFor(() => {
       expect(screen.getByRole('alert').textContent).toMatch(/Degraded/i)
     })
+    expectNoRenderErrors()
+  })
+})
+
+describe('ClientsView', () => {
+  const status = (over: Record<string, unknown>) => ({
+    installed: true,
+    hasHook: true,
+    hookCount: 4,
+    totalHooks: 4,
+    mcpConnected: true,
+    mcpConfigured: true,
+    mcpApplicable: true,
+    hooksApplicable: true,
+    manageable: true,
+    ...over
+  })
+
+  it('explains an unmanageable client it knows, and one it does not', async () => {
+    // `manageable` is a capability the daemon can set on any client, so the
+    // copy cannot assume ChatGPT's reason. An unrecognised id has to fall back
+    // to what the flag alone guarantees rather than borrowing that wording.
+    //
+    // `constructor` is the unrecognised id on purpose: the ids are chosen by
+    // the daemon, and an object lookup answers inherited keys as if they were
+    // entries, so it would take a function where the fallback belongs.
+    const api = installMockApi()
+    ;(api.mcp as Record<string, unknown>).getHookStatus = async () => ({
+      statuses: [
+        status({ client: 'chatgpt', manageable: false, mcpApplicable: false, hooksApplicable: false }),
+        status({ client: 'constructor', manageable: false, mcpApplicable: false, hooksApplicable: false })
+      ],
+      daemonUnavailable: false
+    })
+
+    render(<ClientsView />)
+
+    expect(await screen.findByText(/Connectors are managed in your account/)).toBeTruthy()
+    expect(screen.getByText(/^Edison Watch can't configure this app$/)).toBeTruthy()
     expectNoRenderErrors()
   })
 })

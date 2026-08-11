@@ -81,6 +81,16 @@ export interface AgentInfo {
    */
   workspace_hooks_total?: number
   workspace_hooks_installed?: number
+  /**
+   * Whether Edison can manage this agent at all, or only report that it's
+   * there. False for hosts whose MCP servers are Connectors in the vendor's
+   * account (ChatGPT) - nothing local to read, write, hook, or proxy.
+   *
+   * Absent from daemons predating the field, and absence must read as `true`:
+   * every agent that existed before it is manageable, and defaulting the other
+   * way would silently drop real clients out of setup status.
+   */
+  manageable?: boolean
 }
 
 /** One discovered server instance. `state`: edison | known | new | opaque | report. */

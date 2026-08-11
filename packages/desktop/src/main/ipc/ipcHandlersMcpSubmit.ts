@@ -14,8 +14,9 @@ import {
   submitOneViaDetectord,
 } from "../detectord/submit";
 import { getDetectordClient } from "../detectord/lifecycle";
-import { toAgentName } from "../detectord/agents";
+import { toAgentName, getAgentFacts } from "../detectord/agents";
 import { applyIntegrations, revertIntegrations, integrationErrors } from "../detectord/integrations";
+import { CLIENT_DISPLAY } from "../clients/displayMeta";
 import { detectSecrets } from "../discovery/secretDetection";
 import type { TemplatizedConfig } from "../discovery/secretDetection";
 import { filterOutEdisonWatchServers } from "../runtime/mcpConfigMonitor";
@@ -145,6 +146,24 @@ export function registerMcpSubmitHandlers(): void {
       // as null content and anything else (permissions, a directory, non-UTF-8)
       // as an error, so pass the reason on rather than rendering "no config".
       const message = err instanceof Error ? err.message : String(err);
+
+      // An unmanageable client has no local config, so the failure above is
+      // expected and its message is one the user can do nothing about. Say
+      // what's actually going on instead. The daemon is the authority on which
+      // clients those are, so this asks it - but only here, on a path that has
+      // already failed. Asking up front cost a `list_agents` (a full discovery
+      // pass, plus a workspace hook scan) on every successful read, and the
+      // refresh in AppsStep re-reads every expanded client at once.
+      const facts = await getAgentFacts();
+      if (facts?.get(client as McpClientId)?.manageable === false) {
+        const name = CLIENT_DISPLAY[client as McpClientId]?.name ?? client;
+        return {
+          content:
+            `${name} keeps its MCP servers as Connectors in your account, not in a ` +
+            `local config file. There is nothing here for Edison Watch to read or protect.`,
+        };
+      }
+
       console.warn(`[mcp:readConfig] ${client}: ${message}`);
       return { content: null, error: message };
     }

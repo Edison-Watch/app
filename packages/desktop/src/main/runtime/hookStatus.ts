@@ -24,6 +24,13 @@ export interface HookStatusEntry {
   mcpConfigured: boolean
   mcpApplicable: boolean
   hooksApplicable: boolean
+  /**
+   * False when Edison can only see this client, not configure it (ChatGPT's
+   * server-side Connectors). Reported rather than filtered out: the wizard is
+   * seen once, this list is the permanent surface, and a client silently
+   * missing from it is how a user ends up assuming they're covered.
+   */
+  manageable: boolean
   mcpRuntimeStatus?: ClaudeCodeMcpStatus
 }
 
@@ -75,7 +82,8 @@ export async function getHookStatus(
         mcpConnected: false,
         mcpConfigured: false,
         mcpApplicable: true,
-        hooksApplicable: false
+        hooksApplicable: false,
+        manageable: true
       }
     }
 
@@ -106,8 +114,12 @@ export async function getHookStatus(
       totalHooks,
       mcpConnected,
       mcpConfigured,
-      mcpApplicable: true,
-      hooksApplicable: totalHooks > 0,
+      // An unmanageable client has no gateway entry and no hook surface, so
+      // neither condition applies to it. The UI renders it as its own state
+      // rather than scoring it against conditions it can never meet.
+      mcpApplicable: f.manageable,
+      hooksApplicable: f.manageable && totalHooks > 0,
+      manageable: f.manageable,
       ...(mcpRuntimeStatus !== undefined ? { mcpRuntimeStatus } : {})
     }
   })

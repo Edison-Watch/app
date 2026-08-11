@@ -66,7 +66,7 @@ const api = {
   /** MCP client discovery and hook management */
   mcp: {
     detectClients: (): Promise<{
-      clients: Array<{ id: string; name: string; configPath: string }>
+      clients: Array<{ id: string; name: string; configPath: string; manageable: boolean }>
       daemonUnavailable: boolean
     }> =>
       ipcRenderer.invoke('mcp:detectClients'),
