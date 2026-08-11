@@ -60,6 +60,19 @@ impl Supervisor {
 
     /// Spawn one raw desired server after applying current local values. Reports
     /// the spawn result and retains placeholders so later respawns re-enrich cleanly.
+    ///
+    /// Ordering contract (PROTOCOL.md T-74): every kill-and-respawn path here
+    /// (`apply_snapshot`, `apply_delta`, `apply_spec_update`,
+    /// `apply_env_update`, `restart_unresponsive`) MUST `await`
+    /// [`ChildServer::shutdown`] for the outgoing child *before* calling this,
+    /// and this method's `server_spawn_result` send must stay after the
+    /// spawn. That is what makes the old child's terminal `server_offline`
+    /// reach the outbound channel first: `shutdown` returns only once the
+    /// stdout pump's report has been queued, and the channel behind
+    /// [`OutgoingHandle`] preserves the order in which sends complete, so the
+    /// WS writer emits the two frames in that order. The backend relies on it
+    /// to treat a successful ack as clearing a stored terminal error
+    /// (`registry.py::_dispatch_inbound`).
     async fn try_spawn(&mut self, raw: DesiredServer) {
         let server_id = raw.server_id.clone();
         let sensitive_arg_values = self
