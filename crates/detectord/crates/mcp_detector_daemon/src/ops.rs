@@ -752,12 +752,6 @@ pub fn heal_edison_install(user: &str, e: &Enrollment) -> usize {
         if present.contains(agent.name()) {
             continue; // already installed — don't rewrite (avoids fs-watch churn)
         }
-        // Count and report only what was actually written. An agent with no
-        // install targets (JetBrains with no IDE on the machine) reaches here
-        // and writes nothing; logging it as healed anyway made the self-heal
-        // signal permanently non-zero, so a real heal - somebody's config got
-        // clobbered - was indistinguishable from the every-20s background hum.
-        let mut wrote = false;
         for inst in agent.edison_installs(&home) {
             let done_via_cli = inst.prefer_cli && {
                 let url = mcp_quarantine::edison_url(mcp_base, &e.api_key, &inst.client_id);
@@ -766,10 +760,6 @@ pub fn heal_edison_install(user: &str, e: &Enrollment) -> usize {
             if !done_via_cli {
                 let _ = mcp_quarantine::install_edison(&inst, mcp_base, &e.api_key, secret);
             }
-            wrote = true;
-        }
-        if !wrote {
-            continue;
         }
         tracing::info!(
             agent = agent.name(),
