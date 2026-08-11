@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Badge } from "@edison-watch/shared/ui";
 import { AppLogo } from "../AppLogo";
+import { CONNECTOR_BACKED_REASON, type UnmanageableReason } from "../clientSupport";
 
 // Source of truth: ClaudeCodeMcpStatus in client_2/src/main/setupConfig.ts
 // Duplicated here because renderer cannot import main-process modules directly.
@@ -39,8 +40,8 @@ interface ClientInfo {
 
 // Map client IDs (from McpClientId) to display names. Every id the daemon can
 // report needs an entry - a missing one renders as the raw id. A Map for the
-// same reason as UNMANAGEABLE_REASON below: the key comes from the daemon, and
-// an object lookup would answer `constructor` with a function to render.
+// same reason as CONNECTOR_BACKED_REASON: the key comes from the daemon, and an
+// object lookup would answer `constructor` with a function to render.
 const CLIENT_NAMES = new Map<string, string>([
   ["claude-code", "Claude Code"],
   ["claude-desktop", "Claude Desktop"],
@@ -67,42 +68,22 @@ const CLIENT_NAMES = new Map<string, string>([
 type ClientStatus = "connected" | "partial-setup" | "installed" | "unmanaged" | "missing";
 
 /**
- * Why a given client can't be managed, and what to do about it.
+ * What to say when a client lands in `unmanaged` for a reason this build does
+ * not recognise.
  *
  * `manageable` is a capability, not an identity: the daemon can mark any client
- * unmanageable, and each will be unmanageable for its own reason. Wording that
- * assumes ChatGPT's reason would quietly become wrong for the next one, so the
- * specific advice is keyed by client and the fallback claims only what the flag
- * itself guarantees.
+ * unmanageable, and each will be unmanageable for its own reason. A newer daemon
+ * can send an id this build has never heard of, so the fallback claims only what
+ * the flag itself guarantees - borrowing a known client's wording would state a
+ * cause nobody established.
  */
-interface UnmanageableReason {
-  row: string;
-  tooltip: string;
-}
-
-// A Map, not an object literal: the key is an id the daemon chose, and an
-// object lookup answers inherited keys as though they were entries - a client
-// named `constructor` would take a function where the fallback belongs.
-const UNMANAGEABLE_REASON = new Map<string, UnmanageableReason>([
-  [
-    "chatgpt",
-    {
-      row: "Connectors are managed in your account - Edison Watch can't proxy them",
-      tooltip:
-        "This app's MCP servers are Connectors held in your account, not local " +
-        "config Edison Watch can proxy. Remove them and request equivalents from " +
-        "your admin.",
-    },
-  ],
-]);
-
 const FALLBACK_REASON: UnmanageableReason = {
   row: "Edison Watch can't configure this app",
   tooltip: "Edison Watch can see this app but cannot configure or protect it.",
 };
 
 const unmanageableReason = (id: string): UnmanageableReason =>
-  UNMANAGEABLE_REASON.get(id) ?? FALLBACK_REASON;
+  CONNECTOR_BACKED_REASON.get(id) ?? FALLBACK_REASON;
 
 function StatusDot({ status }: { status: ClientStatus }) {
   const colors: Record<ClientStatus, string> = {
@@ -124,11 +105,8 @@ function StatusDot({ status }: { status: ClientStatus }) {
   );
 }
 
-function getClientStatus(client: ClientInfo): ClientStatus {
-  if (!client.installed) return "missing";
-  // Before the setup conditions, because none of them apply: there is no
-  // gateway entry to install and no hook surface to inject.
-  if (!client.manageable) return "unmanaged";
+/** How far through setup a manageable client is, ignoring Connectors. */
+function getSetupStatus(client: ClientInfo): ClientStatus {
   const needsMcp = client.mcpApplicable;
   const needsHooks = client.hooksApplicable;
   const hooksSatisfied = !needsHooks || client.hasHook;
@@ -136,6 +114,23 @@ function getClientStatus(client: ClientInfo): ClientStatus {
   if (hooksSatisfied && mcpSatisfied) return "connected";
   if ((needsHooks && (client.hasHook || client.hookCount > 0)) || (needsMcp && client.mcpConfigured)) return "partial-setup";
   return "installed";
+}
+
+function getClientStatus(client: ClientInfo): ClientStatus {
+  if (!client.installed) return "missing";
+  // Before the setup conditions, because none of them apply: there is no
+  // gateway entry to install and no hook surface to inject.
+  if (!client.manageable) return "unmanaged";
+  const setup = getSetupStatus(client);
+  // A connector-backed client that is otherwise fully set up is not "Connected"
+  // - its account-side Connectors are still unproxied, and saying Connected
+  // there is the overstatement this whole state exists to avoid.
+  //
+  // Only once setup is done, though: an unreachable gateway is actionable and
+  // outranks a caveat the user can do nothing about right now. Reporting the
+  // caveat over a broken install would bury the fixable problem.
+  if (setup === "connected" && CONNECTOR_BACKED_REASON.has(client.id)) return "unmanaged";
+  return setup;
 }
 
 /** Describes what's missing for a partial-setup client. */
@@ -169,7 +164,10 @@ function getIssueDetail(client: ClientInfo): string {
 
 /** Tooltip showing connection condition checklist on hover. */
 function ConditionTooltip({ client }: { client: ClientInfo }) {
-  if (!client.manageable) {
+  // Keyed on the rendered status, not `manageable`: a connector-backed client
+  // can be manageable and still show this state, and the hover must agree with
+  // the badge beside it.
+  if (getClientStatus(client) === "unmanaged") {
     return (
       <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 z-50 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-150">
         <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-raised)] px-3 py-2 shadow-lg max-w-[260px]">
