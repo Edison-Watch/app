@@ -43,9 +43,11 @@ const status = (over: Record<string, unknown>) => ({
 export const WithAnUnmanageableClient: Story = {
   decorators: [
     (Story) => {
-      // Storybook keeps every story in a file on one page, so a stub assigned
-      // here outlives the story that set it - the next story added to this file
-      // would silently inherit these four clients.
+      // Restored on unmount because `addon-docs` is enabled: a docs page
+      // renders every story in this file into one iframe, so a stub left
+      // behind is inherited by whatever story is added alongside it. The
+      // canvas view isolates each story per iframe and would not care - which
+      // is why the leak would go unnoticed until someone opened Docs.
       //
       // Swap and restore both happen in the effect, so they stay symmetric:
       // mutating a global during render is not safe to repeat, and React does
