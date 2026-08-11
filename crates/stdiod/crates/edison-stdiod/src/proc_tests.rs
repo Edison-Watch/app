@@ -2,6 +2,9 @@ use super::*;
 use serde_json::json;
 use tokio::io::duplex;
 
+use crate::child_diagnostics::mark_entry_crashed;
+use crate::state::{ServerEntry, ServerStatus};
+
 #[test]
 fn diagnostics_are_bounded_and_redacted() {
     let diagnostics = ChildDiagnostics::default();

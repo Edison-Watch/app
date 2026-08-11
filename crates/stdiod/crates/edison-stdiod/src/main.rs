@@ -11,6 +11,7 @@
 use clap::{Parser, Subcommand};
 
 mod auth;
+mod child_diagnostics;
 mod cli;
 mod config;
 mod daemon;
