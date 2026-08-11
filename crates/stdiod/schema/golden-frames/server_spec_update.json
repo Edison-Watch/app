@@ -1,6 +1,6 @@
 {
   "type": "server_spec_update",
   "server_id": "filesystem",
-  "env": { "PP": "/Users/eito/projects" },
-  "templated_args": { "{PP}": "/Users/eito/projects" }
+  "env": { "PP": "/workspace/project" },
+  "templated_args": { "{PP}": "/workspace/project" }
 }

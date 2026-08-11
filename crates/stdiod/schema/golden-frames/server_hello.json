@@ -8,7 +8,7 @@
       "command": "npx",
       "args": ["-y", "@modelcontextprotocol/server-filesystem", "{PP}"],
       "env": {},
-      "working_dir": "/Users/eito/projects",
+      "working_dir": "/workspace/project",
       "enabled": true
     },
     {
