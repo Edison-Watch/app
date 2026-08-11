@@ -7,7 +7,7 @@
     "method": "tools/call",
     "params": {
       "name": "read_file",
-      "arguments": { "path": "/Users/eito/projects/README.md" }
+      "arguments": { "path": "/workspace/project/README.md" }
     }
   }
 }

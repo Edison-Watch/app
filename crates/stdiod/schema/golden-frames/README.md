@@ -36,7 +36,7 @@ Every implementation MUST:
 
 At least one fixture per variant of the `TunnelFrame` enum in
 `../../crates/edison-tunnel-protocol/src/lib.rs`. The Rust test
-`crates/edison-tunnel-protocol/tests/golden_frames.rs` enforces both directions:
+`../../crates/edison-tunnel-protocol/tests/golden_frames.rs` (repo path: `crates/stdiod/crates/edison-tunnel-protocol/tests/golden_frames.rs`) enforces both directions:
 a fixture for an unknown variant fails to parse, and a variant with no fixture
 fails the coverage assertion.
 
@@ -70,5 +70,5 @@ it has no fixture. Add one when it ships.
    as an explicit null, keep the null.
 3. Add a row to the table above.
 4. When the fixture covers a **new** variant, add the tag to `EXPECTED_VARIANTS`
-   in `crates/edison-tunnel-protocol/tests/golden_frames.rs`.
+   in `../../crates/edison-tunnel-protocol/tests/golden_frames.rs` (repo path: `crates/stdiod/crates/edison-tunnel-protocol/tests/golden_frames.rs`).
 5. Run `cargo test --workspace` from `crates/stdiod`.
