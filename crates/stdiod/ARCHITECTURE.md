@@ -9,6 +9,10 @@ This document describes the daemon's own design. The backend is treated as an
 opaque peer reachable at a configured URL; only the public daemon↔backend wire
 contract is described here.
 
+Normative client requirements: [PROTOCOL.md](./PROTOCOL.md). This document is
+narrative and runs ahead of the code in places; PROTOCOL.md documents what
+protocol_version 2 actually implements and lists the deltas.
+
 ## Scope
 
 - **One daemon = one device.** A user may run the daemon on many machines; each
@@ -58,10 +62,11 @@ Cross-cutting concerns sit beneath all of the above: the thin HTTP client for
 the backend's REST surface, on-disk config and state persistence, and the
 platform-specific service integration (macOS / Linux / Windows).
 
-The wire-protocol Rust types are **generated from a JSON Schema** (via
-`schemars`/`typify`). The schema is the single source of truth so the daemon and
-its peer can be kept in lock-step; see
-[`schema/edison-tunnel-protocol.json`](./schema/edison-tunnel-protocol.json).
+The wire-protocol Rust types are hand-written; the JSON Schema at
+[`schema/tunnel-protocol.json`](./schema/tunnel-protocol.json) is the source of
+truth, and the backend's `check_tunnel_protocol_schema.py` check keeps schema,
+Rust, and backend models in lock-step. Canonical wire examples for every frame
+live in [`schema/golden-frames/`](./schema/golden-frames/).
 
 ## Tunnel mechanism: reverse RPC over WebSocket
 
@@ -85,7 +90,7 @@ reverse tunnel because:
 
 ### Wire protocol
 
-Defined as JSON Schema at `schema/edison-tunnel-protocol.json`. Frames are JSON with a
+Defined as JSON Schema at `schema/tunnel-protocol.json`. Frames are JSON with a
 `type` discriminator and fall into two categories.
 
 **Control frames** (lifecycle / desired state):
@@ -96,23 +101,28 @@ Defined as JSON Schema at `schema/edison-tunnel-protocol.json`. Frames are JSON 
 - `server_hello` (backend → daemon): `protocol_version` plus a **full
   desired-state snapshot** -
   `servers: [{server_id, name, command, args, env, working_dir, enabled}]`.
-  If the daemon's `protocol_version` is below the minimum the backend supports,
-  the upgrade is refused with a `needs_upgrade` close code; the daemon records
-  `needs_upgrade=true` in `state.json` and stops retrying until the binary is
-  updated.
+  If the daemon's `protocol_version` does not match the backend's (strict
+  equality at v2), the handshake is refused; the daemon records the
+  `needs_upgrade` connection state in `state.json` and stops retrying until the
+  binary is updated.
 - `desired_state_update` (backend → daemon): steady-state delta -
   `added` / `updated` / `removed` server lists.
 - `device_status` (daemon → backend): periodic snapshot of which children are
-  running and their last health timestamp.
+  running and their last health timestamp. *(Planned; not implemented at
+  protocol_version 2.)*
 - `announce_server` (daemon → backend): the user added a server via the local
-  CLI; the backend records it for review.
+  CLI; the backend records it for review. *(Schema-defined; not yet implemented
+  on either side.)*
 - `creds_invalidated` (backend → daemon): the user's credentials were rotated.
-  The daemon closes the connection, sets `needs_reauth=true` in `state.json`,
-  fires a single OS notification, and waits for credentials to change before
-  retrying.
+  The daemon closes the connection, records the `needs_reauth` connection state
+  in `state.json`, fires a single OS notification, and waits for credentials to
+  change before retrying. *(Planned; not implemented at protocol_version 2 -
+  today the backend closes the WebSocket on revocation and the daemon hits
+  401/403 on reconnect, which reaches the same `needs_reauth` state.)*
 - `fetch_logs_request` / `fetch_logs_response`: an operator-initiated, bounded
   (default 200 lines) pull of a child's recent `stdout`/`stderr`. Never streamed
-  continuously, to keep bandwidth predictable.
+  continuously, to keep bandwidth predictable. *(Planned; not implemented at
+  protocol_version 2.)*
 - `ping` / `pong` (both directions): heartbeat - see
   [Disconnect handling](#disconnect-handling).
 
@@ -230,24 +240,25 @@ The daemon keeps almost nothing durable; the backend is the source of truth.
 
 ### Heartbeats
 
-- The daemon sends a WS Ping every 15s and closes + reconnects if no Pong
-  arrives within 10s.
-- TCP keepalive is enabled to detect zombie sockets faster (e.g. a laptop lid
-  closed mid-connection).
-- A wall-clock gap detector notices sleep/resume jumps and restarts the
-  WebSocket immediately rather than waiting out the heartbeat timeout.
+- The daemon sends an application-level `ping` frame every 15s and closes +
+  reconnects after 25s without any inbound frame (any frame counts as liveness,
+  not just `pong`).
+- TCP keepalive is not currently configured; zombie sockets are caught by the
+  staleness window above.
+- A wall-clock gap detector (45s jump) notices sleep/resume and restarts the
+  WebSocket immediately rather than waiting out the staleness window.
 
 ### Reconnect policy
 
-- Exponential backoff with jitter: 1s, 2s, 4s, 8s … capped at 60s, ±25% jitter
+- Exponential backoff with jitter: 1s, 2s, 4s, 8s … capped at 30s, ±25% jitter
   to avoid a thundering herd against the backend after a deploy.
 - **Retry forever** on transient errors (network down, DNS failure, connection
   refused, 5xx upgrade response).
-- **Stop and notify on auth failure** (401/403 on upgrade): set
-  `needs_reauth=true` in `state.json`, fire one OS notification, then wait for
-  credentials to change before retrying.
-- **Other 4xx** (device disabled, version too old): back off to a steady 60s and
-  log clearly.
+- **Stop and notify on auth failure** (401/403 on upgrade): record the
+  `needs_reauth` connection state in `state.json`, fire one OS notification,
+  then wait for credentials to change before retrying.
+- **Other 4xx** (e.g. device disabled): treated as transient and retried on the
+  normal backoff curve.
 
 ### Reconciliation on (re)connect
 
