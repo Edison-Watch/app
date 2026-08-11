@@ -29,6 +29,7 @@ use tokio::sync::{mpsc, Mutex as AsyncMutex, Notify};
 use tokio::task::JoinHandle;
 use tracing::{debug, info, warn};
 
+use crate::state::{ServerEntry, ServerStatus, StateWriter};
 use crate::tunnel::OutgoingHandle;
 
 const STDERR_TAIL_MAX_LINES: usize = 20;
@@ -342,6 +343,17 @@ struct ChildDiagnostics {
     reported: Arc<AtomicBool>,
     stderr_done: Arc<AtomicBool>,
     stderr_done_notify: Arc<Notify>,
+    /// Where to mark this child `crashed` in `state.json` the moment a pump
+    /// observes it die. The supervisor recomputes the whole `servers` array
+    /// from [`ChildServer::has_exited`] on its next mutation anyway; this is
+    /// what makes the transition visible to the tray *between* mutations,
+    /// which are rare. `None` in tests and wherever no writer exists.
+    state: Option<StateWriter>,
+    /// The PID this child was spawned with, used to address the right
+    /// `state.json` entry: a respawn reuses the server name, so the name
+    /// alone would let a late report from a dead child mark its healthy
+    /// replacement as crashed.
+    pid: Option<u32>,
 }
 
 impl ChildDiagnostics {
@@ -357,6 +369,29 @@ impl ChildDiagnostics {
             sensitive_values: Arc::new(sensitive_values),
             ..Self::default()
         }
+    }
+
+    /// Attach the `state.json` writer and the spawned PID so a death is
+    /// published as soon as it is observed.
+    fn publishing_to(mut self, state: Option<StateWriter>, pid: Option<u32>) -> Self {
+        self.state = state;
+        self.pid = pid;
+        self
+    }
+
+    /// Flip this child's `state.json` entry to `crashed`. No-op when no
+    /// writer is attached or the entry has already been replaced.
+    async fn publish_crashed(&self, server_id: &str) {
+        let Some(state) = self.state.clone() else {
+            return;
+        };
+        let pid = self.pid;
+        let server_id = server_id.to_string();
+        state
+            .update(move |s| {
+                mark_entry_crashed(&mut s.servers, &server_id, pid);
+            })
+            .await;
     }
 
     fn record_stderr(&self, line: &str) -> Option<String> {
@@ -424,6 +459,21 @@ impl ChildDiagnostics {
         }
         Some(self.terminal_error(server_id, status))
     }
+}
+
+/// Mark the `state.json` entry for `server_id` as crashed, but only while it
+/// still describes the process that died. A child that has been respawned
+/// under the same name carries a different PID, and its entry MUST be left
+/// alone. Returns whether an entry was updated.
+fn mark_entry_crashed(servers: &mut [ServerEntry], server_id: &str, pid: Option<u32>) -> bool {
+    let Some(entry) = servers
+        .iter_mut()
+        .find(|entry| entry.name == server_id && entry.pid == pid)
+    else {
+        return false;
+    };
+    entry.state = ServerStatus::Crashed;
+    true
 }
 
 fn sanitize_diagnostic_line(line: &str) -> Option<String> {
@@ -513,11 +563,15 @@ impl ChildServer {
     /// `tunnel_outgoing` is the broker handle the inbound pump uses to send
     /// frames upstream to the backend. It survives WS reconnects - sends
     /// during a disconnect drop silently.
+    ///
+    /// `state` is the `state.json` writer the pumps use to publish this
+    /// child's death as soon as they see it; pass `None` to skip publishing.
     pub fn spawn(
         raw: &DesiredServer,
         enriched: &DesiredServer,
         tunnel_outgoing: OutgoingHandle,
         sensitive_arg_values: Vec<String>,
+        state: Option<StateWriter>,
     ) -> Result<Self> {
         info!(
             server_id = %enriched.server_id,
@@ -553,7 +607,7 @@ impl ChildServer {
         let child: SharedChild = Arc::new(AsyncMutex::new(child));
 
         let sensitive_values = enriched.env.values().cloned().chain(sensitive_arg_values);
-        let diagnostics = ChildDiagnostics::new(sensitive_values);
+        let diagnostics = ChildDiagnostics::new(sensitive_values).publishing_to(state, pid);
         let (outbound_tx, outbound_rx) = mpsc::channel::<serde_json::Value>(64);
         let stdin_pump = tokio::spawn(stdin_pump(
             enriched.server_id.clone(),
@@ -682,8 +736,9 @@ async fn stdin_pump<W: AsyncWrite + Unpin>(
 }
 
 /// Shared terminal-error reporting for both pumps: give stderr a moment to
-/// drain, attach the child's exit status when it can be observed, and emit
-/// the one-shot `server_offline` tunnel error.
+/// drain, attach the child's exit status when it can be observed, emit the
+/// one-shot `server_offline` tunnel error, and flip the child's `state.json`
+/// entry to `crashed`.
 async fn report_terminal(
     server_id: &str,
     diagnostics: &ChildDiagnostics,
@@ -692,7 +747,11 @@ async fn report_terminal(
 ) {
     diagnostics.wait_for_stderr().await;
     let status = child_exit_status(child).await;
-    if let Some(error) = diagnostics.take_terminal_error(server_id, status.as_ref()) {
+    // ``take_terminal_error`` latches ``exited`` on both branches, so by the
+    // time the entry is published the supervisor's own snapshot agrees.
+    let error = diagnostics.take_terminal_error(server_id, status.as_ref());
+    diagnostics.publish_crashed(server_id).await;
+    if let Some(error) = error {
         tunnel_outgoing.send(TunnelFrame::TunnelError(error)).await;
     }
 }
