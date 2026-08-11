@@ -107,6 +107,16 @@ impl OutgoingHandle {
             None => false,
         }
     }
+
+    /// Queue a frame without waiting for capacity, dropping it if the channel
+    /// is full or disconnected. Returns whether the frame was queued. Used on
+    /// shutdown paths that must not block on a wedged WS writer.
+    pub fn try_send(&self, frame: TunnelFrame) -> bool {
+        match self.snapshot() {
+            Some(tx) => tx.try_send(frame).is_ok(),
+            None => false,
+        }
+    }
 }
 
 /// Connect to the backend's `/api/v1/stdio-tunnel/ws` endpoint.

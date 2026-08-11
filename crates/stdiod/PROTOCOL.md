@@ -313,8 +313,20 @@ desired spec, or a restart of an unresponsive child), the terminal
 `server_spawn_result`. Receivers MAY therefore treat
 `server_spawn_result{ok:true}` as clearing any terminal error they hold for
 that `server_id`. See T-42.
-*Source: `proc.rs::ChildServer::shutdown` (joins the stdout pump, so the
-terminal report is queued before it returns); `daemon.rs::Supervisor::try_spawn`
+
+This is an ordering requirement, not a delivery guarantee. A client whose
+outbound channel cannot accept the report (full, or disconnected mid-shutdown)
+MAY drop it, in which case the backend sees no `server_offline` at all and
+falls back to its own staleness handling (T-50); what a client MUST NOT do is
+let the report arrive after the ack. The reference client bounds its own
+shutdown: it joins both frame pumps under one budget, since either may hold the
+one-shot report, and if it has to abort a pump that has taken the report it
+sends the report itself, non-blocking, before returning. T-43 still holds
+across that fallback: the latch that hands out the report and the flag that
+records a completed send are updated without an await between them, so an
+aborted pump has either sent the report or left it unsent, never both.
+*Source: `proc.rs::ChildServer::shutdown` (joins both pumps, with a fallback
+send after an abort); `daemon.rs::Supervisor::try_spawn`
 (every respawn path awaits `shutdown` first); `registry.py::_dispatch_inbound`
 (`ServerSpawnResult` arm clears `last_error_by_server`).*
 
