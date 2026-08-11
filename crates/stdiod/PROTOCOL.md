@@ -306,6 +306,18 @@ pump EOF, input pump write error, a frame addressed to an exited child). The
 reference client uses a one-shot latch.
 *Source: `proc.rs::ChildDiagnostics::take_terminal_error` (`reported.swap`).*
 
+**T-74** When a client stops a child and then reports a spawn result for the
+same `server_id` (a kill-and-respawn: env update, spec update, a changed
+desired spec, or a restart of an unresponsive child), the terminal
+`server_offline` for the old child MUST be sent before the new
+`server_spawn_result`. Receivers MAY therefore treat
+`server_spawn_result{ok:true}` as clearing any terminal error they hold for
+that `server_id`. See T-42.
+*Source: `proc.rs::ChildServer::shutdown` (joins the stdout pump, so the
+terminal report is queued before it returns); `daemon.rs::Supervisor::try_spawn`
+(every respawn path awaits `shutdown` first); `registry.py::_dispatch_inbound`
+(`ServerSpawnResult` arm clears `last_error_by_server`).*
+
 **T-44** A spawn failure MUST produce **both** `server_spawn_result{ok:false}`
 and `tunnel_error{code:"spawn_failed", server_id}`, in that order. The backend
 treats `spawn_failed` and `server_offline` as terminal for the current child:
@@ -361,7 +373,7 @@ carry on) rather than failing the frame.
 
 | Code | Direction | Meaning | Governed by |
 |------|-----------|---------|-------------|
-| `server_offline` | client → backend | The child for `server_id` is gone: its output pump hit EOF or errored, its input pump failed to write, or a frame arrived for a child already known dead. Terminal for that child, and emitted at most once per child lifetime | T-42, T-43, T-47 |
+| `server_offline` | client → backend | The child for `server_id` is gone: its output pump hit EOF or errored, its input pump failed to write, or a frame arrived for a child already known dead. Terminal for that child, and emitted at most once per child lifetime | T-42, T-43, T-47, T-74 |
 | `spawn_failed` | client → backend | The client tried to start `server_id` and could not (binary missing, exec refused, module URI unrecognised). Always accompanies a `server_spawn_result{ok:false}` and follows it | T-44 |
 | `server_unresponsive` | client → backend | The child for `server_id` stopped consuming its input: the per-child queue filled, so this request could not be delivered. The client then kills and respawns the child | T-51 |
 | `stdio_tunnel_disabled` | backend → client | Device-wide (`server_id` null): the org has the `stdio_tunnel_enabled` feature flag off. The backend closes with 1008 straight after | T-07, T-49 |
