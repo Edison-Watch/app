@@ -462,6 +462,10 @@ impl ChildServer {
         let status = self.child.lock().await.try_wait().ok().flatten();
         if status.is_some() {
             self.diagnostics.mark_observed_exit();
+            // This reap may be the first (or only) observation of the exit,
+            // so state.json has to hear about it from here too, not just from
+            // the stdout pump's death path.
+            self.diagnostics.publish_crashed(&self.server_id).await;
         }
         self.diagnostics
             .take_terminal_error(&self.server_id, status.as_ref())
