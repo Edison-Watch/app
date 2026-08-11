@@ -579,11 +579,19 @@ fn jittered(base: Duration) -> Duration {
 ///
 /// Only two of [`ServerStatus`]'s three values are reachable here:
 ///
-/// - `crashed` - a pump saw the process go away ([`ChildServer::has_exited`],
-///   the same latch that drives the terminal `server_offline` report). The
-///   child stays in the map until the next reconciliation respawns or drops
-///   it, so this is what the tray sees in the meantime.
-/// - `running` - the process was spawned and no pump has reported it dead.
+/// - `crashed` - the process was seen to exit
+///   ([`ChildServer::has_observed_exit`]). The child stays in the map until
+///   the next reconciliation respawns or drops it, so this is what the tray
+///   sees in the meantime.
+/// - `running` - the process was spawned and has not been seen to exit.
+///
+/// The mapping keys off the observed exit rather than
+/// [`ChildServer::has_exited`], which is the wider "terminal for MCP" latch
+/// and also covers a child whose stdin broke while the process is still
+/// alive. Reporting that child as `crashed` beside its own live PID would be
+/// a claim the daemon cannot support; it stays `running` until the supervisor
+/// kills and respawns it, which the same latch makes it do on the next
+/// reconciliation.
 ///
 /// `starting` has no observable trigger. A stdio MCP server writes nothing
 /// until the backend opens a session against it, which can be minutes or
@@ -593,7 +601,7 @@ fn jittered(base: Duration) -> Duration {
 fn child_entry(name: &str, child: &ChildServer) -> ServerEntry {
     ServerEntry {
         name: name.to_string(),
-        state: if child.has_exited() {
+        state: if child.has_observed_exit() {
             ServerStatus::Crashed
         } else {
             ServerStatus::Running
@@ -944,6 +952,69 @@ mod tests {
         assert_eq!(entries[0].name, "fetch");
         assert_eq!(entries[0].pid, pid, "a crashed entry keeps its PID");
         assert!(matches!(entries[0].state, ServerStatus::Crashed));
+    }
+
+    /// A child whose stdin has broken is terminal for MCP - the backend gets
+    /// its `server_offline` - but the process may still be running, and the
+    /// snapshot must not call a live PID crashed. It stays `running` until
+    /// the supervisor kills and respawns it.
+    #[tokio::test]
+    async fn snapshot_keeps_a_live_child_with_broken_stdin_as_running() {
+        // `exec 0<&-` closes the child's read end, so our next write to it
+        // fails with EPIPE while `sleep` keeps the process alive.
+        let spec = desired("memory", "exec 0<&-; sleep 30");
+        let outgoing = OutgoingHandle::new();
+        let (wire_tx, mut wire_rx) = mpsc::channel(4);
+        outgoing.set(wire_tx);
+        let child = ChildServer::spawn(&spec, &spec, outgoing, Vec::new(), None).unwrap();
+        let pid = child.pid;
+
+        // Keep offering frames until one fails to reach the child: the shell
+        // needs a moment to close the descriptor, and writes before that
+        // land in the pipe buffer and succeed.
+        let mut reported = None;
+        for _ in 0..100 {
+            let _ = child
+                .outbound_tx
+                .send(serde_json::json!({"jsonrpc": "2.0", "id": 1, "method": "ping"}))
+                .await;
+            if let Ok(Some(frame)) =
+                tokio::time::timeout(Duration::from_millis(50), wire_rx.recv()).await
+            {
+                reported = Some(frame);
+                break;
+            }
+        }
+        let Some(TunnelFrame::TunnelError(error)) = reported else {
+            panic!("a broken stdin should report the server offline");
+        };
+        assert_eq!(error.code, "server_offline");
+        assert!(
+            child.has_exited(),
+            "an unwritable child is terminal for MCP, so the supervisor replaces it"
+        );
+
+        let supervisor = supervisor_with(
+            "broken-stdin",
+            HashMap::from([("memory".to_string(), child)]),
+        );
+        let entries = supervisor.snapshot_entries();
+
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].pid, pid);
+        assert!(
+            matches!(entries[0].state, ServerStatus::Running),
+            "a process that has not been seen to exit is not crashed: {:?}",
+            entries[0].state
+        );
+
+        supervisor
+            .children
+            .into_values()
+            .next()
+            .unwrap()
+            .shutdown()
+            .await;
     }
 
     /// No child, no entries: an empty map publishes an empty array rather

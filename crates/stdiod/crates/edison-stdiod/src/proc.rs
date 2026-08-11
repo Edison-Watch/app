@@ -339,8 +339,20 @@ mod win {
 struct ChildDiagnostics {
     stderr_tail: Arc<Mutex<VecDeque<String>>>,
     sensitive_values: Arc<Vec<String>>,
+    /// "Terminal for MCP purposes": some path gave up on this child, so the
+    /// backend has been told the server is offline and the supervisor should
+    /// replace it. A child whose stdin broke while the process is still
+    /// running counts, because nothing can be delivered to it any more.
     exited: Arc<AtomicBool>,
+    /// The process itself was seen to be gone: a `try_wait` returned an exit
+    /// status, or `shutdown` reaped it. This is the only thing that may be
+    /// reported as `crashed`, so a live-but-unreachable child is never shown
+    /// as crashed next to its own live PID.
+    observed_exit: Arc<AtomicBool>,
     reported: Arc<AtomicBool>,
+    /// One-shot guard so a single death produces a single `crashed` write,
+    /// whichever pump gets there first.
+    crash_published: Arc<AtomicBool>,
     stderr_done: Arc<AtomicBool>,
     stderr_done_notify: Arc<Notify>,
     /// Where to mark this child `crashed` in `state.json` the moment a pump
@@ -379,9 +391,32 @@ impl ChildDiagnostics {
         self
     }
 
-    /// Flip this child's `state.json` entry to `crashed`. No-op when no
-    /// writer is attached or the entry has already been replaced.
+    /// Record that the process itself is gone. Only an exit status (or a
+    /// reap in [`ChildServer::shutdown`]) may set this.
+    fn mark_observed_exit(&self) {
+        self.observed_exit.store(true, Ordering::Release);
+    }
+
+    fn has_observed_exit(&self) -> bool {
+        self.observed_exit.load(Ordering::Acquire)
+    }
+
+    /// Flip this child's `state.json` entry to `crashed`, once, and only for
+    /// a process that was seen to exit.
+    ///
+    /// The `reported` latch is deliberately not reused as the guard here.
+    /// It answers a different question ("has the backend been told this
+    /// server is offline?") and a broken stdin consumes it while the process
+    /// is still alive; a later, genuine exit still has to reach `state.json`.
+    /// No-op when no writer is attached or the entry has already been
+    /// replaced by a respawn.
     async fn publish_crashed(&self, server_id: &str) {
+        if !self.has_observed_exit() {
+            return;
+        }
+        if self.crash_published.swap(true, Ordering::AcqRel) {
+            return;
+        }
         let Some(state) = self.state.clone() else {
             return;
         };
@@ -653,12 +688,25 @@ impl ChildServer {
 
     pub async fn take_terminal_error(&mut self) -> Option<TunnelError> {
         let status = self.child.lock().await.try_wait().ok().flatten();
+        if status.is_some() {
+            self.diagnostics.mark_observed_exit();
+        }
         self.diagnostics
             .take_terminal_error(&self.server_id, status.as_ref())
     }
 
+    /// Whether this child is finished as far as MCP is concerned: a pump
+    /// reported it terminal, so the supervisor should replace it rather than
+    /// keep routing frames at it. True for a broken-stdin child that is still
+    /// running, which is what makes that case self-healing.
     pub fn has_exited(&self) -> bool {
         self.diagnostics.exited.load(Ordering::Acquire)
+    }
+
+    /// Whether the process was actually seen to exit. This, not
+    /// [`has_exited`](Self::has_exited), is what may be reported as `crashed`.
+    pub fn has_observed_exit(&self) -> bool {
+        self.diagnostics.has_observed_exit()
     }
 
     /// Kill the child and abort the pumps.
@@ -682,6 +730,9 @@ impl ChildServer {
         }
         let _ = child.start_kill();
         let _ = child.wait().await;
+        // Reaped here, so the process is observably gone even if no pump
+        // ever managed to read an exit status for it.
+        self.diagnostics.mark_observed_exit();
         drop(child);
         self.stdin_pump.abort();
         self.stdout_pump.abort();
@@ -738,7 +789,16 @@ async fn stdin_pump<W: AsyncWrite + Unpin>(
 /// Shared terminal-error reporting for both pumps: give stderr a moment to
 /// drain, attach the child's exit status when it can be observed, emit the
 /// one-shot `server_offline` tunnel error, and flip the child's `state.json`
-/// entry to `crashed`.
+/// entry to `crashed` if the process really is gone.
+///
+/// The two halves are deliberately independent. The tunnel error is terminal
+/// for MCP as soon as any pump gives up on the child (PROTOCOL.md T-42/T-47):
+/// a server whose stdin no longer accepts writes cannot serve a request, even
+/// if its process is still around. The `crashed` entry in `state.json` is a
+/// claim about the process, so it waits for an actual exit. A child that is
+/// unreachable but alive therefore stays `running` next to its live PID until
+/// the supervisor kills and respawns it, which it does on the next
+/// reconciliation because `has_exited` is latched (PROTOCOL.md T-69).
 async fn report_terminal(
     server_id: &str,
     diagnostics: &ChildDiagnostics,
@@ -747,6 +807,9 @@ async fn report_terminal(
 ) {
     diagnostics.wait_for_stderr().await;
     let status = child_exit_status(child).await;
+    if status.is_some() {
+        diagnostics.mark_observed_exit();
+    }
     // ``take_terminal_error`` latches ``exited`` on both branches, so by the
     // time the entry is published the supervisor's own snapshot agrees.
     let error = diagnostics.take_terminal_error(server_id, status.as_ref());

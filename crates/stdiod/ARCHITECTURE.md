@@ -249,8 +249,11 @@ The daemon keeps almost nothing durable; the backend is the source of truth.
 }
 ```
 
-A child is reported `crashed` from the moment a pump sees the process go away
-until the next reconciliation respawns or drops it. The third value the format
+A child is reported `crashed` from the moment a pump sees the process exit
+until the next reconciliation respawns or drops it. An exit observation is what
+counts: a child whose stdin broke while the process is still alive is reported
+offline on the tunnel, but stays `running` here until it is actually gone. The
+third value the format
 allows, `starting`, has no observable trigger in a subprocess daemon and is
 never written here; see PROTOCOL.md T-69.
 

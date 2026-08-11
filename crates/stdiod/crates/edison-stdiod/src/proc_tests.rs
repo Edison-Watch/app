@@ -85,7 +85,7 @@ async fn broken_stdin_replays_actionable_terminal_error() {
         stdin,
         frame_rx,
         outgoing,
-        diagnostics,
+        diagnostics.clone(),
         None,
     )
     .await;
@@ -96,6 +96,14 @@ async fn broken_stdin_replays_actionable_terminal_error() {
     };
     assert_eq!(error.code, "server_offline");
     assert!(error.message.contains("ECONNREFUSED localhost:23373"));
+    assert!(
+        diagnostics.exited.load(Ordering::Acquire),
+        "a child that cannot be written to is terminal for MCP"
+    );
+    assert!(
+        !diagnostics.has_observed_exit(),
+        "a failed write is not an exit observation, so nothing may be published as crashed"
+    );
 }
 
 #[cfg(unix)]

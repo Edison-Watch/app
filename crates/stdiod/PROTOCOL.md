@@ -484,13 +484,18 @@ Every member except `servers` and `generation` is nullable.
 **T-69** Each `servers[]` entry MUST carry `name`, `state` (one of `starting`,
 `running`, `crashed`), and a nullable `pid`. A reader MUST accept all three
 values; a writer MUST report the value its own observations support and MUST
-NOT report `running` for a child it knows to be dead.
+NOT report `running` for a child it knows to be dead. `crashed` means the
+client observed the process exit (an exit status, or a reap during shutdown).
+A client MUST NOT report `crashed` on the strength of a failed interaction
+alone: a child whose stdin no longer accepts writes is terminal for MCP and
+gets its `server_offline` under T-42, but until its exit is observed it is
+still a running process and the entry stays `running`. The supervisor's next
+reconciliation kills and respawns such a child, so the state is self-healing.
 
 A subprocess client can honestly distinguish only two of the three. The
-reference client reports `crashed` once a pump has observed the child go away
-(the same latch that drives the terminal `server_offline` report, T-42/T-43) and
-`running` otherwise, keeping the entry until reconciliation respawns or drops
-it. It never reports `starting`: a stdio MCP server writes nothing until the
+reference client reports `crashed` once it has an exit observation for the
+child and `running` otherwise, keeping the entry until reconciliation respawns
+or drops it. It never reports `starting`: a stdio MCP server writes nothing until the
 backend opens a session against it, which can be hours after the spawn, so
 treating "no output yet" as `starting` would pin healthy idle children there,
 and the daemon has no other health signal to key on. A client class with a real
@@ -512,8 +517,9 @@ detect "nothing changed".
 spawn/death, and MUST NOT write per forwarded frame. Death is the one that is
 easy to miss: nothing else wakes the supervisor when a child dies on its own,
 so the reference client publishes the `crashed` entry from the same pump path
-that emits `server_offline`. Without that write the tray would keep showing
-`running` until the next reconciliation, which may be hours away.
+that emits `server_offline`, once per death and only when that path saw the
+process exit (T-69). Without that write the tray would keep showing `running`
+until the next reconciliation, which may be hours away.
 *Source: `state.rs` module docs; `daemon.rs::Supervisor::publish_state`;
 `proc.rs::report_terminal` / `proc.rs::mark_entry_crashed`.*
 

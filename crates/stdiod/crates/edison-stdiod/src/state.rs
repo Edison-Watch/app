@@ -15,7 +15,7 @@
 //! whatever JSON lib they have lying around. Schema is described inline
 //! in [`State`] below.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
@@ -120,19 +120,34 @@ impl State {
 }
 
 /// Process-wide writer that the daemon mutates from various tasks (the
-/// WS lifecycle loop, the supervisor) and that fans out to the on-disk
-/// `state.json`. All mutations go through [`StateWriter::update`] which
-/// holds a mutex across read-mutate-write so two transitions can never
-/// produce an interleaved file write.
+/// WS lifecycle loop, the supervisor, every child's pumps) and that fans
+/// out to the on-disk `state.json`. All mutations go through
+/// [`StateWriter::update`], which holds a mutex across the whole
+/// read-mutate-write so two transitions can never produce an interleaved
+/// or out-of-order file write.
 #[derive(Clone)]
 pub struct StateWriter {
     inner: Arc<Mutex<State>>,
+    /// Where to write. `None` resolves [`paths::state_file`] at write time,
+    /// which is what the daemon does; tests set an explicit path so they can
+    /// assert on the bytes that reach disk.
+    path: Option<PathBuf>,
 }
 
 impl StateWriter {
     pub fn new(initial: State) -> Self {
         Self {
             inner: Arc::new(Mutex::new(initial)),
+            path: None,
+        }
+    }
+
+    /// A writer pinned to `path` instead of the per-user config dir.
+    #[cfg(test)]
+    pub fn new_at(initial: State, path: PathBuf) -> Self {
+        Self {
+            inner: Arc::new(Mutex::new(initial)),
+            path: Some(path),
         }
     }
 
@@ -140,20 +155,28 @@ impl StateWriter {
     /// the file. Failures are logged but don't propagate - `state.json`
     /// is best-effort; the WS reconnect loop must not stall on a full
     /// disk.
+    ///
+    /// The file write happens while the lock is still held, so the
+    /// generation on disk only ever moves forward. Releasing the lock
+    /// first and writing after would let two callers rename in the
+    /// opposite order to the one they mutated in, leaving an older
+    /// snapshot on disk until whatever writes next - a real risk now that
+    /// child pumps publish deaths concurrently with the supervisor. The
+    /// write is blocking under an async mutex, which is fine here: the
+    /// file is a few hundred bytes and is written on state transitions
+    /// only, never per forwarded frame.
     pub async fn update<F: FnOnce(&mut State)>(&self, f: F) {
         let mut guard = self.inner.lock().await;
         f(&mut guard);
         guard.generation = guard.generation.saturating_add(1);
-        let snapshot = guard.clone();
-        drop(guard);
-        let path = match paths::state_file() {
+        let path = match self.path.clone().map(Ok).unwrap_or_else(paths::state_file) {
             Ok(p) => p,
             Err(e) => {
                 debug!(error = %e, "state.json: cannot resolve path; skipping write");
                 return;
             }
         };
-        if let Err(e) = snapshot.write_atomic(&path) {
+        if let Err(e) = guard.write_atomic(&path) {
             debug!(error = %e, "state.json: write failed; skipping");
         }
     }
@@ -201,6 +224,50 @@ mod tests {
         ] {
             assert_eq!(serde_json::to_string(&status).unwrap(), expected);
         }
+    }
+
+    /// Updates raced from several tasks must leave the newest snapshot on
+    /// disk. Each task appends one entry, so the last file written is only
+    /// correct if the generation the writer bumped and the bytes it renamed
+    /// into place moved together: an older snapshot landing last would show
+    /// both a lower generation and fewer servers.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn concurrent_updates_leave_the_newest_snapshot_on_disk() {
+        const UPDATES: usize = 32;
+
+        let dir = std::env::temp_dir().join(format!("edison-stdiod-state-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("concurrent-state.json");
+        let _ = std::fs::remove_file(&path);
+        let writer = StateWriter::new_at(State::default(), path.clone());
+
+        let tasks: Vec<_> = (0..UPDATES)
+            .map(|i| {
+                let writer = writer.clone();
+                tokio::spawn(async move {
+                    writer
+                        .update(move |s| {
+                            s.servers.push(ServerEntry {
+                                name: format!("server-{i}"),
+                                state: ServerStatus::Running,
+                                pid: Some(i as u32),
+                            });
+                        })
+                        .await;
+                })
+            })
+            .collect();
+        for task in tasks {
+            task.await.unwrap();
+        }
+
+        let on_disk = State::load_from(&path).unwrap();
+        assert_eq!(
+            on_disk.generation, UPDATES as u64,
+            "the highest generation must be the one left on disk"
+        );
+        assert_eq!(on_disk.servers.len(), UPDATES);
+        let _ = std::fs::remove_file(&path);
     }
 
     #[test]
