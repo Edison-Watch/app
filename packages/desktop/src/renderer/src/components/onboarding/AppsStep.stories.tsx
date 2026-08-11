@@ -20,35 +20,16 @@ const MOCK_CLIENTS = [
     id: 'cursor',
     name: 'Cursor',
     configPath: '/Users/alice/.cursor/mcp.json',
-    manageable: true,
   },
   {
     id: 'claude-code',
     name: 'Claude Code',
     configPath: '/Users/alice/.claude/mcp.json',
-    manageable: true,
   },
   {
     id: 'windsurf',
     name: 'Windsurf',
     configPath: '/Users/alice/.windsurf/mcp.json',
-    manageable: true,
-  },
-  // The two states the "partially supported" section can hold, which are NOT
-  // the same thing. Claude Desktop is manageable: Edison writes its config, it
-  // just also supports Connectors it can't see. ChatGPT is only detectable, so
-  // it renders with no checkbox and a "Not protected" tag.
-  {
-    id: 'claude-desktop',
-    name: 'Claude Desktop',
-    configPath: '/Users/alice/Library/Application Support/Claude/claude_desktop_config.json',
-    manageable: true,
-  },
-  {
-    id: 'chatgpt',
-    name: 'ChatGPT',
-    configPath: 'Connectors · managed server-side in your ChatGPT account',
-    manageable: false,
   },
 ];
 
