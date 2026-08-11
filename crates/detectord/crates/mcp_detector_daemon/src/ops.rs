@@ -703,14 +703,46 @@ pub fn heal_edison_install(user: &str, e: &Enrollment) -> usize {
         if present.contains(agent.name()) {
             continue; // already installed — don't rewrite (avoids fs-watch churn)
         }
+        // Count and report only what was actually written. An agent with no
+        // install targets (JetBrains with no IDE on the machine) reaches here
+        // and writes nothing; logging it as healed anyway made the self-heal
+        // signal permanently non-zero, so a real heal - somebody's config got
+        // clobbered - was indistinguishable from the every-20s background hum.
+        //
+        // A failed write does not count either. Claiming a heal for an install
+        // that errored would put the same false signal back for the case that
+        // matters most: the config Edison could not repair.
+        //
+        // The error goes to `debug`, not `warn`, because this loop is on the
+        // 20s rescan: a config that cannot be repaired fails identically
+        // forever, and one warn per pass would bury the warnings that mean
+        // something new. `install_edison_entries_for` can afford `warn` because
+        // it runs when the user asks. The durable signal here is the count -
+        // a failing agent now stays out of it, which is the whole point.
+        let mut wrote = false;
         for inst in agent.edison_installs(&home) {
             let done_via_cli = inst.prefer_cli && {
                 let url = mcp_quarantine::edison_url(mcp_base, &e.api_key, &inst.client_id);
                 crate::claude_cli::install(user, &url, secret).is_ok()
             };
-            if !done_via_cli {
-                let _ = mcp_quarantine::install_edison(&inst, mcp_base, &e.api_key, secret);
+            if done_via_cli {
+                wrote = true;
+                continue;
             }
+            match mcp_quarantine::install_edison(&inst, mcp_base, &e.api_key, secret) {
+                Ok(()) => wrote = true,
+                Err(err) => {
+                    tracing::debug!(
+                        agent = agent.name(),
+                        path = %inst.path.display(),
+                        error = %err,
+                        "self-heal install failed"
+                    )
+                }
+            }
+        }
+        if !wrote {
+            continue;
         }
         tracing::info!(
             agent = agent.name(),
