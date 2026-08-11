@@ -16,7 +16,7 @@
 //! learns their connectors are unprotected — and they cannot report a warning
 //! they never saw. Every path here should carry its evidence.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::agent::Agent;
 use crate::error::Result;
@@ -49,7 +49,9 @@ impl Agent for ChatGpt {
     }
 
     fn is_installed(&self) -> bool {
-        self.candidates.iter().any(|p| p.exists())
+        self.candidates
+            .iter()
+            .any(|p| p.exists() && is_openai_owned(p))
     }
 
     fn is_manageable(&self) -> bool {
@@ -76,6 +78,42 @@ impl Agent for ChatGpt {
 
     // `edison_installs` / `hook_install` stay at their empty defaults: there is
     // no local surface to install into, so ChatGPT is never an install target.
+}
+
+/// The prefix every OpenAI desktop build's bundle id starts with:
+/// `com.openai.codex` for the merged app, `com.openai.chat` for the older one.
+const OPENAI_BUNDLE_PREFIX: &[u8] = b"com.openai.";
+
+/// Whether a candidate that exists really belongs to OpenAI.
+///
+/// Only `.app` bundles are checked. `Codex.app` is a name anyone can ship, and
+/// matching on it alone is not a harmless over-detection: it puts a permanent
+/// "your connectors are unprotected" row in front of someone who does not have
+/// ChatGPT at all, about an app that has nothing to do with OpenAI. OpenAI's
+/// own detection disambiguates by bundle id for the same reason. The Windows
+/// package directories need no such check - their names carry the publisher
+/// hash, so only the real package can create them.
+///
+/// A substring search over the raw `Info.plist` rather than a plist parser: the
+/// id is stored as ASCII in both the XML and binary formats, and the `chatgpt`
+/// feature is deliberately dependency-free (see Cargo.toml). The trade is that
+/// a bundle merely *mentioning* an OpenAI id somewhere would pass, which lands
+/// on the over-detect side, exactly where this started.
+///
+/// An unreadable or absent `Info.plist` also counts as a match. Losing
+/// detection is the expensive direction - nobody reports a warning they never
+/// saw - and a bundle without a readable `Info.plist` is odd enough that
+/// trusting the name is the better guess.
+fn is_openai_owned(path: &Path) -> bool {
+    if path.extension().is_none_or(|e| e != "app") {
+        return true;
+    }
+    match std::fs::read(path.join("Contents").join("Info.plist")) {
+        Ok(bytes) => bytes
+            .windows(OPENAI_BUNDLE_PREFIX.len())
+            .any(|w| w == OPENAI_BUNDLE_PREFIX),
+        Err(_) => true,
+    }
 }
 
 /// Every bundle name OpenAI has shipped the macOS desktop app under.
@@ -171,6 +209,55 @@ mod tests {
         assert!(ChatGpt::from_paths(vec![app, missing]).is_installed());
     }
 
+    /// Write a `.app` bundle whose `Info.plist` declares `bundle_id`.
+    fn bundle_with_id(root: &std::path::Path, name: &str, bundle_id: &str) -> PathBuf {
+        let app = root.join(name);
+        std::fs::create_dir_all(app.join("Contents")).unwrap();
+        std::fs::write(
+            app.join("Contents").join("Info.plist"),
+            format!(
+                "<plist><dict><key>CFBundleIdentifier</key><string>{bundle_id}</string></dict></plist>"
+            ),
+        )
+        .unwrap();
+        app
+    }
+
+    #[test]
+    fn a_codex_app_from_someone_else_is_not_chatgpt() {
+        // `Codex.app` is a name anyone can ship. Matching it by name alone
+        // would tell a user their ChatGPT connectors are unprotected when they
+        // do not have ChatGPT, about an app unrelated to OpenAI.
+        let dir = tempdir().unwrap();
+        let theirs = bundle_with_id(dir.path(), "Codex.app", "com.example.codex");
+        assert!(!ChatGpt::from_paths(vec![theirs]).is_installed());
+
+        let dir = tempdir().unwrap();
+        let openai = bundle_with_id(dir.path(), "Codex.app", "com.openai.codex");
+        assert!(ChatGpt::from_paths(vec![openai]).is_installed());
+    }
+
+    #[test]
+    fn a_bundle_with_no_readable_plist_is_still_reported() {
+        // Fail open. Losing detection is the expensive direction here, because
+        // the user only ever sees the absence of a warning and so never
+        // reports it.
+        let dir = tempdir().unwrap();
+        let app = dir.path().join("ChatGPT.app");
+        std::fs::create_dir(&app).unwrap();
+        assert!(ChatGpt::from_paths(vec![app]).is_installed());
+    }
+
+    #[test]
+    fn a_windows_package_dir_needs_no_bundle_id() {
+        // Only `.app` bundles are vetted; the package family names carry the
+        // publisher hash, so only the real package can create those.
+        let dir = tempdir().unwrap();
+        let pkg = dir.path().join("OpenAI.Codex_2p2nqsd0c76g0");
+        std::fs::create_dir(&pkg).unwrap();
+        assert!(ChatGpt::from_paths(vec![pkg]).is_installed());
+    }
+
     #[test]
     fn discovers_nothing_and_is_not_an_install_target() {
         // The null-object contract the whole app-side design rests on: ChatGPT
@@ -237,6 +324,14 @@ mod tests {
                 "package family {fam} not probed"
             );
         }
+        // The alias fallback is not expected to hit, but it is still a probe,
+        // and dropping it silently is the same class of regression as the one
+        // this file is about. Cover it so its removal has to be deliberate.
+        assert!(
+            paths
+                .iter()
+                .any(|p| p.ends_with("Microsoft\\WindowsApps\\ChatGPT.exe"))
+        );
         // A regression guard, not decoration. The first version of this probed
         // `Programs\ChatGPT\ChatGPT.exe` for a direct installer that does not
         // exist - the app is Store-only - and asserted merely that the path was
