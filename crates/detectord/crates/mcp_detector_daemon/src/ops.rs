@@ -711,9 +711,14 @@ pub fn heal_edison_install(user: &str, e: &Enrollment) -> usize {
         //
         // A failed write does not count either. Claiming a heal for an install
         // that errored would put the same false signal back for the case that
-        // matters most: the config Edison could not repair. The error was
-        // dropped on the floor here, so log it the way the install path does -
-        // a self-heal that keeps failing is worth seeing.
+        // matters most: the config Edison could not repair.
+        //
+        // The error goes to `debug`, not `warn`, because this loop is on the
+        // 20s rescan: a config that cannot be repaired fails identically
+        // forever, and one warn per pass would bury the warnings that mean
+        // something new. `install_edison_entries_for` can afford `warn` because
+        // it runs when the user asks. The durable signal here is the count -
+        // a failing agent now stays out of it, which is the whole point.
         let mut wrote = false;
         for inst in agent.edison_installs(&home) {
             let done_via_cli = inst.prefer_cli && {
@@ -727,7 +732,7 @@ pub fn heal_edison_install(user: &str, e: &Enrollment) -> usize {
             match mcp_quarantine::install_edison(&inst, mcp_base, &e.api_key, secret) {
                 Ok(()) => wrote = true,
                 Err(err) => {
-                    tracing::warn!(
+                    tracing::debug!(
                         agent = agent.name(),
                         path = %inst.path.display(),
                         error = %err,
