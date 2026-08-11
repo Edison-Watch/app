@@ -100,10 +100,13 @@ const OPENAI_BUNDLE_PREFIX: &[u8] = b"com.openai.";
 /// a bundle merely *mentioning* an OpenAI id somewhere would pass, which lands
 /// on the over-detect side, exactly where this started.
 ///
-/// An unreadable or absent `Info.plist` also counts as a match. Losing
-/// detection is the expensive direction - nobody reports a warning they never
-/// saw - and a bundle without a readable `Info.plist` is odd enough that
-/// trusting the name is the better guess.
+/// When the plist cannot be read, the *name* decides, and the two directions
+/// are not symmetric. `ChatGPT.app` is distinctive enough to trust on its own,
+/// so it fails open - losing detection is the expensive direction, because the
+/// user only ever sees the absence of a warning and so never reports it.
+/// `Codex.app` is a name anyone can ship, so it fails closed: trusting it
+/// unread would hand the false positive straight back, just via a permission
+/// error instead of a name match.
 fn is_openai_owned(path: &Path) -> bool {
     if path.extension().is_none_or(|e| e != "app") {
         return true;
@@ -112,9 +115,17 @@ fn is_openai_owned(path: &Path) -> bool {
         Ok(bytes) => bytes
             .windows(OPENAI_BUNDLE_PREFIX.len())
             .any(|w| w == OPENAI_BUNDLE_PREFIX),
-        Err(_) => true,
+        Err(_) => path
+            .file_name()
+            .is_some_and(|n| SELF_EVIDENT_BUNDLES.iter().any(|b| n == *b)),
     }
 }
+
+/// Bundle names carrying OpenAI's product name, so distinctive enough that the
+/// name alone is evidence when the `Info.plist` cannot be read. `Codex.app` is
+/// deliberately absent: it is generic, and it is the name this whole check
+/// exists for.
+const SELF_EVIDENT_BUNDLES: [&str; 2] = ["ChatGPT.app", "ChatGPT Classic.app"];
 
 /// Every bundle name OpenAI has shipped the macOS desktop app under.
 ///
@@ -140,53 +151,66 @@ const WINDOWS_PACKAGE_FAMILIES: [&str; 2] = [
     "OpenAI.ChatGPT-Desktop_2p2nqsd0c76g0",
 ];
 
+/// Bundle paths to probe on macOS, given the user's home (absent if it cannot
+/// be resolved, in which case only `/Applications` is covered).
+///
+/// Split out from `default_app_paths` so the probe list can be asserted on any
+/// platform. Gating these assertions behind `#[cfg(target_os = "…")]` meant the
+/// Windows ones compiled nowhere - the CI matrix is Linux and macOS only - so
+/// the regression guard proved nothing on the platform it guarded.
+fn macos_candidates(home: Option<&Path>) -> Vec<PathBuf> {
+    let mut out: Vec<PathBuf> = MACOS_BUNDLES
+        .iter()
+        .map(|n| PathBuf::from("/Applications").join(n))
+        .collect();
+    if let Some(home) = home {
+        out.extend(
+            MACOS_BUNDLES
+                .iter()
+                .map(|n| home.join("Applications").join(n)),
+        );
+    }
+    out
+}
+
+/// Paths to probe on Windows, given `%LOCALAPPDATA%`.
+///
+/// Windows ships Store/MSIX only - there is no direct installer, so nothing
+/// ever lands in `%LOCALAPPDATA%\Programs`. The per-package data directory is
+/// the one place an MSIX install leaves something readable without elevation.
+///
+/// Deliberately NOT the executable. It lives at
+/// `C:\Program Files\WindowsApps\<pkg>\app\ChatGPT.exe`, whose name embeds a
+/// version and whose ACLs deny ordinary reads - and a denied read surfaces as
+/// `Path::exists() == false`, which is the same silent non-detection this is
+/// meant to fix.
+///
+/// `%LOCALAPPDATA%\Microsoft\WindowsApps\ChatGPT.exe` stays as a third probe,
+/// but it is not expected to hit: `ChatGPT.exe` is the manifest's
+/// package-relative `Executable`, not a declared `AppExecutionAlias`, and
+/// OpenAI's own check goes through the package identity rather than any path
+/// (`codex-rs/cli/src/desktop_app/windows.rs`). Costs one `stat`.
+fn windows_candidates(local: &Path) -> Vec<PathBuf> {
+    let mut out: Vec<PathBuf> = WINDOWS_PACKAGE_FAMILIES
+        .iter()
+        .map(|fam| local.join("Packages").join(fam))
+        .collect();
+    out.push(
+        local
+            .join("Microsoft")
+            .join("WindowsApps")
+            .join("ChatGPT.exe"),
+    );
+    out
+}
+
 fn default_app_paths() -> Vec<PathBuf> {
     if cfg!(target_os = "macos") {
-        let mut out: Vec<PathBuf> = MACOS_BUNDLES
-            .iter()
-            .map(|n| PathBuf::from("/Applications").join(n))
-            .collect();
-        if let Some(home) = dirs::home_dir() {
-            out.extend(
-                MACOS_BUNDLES
-                    .iter()
-                    .map(|n| home.join("Applications").join(n)),
-            );
-        }
-        out
+        macos_candidates(dirs::home_dir().as_deref())
     } else if cfg!(target_os = "windows") {
-        // Windows ships Store/MSIX only - there is no direct installer, so
-        // nothing ever lands in `%LOCALAPPDATA%\Programs`. The per-package data
-        // directory is the one place an MSIX install leaves something readable
-        // without elevation.
-        //
-        // Deliberately NOT the executable. It lives at
-        // `C:\Program Files\WindowsApps\<pkg>\app\ChatGPT.exe`, whose name
-        // embeds a version and whose ACLs deny ordinary reads - and a denied
-        // read surfaces as `Path::exists() == false`, which is the same silent
-        // non-detection this is meant to fix.
-        //
-        // `%LOCALAPPDATA%\Microsoft\WindowsApps\ChatGPT.exe` stays as a third
-        // probe, but it is not expected to hit: `ChatGPT.exe` is the manifest's
-        // package-relative `Executable`, not a declared `AppExecutionAlias`, and
-        // OpenAI's own check goes through the package identity rather than any
-        // path (`codex-rs/cli/src/desktop_app/windows.rs`). Costs one `stat`.
-        match dirs::data_local_dir() {
-            Some(local) => {
-                let mut out: Vec<PathBuf> = WINDOWS_PACKAGE_FAMILIES
-                    .iter()
-                    .map(|fam| local.join("Packages").join(fam))
-                    .collect();
-                out.push(
-                    local
-                        .join("Microsoft")
-                        .join("WindowsApps")
-                        .join("ChatGPT.exe"),
-                );
-                out
-            }
-            None => Vec::new(),
-        }
+        dirs::data_local_dir()
+            .map(|local| windows_candidates(&local))
+            .unwrap_or_default()
     } else {
         // No official Linux desktop app — never detected.
         Vec::new()
@@ -238,14 +262,23 @@ mod tests {
     }
 
     #[test]
-    fn a_bundle_with_no_readable_plist_is_still_reported() {
-        // Fail open. Losing detection is the expensive direction here, because
-        // the user only ever sees the absence of a warning and so never
-        // reports it.
+    fn an_unreadable_plist_is_decided_by_how_distinctive_the_name_is() {
+        // The two directions are not symmetric, so neither is the fallback.
         let dir = tempdir().unwrap();
-        let app = dir.path().join("ChatGPT.app");
-        std::fs::create_dir(&app).unwrap();
-        assert!(ChatGpt::from_paths(vec![app]).is_installed());
+
+        // `ChatGPT.app` carries OpenAI's product name: fail open, because
+        // losing detection is the expensive direction - the user only sees the
+        // absence of a warning and so never reports it.
+        let chatgpt = dir.path().join("ChatGPT.app");
+        std::fs::create_dir(&chatgpt).unwrap();
+        assert!(ChatGpt::from_paths(vec![chatgpt]).is_installed());
+
+        // `Codex.app` is a name anyone can ship: fail closed. Trusting it
+        // unread would hand back the false positive this check exists to stop,
+        // just through a permission error rather than a name match.
+        let codex = dir.path().join("Codex.app");
+        std::fs::create_dir(&codex).unwrap();
+        assert!(!ChatGpt::from_paths(vec![codex]).is_installed());
     }
 
     #[test]
@@ -276,71 +309,81 @@ mod tests {
         assert!(agent.watch_targets().files.is_empty());
     }
 
-    // `default_app_paths` is the only part of this file with real logic, and
-    // the only way it can fail is silently: probe the wrong place and ChatGPT
-    // is simply never detected, which no user reports because all they see is
-    // the absence of a warning. The platform it runs on is the platform under
-    // test - these run in CI on all three.
+    // The probe lists are the only part of this file with real logic, and the
+    // only way they fail is silently: probe the wrong place and ChatGPT is
+    // never detected, which nobody reports because all they see is the absence
+    // of a warning.
+    //
+    // These take the base directory as an argument rather than reading it from
+    // the environment, so every assertion runs on every platform. The earlier
+    // version gated the Windows ones behind `#[cfg(target_os = "windows")]`,
+    // and the CI matrix is Linux and macOS only - so the guard against silent
+    // non-detection was itself silently never compiled.
 
     #[test]
-    #[cfg(target_os = "macos")]
     fn macos_probes_every_bundle_name_in_both_application_dirs() {
-        let paths = default_app_paths();
-        let ends_with = |name: &str| {
-            paths
-                .iter()
-                .filter(|p| p.file_name().is_some_and(|f| f == name))
-                .count()
-        };
-        // `/Applications` is unconditional; `~/Applications` needs a home dir,
-        // which the code treats as optional - so the test does too. Asserting
-        // more than the code promises fails on the code's own valid states.
-        assert!(paths.iter().any(|p| p.starts_with("/Applications")));
-        let per_dir = if dirs::home_dir().is_some() { 2 } else { 1 };
+        let home = PathBuf::from("/Users/someone");
+        let paths = macos_candidates(Some(&home));
         for name in MACOS_BUNDLES {
-            assert_eq!(ends_with(name), per_dir, "{name} not probed in every dir");
-        }
-        // Named explicitly rather than looping alone: an in-place Codex update
-        // keeps this bundle name, and dropping it from the list would silently
-        // stop detecting those users - exactly the failure this file exists to
-        // avoid, and one nobody reports because they only see no warning.
-        assert!(paths.iter().any(|p| p.ends_with("Codex.app")));
-        if let Some(home) = dirs::home_dir() {
             assert!(
-                paths
-                    .iter()
-                    .any(|p| p.starts_with(home.join("Applications")))
+                paths.contains(&PathBuf::from("/Applications").join(name)),
+                "{name} not probed in /Applications"
+            );
+            assert!(
+                paths.contains(&home.join("Applications").join(name)),
+                "{name} not probed in ~/Applications"
             );
         }
+        // Named rather than left to the loop: an in-place Codex update keeps
+        // this bundle name, so dropping it silently stops detecting those
+        // users - the exact failure this file exists to avoid.
+        assert!(paths.iter().any(|p| p.ends_with("Codex.app")));
+
+        // `~/Applications` is optional because the home dir is; `/Applications`
+        // is not. Asserting more than the code promises fails on its own valid
+        // states.
+        assert_eq!(macos_candidates(None).len(), MACOS_BUNDLES.len());
     }
 
     #[test]
-    #[cfg(target_os = "windows")]
-    fn windows_probes_both_store_package_dirs() {
-        let paths = default_app_paths();
+    fn windows_probes_both_store_package_dirs_and_the_alias() {
+        let local = PathBuf::from("C:").join("Users").join("a").join("Local");
+        let paths = windows_candidates(&local);
         for fam in WINDOWS_PACKAGE_FAMILIES {
             assert!(
-                paths.iter().any(|p| p.ends_with(fam)),
+                paths.contains(&local.join("Packages").join(fam)),
                 "package family {fam} not probed"
             );
         }
         // The alias fallback is not expected to hit, but it is still a probe,
         // and dropping it silently is the same class of regression as the one
-        // this file is about. Cover it so its removal has to be deliberate.
+        // this file is about. Cover it so removal has to be deliberate.
         assert!(
-            paths
-                .iter()
-                .any(|p| p.ends_with("Microsoft\\WindowsApps\\ChatGPT.exe"))
+            paths.contains(
+                &local
+                    .join("Microsoft")
+                    .join("WindowsApps")
+                    .join("ChatGPT.exe")
+            )
         );
-        // A regression guard, not decoration. The first version of this probed
+        // A regression guard, not decoration. The first version probed
         // `Programs\ChatGPT\ChatGPT.exe` for a direct installer that does not
         // exist - the app is Store-only - and asserted merely that the path was
-        // *present* in the list, so the test passed while detection could never
-        // fire. Assert the dead path stays gone.
+        // *present* in the list, so it passed while detection could never fire.
         assert!(
             !paths
                 .iter()
-                .any(|p| p.ends_with("Programs\\ChatGPT\\ChatGPT.exe"))
+                .any(|p| p.ends_with(Path::new("Programs").join("ChatGPT").join("ChatGPT.exe")))
+        );
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn macos_delegates_to_the_bundle_list() {
+        assert!(
+            default_app_paths()
+                .iter()
+                .any(|p| p.starts_with("/Applications"))
         );
     }
 
