@@ -1,20 +1,13 @@
 //! ChatGPT desktop app [`Agent`] — presence detection only.
 //!
-//! ChatGPT's MCP servers are **Connectors**: they are configured in the OpenAI
-//! account and run server-side, so unlike every other agent here there is no
-//! local config file. Nothing to watch, nothing to discover, and nowhere to
-//! install the `edison-watch` entry.
+//! ChatGPT's MCP servers are **Connectors**: configured in the OpenAI account
+//! and run server-side, so unlike every other agent here there is no local
+//! config file. Presence alone is the signal — the app uses it to warn that
+//! these connectors are outside Edison's reach.
 //!
-//! It is still worth reporting, because the app uses "is it installed?" to warn
-//! the user that their ChatGPT connectors are outside Edison's reach — the same
-//! bucket as the Claude hosts' connectors, minus even the local file those have
-//! to fall back on. Detection therefore keys off *where the install itself puts
-//! things*: an app bundle on macOS, a per-package data directory on Windows.
-//!
-//! Getting those paths wrong fails silently. There is no second signal to fall
-//! back on, so a bad path just means the app never appears and the user never
-//! learns their connectors are unprotected — and they cannot report a warning
-//! they never saw. Every path here should carry its evidence.
+//! With no config to fall back on, a wrong path fails silently: the app never
+//! appears, and the user never learns their connectors are unprotected. Hence
+//! the evidence attached to each path below.
 
 use std::path::{Path, PathBuf};
 
@@ -59,9 +52,8 @@ impl Agent for ChatGpt {
     }
 
     fn watch_targets(&self) -> WatchTargets {
-        // No local config exists, so there is no file whose change could mean
-        // "a connector was added". Watching the app bundle would only report
-        // updates to ChatGPT itself.
+        // No local file changes when a connector is added; watching the bundle
+        // would only report ChatGPT's own updates.
         WatchTargets {
             files: Vec::new(),
             dirs: Vec::new(),
@@ -70,43 +62,33 @@ impl Agent for ChatGpt {
     }
 
     fn discover(&self) -> Result<Vec<DiscoveredServer>> {
-        // Connectors live in the OpenAI account; the daemon cannot enumerate
-        // them and must not imply "ChatGPT has no MCP servers" — the app says
-        // so explicitly in the wizard's partially-supported section instead.
+        // Connectors live in the OpenAI account and cannot be enumerated from
+        // here. Empty means "unknowable", not "none" — the wizard's
+        // partially-supported section is what says so to the user.
         Ok(Vec::new())
     }
 
-    // `edison_installs` / `hook_install` stay at their empty defaults: there is
-    // no local surface to install into, so ChatGPT is never an install target.
+    // `edison_installs` / `hook_install` stay at their empty defaults: no local
+    // surface to install into.
 }
 
-/// The prefix every OpenAI desktop build's bundle id starts with:
-/// `com.openai.codex` for the merged app, `com.openai.chat` for the older one.
+/// Prefix of every OpenAI desktop bundle id: `com.openai.codex` for the merged
+/// app, `com.openai.chat` for the older one.
 const OPENAI_BUNDLE_PREFIX: &[u8] = b"com.openai.";
 
 /// Whether a candidate that exists really belongs to OpenAI.
 ///
-/// Only `.app` bundles are checked. `Codex.app` is a name anyone can ship, and
-/// matching on it alone is not a harmless over-detection: it puts a permanent
-/// "your connectors are unprotected" row in front of someone who does not have
-/// ChatGPT at all, about an app that has nothing to do with OpenAI. OpenAI's
-/// own detection disambiguates by bundle id for the same reason. The Windows
-/// package directories need no such check - their names carry the publisher
-/// hash, so only the real package can create them.
+/// Only `.app` bundles need vetting; the Windows package family names carry the
+/// publisher hash, so only the real package can create those directories.
 ///
 /// A substring search over the raw `Info.plist` rather than a plist parser: the
-/// id is stored as ASCII in both the XML and binary formats, and the `chatgpt`
-/// feature is deliberately dependency-free (see Cargo.toml). The trade is that
-/// a bundle merely *mentioning* an OpenAI id somewhere would pass, which lands
-/// on the over-detect side, exactly where this started.
+/// id is ASCII in both the XML and binary formats, and the `chatgpt` feature is
+/// deliberately dependency-free (see Cargo.toml).
 ///
-/// When the plist cannot be read, the *name* decides, and the two directions
-/// are not symmetric. `ChatGPT.app` is distinctive enough to trust on its own,
-/// so it fails open - losing detection is the expensive direction, because the
-/// user only ever sees the absence of a warning and so never reports it.
-/// `Codex.app` is a name anyone can ship, so it fails closed: trusting it
-/// unread would hand the false positive straight back, just via a permission
-/// error instead of a name match.
+/// An unreadable plist falls back to the name, asymmetrically: `ChatGPT.app`
+/// fails open because losing detection is the silent direction, `Codex.app`
+/// fails closed because trusting it unread hands back the false positive this
+/// check exists to stop.
 fn is_openai_owned(path: &Path) -> bool {
     if path.extension().is_none_or(|e| e != "app") {
         return true;
@@ -121,43 +103,34 @@ fn is_openai_owned(path: &Path) -> bool {
     }
 }
 
-/// Bundle names carrying OpenAI's product name, so distinctive enough that the
-/// name alone is evidence when the `Info.plist` cannot be read. `Codex.app` is
-/// deliberately absent: it is generic, and it is the name this whole check
-/// exists for.
+/// Names carrying OpenAI's product name, distinctive enough to stand as
+/// evidence on their own. `Codex.app` is deliberately absent — it is generic.
 const SELF_EVIDENT_BUNDLES: [&str; 2] = ["ChatGPT.app", "ChatGPT Classic.app"];
 
 /// Every bundle name OpenAI has shipped the macOS desktop app under.
 ///
-/// `Codex.app` is here because the July 2026 merge folded Codex and ChatGPT
-/// into one app *without* renaming an existing install: anyone who had Codex
-/// and updated in place still has that bundle. OpenAI's own detection probes
-/// the same two names (`codex-rs/cli/src/desktop_app/mac.rs`) and tells them
-/// apart by bundle id.
-///
-/// `ChatGPT Classic.app` is a guess at what the pre-merge app is called now.
-/// OpenAI's code never refers to it, so treat it as unconfirmed - kept because
-/// a wrong extra name costs one `stat` while a missing one costs detection.
-/// (The Codex *CLI* is a separate, fully supported agent - `clients/codex.rs`.)
+/// `Codex.app` because the July 2026 merge folded Codex and ChatGPT into one
+/// app *without* renaming existing installs; OpenAI's own detection probes the
+/// same two names (`codex-rs/cli/src/desktop_app/mac.rs`). `ChatGPT Classic.app`
+/// is an unconfirmed guess at the pre-merge app's current name, kept because a
+/// wrong extra name costs one `stat` and a missing one costs detection.
+/// (The Codex *CLI* is a separate, fully supported agent — `clients/codex.rs`.)
 const MACOS_BUNDLES: [&str; 3] = ["ChatGPT.app", "Codex.app", "ChatGPT Classic.app"];
 
 /// Package family names for the two Store apps, under `%LOCALAPPDATA%\Packages`.
-///
-/// The merged app kept the **Codex** package identity while being branded
-/// ChatGPT, which is why the first of these does not say "ChatGPT" anywhere.
-/// Both carry the same publisher hash.
+/// The merged app kept the **Codex** package identity while branded ChatGPT,
+/// which is why the first says nothing about ChatGPT.
 const WINDOWS_PACKAGE_FAMILIES: [&str; 2] = [
     "OpenAI.Codex_2p2nqsd0c76g0",
     "OpenAI.ChatGPT-Desktop_2p2nqsd0c76g0",
 ];
 
-/// Bundle paths to probe on macOS, given the user's home (absent if it cannot
-/// be resolved, in which case only `/Applications` is covered).
+/// Bundle paths to probe on macOS. `home` is absent when it cannot be resolved,
+/// leaving only `/Applications`.
 ///
-/// Split out from `default_app_paths` so the probe list can be asserted on any
-/// platform. Gating these assertions behind `#[cfg(target_os = "…")]` meant the
-/// Windows ones compiled nowhere - the CI matrix is Linux and macOS only - so
-/// the regression guard proved nothing on the platform it guarded.
+/// Takes its base directory as an argument, rather than reading it here, so the
+/// probe list can be asserted on any platform — the CI matrix is Linux and
+/// macOS, so a `#[cfg(windows)]` test would compile nowhere.
 fn macos_candidates(home: Option<&Path>) -> Vec<PathBuf> {
     let mut out: Vec<PathBuf> = MACOS_BUNDLES
         .iter()
@@ -175,21 +148,15 @@ fn macos_candidates(home: Option<&Path>) -> Vec<PathBuf> {
 
 /// Paths to probe on Windows, given `%LOCALAPPDATA%`.
 ///
-/// Windows ships Store/MSIX only - there is no direct installer, so nothing
-/// ever lands in `%LOCALAPPDATA%\Programs`. The per-package data directory is
-/// the one place an MSIX install leaves something readable without elevation.
+/// Store/MSIX only — no direct installer, so nothing ever lands in
+/// `%LOCALAPPDATA%\Programs`, and the per-package data directory is the one
+/// place an install leaves something readable without elevation. Not the
+/// executable: it sits under `C:\Program Files\WindowsApps\`, whose ACLs deny
+/// ordinary reads, and a denied read surfaces as `exists() == false`.
 ///
-/// Deliberately NOT the executable. It lives at
-/// `C:\Program Files\WindowsApps\<pkg>\app\ChatGPT.exe`, whose name embeds a
-/// version and whose ACLs deny ordinary reads - and a denied read surfaces as
-/// `Path::exists() == false`, which is the same silent non-detection this is
-/// meant to fix.
-///
-/// `%LOCALAPPDATA%\Microsoft\WindowsApps\ChatGPT.exe` stays as a third probe,
-/// but it is not expected to hit: `ChatGPT.exe` is the manifest's
-/// package-relative `Executable`, not a declared `AppExecutionAlias`, and
-/// OpenAI's own check goes through the package identity rather than any path
-/// (`codex-rs/cli/src/desktop_app/windows.rs`). Costs one `stat`.
+/// The `WindowsApps\ChatGPT.exe` probe is not expected to hit — that name is
+/// the manifest's package-relative `Executable`, not a declared
+/// `AppExecutionAlias` — but it costs one `stat`.
 fn windows_candidates(local: &Path) -> Vec<PathBuf> {
     let mut out: Vec<PathBuf> = WINDOWS_PACKAGE_FAMILIES
         .iter()
@@ -249,9 +216,8 @@ mod tests {
 
     #[test]
     fn a_codex_app_from_someone_else_is_not_chatgpt() {
-        // `Codex.app` is a name anyone can ship. Matching it by name alone
-        // would tell a user their ChatGPT connectors are unprotected when they
-        // do not have ChatGPT, about an app unrelated to OpenAI.
+        // Matching the name alone would warn that ChatGPT connectors are
+        // unprotected on a machine with no ChatGPT.
         let dir = tempdir().unwrap();
         let theirs = bundle_with_id(dir.path(), "Codex.app", "com.example.codex");
         assert!(!ChatGpt::from_paths(vec![theirs]).is_installed());
@@ -263,19 +229,16 @@ mod tests {
 
     #[test]
     fn an_unreadable_plist_is_decided_by_how_distinctive_the_name_is() {
-        // The two directions are not symmetric, so neither is the fallback.
         let dir = tempdir().unwrap();
 
-        // `ChatGPT.app` carries OpenAI's product name: fail open, because
-        // losing detection is the expensive direction - the user only sees the
-        // absence of a warning and so never reports it.
+        // Distinctive name: fail open, since losing detection is the direction
+        // the user never sees and so never reports.
         let chatgpt = dir.path().join("ChatGPT.app");
         std::fs::create_dir(&chatgpt).unwrap();
         assert!(ChatGpt::from_paths(vec![chatgpt]).is_installed());
 
-        // `Codex.app` is a name anyone can ship: fail closed. Trusting it
-        // unread would hand back the false positive this check exists to stop,
-        // just through a permission error rather than a name match.
+        // Generic name: fail closed, or the false positive comes back through a
+        // permission error instead of a name match.
         let codex = dir.path().join("Codex.app");
         std::fs::create_dir(&codex).unwrap();
         assert!(!ChatGpt::from_paths(vec![codex]).is_installed());
@@ -283,8 +246,8 @@ mod tests {
 
     #[test]
     fn a_windows_package_dir_needs_no_bundle_id() {
-        // Only `.app` bundles are vetted; the package family names carry the
-        // publisher hash, so only the real package can create those.
+        // Only `.app` bundles are vetted — the family name carries the
+        // publisher hash, so only the real package can create the directory.
         let dir = tempdir().unwrap();
         let pkg = dir.path().join("OpenAI.Codex_2p2nqsd0c76g0");
         std::fs::create_dir(&pkg).unwrap();
@@ -293,9 +256,8 @@ mod tests {
 
     #[test]
     fn discovers_nothing_and_is_not_an_install_target() {
-        // The null-object contract the whole app-side design rests on: ChatGPT
-        // is reported as present and nothing else. If any of these ever returns
-        // something, the app has to stop calling it unmanageable.
+        // If any of these ever returns something, the app has to stop calling
+        // ChatGPT unmanageable.
         let dir = tempdir().unwrap();
         let app = dir.path().join("ChatGPT.app");
         std::fs::create_dir(&app).unwrap();
@@ -309,16 +271,9 @@ mod tests {
         assert!(agent.watch_targets().files.is_empty());
     }
 
-    // The probe lists are the only part of this file with real logic, and the
-    // only way they fail is silently: probe the wrong place and ChatGPT is
-    // never detected, which nobody reports because all they see is the absence
-    // of a warning.
-    //
-    // These take the base directory as an argument rather than reading it from
-    // the environment, so every assertion runs on every platform. The earlier
-    // version gated the Windows ones behind `#[cfg(target_os = "windows")]`,
-    // and the CI matrix is Linux and macOS only - so the guard against silent
-    // non-detection was itself silently never compiled.
+    // The probe lists are the only real logic here, and they only fail
+    // silently, so the next two tests run on every platform rather than under
+    // `#[cfg(target_os = ...)]`.
 
     #[test]
     fn macos_probes_every_bundle_name_in_both_application_dirs() {
@@ -334,14 +289,11 @@ mod tests {
                 "{name} not probed in ~/Applications"
             );
         }
-        // Named rather than left to the loop: an in-place Codex update keeps
-        // this bundle name, so dropping it silently stops detecting those
-        // users - the exact failure this file exists to avoid.
+        // Named rather than left to the loop: dropping it from MACOS_BUNDLES
+        // would silently stop detecting in-place Codex updates.
         assert!(paths.iter().any(|p| p.ends_with("Codex.app")));
 
-        // `~/Applications` is optional because the home dir is; `/Applications`
-        // is not. Asserting more than the code promises fails on its own valid
-        // states.
+        // Without a home dir, `/Applications` alone.
         assert_eq!(macos_candidates(None).len(), MACOS_BUNDLES.len());
     }
 
@@ -355,9 +307,7 @@ mod tests {
                 "package family {fam} not probed"
             );
         }
-        // The alias fallback is not expected to hit, but it is still a probe,
-        // and dropping it silently is the same class of regression as the one
-        // this file is about. Cover it so removal has to be deliberate.
+        // Covered so that removing the alias fallback has to be deliberate.
         assert!(
             paths.contains(
                 &local
@@ -366,10 +316,8 @@ mod tests {
                     .join("ChatGPT.exe")
             )
         );
-        // A regression guard, not decoration. The first version probed
-        // `Programs\ChatGPT\ChatGPT.exe` for a direct installer that does not
-        // exist - the app is Store-only - and asserted merely that the path was
-        // *present* in the list, so it passed while detection could never fire.
+        // The path this file's bug was: a direct-installer location for an app
+        // that ships Store-only, so detection could never fire.
         assert!(
             !paths
                 .iter()
@@ -390,9 +338,8 @@ mod tests {
     #[test]
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     fn linux_probes_nothing_so_chatgpt_is_never_reported() {
-        // There is no official Linux desktop app. Detecting one would put an
-        // unremovable "partially supported" warning in front of a user who
-        // cannot possibly have it installed.
+        // No official Linux desktop app, so any hit is a permanent warning
+        // about something the user cannot have installed.
         assert!(default_app_paths().is_empty());
         assert!(!ChatGpt::discover().unwrap().is_installed());
     }
