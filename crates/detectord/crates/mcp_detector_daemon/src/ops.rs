@@ -628,14 +628,36 @@ fn purge_stale_edison_entries(user: &str) {
 /// `LAUNCHER_RE`.
 const LAUNCHERS: [&str; 5] = ["npx", "bunx", "pnpx", "yarn", "pnpm"];
 
+/// Launcher options that consume the following token, so what comes after them
+/// is a value and not the package being run.
+///
+/// `npx --package mcp-remote other-server` runs **`other-server`**; the package
+/// name is an argument to `--package`. Treating it as the executable classifies
+/// an unrelated server as the shim. `--` forms with `=` need no entry: they are
+/// one token, so the value never looks like a positional.
+const LAUNCHER_VALUE_FLAGS: [&str; 6] = [
+    "-p",
+    "--package",
+    "-c",
+    "--call",
+    "--node-arg",
+    "--userconfig",
+];
+
 /// Whether a discovered entry invokes the `mcp-remote` package.
 ///
 /// Ported from `stdioShim.ts`, which is the repo's canonical matcher, and
 /// ported in full: *where* it applies its regex matters as much as the regex.
-/// It tests the command, or the first non-flag positional after a known
-/// launcher - never every argument. Testing every argument looks equivalent
-/// until a URL ends in `/mcp-remote`, at which point a server that has nothing
-/// to do with the package gets deleted from the user's config.
+/// It tests the command, or the first positional after a known launcher - never
+/// every argument. Testing every argument looks equivalent until a URL ends in
+/// `/mcp-remote`, at which point a server that has nothing to do with the
+/// package gets deleted from the user's config.
+///
+/// Stricter than the TS reader in one place, deliberately: it skips *any*
+/// `-`-prefixed token and takes the next positional, so `--package mcp-remote
+/// other-server` reads as the shim there too. That misclassification costs the
+/// reader a wrong transport; here it costs the user an entry. Where the two
+/// disagree, the one that deletes should be the cautious one.
 fn is_mcp_remote_shim(config: &ServerConfig) -> bool {
     let ServerConfig::Stdio { command, args, .. } = config else {
         return false;
@@ -654,11 +676,14 @@ fn is_mcp_remote_shim(config: &ServerConfig) -> bool {
     if matches!(launcher, "yarn" | "pnpm") && matches!(token, Some("dlx" | "exec")) {
         token = rest.next();
     }
-    // Launcher flags (`-y`, `--yes`) come first; the first positional after
-    // them is the package, and if it is something else this is not the shim.
+    // Boolean flags (`-y`, `--yes`) are skipped, value-taking ones take their
+    // value with them, and the first positional left is the package.
     while let Some(t) = token {
         if !t.starts_with('-') {
             return is_mcp_remote_token(t);
+        }
+        if LAUNCHER_VALUE_FLAGS.contains(&t) {
+            rest.next();
         }
         token = rest.next();
     }
@@ -1666,6 +1691,22 @@ mod tests {
         )));
         // Not a launcher at all, so nothing after it is a package name.
         assert!(!is_mcp_remote_shim(&stdio("node", &["mcp-remote"])));
+        // `--package mcp-remote other-server` RUNS other-server: the package
+        // name is the flag's value, not the executable. Skipping the flag but
+        // not its value would quarantine an unrelated server.
+        assert!(!is_mcp_remote_shim(&stdio(
+            "npx",
+            &["--package", "mcp-remote", "other-server"]
+        )));
+        assert!(!is_mcp_remote_shim(&stdio(
+            "npx",
+            &["-p", "mcp-remote", "other-server"]
+        )));
+        // The `=` form is one token, so its value never looks positional.
+        assert!(!is_mcp_remote_shim(&stdio(
+            "npx",
+            &["--package=mcp-remote", "other-server"]
+        )));
         assert!(!is_mcp_remote_shim(&ServerConfig::Http {
             url: "https://mcp.edison.watch/mcp/K/".into(),
             headers: Default::default(),
