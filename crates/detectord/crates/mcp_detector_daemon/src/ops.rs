@@ -624,80 +624,48 @@ fn purge_stale_edison_entries(user: &str) {
     commit_purge(&undo, || q.save_for(user));
 }
 
-/// Launchers that may run a package by name, from `stdioShim.ts`'s
-/// `LAUNCHER_RE`.
-const LAUNCHERS: [&str; 5] = ["npx", "bunx", "pnpx", "yarn", "pnpm"];
-
-/// Launcher options that stand alone. **Every other option is assumed to take
-/// the next token as its value**, which is the opposite of the usual default
-/// and is the point.
+/// Whether an entry is the shim **Edison itself wrote**.
 ///
-/// Guessing wrong is not symmetric. Read a value-taking option as standalone
-/// (`npx --package mcp-remote other-server`) and its value lands in the package
-/// position, so an unrelated server matches and gets removed. Read a standalone
-/// one as value-taking and the shim is simply missed, which costs the user
-/// nothing they did not already have. Unknown options therefore default to the
-/// direction that cannot delete the wrong thing, and this list carries only the
-/// ones common enough to be worth naming.
+/// Deliberately not a general `mcp-remote` detector. Edison emitted exactly one
+/// shape, from one function, unchanged for the writer's whole life:
 ///
-/// `=` forms need no entry either way: they are a single token, so their value
-/// never looks like a positional.
-const LAUNCHER_BOOLEAN_FLAGS: [&str; 9] = [
-    "-y",
-    "--yes",
-    "-n",
-    "--no",
-    "-q",
-    "--quiet",
-    "--silent",
-    "--prefer-online",
-    "--prefer-offline",
-];
-
-/// Whether a discovered entry invokes the `mcp-remote` package.
+/// ```text
+/// { "command": "npx", "args": ["-y", "mcp-remote", <url>, ...] }
+/// ```
 ///
-/// Ported from `stdioShim.ts`, which is the repo's canonical matcher, and
-/// ported in full: *where* it applies its regex matters as much as the regex.
-/// It tests the command, or the first positional after a known launcher - never
-/// every argument. Testing every argument looks equivalent until a URL ends in
-/// `/mcp-remote`, at which point a server that has nothing to do with the
-/// package gets deleted from the user's config.
+/// (`git log -S mcp-remote -- crates/.../configstore.rs`; the tray's copyable
+/// snippet used the same prefix.) That is the entire population this migration
+/// has to recognise, so matching it exactly is both sufficient and the only way
+/// to be sure of the boundary.
 ///
-/// Stricter than the TS reader about options, deliberately: that one skips
-/// *any* `-`-prefixed token and takes the next positional, so `--package
-/// mcp-remote other-server` reads as the shim there too. That misclassification
-/// costs the reader a wrong transport; here it costs the user an entry. Where
-/// the two disagree, the one that deletes should be the cautious one.
+/// The general version of this predicate was a mistake worth recording. Every
+/// step toward "recognise any mcp-remote invocation" - other launchers, `yarn
+/// dlx`, bare commands, which options take a value - added a way to be wrong in
+/// one of two directions: over-match and delete a server that was never ours,
+/// or under-match and leave the shim behind. The option tables in particular
+/// cannot be finished, because every launcher keeps its own set and adds to it.
+/// None of that generality serves a migration whose input is one known string.
+///
+/// A hand-written `mcp-remote` entry in some other shape is therefore left
+/// alone, which is the right outcome twice over: it is not Edison's to remove,
+/// and it still reaches whatever gateway its author pointed it at.
 fn is_mcp_remote_shim(config: &ServerConfig) -> bool {
     let ServerConfig::Stdio { command, args, .. } = config else {
         return false;
     };
-    // A bare invocation: the command IS the package, with no launcher.
-    if is_mcp_remote_token(command) {
-        return true;
-    }
-    let launcher = base_name(command);
-    if !LAUNCHERS.contains(&launcher) {
+    if base_name(command) != "npx" {
         return false;
     }
-    let mut rest = args.iter().map(String::as_str);
-    let mut token = rest.next();
-    // `yarn dlx` / `pnpm exec` shift the package one token right.
-    if matches!(launcher, "yarn" | "pnpm") && matches!(token, Some("dlx" | "exec")) {
-        token = rest.next();
+    let mut rest = args.iter().map(String::as_str).peekable();
+    // `-y` is what Edison wrote; tolerated as optional only because removing it
+    // is an edit that leaves the entry otherwise untouched.
+    if matches!(rest.peek(), Some(&"-y") | Some(&"--yes")) {
+        rest.next();
     }
-    // Standalone options are skipped, everything else takes its value with it,
-    // and the first positional left is the package.
-    while let Some(t) = token {
-        if !t.starts_with('-') {
-            return is_mcp_remote_token(t);
-        }
-        if !LAUNCHER_BOOLEAN_FLAGS.contains(&t) && !t.contains('=') {
-            rest.next();
-        }
-        token = rest.next();
-    }
-    false
+    // Then the package, pinned or not - pinning is the one edit a user might
+    // plausibly make to *our* entry, since the floating version is the
+    // complaint this change answers.
+    rest.next().is_some_and(is_mcp_remote_token)
 }
 
 /// `mcp-remote`, `mcp-remote@1.2.3`, or either behind a path — the whole of
@@ -1633,48 +1601,63 @@ mod tests {
     }
 
     #[test]
-    fn recognises_the_shim_whatever_launched_it() {
+    fn recognises_the_entry_edison_wrote() {
+        // The exact shape, with and without the trailing secret header.
         assert!(is_mcp_remote_shim(&stdio(
             "npx",
             &["-y", "mcp-remote", "https://x"]
         )));
-        // A pinned version is still the shim - and pinning is the likeliest
-        // hand-edit, since the unpinned fetch is what people complain about.
-        assert!(is_mcp_remote_shim(&stdio(
-            "bunx",
-            &["mcp-remote@0.1.29", "https://x"]
-        )));
-        // No launcher at all: `command` IS the package. Reading only `args`
-        // missed this, and the entry then survived every purge.
-        assert!(is_mcp_remote_shim(&stdio("mcp-remote", &["https://x"])));
-        // And behind a path, on either separator.
-        assert!(is_mcp_remote_shim(&stdio(
-            "/usr/local/bin/mcp-remote",
-            &["https://x"]
-        )));
-        assert!(is_mcp_remote_shim(&stdio(
-            "C:\\tools\\mcp-remote@1.2.3",
-            &["https://x"]
-        )));
-        // An option that takes a value, named or not, hands the package
-        // position to the token after its value. Both of these still purge.
         assert!(is_mcp_remote_shim(&stdio(
             "npx",
-            &["-w", "some-workspace", "mcp-remote", "https://x"]
+            &[
+                "-y",
+                "mcp-remote",
+                "https://x",
+                "--header",
+                "X-Edison-Secret-Key: s"
+            ]
+        )));
+        // The tray snippet's variant, which a user may have pasted in.
+        assert!(is_mcp_remote_shim(&stdio(
+            "npx",
+            &["-y", "mcp-remote", "https://x", "--transport", "http-first"]
+        )));
+        // Two edits a user might make to OUR entry and still leave it ours:
+        // pinning the version (the floating fetch is the complaint this change
+        // answers), and dropping `-y`.
+        assert!(is_mcp_remote_shim(&stdio(
+            "npx",
+            &["-y", "mcp-remote@0.1.29", "https://x"]
         )));
         assert!(is_mcp_remote_shim(&stdio(
             "npx",
+            &["mcp-remote", "https://x"]
+        )));
+        // A path to npx is still npx.
+        assert!(is_mcp_remote_shim(&stdio(
+            "/usr/local/bin/npx",
             &["-y", "mcp-remote", "https://x"]
         )));
-        // `yarn dlx` / `pnpm exec` put the package one token further right.
-        assert!(is_mcp_remote_shim(&stdio(
-            "yarn",
-            &["dlx", "mcp-remote", "https://x"]
-        )));
-        assert!(is_mcp_remote_shim(&stdio(
-            "pnpm",
-            &["exec", "mcp-remote", "https://x"]
-        )));
+    }
+
+    #[test]
+    fn leaves_alone_every_shape_edison_never_wrote() {
+        // These are NOT oversights. Edison emitted one shape from one function
+        // for the writer's whole life, so anything else is someone's own entry:
+        // not ours to delete, and still reaching the gateway its author chose.
+        // Recognising them was what kept this predicate wrong - each launcher
+        // has its own option table, and those tables cannot be finished.
+        for other in [
+            stdio("bunx", &["mcp-remote", "https://x"]),
+            stdio("bunx", &["--bun", "mcp-remote", "https://x"]),
+            stdio("yarn", &["dlx", "mcp-remote", "https://x"]),
+            stdio("pnpm", &["exec", "mcp-remote", "https://x"]),
+            stdio("mcp-remote", &["https://x"]),
+            stdio("npx", &["--", "mcp-remote", "https://x"]),
+            stdio("npx", &["-w", "some-workspace", "mcp-remote", "https://x"]),
+        ] {
+            assert!(!is_mcp_remote_shim(&other), "{other:?} is not Edison's");
+        }
     }
 
     #[test]
@@ -1687,57 +1670,31 @@ mod tests {
         )));
         // A different package. Matching a prefix rather than the whole token
         // would take this one too.
-        assert!(!is_mcp_remote_shim(&stdio("npx", &["mcp-remote-proxy"])));
-        assert!(!is_mcp_remote_shim(&stdio("npx", &["not-mcp-remote"])));
-        // A bare `@` is not a version - the TS regex requires `[\w.+-]+` - and
-        // neither is one carrying a character a version cannot hold.
-        assert!(!is_mcp_remote_shim(&stdio("npx", &["mcp-remote@"])));
         assert!(!is_mcp_remote_shim(&stdio(
             "npx",
-            &["mcp-remote@1.2.3:port"]
+            &["-y", "mcp-remote-proxy"]
         )));
-        assert!(!is_mcp_remote_shim(&stdio("npx", &["mcp-remote@foo@bar"])));
+        assert!(!is_mcp_remote_shim(&stdio(
+            "npx",
+            &["-y", "not-mcp-remote"]
+        )));
+        // A bare `@` is not a version - the TS regex requires `[\w.+-]+` - and
+        // neither is one carrying a character a version cannot hold.
+        assert!(!is_mcp_remote_shim(&stdio("npx", &["-y", "mcp-remote@"])));
+        assert!(!is_mcp_remote_shim(&stdio(
+            "npx",
+            &["-y", "mcp-remote@1.2.3:port"]
+        )));
         // The package name has to be in the package POSITION. A URL that
-        // happens to end in `/mcp-remote` is an argument to something else,
-        // and this predicate deletes what it matches.
+        // happens to end in `/mcp-remote` is an argument to something else.
         assert!(!is_mcp_remote_shim(&stdio(
             "npx",
             &["-y", "some-proxy", "https://gateway.example/mcp-remote"]
         )));
-        // Same for a launcher running a different package entirely.
-        assert!(!is_mcp_remote_shim(&stdio(
-            "npx",
-            &["-y", "other-pkg", "mcp-remote"]
-        )));
-        // Not a launcher at all, so nothing after it is a package name.
-        assert!(!is_mcp_remote_shim(&stdio("node", &["mcp-remote"])));
-        // `--package mcp-remote other-server` RUNS other-server: the package
-        // name is the flag's value, not the executable. Skipping the flag but
-        // not its value would quarantine an unrelated server.
+        // `--package mcp-remote other-server` RUNS other-server.
         assert!(!is_mcp_remote_shim(&stdio(
             "npx",
             &["--package", "mcp-remote", "other-server"]
-        )));
-        assert!(!is_mcp_remote_shim(&stdio(
-            "npx",
-            &["-p", "mcp-remote", "other-server"]
-        )));
-        // The `=` form is one token, so its value never looks positional - and
-        // the option must NOT then eat the real package name after it.
-        assert!(!is_mcp_remote_shim(&stdio(
-            "npx",
-            &["--package=other", "other-server"]
-        )));
-        assert!(is_mcp_remote_shim(&stdio(
-            "npx",
-            &["--userconfig=/tmp/x", "mcp-remote", "https://x"]
-        )));
-        // An option nobody listed. Assuming it stands alone would put its value
-        // in the package position, which is the deleting direction; assuming it
-        // takes one only risks missing a shim.
-        assert!(!is_mcp_remote_shim(&stdio(
-            "npx",
-            &["--some-future-opt", "mcp-remote", "other-server"]
         )));
         assert!(!is_mcp_remote_shim(&ServerConfig::Http {
             url: "https://mcp.edison.watch/mcp/K/".into(),
