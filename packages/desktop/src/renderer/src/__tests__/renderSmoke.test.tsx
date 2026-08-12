@@ -190,11 +190,39 @@ describe('ClientsView', () => {
     expectNoRenderErrors()
   })
 
-  it('caveats a fully set up connector-backed client instead of calling it Connected', async () => {
-    // Claude Desktop is manageable and its local servers really are proxied, so
-    // the ChatGPT copy would be false here. What stays true is narrower: the
-    // account-side Connectors are still unproxied, which is why "Connected"
-    // would overstate the coverage.
+  it('points a Claude host at Connectors rather than calling it unconfigurable', async () => {
+    // Claude Desktop is unmanageable for a different reason than ChatGPT: it
+    // does run local MCP servers, Edison just has nowhere to install itself in
+    // a config file that takes stdio entries only. So the copy names the manual
+    // route that does work rather than borrowing ChatGPT's "it all lives in
+    // your account" - and never the generic fallback, which offers nothing.
+    const api = installMockApi()
+    ;(api.mcp as Record<string, unknown>).getHookStatus = async () => ({
+      statuses: [
+        status({
+          client: 'claude-desktop',
+          manageable: false,
+          mcpApplicable: false,
+          hooksApplicable: false
+        })
+      ],
+      daemonUnavailable: false
+    })
+
+    render(<ClientsView />)
+
+    expect(await screen.findByText(/Add Edison Watch as a connector/)).toBeTruthy()
+    expect(screen.queryByText('Connected')).toBeNull()
+    expect(screen.queryByText(/^Edison Watch can't configure this app$/)).toBeNull()
+    expectNoRenderErrors()
+  })
+
+  it('still refuses to say Connected when an older daemon calls one manageable', async () => {
+    // Version skew: this app can run against an already-installed older daemon
+    // that still writes the `mcp-remote` entry, and so still reports these
+    // hosts as manageable and fully set up. "Connected" was an overstatement
+    // then too - the account-side Connectors were never proxied - so the
+    // downgrade has to hold independently of the `manageable` flag.
     const api = installMockApi()
     ;(api.mcp as Record<string, unknown>).getHookStatus = async () => ({
       statuses: [status({ client: 'claude-desktop', hooksApplicable: false })],
@@ -203,19 +231,15 @@ describe('ClientsView', () => {
 
     render(<ClientsView />)
 
-    expect(await screen.findByText(/account Connectors are not visible/)).toBeTruthy()
+    expect(await screen.findByText(/Add Edison Watch as a connector/)).toBeTruthy()
     expect(screen.queryByText('Connected')).toBeNull()
-    // And never the generic copy. This client IS configurable; the downgrade
-    // and the wording come from one lookup now, but the assertion is what
-    // catches it if they are ever split apart again.
-    expect(screen.queryByText(/can't configure this app/)).toBeNull()
     expectNoRenderErrors()
   })
 
   it('reports a broken gateway over the Connectors caveat', async () => {
-    // Precedence: the caveat is permanent and the user can do nothing about it
-    // right now, while an unreachable gateway is theirs to fix. Showing the
-    // caveat here would bury the actionable failure behind a standing one.
+    // The same skew case, mid-setup. Precedence: the caveat is permanent and
+    // the user can do nothing about it right now, while an unreachable gateway
+    // is theirs to fix. Showing the caveat here buries the actionable failure.
     const api = installMockApi()
     ;(api.mcp as Record<string, unknown>).getHookStatus = async () => ({
       statuses: [
@@ -227,7 +251,7 @@ describe('ClientsView', () => {
     render(<ClientsView />)
 
     expect(await screen.findByText(/MCP gateway unreachable/)).toBeTruthy()
-    expect(screen.queryByText(/account Connectors are not visible/)).toBeNull()
+    expect(screen.queryByText(/Add Edison Watch as a connector/)).toBeNull()
     expectNoRenderErrors()
   })
 })

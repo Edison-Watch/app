@@ -1,12 +1,22 @@
 //! Claude Desktop [`Agent`] — a single user-level JSON config,
 //! `claude_desktop_config.json`, key `mcpServers`.
+//!
+//! Discovery only: the servers in that file are read, but Edison installs
+//! nothing into it. The file accepts stdio entries alone — a remote MCP server
+//! reaches Claude Desktop through Settings → Connectors, which is a hand-driven
+//! flow with no config-file equivalent. Edison used to bridge the gap by
+//! writing `npx -y mcp-remote <url>`, which made every launch of Claude Desktop
+//! fetch an unpinned package from npm and pass the secret key in `argv`.
+//!
+//! So this host is [`Agent::is_manageable`] `false`, like ChatGPT: present,
+//! read, and reported as something the user has to connect themselves.
 
 use std::path::PathBuf;
 
 use crate::agent::Agent;
 use crate::clients::common::parse_json_servers_map;
 use crate::error::Result;
-use crate::types::{DiscoveredServer, EdisonInstall, EdisonStyle, Scope, SourceKind};
+use crate::types::{DiscoveredServer, Scope, SourceKind};
 use crate::watch::WatchTargets;
 
 const CLIENT_NAME: &str = "claude_desktop";
@@ -58,19 +68,12 @@ impl Agent for ClaudeDesktop {
         })
     }
 
-    fn edison_installs(&self, home: &std::path::Path) -> Vec<EdisonInstall> {
-        // Desktop is stdio-only → mcp-remote shim.
-        config_path_in(home)
-            .map(|path| EdisonInstall {
-                path,
-                key_path: vec!["mcpServers".into()],
-                style: EdisonStyle::StdioShim,
-                client_id: "claude-desktop".into(),
-                prefer_cli: false,
-            })
-            .into_iter()
-            .collect()
+    fn is_manageable(&self) -> bool {
+        false
     }
+
+    // `edison_installs` stays at its empty default: the config file takes stdio
+    // entries only, so there is no URL-shaped entry to write. See the module doc.
 }
 
 fn default_config_path() -> Option<PathBuf> {
@@ -111,6 +114,22 @@ mod tests {
         assert_eq!(by["fs"].transport, Transport::Stdio);
         assert_eq!(by["remote"].transport, Transport::Remote);
         assert_eq!(by["fs"].client, CLIENT_NAME);
+    }
+
+    #[test]
+    fn reads_the_config_but_never_writes_to_it() {
+        // Discovery and installation are separate capabilities, and this host
+        // has only the first. Returning an install target would put back the
+        // `npx -y mcp-remote` entry the daemon's purge exists to take out - the
+        // two would fight on every app start.
+        let dir = tempdir().unwrap();
+        let cfg = dir.path().join("claude_desktop_config.json");
+        std::fs::write(&cfg, r#"{"mcpServers":{"fs":{"command":"npx"}}}"#).unwrap();
+        let agent = ClaudeDesktop::from_path(Some(cfg));
+
+        assert!(!agent.discover().unwrap().is_empty());
+        assert!(!agent.is_manageable());
+        assert!(agent.edison_installs(dir.path()).is_empty());
     }
 
     #[test]

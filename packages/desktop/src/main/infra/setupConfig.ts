@@ -468,20 +468,32 @@ export function getMcpUrl(): string | null {
   return null;
 }
 
+/**
+ * The snippet behind the tray's "Copy MCP config", for pasting into a client
+ * the app does not configure itself.
+ *
+ * A URL entry, not a `npx -y mcp-remote <url>` bridge. What the user pastes is
+ * what they then run on every launch of that client, so handing them a command
+ * that fetches an unpinned package from npm - with the secret key sitting in
+ * `argv` where any local process can read it off the process list - made this
+ * the one place the app recommended what it had stopped doing itself.
+ *
+ * Hosts whose config file takes no URL (Claude Desktop, Cowork) are not served
+ * by this snippet at all; they need Settings > Connectors, which is why the app
+ * reports them as clients the user has to connect by hand.
+ */
 export function getMcpConfig(): string | null {
   const url = getMcpUrl();
   if (!url) return null;
   const creds = getCredentialsForEnv();
-  const args = ["-y", "mcp-remote", url, "--transport", "http-first"];
-  if (creds?.edisonSecretKey) {
-    args.push("--header", `X-Edison-Secret-Key:${creds.edisonSecretKey}`);
-  }
   const config = {
     servers: {
       edisonwatch: {
-        type: "stdio",
-        command: "npx",
-        args,
+        type: "http",
+        url,
+        ...(creds?.edisonSecretKey
+          ? { headers: { "X-Edison-Secret-Key": creds.edisonSecretKey } }
+          : {}),
       },
     },
   };

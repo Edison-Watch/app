@@ -27,18 +27,16 @@ const status = (over: Record<string, unknown>) => ({
 
 /**
  * The permanent client surface, covering both routes into "Partially
- * Supported" - which are not the same situation.
+ * Supported" - which are not the same situation, and carry different copy.
  *
- * ChatGPT is `manageable: false`: its servers are Connectors in the user's
- * account and there is nothing to configure. Claude Desktop is the opposite -
- * manageable and fully set up - and still lands here, because its account-side
- * Connectors stay unproxied and calling it "Connected" would be the
- * overstatement this state exists to avoid. The two carry different copy.
+ * ChatGPT has nothing local at all: its servers are Connectors in the user's
+ * account, so no manual step would help and the row does not offer one. The
+ * Claude hosts do run local servers - `claude_desktop_config.json` simply takes
+ * stdio entries only, leaving Edison nowhere to write a gateway URL. That one
+ * is actionable, so its row names the route that works.
  *
- * Cowork is connector-backed as well, but mid-setup, and shows the other half
- * of the rule: a fixable problem outranks the caveat, so it reports
- * "Incomplete" rather than hiding a broken gateway behind something permanent
- * that the user cannot act on.
+ * Claude Code, Cursor and VS Code sit alongside as the ordinary case: config
+ * files that accept a URL, so Edison configures them itself.
  */
 export const WithAnUnmanageableClient: Story = {
   decorators: [
@@ -65,12 +63,29 @@ export const WithAnUnmanageableClient: Story = {
           statuses: [
             status({ client: 'claude-code' }),
             status({ client: 'cursor' }),
-            // Manageable and fully set up, so the caveat is what's left to say.
-            status({ client: 'claude-desktop' }),
-            // Manageable but mid-setup: the gateway problem wins over the caveat.
+            // Stdio-only config file, so nothing to install and nothing to
+            // score against setup - but a manual route that does work.
+            status({
+              client: 'claude-desktop',
+              manageable: false,
+              mcpApplicable: false,
+              hooksApplicable: false,
+              hasHook: false,
+              hookCount: 0,
+              totalHooks: 0,
+              mcpConnected: false,
+              mcpConfigured: false,
+            }),
             status({
               client: 'claude-cowork',
+              manageable: false,
+              mcpApplicable: false,
+              hooksApplicable: false,
+              hasHook: false,
+              hookCount: 0,
+              totalHooks: 0,
               mcpConnected: false,
+              mcpConfigured: false,
             }),
             status({
               client: 'vscode',

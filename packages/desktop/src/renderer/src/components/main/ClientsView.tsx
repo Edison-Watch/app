@@ -126,6 +126,12 @@ function getClientStatus(client: ClientInfo): ClientStatus {
   // - its account-side Connectors are still unproxied, and saying Connected
   // there is the overstatement this whole state exists to avoid.
   //
+  // No connector-backed client this app knows is still manageable, so the check
+  // above catches all of them and this one fires only under version skew: an
+  // older daemon alongside this app reports the Claude hosts as manageable and
+  // wired up through the `mcp-remote` entry it still installs. Saying
+  // "Connected" for that is exactly as wrong as it was before.
+  //
   // Only once setup is done, though: an unreachable gateway is actionable and
   // outranks a caveat the user can do nothing about right now. Reporting the
   // caveat over a broken install would bury the fixable problem.
