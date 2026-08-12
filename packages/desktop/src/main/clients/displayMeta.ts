@@ -26,20 +26,8 @@ export interface ClientDisplay {
 
 export const CLIENT_DISPLAY: Record<McpClientId, ClientDisplay> = {
   'claude-code': { name: 'Claude Code', brandColor: '#1A1A1A' },
-  // These two have a config file - it is read on every scan - but it takes
-  // stdio entries only, so Edison never writes to it and reports no install
-  // path. Naming the file here would point at somewhere nothing happens; the
-  // route that works is the one worth showing.
-  'claude-desktop': {
-    name: 'Claude Desktop',
-    brandColor: '#D97757',
-    configLabel: 'Connectors · add Edison Watch under Settings > Connectors',
-  },
-  'claude-cowork': {
-    name: 'Claude Cowork',
-    brandColor: '#C4745B',
-    configLabel: 'Connectors · add Edison Watch under Settings > Connectors',
-  },
+  'claude-desktop': { name: 'Claude Desktop', brandColor: '#D97757' },
+  'claude-cowork': { name: 'Claude Cowork', brandColor: '#C4745B' },
   codex: { name: 'Codex', brandColor: '#000000' },
   cursor: { name: 'Cursor', brandColor: '#000000' },
   vscode: { name: 'VS Code', brandColor: '#007ACC' },

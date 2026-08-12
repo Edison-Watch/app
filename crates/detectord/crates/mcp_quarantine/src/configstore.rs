@@ -532,28 +532,23 @@ fn http_entry(url: &str, secret: Option<&str>) -> Value {
 pub fn uninstall_edison(inst: &EdisonInstall) -> Result<()> {
     match inst.style {
         EdisonStyle::Toml => uninstall_toml(inst),
-        _ => remove_edison_entry(&inst.path, &inst.key_path),
+        // Named rather than `_`, so a third style has to decide for itself
+        // instead of silently inheriting JSON removal. `install_edison` is
+        // exhaustive for the same reason; the pair should fail together.
+        EdisonStyle::Http => uninstall_json(inst),
     }
 }
 
-/// Remove the `edison-watch` entry from the servers map at `key_path` in a JSON
-/// config (no-op if the file or the entry is absent).
-///
-/// Takes the location rather than an [`EdisonInstall`] because it has to reach
-/// entries no [`EdisonInstall`] describes any more: the `npx -y mcp-remote`
-/// shim older builds wrote into the Claude hosts' config. Those hosts no longer
-/// produce an install descriptor at all, so their leftovers can only be
-/// addressed by where they sit.
-pub fn remove_edison_entry(path: &Path, key_path: &[String]) -> Result<()> {
-    if !path.exists() {
+fn uninstall_json(inst: &EdisonInstall) -> Result<()> {
+    if !inst.path.exists() {
         return Ok(());
     }
-    let raw = read(path)?;
-    let mut root = parse(&raw, path)?;
-    if let Some(map) = nav_mut(&mut root, key_path) {
+    let raw = read(&inst.path)?;
+    let mut root = parse(&raw, &inst.path)?;
+    if let Some(map) = nav_mut(&mut root, &inst.key_path) {
         map.remove(EDISON_SERVER_NAME);
     }
-    write(path, &serialize(&root))
+    write(&inst.path, &serialize(&root))
 }
 
 fn ensure_parent(path: &Path) -> Result<()> {
@@ -906,38 +901,19 @@ mod tests {
     }
 
     #[test]
-    fn remove_edison_entry_takes_out_a_legacy_shim_and_leaves_the_rest() {
-        // The entry older builds wrote into Claude Desktop. No `EdisonInstall`
-        // describes it any more, so removal has to work from the location
-        // alone - and it has to leave the user's own servers untouched.
+    fn uninstall_edison_leaves_the_user_servers_alone() {
         let dir = tempdir().unwrap();
-        let cfg = dir.path().join("claude_desktop_config.json");
+        let cfg = dir.path().join("mcp.json");
         std::fs::write(
             &cfg,
-            r#"{"mcpServers":{"edison-watch":{"command":"npx","args":["-y","mcp-remote","https://mcp.edison.watch/mcp/K/"]},"mine":{"command":"x"}}}"#,
+            r#"{"mcpServers":{"edison-watch":{"type":"http","url":"https://x"},"mine":{"command":"x"}}}"#,
         )
         .unwrap();
 
-        remove_edison_entry(&cfg, &["mcpServers".to_string()]).unwrap();
+        uninstall_edison(&edison(&cfg, &["mcpServers"], EdisonStyle::Http, "cursor")).unwrap();
 
         let v: Value = serde_json::from_str(&std::fs::read_to_string(&cfg).unwrap()).unwrap();
         assert!(v["mcpServers"].get("edison-watch").is_none());
-        assert!(v["mcpServers"].get("mine").is_some());
-    }
-
-    #[test]
-    fn remove_edison_entry_is_a_no_op_when_there_is_nothing_to_remove() {
-        // Runs on every app start, so the common case is a config that never
-        // had the shim - and a missing file is the first-launch case.
-        let dir = tempdir().unwrap();
-        let missing = dir.path().join("absent.json");
-        remove_edison_entry(&missing, &["mcpServers".to_string()]).unwrap();
-        assert!(!missing.exists());
-
-        let cfg = dir.path().join("claude_desktop_config.json");
-        std::fs::write(&cfg, "{\"mcpServers\":{\"mine\":{\"command\":\"x\"}}}").unwrap();
-        remove_edison_entry(&cfg, &["mcpServers".to_string()]).unwrap();
-        let v: Value = serde_json::from_str(&std::fs::read_to_string(&cfg).unwrap()).unwrap();
         assert!(v["mcpServers"].get("mine").is_some());
     }
 

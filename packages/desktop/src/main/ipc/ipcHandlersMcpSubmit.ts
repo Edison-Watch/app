@@ -147,15 +147,24 @@ export function registerMcpSubmitHandlers(): void {
       // as an error, so pass the reason on rather than rendering "no config".
       const message = err instanceof Error ? err.message : String(err);
 
-      // An unmanageable client has no local config, so the failure above is
-      // expected and its message is one the user can do nothing about. Say
-      // what's actually going on instead. The daemon is the authority on which
-      // clients those are, so this asks it - but only here, on a path that has
-      // already failed. Asking up front cost a `list_agents` (a full discovery
-      // pass, plus a workspace hook scan) on every successful read, and the
-      // refresh in AppsStep re-reads every expanded client at once.
+      // A client with no config file at all fails here every time, with a
+      // message the user can do nothing about. Say what's actually going on.
+      //
+      // Keyed on the absence of a path, NOT on `manageable`. Those are not the
+      // same question: the Claude hosts are unmanageable - Edison cannot write
+      // a gateway URL into a stdio-only file - and still have a config Edison
+      // reads on every scan. Gating on `manageable` told their users this file
+      // did not exist, which is the sentence below, and every clause of it was
+      // false for them.
+      //
+      // The daemon is the authority on that path, so this asks it - but only
+      // here, on a read that has already failed. Asking up front cost a
+      // `list_agents` (a full discovery pass, plus a workspace hook scan) on
+      // every successful read, and AppsStep re-reads every expanded client at
+      // once on refresh.
       const facts = await getAgentFacts();
-      if (facts?.get(client as McpClientId)?.manageable === false) {
+      const fact = facts?.get(client as McpClientId);
+      if (fact && !fact.configPath) {
         const name = CLIENT_DISPLAY[client as McpClientId]?.name ?? client;
         return {
           content:

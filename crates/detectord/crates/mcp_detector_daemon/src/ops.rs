@@ -93,7 +93,7 @@ pub fn list_agents(user: &str) -> Vec<AgentInfo> {
                 workspace_hooks_installed,
                 edison_url: installed_edison_entry(a.name(), &installs, &observed)
                     .and_then(|s| edison_entry_url(&s.config)),
-                config_path: installs.first().map(|i| i.path.display().to_string()),
+                config_path: a.config_path(&home).map(|p| p.display().to_string()),
                 manageable: a.is_manageable(),
             }
         })
@@ -128,13 +128,14 @@ fn installed_edison_entry<'a>(
     })
 }
 
-/// The upstream URL of an `edison-watch` entry, whichever shape it was written
-/// in: a plain HTTP entry carries it directly, the `npx -y mcp-remote <url> …`
-/// shim hides it in the args.
+/// The upstream URL of an `edison-watch` entry, whichever shape it is in: an
+/// HTTP entry carries it directly, an `npx -y mcp-remote <url> …` shim hides it
+/// in the args.
 ///
-/// The stdio arm is a reader for history, not for anything Edison writes: the
-/// shim is gone, but a machine that has not yet run the purge still has one,
-/// and reporting no URL for it would show that install as unconfigured.
+/// Edison writes only the first. The stdio arm covers a hand-written shim in a
+/// *manageable* agent's install location — reached via `installed_edison_entry`,
+/// which requires a matching `EdisonInstall`, so the Claude hosts' leftovers
+/// never arrive here.
 fn edison_entry_url(config: &ServerConfig) -> Option<String> {
     match config {
         ServerConfig::Http { url, .. } => Some(url.clone()),
@@ -174,7 +175,7 @@ pub fn apply_integrations(
 
     let home = user_home(user);
     let changes = install_edison_entries_for(user, &e, &home, &wanted);
-    purge_shadowing_edison_entries(user, &agents::discover_all(&agents::build()));
+    purge_stale_edison_entries(user);
     // Hooks only for what was asked for. The machine-wide sweep is enroll's job
     // (`apply_install`), which runs on every app start.
     apply_hooks_for(&home, Some(&wanted));
@@ -226,9 +227,7 @@ pub fn read_config(user: &str, agent_name: &str) -> anyhow::Result<(String, Opti
         .find(|a| a.name() == agent_name)
         .ok_or_else(|| anyhow::anyhow!("unknown agent '{agent_name}'"))?;
     let path = agent
-        .edison_installs(&home)
-        .first()
-        .map(|i| i.path.clone())
+        .config_path(&home)
         .ok_or_else(|| anyhow::anyhow!("agent '{agent_name}' has no user-scope config"))?;
     Ok((path.display().to_string(), read_config_text(&path)?))
 }
@@ -517,93 +516,63 @@ fn user_home(user: &str) -> std::path::PathBuf {
 pub fn apply_install(user: &str, e: &Enrollment) {
     let home = user_home(user);
     install_edison_entries(user, e, &home);
-    // One discovery pass feeds both purges. Discovery is the expensive part
-    // (every adapter walks its whole config surface), and running it twice here
-    // would also let the two passes disagree about what is on disk.
-    let observed = agents::discover_all(&agents::build());
-    purge_shadowing_edison_entries(user, &observed);
-    purge_legacy_stdio_shims(&observed);
+    purge_stale_edison_entries(user);
     apply_hooks(&home);
 }
 
-/// Names of the hosts whose `edison-watch` entry Edison no longer writes.
+/// Hosts whose `edison-watch` entry Edison no longer writes.
 ///
-/// Kept as a list rather than asking the adapters, because the adapters have
-/// already forgotten: dropping their `edison_installs` is exactly what this
-/// cleans up after, so there is nothing left to ask.
+/// Frozen rather than derived from the adapters: this is a fact about what past
+/// builds wrote, so deriving it would make it drift with the code instead of
+/// staying pinned to the history it cleans up. A test asserts the names still
+/// resolve, because a rename would otherwise disable the sweep in silence.
 const STDIO_SHIM_HOSTS: [&str; 2] = ["claude_desktop", "claude_cowork"];
 
-/// Delete the `npx -y mcp-remote` entry that builds through 0.6.2 wrote into
-/// the Claude hosts' config.
-///
-/// Those hosts are no longer install targets, so nothing would ever overwrite
-/// this entry: left alone it keeps fetching an unpinned package from npm on
-/// every launch of the host app, with the secret key in `argv`, which is the
-/// whole reason the shim is gone. Removing it also makes the app's report
-/// honest - the row says "connect this yourself", and a stale entry would mean
-/// a gateway was still wired up behind that sentence.
-///
-/// Only entries that really are the shim are touched. An `edison-watch` entry
-/// of some other shape in that file is someone's own work, and this runs on
-/// every app start - a broad "delete anything named edison-watch" sweep would
-/// keep deleting it.
-fn purge_legacy_stdio_shims(observed: &[DiscoveredServer]) {
-    for server in observed {
-        if !STDIO_SHIM_HOSTS.contains(&server.client)
-            || !is_edison_entry(server)
-            || !is_mcp_remote_shim(&server.config)
-        {
-            continue;
-        }
-        let loc = &server.location;
-        match mcp_quarantine::remove_edison_entry(&loc.path, &loc.key_path) {
-            Ok(()) => tracing::info!(
-                client = %server.client,
-                path = %loc.path.display(),
-                "removed the legacy mcp-remote edison-watch entry"
-            ),
-            // `debug`, not `warn`: this runs on every start, so a config that
-            // stays unwritable would repeat the line forever. The user-visible
-            // consequence is already covered - the client reports itself as one
-            // they have to connect by hand either way.
-            Err(err) => tracing::debug!(
-                client = %server.client,
-                path = %loc.path.display(),
-                error = %err,
-                "removing the legacy mcp-remote entry failed"
-            ),
-        }
+/// Why an `edison-watch` entry found on disk has to come out.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Stale {
+    /// A *project-scoped* Cursor entry. `<project>/.cursor/mcp.json` takes
+    /// precedence over the user-level `~/.cursor/mcp.json`, so this one shadows
+    /// the registration we just installed and the user sees "edison-watch not
+    /// recognized". Only Cursor has this precedence rule; other agents' project
+    /// configs merge, and an entry there may well be deliberate.
+    Shadowing,
+    /// The `npx -y mcp-remote` bridge older builds wrote into the Claude hosts'
+    /// config. They are not install targets any more, so nothing would ever
+    /// overwrite it: left alone it keeps fetching an unpinned package from npm
+    /// on every launch of the host app, with the secret key in `argv`.
+    LegacyShim,
+}
+
+fn stale_reason(server: &DiscoveredServer) -> Option<Stale> {
+    if server.client == "cursor" {
+        return matches!(server.scope, edison_detectord::Scope::Project(_))
+            .then_some(Stale::Shadowing);
     }
+    (STDIO_SHIM_HOSTS.contains(&server.client) && is_mcp_remote_shim(&server.config))
+        .then_some(Stale::LegacyShim)
 }
 
-/// Whether a discovered entry is an `mcp-remote` invocation.
+/// Take out every `edison-watch` entry that should no longer be on disk.
 ///
-/// Matches the package token in `args` rather than the command, because the
-/// launcher varies (`npx`, `bunx`, a pinned path) while the package name is
-/// what identifies the shim. `mcp-remote@1.2.3` counts.
-fn is_mcp_remote_shim(config: &ServerConfig) -> bool {
-    let ServerConfig::Stdio { args, .. } = config else {
-        return false;
-    };
-    args.iter()
-        .any(|a| a == "mcp-remote" || a.starts_with("mcp-remote@"))
-}
-
-/// Drop `edison-watch` entries that live in a *project-scoped* Cursor config.
+/// One sweep for two unrelated causes ([`Stale`]) because both end the same
+/// way: remove the entry, record it so `restore` can put it back, and undo the
+/// lot if the record never reaches disk. Splitting them gave the second cause
+/// its own weaker removal path - no backup, no record, unrecoverable - which is
+/// exactly the difference nobody would notice until a user needed it back.
 ///
-/// Cursor's `<project>/.cursor/mcp.json` takes precedence over the user-level
-/// `~/.cursor/mcp.json`, so a stale entry there (manual setup, or an older app
-/// version that wrote one) shadows the registration we just installed and the
-/// user sees "edison-watch not recognized". Only Cursor has this precedence
-/// rule; other agents' project configs merge, and a project-scoped entry there
-/// may well be deliberate, so leave those alone.
-fn purge_shadowing_edison_entries(user: &str, observed: &[DiscoveredServer]) {
+/// Removal is restorable and not conditional on the entry being *ours*, because
+/// it cannot be told apart from the user's own: `npx -y mcp-remote <url>` was
+/// the published way to reach a remote MCP server from Claude Desktop, so an
+/// entry someone hand-wrote against their own gateway looks identical to one we
+/// wrote. Recording it is what makes deleting it safe.
+fn purge_stale_edison_entries(user: &str) {
     let mut q = match QuarantinedState::load_for(user) {
         Ok(q) => q,
         Err(err) => {
             // Without somewhere to record it, removing the entry would strand
             // it: the sidecar would exist with nothing pointing at it.
-            tracing::warn!(error = %err, "skipping shadow purge: quarantined state unreadable");
+            tracing::warn!(error = %err, "skipping purge: quarantined state unreadable");
             return;
         }
     };
@@ -613,34 +582,73 @@ fn purge_shadowing_edison_entries(user: &str, observed: &[DiscoveredServer]) {
     // record never reaches disk is worse than no removal at all: the entry is
     // gone from the config, the sidecar exists, and nothing points at it.
     let mut undo: Vec<(PathBuf, QuarantineRecord)> = Vec::new();
-    for server in observed {
-        if server.client != "cursor" || !is_edison_entry(server) {
+    // Claude Desktop and Cowork are separate adapters over ONE file, and
+    // `discover_all` dedupes by (client, path, key, name) - so the client in
+    // that key keeps both copies of a shared entry. Acting on the second would
+    // rewrite the file for a removal that already happened and log a success
+    // for it.
+    let mut done: std::collections::HashSet<(PathBuf, Vec<String>)> =
+        std::collections::HashSet::new();
+
+    for server in &agents::discover_all(&agents::build()) {
+        if !is_edison_entry(server) {
             continue;
         }
-        let edison_detectord::Scope::Project(project) = &server.scope else {
-            continue; // the user-level entry is the one we just installed
+        let Some(reason) = stale_reason(server) else {
+            continue;
         };
-        match FileConfigStore.quarantine(&server.location, &server.config) {
+        let loc = &server.location;
+        if !done.insert((loc.path.clone(), loc.key_path.clone())) {
+            continue;
+        }
+        match FileConfigStore.quarantine(loc, &server.config) {
             Ok(record) => {
-                // Track it like any other quarantine. These entries can be the
-                // user's own manual setup, so "remove and forget" would leave
-                // them with no way back through `restore` - only the CLI's
-                // disk-scanning `recover`, which restores everything at once.
-                undo.push((project.clone(), record.clone()));
+                undo.push((loc.path.clone(), record.clone()));
                 q.upsert(quarantined_entry(server, record));
                 tracing::info!(
-                    project = %project.display(),
-                    "removed shadowing project-scoped edison-watch entry (restorable)"
+                    client = %server.client,
+                    path = %loc.path.display(),
+                    ?reason,
+                    "removed a stale edison-watch entry (restorable)"
                 )
             }
             Err(err) => tracing::warn!(
-                project = %project.display(),
+                client = %server.client,
+                path = %loc.path.display(),
+                ?reason,
                 error = %err,
-                "removing shadowing project-scoped edison-watch entry failed"
+                "removing a stale edison-watch entry failed"
             ),
         }
     }
     commit_purge(&undo, || q.save_for(user));
+}
+
+/// Whether a discovered entry invokes the `mcp-remote` package.
+///
+/// Ported from `stdioShim.ts`'s `MCP_REMOTE_RE`, which is the repo's canonical
+/// matcher, rather than paraphrased: this predicate decides whether to delete
+/// something from a user's config, so it should be no looser than the reader
+/// that already ships. That means checking `command` as well as `args` (a bare
+/// `mcp-remote` invocation has no launcher), accepting a path prefix, and
+/// accepting an `@version` suffix.
+fn is_mcp_remote_shim(config: &ServerConfig) -> bool {
+    let ServerConfig::Stdio { command, args, .. } = config else {
+        return false;
+    };
+    std::iter::once(command)
+        .chain(args)
+        .any(|t| is_mcp_remote_token(t))
+}
+
+/// `mcp-remote`, `mcp-remote@1.2.3`, or either behind a path.
+fn is_mcp_remote_token(token: &str) -> bool {
+    let base = token.rsplit(['/', '\\']).next().unwrap_or(token);
+    match base.split_once('@') {
+        // An empty version is not a version, matching the TS regex's `+`.
+        Some((name, version)) => name == "mcp-remote" && !version.is_empty(),
+        None => base == "mcp-remote",
+    }
 }
 
 /// Finish a purge pass: persist the records, or undo every removal if that
@@ -1524,21 +1532,21 @@ mod tests {
 
     #[test]
     fn picks_the_url_out_of_a_stdio_shim_entry() {
-        // Edison no longer writes this shape, but installed machines still
-        // carry it until the purge runs, and `list_agents` reports the URL of
-        // whatever is actually on disk.
+        // A hand-written shim in an install location Edison does write to.
+        // `?client=cursor`, not a Claude host: those have no install location,
+        // so `installed_edison_entry` never routes their entries here.
         let config = ServerConfig::Stdio {
             command: "npx".into(),
             args: vec![
                 "-y".into(),
                 "mcp-remote".into(),
-                "https://mcp.edison.watch/mcp?client=claude-desktop".into(),
+                "https://mcp.edison.watch/mcp?client=cursor".into(),
             ],
             env: Default::default(),
         };
         assert_eq!(
             edison_entry_url(&config).as_deref(),
-            Some("https://mcp.edison.watch/mcp?client=claude-desktop")
+            Some("https://mcp.edison.watch/mcp?client=cursor")
         );
     }
 
@@ -1562,23 +1570,89 @@ mod tests {
             "bunx",
             &["mcp-remote@0.1.29", "https://x"]
         )));
+        // No launcher at all: `command` IS the package. Reading only `args`
+        // missed this, and the entry then survived every purge.
+        assert!(is_mcp_remote_shim(&stdio("mcp-remote", &["https://x"])));
+        // And behind a path, on either separator.
+        assert!(is_mcp_remote_shim(&stdio(
+            "/usr/local/bin/mcp-remote",
+            &["https://x"]
+        )));
+        assert!(is_mcp_remote_shim(&stdio(
+            "C:\\tools\\mcp-remote@1.2.3",
+            &["https://x"]
+        )));
     }
 
     #[test]
     fn leaves_alone_anything_that_is_not_the_shim() {
-        // The purge runs on every app start, so over-matching here would keep
-        // deleting an entry the user put back by hand.
+        // This predicate decides whether to delete an entry from someone's
+        // config, on every app start. Over-matching keeps deleting it.
         assert!(!is_mcp_remote_shim(&stdio(
             "npx",
             &["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
         )));
-        // `mcp-remote-proxy` is a different package: matching on a prefix
-        // rather than the whole token would take this one too.
+        // A different package. Matching a prefix rather than the whole token
+        // would take this one too.
         assert!(!is_mcp_remote_shim(&stdio("npx", &["mcp-remote-proxy"])));
+        assert!(!is_mcp_remote_shim(&stdio("npx", &["not-mcp-remote"])));
+        // A bare `@` is not a version - the TS regex requires `[\w.+-]+`.
+        assert!(!is_mcp_remote_shim(&stdio("npx", &["mcp-remote@"])));
         assert!(!is_mcp_remote_shim(&ServerConfig::Http {
             url: "https://mcp.edison.watch/mcp/K/".into(),
             headers: Default::default(),
             kind: edison_detectord::HttpKind::Http,
         }));
+    }
+
+    #[test]
+    fn the_shim_hosts_are_still_agents_this_build_knows() {
+        // `STDIO_SHIM_HOSTS` duplicates two `CLIENT_NAME` literals. Renaming
+        // either breaks neither the build nor any other test - the purge would
+        // just stop matching, and every affected machine would keep its shim
+        // for good, silently.
+        let names: Vec<&str> = agents::build().iter().map(|a| a.name()).collect();
+        for host in STDIO_SHIM_HOSTS {
+            assert!(
+                names.contains(&host),
+                "{host} is not an agent name any more; the legacy shim purge is dead code"
+            );
+        }
+    }
+
+    #[test]
+    fn an_entry_is_stale_only_where_it_is_actually_stale() {
+        // Cursor: a project entry shadows the user-level one, and the
+        // user-level one is what we just installed.
+        let mut cursor = entry(
+            "cursor",
+            "edison-watch",
+            "/home/u/p/.cursor/mcp.json",
+            &["mcpServers"],
+            Scope::Project(PathBuf::from("/home/u/p")),
+            "https://x",
+        );
+        assert_eq!(stale_reason(&cursor), Some(Stale::Shadowing));
+        cursor.scope = Scope::Global;
+        assert_eq!(stale_reason(&cursor), None);
+
+        // A Claude host is stale only when the entry is the shim. An HTTP entry
+        // there is someone's own doing - Edison never wrote one.
+        let mut claude = entry(
+            "claude_desktop",
+            "edison-watch",
+            "/home/u/claude_desktop_config.json",
+            &["mcpServers"],
+            Scope::Global,
+            "https://x",
+        );
+        assert_eq!(stale_reason(&claude), None);
+        claude.config = stdio("npx", &["-y", "mcp-remote", "https://x"]);
+        assert_eq!(stale_reason(&claude), Some(Stale::LegacyShim));
+
+        // The same shim under a host Edison never wrote it to stays put.
+        let mut elsewhere = claude.clone();
+        elsewhere.client = "vscode";
+        assert_eq!(stale_reason(&elsewhere), None);
     }
 }

@@ -15,7 +15,7 @@ mod statedb;
 
 pub use configstore::{
     ConfigStore, FileConfigStore, QuarantineRecord, backup_path, edison_url, install_edison,
-    remove_edison_entry, uninstall_edison,
+    uninstall_edison,
 };
 pub use error::{Error, Result};
 pub use hooks::{

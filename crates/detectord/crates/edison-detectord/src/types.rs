@@ -184,12 +184,9 @@ pub struct EdisonInstall {
 
 /// The shape of an installed `edison-watch` entry.
 ///
-/// Both variants carry the gateway URL directly. There is deliberately no stdio
-/// variant: reaching a remote gateway from a host that only accepts stdio takes
-/// a bridge subprocess, and the one Edison used to write — `npx -y mcp-remote` —
-/// pulled an unpinned package from npm on every launch of the host app and put
-/// the secret key in `argv`. A host that cannot take a URL in its config file is
-/// simply not an install target now (see `clients/claude_desktop.rs`).
+/// Both variants carry the gateway URL directly, and there is deliberately no
+/// stdio variant: a host whose config file cannot hold a URL is not an install
+/// target (see `clients/claude_desktop.rs`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EdisonStyle {
     /// `{ "type": "http", "url": … }` in a JSON/JSONC file.

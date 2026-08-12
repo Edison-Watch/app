@@ -26,6 +26,24 @@ const status = (over: Record<string, unknown>) => ({
 });
 
 /**
+ * A client Edison can see but not configure. Every setup field goes false
+ * together: there is no gateway entry to install and no hook surface, so a row
+ * that reported "4/4 hooks" here would be describing work nobody did.
+ */
+const unmanaged = (client: string) =>
+  status({
+    client,
+    manageable: false,
+    mcpApplicable: false,
+    hooksApplicable: false,
+    hasHook: false,
+    hookCount: 0,
+    totalHooks: 0,
+    mcpConnected: false,
+    mcpConfigured: false,
+  });
+
+/**
  * The permanent client surface, covering both routes into "Partially
  * Supported" - which are not the same situation, and carry different copy.
  *
@@ -63,47 +81,18 @@ export const WithAnUnmanageableClient: Story = {
           statuses: [
             status({ client: 'claude-code' }),
             status({ client: 'cursor' }),
-            // Stdio-only config file, so nothing to install and nothing to
-            // score against setup - but a manual route that does work.
-            status({
-              client: 'claude-desktop',
-              manageable: false,
-              mcpApplicable: false,
-              hooksApplicable: false,
-              hasHook: false,
-              hookCount: 0,
-              totalHooks: 0,
-              mcpConnected: false,
-              mcpConfigured: false,
-            }),
-            status({
-              client: 'claude-cowork',
-              manageable: false,
-              mcpApplicable: false,
-              hooksApplicable: false,
-              hasHook: false,
-              hookCount: 0,
-              totalHooks: 0,
-              mcpConnected: false,
-              mcpConfigured: false,
-            }),
+            // Stdio-only config file: nothing to install, and nothing to score
+            // against setup - but a manual route that does work.
+            unmanaged('claude-desktop'),
+            unmanaged('claude-cowork'),
             status({
               client: 'vscode',
               hasHook: false,
               hookCount: 2,
               mcpConnected: false,
             }),
-            status({
-              client: 'chatgpt',
-              manageable: false,
-              mcpApplicable: false,
-              hooksApplicable: false,
-              hasHook: false,
-              hookCount: 0,
-              totalHooks: 0,
-              mcpConnected: false,
-              mcpConfigured: false,
-            }),
+            // Same row state, different cause: no local servers at all.
+            unmanaged('chatgpt'),
           ],
           daemonUnavailable: false,
         });

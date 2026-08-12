@@ -72,8 +72,11 @@ impl Agent for ClaudeDesktop {
         false
     }
 
-    // `edison_installs` stays at its empty default: the config file takes stdio
-    // entries only, so there is no URL-shaped entry to write. See the module doc.
+    /// Overridden because the default derives it from `edison_installs`, which
+    /// is empty here — and this file is read on every scan.
+    fn config_path(&self, home: &std::path::Path) -> Option<PathBuf> {
+        config_path_in(home)
+    }
 }
 
 fn default_config_path() -> Option<PathBuf> {

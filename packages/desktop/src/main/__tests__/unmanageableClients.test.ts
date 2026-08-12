@@ -165,4 +165,24 @@ describe('mcp:readConfig', () => {
     expect(content).toBeNull()
     expect(error).toBe('permission denied')
   })
+
+  it('does not claim the config is missing for an unmanageable client that has one', async () => {
+    // The Claude hosts are unmanageable - Edison cannot write a gateway URL
+    // into a stdio-only file - and their config still exists and is parsed on
+    // every scan. Keyed on `manageable`, this branch told those users the file
+    // did not exist and there was nothing to protect. It keys on the path now,
+    // which is the question it was always asking.
+    facts = new Map([
+      [
+        'claude-desktop' as McpClientId,
+        agent({ manageable: false, configPath: '/home/u/claude_desktop_config.json' })
+      ]
+    ])
+    readConfigResult = async () => {
+      throw new Error('permission denied')
+    }
+    const { content, error } = await readConfig(null, 'claude-desktop')
+    expect(content).toBeNull()
+    expect(error).toBe('permission denied')
+  })
 })

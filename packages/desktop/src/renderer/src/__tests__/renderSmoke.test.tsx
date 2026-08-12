@@ -217,12 +217,12 @@ describe('ClientsView', () => {
     expectNoRenderErrors()
   })
 
-  it('still refuses to say Connected when an older daemon calls one manageable', async () => {
-    // Version skew: this app can run against an already-installed older daemon
-    // that still writes the `mcp-remote` entry, and so still reports these
-    // hosts as manageable and fully set up. "Connected" was an overstatement
-    // then too - the account-side Connectors were never proxied - so the
-    // downgrade has to hold independently of the `manageable` flag.
+  it('still refuses to say Connected for a connector-backed client it can configure', async () => {
+    // Connector-backed and unmanageable are different questions, and today
+    // every connector-backed client happens to be both. This pins the half
+    // that does not depend on that coincidence: a member Edison configures
+    // perfectly well is still not "Connected", because the account-side
+    // Connectors it also has are unproxied either way.
     const api = installMockApi()
     ;(api.mcp as Record<string, unknown>).getHookStatus = async () => ({
       statuses: [status({ client: 'claude-desktop', hooksApplicable: false })],
@@ -237,9 +237,9 @@ describe('ClientsView', () => {
   })
 
   it('reports a broken gateway over the Connectors caveat', async () => {
-    // The same skew case, mid-setup. Precedence: the caveat is permanent and
-    // the user can do nothing about it right now, while an unreachable gateway
-    // is theirs to fix. Showing the caveat here buries the actionable failure.
+    // Same shape, mid-setup. Precedence: the caveat is permanent and the user
+    // can do nothing about it right now, while an unreachable gateway is
+    // theirs to fix. Showing the caveat here buries the actionable failure.
     const api = installMockApi()
     ;(api.mcp as Record<string, unknown>).getHookStatus = async () => ({
       statuses: [

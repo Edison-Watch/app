@@ -176,9 +176,16 @@ export function setCustomBackend(apiBaseUrl: string, mcpBaseUrl?: string): Custo
 
 // ── Setup data persistence ──────────────────────────────────────────
 
+/**
+ * Apps Edison configures itself, used as the fallback when a caller names none.
+ *
+ * Excludes every host whose servers Edison cannot install into: ChatGPT, and
+ * the two Claude hosts whose config file takes stdio entries only. The daemon
+ * drops them anyway, but a list here that disagrees with the daemon is a second
+ * answer to the same question waiting to be believed.
+ */
 export const ALL_SUPPORTED_APPS = [
-  "vscode", "cursor", "claude-desktop",
-  "claude-code", "claude-cowork", "windsurf", "zed", "codex",
+  "vscode", "cursor", "claude-code", "windsurf", "zed", "codex",
   "intellij", "pycharm", "webstorm",
 ];
 
@@ -469,18 +476,12 @@ export function getMcpUrl(): string | null {
 }
 
 /**
- * The snippet behind the tray's "Copy MCP config", for pasting into a client
- * the app does not configure itself.
+ * The snippet behind the tray's "Copy MCP config".
  *
- * A URL entry, not a `npx -y mcp-remote <url>` bridge. What the user pastes is
- * what they then run on every launch of that client, so handing them a command
- * that fetches an unpinned package from npm - with the secret key sitting in
- * `argv` where any local process can read it off the process list - made this
- * the one place the app recommended what it had stopped doing itself.
- *
- * Hosts whose config file takes no URL (Claude Desktop, Cowork) are not served
- * by this snippet at all; they need Settings > Connectors, which is why the app
- * reports them as clients the user has to connect by hand.
+ * A URL entry rather than an `npx -y mcp-remote <url>` bridge: what the user
+ * pastes is what their client runs on every launch, and that command would
+ * fetch an unpinned npm package with the secret key in `argv`. Clients whose
+ * config file cannot hold a URL are not served by this snippet at all.
  */
 export function getMcpConfig(): string | null {
   const url = getMcpUrl();

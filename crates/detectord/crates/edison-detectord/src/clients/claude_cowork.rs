@@ -79,8 +79,11 @@ impl Agent for ClaudeCowork {
         false
     }
 
-    // `edison_installs` stays at its empty default — same config file, same
-    // stdio-only limit as Claude Desktop.
+    /// Only once Cowork is actually present. The file is Desktop's too, and
+    /// claiming it while inert would show Desktop's servers under Cowork's name.
+    fn config_path(&self, home: &std::path::Path) -> Option<PathBuf> {
+        self.is_cowork().then(|| config_path_in(home)).flatten()
+    }
 }
 
 fn default_config_path() -> Option<PathBuf> {

@@ -126,11 +126,12 @@ function getClientStatus(client: ClientInfo): ClientStatus {
   // - its account-side Connectors are still unproxied, and saying Connected
   // there is the overstatement this whole state exists to avoid.
   //
-  // No connector-backed client this app knows is still manageable, so the check
-  // above catches all of them and this one fires only under version skew: an
-  // older daemon alongside this app reports the Claude hosts as manageable and
-  // wired up through the `mcp-remote` entry it still installs. Saying
-  // "Connected" for that is exactly as wrong as it was before.
+  // Every connector-backed client happens to be unmanageable today, so the
+  // check above catches all of them and this one currently fires for nobody.
+  // It stays because those are different questions - `clientSupport.ts` calls
+  // the grouping a presentation fact, not a capability - and a connector-backed
+  // client that Edison *can* configure is exactly the case where "Connected"
+  // becomes an overstatement again with nothing else to catch it.
   //
   // Only once setup is done, though: an unreachable gateway is actionable and
   // outranks a caveat the user can do nothing about right now. Reporting the
