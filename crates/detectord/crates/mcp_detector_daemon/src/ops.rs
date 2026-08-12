@@ -624,31 +624,70 @@ fn purge_stale_edison_entries(user: &str) {
     commit_purge(&undo, || q.save_for(user));
 }
 
+/// Launchers that may run a package by name, from `stdioShim.ts`'s
+/// `LAUNCHER_RE`.
+const LAUNCHERS: [&str; 5] = ["npx", "bunx", "pnpx", "yarn", "pnpm"];
+
 /// Whether a discovered entry invokes the `mcp-remote` package.
 ///
-/// Ported from `stdioShim.ts`'s `MCP_REMOTE_RE`, which is the repo's canonical
-/// matcher, rather than paraphrased: this predicate decides whether to delete
-/// something from a user's config, so it should be no looser than the reader
-/// that already ships. That means checking `command` as well as `args` (a bare
-/// `mcp-remote` invocation has no launcher), accepting a path prefix, and
-/// accepting an `@version` suffix.
+/// Ported from `stdioShim.ts`, which is the repo's canonical matcher, and
+/// ported in full: *where* it applies its regex matters as much as the regex.
+/// It tests the command, or the first non-flag positional after a known
+/// launcher - never every argument. Testing every argument looks equivalent
+/// until a URL ends in `/mcp-remote`, at which point a server that has nothing
+/// to do with the package gets deleted from the user's config.
 fn is_mcp_remote_shim(config: &ServerConfig) -> bool {
     let ServerConfig::Stdio { command, args, .. } = config else {
         return false;
     };
-    std::iter::once(command)
-        .chain(args)
-        .any(|t| is_mcp_remote_token(t))
+    // A bare invocation: the command IS the package, with no launcher.
+    if is_mcp_remote_token(command) {
+        return true;
+    }
+    let launcher = base_name(command);
+    if !LAUNCHERS.contains(&launcher) {
+        return false;
+    }
+    let mut rest = args.iter().map(String::as_str);
+    let mut token = rest.next();
+    // `yarn dlx` / `pnpm exec` shift the package one token right.
+    if matches!(launcher, "yarn" | "pnpm") && matches!(token, Some("dlx" | "exec")) {
+        token = rest.next();
+    }
+    // Launcher flags (`-y`, `--yes`) come first; the first positional after
+    // them is the package, and if it is something else this is not the shim.
+    while let Some(t) = token {
+        if !t.starts_with('-') {
+            return is_mcp_remote_token(t);
+        }
+        token = rest.next();
+    }
+    false
 }
 
-/// `mcp-remote`, `mcp-remote@1.2.3`, or either behind a path.
+/// `mcp-remote`, `mcp-remote@1.2.3`, or either behind a path — the whole of
+/// `MCP_REMOTE_RE`, including its `[\w.+-]+` version class.
 fn is_mcp_remote_token(token: &str) -> bool {
-    let base = token.rsplit(['/', '\\']).next().unwrap_or(token);
+    let base = base_name(token);
     match base.split_once('@') {
-        // An empty version is not a version, matching the TS regex's `+`.
-        Some((name, version)) => name == "mcp-remote" && !version.is_empty(),
+        Some((name, version)) => {
+            name == "mcp-remote"
+                // `+` in the TS regex: an empty version is not a version. The
+                // character class matters too - it stops at the first thing a
+                // version cannot contain, so `mcp-remote@1.2.3:port` and
+                // `mcp-remote@foo@bar` are not this package.
+                && !version.is_empty()
+                && version
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '+' | '-'))
+        }
         None => base == "mcp-remote",
     }
+}
+
+/// The last path segment, on either separator.
+fn base_name(token: &str) -> &str {
+    token.rsplit(['/', '\\']).next().unwrap_or(token)
 }
 
 /// Finish a purge pass: persist the records, or undo every removal if that
@@ -1582,6 +1621,15 @@ mod tests {
             "C:\\tools\\mcp-remote@1.2.3",
             &["https://x"]
         )));
+        // `yarn dlx` / `pnpm exec` put the package one token further right.
+        assert!(is_mcp_remote_shim(&stdio(
+            "yarn",
+            &["dlx", "mcp-remote", "https://x"]
+        )));
+        assert!(is_mcp_remote_shim(&stdio(
+            "pnpm",
+            &["exec", "mcp-remote", "https://x"]
+        )));
     }
 
     #[test]
@@ -1596,8 +1644,28 @@ mod tests {
         // would take this one too.
         assert!(!is_mcp_remote_shim(&stdio("npx", &["mcp-remote-proxy"])));
         assert!(!is_mcp_remote_shim(&stdio("npx", &["not-mcp-remote"])));
-        // A bare `@` is not a version - the TS regex requires `[\w.+-]+`.
+        // A bare `@` is not a version - the TS regex requires `[\w.+-]+` - and
+        // neither is one carrying a character a version cannot hold.
         assert!(!is_mcp_remote_shim(&stdio("npx", &["mcp-remote@"])));
+        assert!(!is_mcp_remote_shim(&stdio(
+            "npx",
+            &["mcp-remote@1.2.3:port"]
+        )));
+        assert!(!is_mcp_remote_shim(&stdio("npx", &["mcp-remote@foo@bar"])));
+        // The package name has to be in the package POSITION. A URL that
+        // happens to end in `/mcp-remote` is an argument to something else,
+        // and this predicate deletes what it matches.
+        assert!(!is_mcp_remote_shim(&stdio(
+            "npx",
+            &["-y", "some-proxy", "https://gateway.example/mcp-remote"]
+        )));
+        // Same for a launcher running a different package entirely.
+        assert!(!is_mcp_remote_shim(&stdio(
+            "npx",
+            &["-y", "other-pkg", "mcp-remote"]
+        )));
+        // Not a launcher at all, so nothing after it is a package name.
+        assert!(!is_mcp_remote_shim(&stdio("node", &["mcp-remote"])));
         assert!(!is_mcp_remote_shim(&ServerConfig::Http {
             url: "https://mcp.edison.watch/mcp/K/".into(),
             headers: Default::default(),

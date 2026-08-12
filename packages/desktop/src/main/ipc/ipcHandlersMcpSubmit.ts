@@ -147,24 +147,33 @@ export function registerMcpSubmitHandlers(): void {
       // as an error, so pass the reason on rather than rendering "no config".
       const message = err instanceof Error ? err.message : String(err);
 
-      // A client with no config file at all fails here every time, with a
-      // message the user can do nothing about. Say what's actually going on.
+      // A connector-only client fails here every time, with a message the user
+      // can do nothing about. Say what's actually going on.
       //
-      // Keyed on the absence of a path, NOT on `manageable`. Those are not the
-      // same question: the Claude hosts are unmanageable - Edison cannot write
-      // a gateway URL into a stdio-only file - and still have a config Edison
-      // reads on every scan. Gating on `manageable` told their users this file
-      // did not exist, which is the sentence below, and every clause of it was
-      // false for them.
+      // BOTH conditions, because either alone names a different set:
       //
-      // The daemon is the authority on that path, so this asks it - but only
-      // here, on a read that has already failed. Asking up front cost a
-      // `list_agents` (a full discovery pass, plus a workspace hook scan) on
-      // every successful read, and AppsStep re-reads every expanded client at
-      // once on refresh.
+      //   unmanageable, has a config   Claude Desktop / Cowork - Edison cannot
+      //                                write a URL into a stdio-only file, but
+      //                                reads that file on every scan. Gating on
+      //                                `manageable` alone told those users the
+      //                                file below did not exist.
+      //   manageable, no config path   JetBrains with no IDE installed - it
+      //                                reports zero install targets and is
+      //                                perfectly manageable the moment one
+      //                                appears. Gating on the path alone told
+      //                                them their servers live in an account.
+      //
+      // Only a client that is both is genuinely connector-only. `configPath` is
+      // optional on the wire, so an older daemon omitting it must not on its
+      // own be enough to trigger this.
+      //
+      // The daemon is the authority here, so this asks it - but only on a read
+      // that has already failed. Asking up front cost a `list_agents` (a full
+      // discovery pass, plus a workspace hook scan) on every successful read,
+      // and AppsStep re-reads every expanded client at once on refresh.
       const facts = await getAgentFacts();
       const fact = facts?.get(client as McpClientId);
-      if (fact && !fact.configPath) {
+      if (fact && !fact.configPath && !fact.manageable) {
         const name = CLIENT_DISPLAY[client as McpClientId]?.name ?? client;
         return {
           content:
