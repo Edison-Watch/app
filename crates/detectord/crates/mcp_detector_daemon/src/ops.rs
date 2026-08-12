@@ -628,20 +628,30 @@ fn purge_stale_edison_entries(user: &str) {
 /// `LAUNCHER_RE`.
 const LAUNCHERS: [&str; 5] = ["npx", "bunx", "pnpx", "yarn", "pnpm"];
 
-/// Launcher options that consume the following token, so what comes after them
-/// is a value and not the package being run.
+/// Launcher options that stand alone. **Every other option is assumed to take
+/// the next token as its value**, which is the opposite of the usual default
+/// and is the point.
 ///
-/// `npx --package mcp-remote other-server` runs **`other-server`**; the package
-/// name is an argument to `--package`. Treating it as the executable classifies
-/// an unrelated server as the shim. `--` forms with `=` need no entry: they are
-/// one token, so the value never looks like a positional.
-const LAUNCHER_VALUE_FLAGS: [&str; 6] = [
-    "-p",
-    "--package",
-    "-c",
-    "--call",
-    "--node-arg",
-    "--userconfig",
+/// Guessing wrong is not symmetric. Read a value-taking option as standalone
+/// (`npx --package mcp-remote other-server`) and its value lands in the package
+/// position, so an unrelated server matches and gets removed. Read a standalone
+/// one as value-taking and the shim is simply missed, which costs the user
+/// nothing they did not already have. Unknown options therefore default to the
+/// direction that cannot delete the wrong thing, and this list carries only the
+/// ones common enough to be worth naming.
+///
+/// `=` forms need no entry either way: they are a single token, so their value
+/// never looks like a positional.
+const LAUNCHER_BOOLEAN_FLAGS: [&str; 9] = [
+    "-y",
+    "--yes",
+    "-n",
+    "--no",
+    "-q",
+    "--quiet",
+    "--silent",
+    "--prefer-online",
+    "--prefer-offline",
 ];
 
 /// Whether a discovered entry invokes the `mcp-remote` package.
@@ -653,11 +663,11 @@ const LAUNCHER_VALUE_FLAGS: [&str; 6] = [
 /// `/mcp-remote`, at which point a server that has nothing to do with the
 /// package gets deleted from the user's config.
 ///
-/// Stricter than the TS reader in one place, deliberately: it skips *any*
-/// `-`-prefixed token and takes the next positional, so `--package mcp-remote
-/// other-server` reads as the shim there too. That misclassification costs the
-/// reader a wrong transport; here it costs the user an entry. Where the two
-/// disagree, the one that deletes should be the cautious one.
+/// Stricter than the TS reader about options, deliberately: that one skips
+/// *any* `-`-prefixed token and takes the next positional, so `--package
+/// mcp-remote other-server` reads as the shim there too. That misclassification
+/// costs the reader a wrong transport; here it costs the user an entry. Where
+/// the two disagree, the one that deletes should be the cautious one.
 fn is_mcp_remote_shim(config: &ServerConfig) -> bool {
     let ServerConfig::Stdio { command, args, .. } = config else {
         return false;
@@ -676,13 +686,13 @@ fn is_mcp_remote_shim(config: &ServerConfig) -> bool {
     if matches!(launcher, "yarn" | "pnpm") && matches!(token, Some("dlx" | "exec")) {
         token = rest.next();
     }
-    // Boolean flags (`-y`, `--yes`) are skipped, value-taking ones take their
-    // value with them, and the first positional left is the package.
+    // Standalone options are skipped, everything else takes its value with it,
+    // and the first positional left is the package.
     while let Some(t) = token {
         if !t.starts_with('-') {
             return is_mcp_remote_token(t);
         }
-        if LAUNCHER_VALUE_FLAGS.contains(&t) {
+        if !LAUNCHER_BOOLEAN_FLAGS.contains(&t) && !t.contains('=') {
             rest.next();
         }
         token = rest.next();
@@ -1646,6 +1656,16 @@ mod tests {
             "C:\\tools\\mcp-remote@1.2.3",
             &["https://x"]
         )));
+        // An option that takes a value, named or not, hands the package
+        // position to the token after its value. Both of these still purge.
+        assert!(is_mcp_remote_shim(&stdio(
+            "npx",
+            &["-w", "some-workspace", "mcp-remote", "https://x"]
+        )));
+        assert!(is_mcp_remote_shim(&stdio(
+            "npx",
+            &["-y", "mcp-remote", "https://x"]
+        )));
         // `yarn dlx` / `pnpm exec` put the package one token further right.
         assert!(is_mcp_remote_shim(&stdio(
             "yarn",
@@ -1702,10 +1722,22 @@ mod tests {
             "npx",
             &["-p", "mcp-remote", "other-server"]
         )));
-        // The `=` form is one token, so its value never looks positional.
+        // The `=` form is one token, so its value never looks positional - and
+        // the option must NOT then eat the real package name after it.
         assert!(!is_mcp_remote_shim(&stdio(
             "npx",
-            &["--package=mcp-remote", "other-server"]
+            &["--package=other", "other-server"]
+        )));
+        assert!(is_mcp_remote_shim(&stdio(
+            "npx",
+            &["--userconfig=/tmp/x", "mcp-remote", "https://x"]
+        )));
+        // An option nobody listed. Assuming it stands alone would put its value
+        // in the package position, which is the deleting direction; assuming it
+        // takes one only risks missing a shim.
+        assert!(!is_mcp_remote_shim(&stdio(
+            "npx",
+            &["--some-future-opt", "mcp-remote", "other-server"]
         )));
         assert!(!is_mcp_remote_shim(&ServerConfig::Http {
             url: "https://mcp.edison.watch/mcp/K/".into(),
