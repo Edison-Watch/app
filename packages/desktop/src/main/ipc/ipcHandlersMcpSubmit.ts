@@ -147,15 +147,33 @@ export function registerMcpSubmitHandlers(): void {
       // as an error, so pass the reason on rather than rendering "no config".
       const message = err instanceof Error ? err.message : String(err);
 
-      // An unmanageable client has no local config, so the failure above is
-      // expected and its message is one the user can do nothing about. Say
-      // what's actually going on instead. The daemon is the authority on which
-      // clients those are, so this asks it - but only here, on a path that has
-      // already failed. Asking up front cost a `list_agents` (a full discovery
-      // pass, plus a workspace hook scan) on every successful read, and the
-      // refresh in AppsStep re-reads every expanded client at once.
+      // A connector-only client fails here every time, with a message the user
+      // can do nothing about. Say what's actually going on.
+      //
+      // BOTH conditions, because either alone names a different set:
+      //
+      //   unmanageable, has a config   Claude Desktop / Cowork - Edison cannot
+      //                                write a URL into a stdio-only file, but
+      //                                reads that file on every scan. Gating on
+      //                                `manageable` alone told those users the
+      //                                file below did not exist.
+      //   manageable, no config path   JetBrains with no IDE installed - it
+      //                                reports zero install targets and is
+      //                                perfectly manageable the moment one
+      //                                appears. Gating on the path alone told
+      //                                them their servers live in an account.
+      //
+      // Only a client that is both is genuinely connector-only. `configPath` is
+      // optional on the wire, so an older daemon omitting it must not on its
+      // own be enough to trigger this.
+      //
+      // The daemon is the authority here, so this asks it - but only on a read
+      // that has already failed. Asking up front cost a `list_agents` (a full
+      // discovery pass, plus a workspace hook scan) on every successful read,
+      // and AppsStep re-reads every expanded client at once on refresh.
       const facts = await getAgentFacts();
-      if (facts?.get(client as McpClientId)?.manageable === false) {
+      const fact = facts?.get(client as McpClientId);
+      if (fact && !fact.configPath && !fact.manageable) {
         const name = CLIENT_DISPLAY[client as McpClientId]?.name ?? client;
         return {
           content:

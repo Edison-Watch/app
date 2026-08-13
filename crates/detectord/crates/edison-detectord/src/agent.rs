@@ -26,10 +26,14 @@ pub trait Agent: Send + Sync {
     /// produces no servers.
     fn is_installed(&self) -> bool;
 
-    /// Whether Edison can manage this agent at all: install the `edison-watch`
-    /// entry, inject hooks, read a config back. False for presence-only agents
-    /// whose MCP servers live in the vendor's account (ChatGPT's Connectors)
-    /// rather than in a file on this machine.
+    /// Whether Edison can install the `edison-watch` entry and inject hooks for
+    /// this agent. False for a host whose MCP servers live in the vendor's
+    /// account (ChatGPT's Connectors), and for one whose config file has no
+    /// shape that can carry a gateway URL (the Claude hosts take stdio only).
+    ///
+    /// Says nothing about reading: an unmanageable agent may still have a
+    /// config Edison parses on every scan — see
+    /// [`config_path`](Agent::config_path).
     ///
     /// Declared, not inferred from an empty
     /// [`edison_installs`](Agent::edison_installs): "no install target right
@@ -74,6 +78,17 @@ pub trait Agent: Send + Sync {
     fn edison_installs(&self, home: &Path) -> Vec<EdisonInstall> {
         let _ = home;
         Vec::new()
+    }
+
+    /// This agent's user-scope config file, for showing and reading back — a
+    /// different question from [`edison_installs`](Agent::edison_installs),
+    /// which says where the `edison-watch` entry may be *written*.
+    ///
+    /// The two coincide for most agents, hence the default. They come apart for
+    /// a host Edison can read but not install into, where deriving one from the
+    /// other would deny a file the daemon parses on every scan.
+    fn config_path(&self, home: &Path) -> Option<PathBuf> {
+        self.edison_installs(home).first().map(|i| i.path.clone())
     }
 
     /// How to inject Edison Watch hooks for this agent under `home`, or `None`

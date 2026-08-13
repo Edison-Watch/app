@@ -165,4 +165,40 @@ describe('mcp:readConfig', () => {
     expect(content).toBeNull()
     expect(error).toBe('permission denied')
   })
+
+  it('does not claim an account holds the servers of a manageable client with no config yet', async () => {
+    // JetBrains reports zero install targets when no IDE is installed, so it
+    // has no config path and is still perfectly manageable the moment one
+    // appears. Keyed on the path alone, this branch told those users their
+    // servers live in an account, which is the opposite of true. `configPath`
+    // is also optional on the wire, so an older daemon omitting it must not be
+    // enough on its own either.
+    facts = new Map([['intellij' as McpClientId, agent({ manageable: true, configPath: null })]])
+    readConfigResult = async () => {
+      throw new Error('permission denied')
+    }
+    const { content, error } = await readConfig(null, 'intellij')
+    expect(content).toBeNull()
+    expect(error).toBe('permission denied')
+  })
+
+  it('does not claim the config is missing for an unmanageable client that has one', async () => {
+    // The Claude hosts are unmanageable - Edison cannot write a gateway URL
+    // into a stdio-only file - and their config still exists and is parsed on
+    // every scan. Keyed on `manageable`, this branch told those users the file
+    // did not exist and there was nothing to protect. It keys on the path now,
+    // which is the question it was always asking.
+    facts = new Map([
+      [
+        'claude-desktop' as McpClientId,
+        agent({ manageable: false, configPath: '/home/u/claude_desktop_config.json' })
+      ]
+    ])
+    readConfigResult = async () => {
+      throw new Error('permission denied')
+    }
+    const { content, error } = await readConfig(null, 'claude-desktop')
+    expect(content).toBeNull()
+    expect(error).toBe('permission denied')
+  })
 })

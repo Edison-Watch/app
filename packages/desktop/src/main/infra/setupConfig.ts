@@ -176,9 +176,16 @@ export function setCustomBackend(apiBaseUrl: string, mcpBaseUrl?: string): Custo
 
 // ── Setup data persistence ──────────────────────────────────────────
 
+/**
+ * Apps Edison configures itself, used as the fallback when a caller names none.
+ *
+ * Excludes every host whose servers Edison cannot install into: ChatGPT, and
+ * the two Claude hosts whose config file takes stdio entries only. The daemon
+ * drops them anyway, but a list here that disagrees with the daemon is a second
+ * answer to the same question waiting to be believed.
+ */
 export const ALL_SUPPORTED_APPS = [
-  "vscode", "cursor", "claude-desktop",
-  "claude-code", "claude-cowork", "windsurf", "zed", "codex",
+  "vscode", "cursor", "claude-code", "windsurf", "zed", "codex",
   "intellij", "pycharm", "webstorm",
 ];
 
@@ -468,20 +475,26 @@ export function getMcpUrl(): string | null {
   return null;
 }
 
+/**
+ * The snippet behind the tray's "Copy MCP config".
+ *
+ * A URL entry rather than an `npx -y mcp-remote <url>` bridge: what the user
+ * pastes is what their client runs on every launch, and that command would
+ * fetch an unpinned npm package with the secret key in `argv`. Clients whose
+ * config file cannot hold a URL are not served by this snippet at all.
+ */
 export function getMcpConfig(): string | null {
   const url = getMcpUrl();
   if (!url) return null;
   const creds = getCredentialsForEnv();
-  const args = ["-y", "mcp-remote", url, "--transport", "http-first"];
-  if (creds?.edisonSecretKey) {
-    args.push("--header", `X-Edison-Secret-Key:${creds.edisonSecretKey}`);
-  }
   const config = {
     servers: {
       edisonwatch: {
-        type: "stdio",
-        command: "npx",
-        args,
+        type: "http",
+        url,
+        ...(creds?.edisonSecretKey
+          ? { headers: { "X-Edison-Secret-Key": creds.edisonSecretKey } }
+          : {}),
       },
     },
   };

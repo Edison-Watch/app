@@ -26,19 +26,35 @@ const status = (over: Record<string, unknown>) => ({
 });
 
 /**
+ * A client Edison can see but not configure. Every setup field goes false
+ * together: there is no gateway entry to install and no hook surface, so a row
+ * that reported "4/4 hooks" here would be describing work nobody did.
+ */
+const unmanaged = (client: string) =>
+  status({
+    client,
+    manageable: false,
+    mcpApplicable: false,
+    hooksApplicable: false,
+    hasHook: false,
+    hookCount: 0,
+    totalHooks: 0,
+    mcpConnected: false,
+    mcpConfigured: false,
+  });
+
+/**
  * The permanent client surface, covering both routes into "Partially
- * Supported" - which are not the same situation.
+ * Supported" - which are not the same situation, and carry different copy.
  *
- * ChatGPT is `manageable: false`: its servers are Connectors in the user's
- * account and there is nothing to configure. Claude Desktop is the opposite -
- * manageable and fully set up - and still lands here, because its account-side
- * Connectors stay unproxied and calling it "Connected" would be the
- * overstatement this state exists to avoid. The two carry different copy.
+ * ChatGPT has nothing local at all: its servers are Connectors in the user's
+ * account, so no manual step would help and the row does not offer one. The
+ * Claude hosts do run local servers - `claude_desktop_config.json` simply takes
+ * stdio entries only, leaving Edison nowhere to write a gateway URL. That one
+ * is actionable, so its row names the route that works.
  *
- * Cowork is connector-backed as well, but mid-setup, and shows the other half
- * of the rule: a fixable problem outranks the caveat, so it reports
- * "Incomplete" rather than hiding a broken gateway behind something permanent
- * that the user cannot act on.
+ * Claude Code, Cursor and VS Code sit alongside as the ordinary case: config
+ * files that accept a URL, so Edison configures them itself.
  */
 export const WithAnUnmanageableClient: Story = {
   decorators: [
@@ -65,30 +81,18 @@ export const WithAnUnmanageableClient: Story = {
           statuses: [
             status({ client: 'claude-code' }),
             status({ client: 'cursor' }),
-            // Manageable and fully set up, so the caveat is what's left to say.
-            status({ client: 'claude-desktop' }),
-            // Manageable but mid-setup: the gateway problem wins over the caveat.
-            status({
-              client: 'claude-cowork',
-              mcpConnected: false,
-            }),
+            // Stdio-only config file: nothing to install, and nothing to score
+            // against setup - but a manual route that does work.
+            unmanaged('claude-desktop'),
+            unmanaged('claude-cowork'),
             status({
               client: 'vscode',
               hasHook: false,
               hookCount: 2,
               mcpConnected: false,
             }),
-            status({
-              client: 'chatgpt',
-              manageable: false,
-              mcpApplicable: false,
-              hooksApplicable: false,
-              hasHook: false,
-              hookCount: 0,
-              totalHooks: 0,
-              mcpConnected: false,
-              mcpConfigured: false,
-            }),
+            // Same row state, different cause: no local servers at all.
+            unmanaged('chatgpt'),
           ],
           daemonUnavailable: false,
         });

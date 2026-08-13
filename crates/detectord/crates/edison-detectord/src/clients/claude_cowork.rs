@@ -2,13 +2,17 @@
 //! Desktop (`claude_desktop_config.json`, key `mcpServers`) but is only active
 //! when a sibling `vm_bundles/` directory exists (Cowork's distinguishing
 //! marker vs. plain Desktop).
+//!
+//! Sharing that file means sharing its limits: stdio entries only, so Edison
+//! installs nothing here either. See `claude_desktop.rs` for why the
+//! `npx -y mcp-remote` bridge that used to paper over this is gone.
 
 use std::path::PathBuf;
 
 use crate::agent::Agent;
 use crate::clients::common::parse_json_servers_map;
 use crate::error::Result;
-use crate::types::{DiscoveredServer, EdisonInstall, EdisonStyle, Scope, SourceKind};
+use crate::types::{DiscoveredServer, Scope, SourceKind};
 use crate::watch::WatchTargets;
 
 const CLIENT_NAME: &str = "claude_cowork";
@@ -71,21 +75,14 @@ impl Agent for ClaudeCowork {
         })
     }
 
-    fn edison_installs(&self, home: &std::path::Path) -> Vec<EdisonInstall> {
-        // Cowork is stdio-only → mcp-remote shim. Install only when present.
-        if !self.is_cowork() {
-            return Vec::new();
-        }
-        config_path_in(home)
-            .map(|path| EdisonInstall {
-                path,
-                key_path: vec!["mcpServers".into()],
-                style: EdisonStyle::StdioShim,
-                client_id: "claude-cowork".into(),
-                prefer_cli: false,
-            })
-            .into_iter()
-            .collect()
+    fn is_manageable(&self) -> bool {
+        false
+    }
+
+    /// Only once Cowork is actually present. The file is Desktop's too, and
+    /// claiming it while inert would show Desktop's servers under Cowork's name.
+    fn config_path(&self, home: &std::path::Path) -> Option<PathBuf> {
+        self.is_cowork().then(|| config_path_in(home)).flatten()
     }
 }
 
@@ -127,5 +124,20 @@ mod tests {
         let servers = ClaudeCowork::from_path(Some(cfg)).discover().unwrap();
         assert_eq!(servers.len(), 1);
         assert_eq!(servers[0].client, CLIENT_NAME);
+    }
+
+    #[test]
+    fn reads_the_config_but_never_writes_to_it() {
+        // Cowork shares Desktop's file, so it inherits the same limit. Being
+        // active (vm_bundles/ present) is the case that used to install.
+        let dir = tempdir().unwrap();
+        let cfg = dir.path().join("claude_desktop_config.json");
+        std::fs::write(&cfg, r#"{"mcpServers":{"c":{"command":"x"}}}"#).unwrap();
+        std::fs::create_dir(dir.path().join("vm_bundles")).unwrap();
+        let agent = ClaudeCowork::from_path(Some(cfg));
+
+        assert!(!agent.discover().unwrap().is_empty());
+        assert!(!agent.is_manageable());
+        assert!(agent.edison_installs(dir.path()).is_empty());
     }
 }

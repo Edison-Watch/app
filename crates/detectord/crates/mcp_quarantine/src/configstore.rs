@@ -493,11 +493,6 @@ pub fn backup_path(path: &Path) -> PathBuf {
 const EDISON_SERVER_NAME: &str = "edison-watch";
 const EDISON_SECRET_HEADER: &str = "X-Edison-Secret-Key";
 
-/// Install the `edison-watch` proxy entry into `inst`'s config (creating the
-/// file if needed, alongside existing servers, with a one-time backup). The URL
-/// is `<mcp_base>/mcp/<api_key>/?client=<client_id>`; when `secret` is set it is
-/// carried in the `X-Edison-Secret-Key` header (or `--header` arg for the stdio
-/// shim).
 /// The edison-watch proxy URL: `<mcp_base>/mcp/<api_key>/?client=<client_id>`.
 pub fn edison_url(mcp_base: &str, api_key: &str, client_id: &str) -> String {
     format!(
@@ -508,6 +503,10 @@ pub fn edison_url(mcp_base: &str, api_key: &str, client_id: &str) -> String {
     )
 }
 
+/// Install the `edison-watch` proxy entry into `inst`'s config (creating the
+/// file if needed, alongside existing servers, with a one-time backup). The URL
+/// is `<mcp_base>/mcp/<api_key>/?client=<client_id>`; when `secret` is set it is
+/// carried in the `X-Edison-Secret-Key` header.
 pub fn install_edison(
     inst: &EdisonInstall,
     mcp_base: &str,
@@ -517,7 +516,6 @@ pub fn install_edison(
     let url = edison_url(mcp_base, api_key, &inst.client_id);
     match inst.style {
         EdisonStyle::Http => install_json(inst, http_entry(&url, secret)),
-        EdisonStyle::StdioShim => install_json(inst, stdio_shim_entry(&url, secret)),
         EdisonStyle::Toml => install_toml(inst, &url, secret),
     }
 }
@@ -530,21 +528,27 @@ fn http_entry(url: &str, secret: Option<&str>) -> Value {
     entry
 }
 
-fn stdio_shim_entry(url: &str, secret: Option<&str>) -> Value {
-    let mut args = vec![json!("-y"), json!("mcp-remote"), json!(url)];
-    if let Some(s) = secret {
-        args.push(json!("--header"));
-        args.push(json!(format!("{EDISON_SECRET_HEADER}: {s}")));
-    }
-    json!({ "command": "npx", "args": args })
-}
-
 /// Remove the `edison-watch` entry from `inst`'s config (no-op if absent).
 pub fn uninstall_edison(inst: &EdisonInstall) -> Result<()> {
     match inst.style {
         EdisonStyle::Toml => uninstall_toml(inst),
-        _ => uninstall_json(inst),
+        // Named rather than `_`, so a third style has to decide for itself
+        // instead of silently inheriting JSON removal. `install_edison` is
+        // exhaustive for the same reason; the pair should fail together.
+        EdisonStyle::Http => uninstall_json(inst),
     }
+}
+
+fn uninstall_json(inst: &EdisonInstall) -> Result<()> {
+    if !inst.path.exists() {
+        return Ok(());
+    }
+    let raw = read(&inst.path)?;
+    let mut root = parse(&raw, &inst.path)?;
+    if let Some(map) = nav_mut(&mut root, &inst.key_path) {
+        map.remove(EDISON_SERVER_NAME);
+    }
+    write(&inst.path, &serialize(&root))
 }
 
 fn ensure_parent(path: &Path) -> Result<()> {
@@ -579,18 +583,6 @@ fn install_json(inst: &EdisonInstall, entry: Value) -> Result<()> {
     nav_create(&mut root, &inst.key_path)
         .ok_or_else(|| Error::NotAnObject(inst.key_path.clone()))?
         .insert(EDISON_SERVER_NAME.to_string(), entry);
-    write(&inst.path, &serialize(&root))
-}
-
-fn uninstall_json(inst: &EdisonInstall) -> Result<()> {
-    if !inst.path.exists() {
-        return Ok(());
-    }
-    let raw = read(&inst.path)?;
-    let mut root = parse(&raw, &inst.path)?;
-    if let Some(map) = nav_mut(&mut root, &inst.key_path) {
-        map.remove(EDISON_SERVER_NAME);
-    }
     write(&inst.path, &serialize(&root))
 }
 
@@ -909,22 +901,20 @@ mod tests {
     }
 
     #[test]
-    fn install_edison_stdio_shim() {
+    fn uninstall_edison_leaves_the_user_servers_alone() {
         let dir = tempdir().unwrap();
-        let cfg = dir.path().join("claude_desktop_config.json");
-        let inst = edison(
+        let cfg = dir.path().join("mcp.json");
+        std::fs::write(
             &cfg,
-            &["mcpServers"],
-            EdisonStyle::StdioShim,
-            "claude-desktop",
-        );
-        install_edison(&inst, "http://localhost:3000", "K", None).unwrap();
+            r#"{"mcpServers":{"edison-watch":{"type":"http","url":"https://x"},"mine":{"command":"x"}}}"#,
+        )
+        .unwrap();
+
+        uninstall_edison(&edison(&cfg, &["mcpServers"], EdisonStyle::Http, "cursor")).unwrap();
+
         let v: Value = serde_json::from_str(&std::fs::read_to_string(&cfg).unwrap()).unwrap();
-        assert_eq!(v["mcpServers"]["edison-watch"]["command"], "npx");
-        assert_eq!(
-            v["mcpServers"]["edison-watch"]["args"][2],
-            "http://localhost:3000/mcp/K/?client=claude-desktop"
-        );
+        assert!(v["mcpServers"].get("edison-watch").is_none());
+        assert!(v["mcpServers"].get("mine").is_some());
     }
 
     #[test]

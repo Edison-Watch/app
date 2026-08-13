@@ -183,13 +183,14 @@ pub struct EdisonInstall {
 }
 
 /// The shape of an installed `edison-watch` entry.
+///
+/// Both variants carry the gateway URL directly, and there is deliberately no
+/// stdio variant: a host whose config file cannot hold a URL is not an install
+/// target (see `clients/claude_desktop.rs`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EdisonStyle {
     /// `{ "type": "http", "url": … }` in a JSON/JSONC file.
     Http,
-    /// `{ "command": "npx", "args": ["-y","mcp-remote", url] }` — for stdio-only
-    /// clients (Claude Desktop / Cowork).
-    StdioShim,
     /// `[mcp_servers.edison-watch]` in a TOML file (Codex).
     Toml,
 }
