@@ -665,7 +665,14 @@ fn is_mcp_remote_shim(config: &ServerConfig) -> bool {
     // Then the package, pinned or not - pinning is the one edit a user might
     // plausibly make to *our* entry, since the floating version is the
     // complaint this change answers.
-    rest.next().is_some_and(is_mcp_remote_token)
+    if !rest.next().is_some_and(is_mcp_remote_token) {
+        return false;
+    }
+    // And then the gateway URL. Edison always wrote one, so an invocation
+    // without it (`npx -y mcp-remote --help`, or the bare package) is someone
+    // else's - and the URL is the whole reason the entry existed.
+    rest.next()
+        .is_some_and(|t| t.starts_with("https://") || t.starts_with("http://"))
 }
 
 /// `mcp-remote`, `mcp-remote@1.2.3`, or either behind a path — the whole of
@@ -1655,6 +1662,11 @@ mod tests {
             stdio("mcp-remote", &["https://x"]),
             stdio("npx", &["--", "mcp-remote", "https://x"]),
             stdio("npx", &["-w", "some-workspace", "mcp-remote", "https://x"]),
+            // The URL is part of the shape: Edison wrote the entry to reach a
+            // gateway, so an invocation with no gateway is not that entry.
+            stdio("npx", &["-y", "mcp-remote"]),
+            stdio("npx", &["-y", "mcp-remote", "--help"]),
+            stdio("npx", &["-y", "mcp-remote", "/local/path"]),
         ] {
             assert!(!is_mcp_remote_shim(&other), "{other:?} is not Edison's");
         }
