@@ -77,14 +77,24 @@ jobs:
         # Pre-creating the release means every publisher instance (now across
         # three OS jobs) finds and reuses it instead of racing to create it.
         # Draft keeps it invisible to auto-updaters until all assets are up.
+        # An existing release is only reused if it is still a DRAFT (a rerun of
+        # a failed attempt keeps the same run_number/tag): once published,
+        # reusing it would let the build jobs upload straight into the public
+        # prerelease.
         run: |
           TAG="v${{ steps.ver.outputs.version }}"
-          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
+          EXISTING_DRAFT=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --json isDraft --jq '.isDraft' 2>/dev/null || true)
+          if [ "$EXISTING_DRAFT" = "false" ]; then
+            echo "::error::release $TAG already exists and is not a draft"
+            exit 1
+          elif [ -z "$EXISTING_DRAFT" ]; then
             gh release create "$TAG" --repo "$GITHUB_REPOSITORY" \
               --target "$GITHUB_SHA" \
               --title "${{ steps.ver.outputs.version }}" \
               --draft --prerelease \
               --notes "Demo prerelease build (run ${{ github.run_number }})"
+          fi
 
   macos:
     name: Build, sign, notarize & upload macOS
@@ -151,9 +161,14 @@ jobs:
         run: npm run build:detectord
 
       - name: Pull edison-stdiod (universal) from stdiod releases
+        env:
+          # Via env, not inline `${{ }}` in the script: the tag string comes
+          # from release metadata, and env assignment keeps it inert data
+          # instead of shell-expanded source.
+          STDIOD_TAG: ${{ needs.draft.outputs.stdiod_tag }}
         run: |
           mkdir -p stdiod-dl bin
-          TAG="${{ needs.draft.outputs.stdiod_tag }}"
+          TAG="$STDIOD_TAG"
           echo "Bundling stdiod release: $TAG"
           gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
             --pattern 'edison-stdiod-macos-universal' \
@@ -191,6 +206,20 @@ jobs:
             [ -n "$found" ] || { echo "::error::$bin missing from packaged app"; exit 1; }
             echo "bundled: $found"
           done
+
+      - name: Verify update artifacts (auto-update sanity)
+        # Same gate as the Windows/Linux jobs: beta-mac.yml must exist and
+        # carry the prerelease version, or electron-updater silently breaks on
+        # macOS once the publish job flips the draft public.
+        run: |
+          set -euo pipefail
+          VERSION="${{ needs.draft.outputs.version }}"
+          YML="dist/beta-mac.yml"
+          test -f "$YML" || { echo "::error::dist/beta-mac.yml missing"; exit 1; }
+          MVER=$(grep -m1 '^version:' "$YML" | awk '{print $2}' | tr -d '\r')
+          [ "$MVER" = "$VERSION" ] || { echo "::error::manifest version '$MVER' != release version '$VERSION'"; exit 1; }
+          ls dist/*.dmg dist/*.zip >/dev/null 2>&1 || { echo "::error::dmg/zip missing"; exit 1; }
+          echo "manifest version: $MVER"
 
   windows:
     name: Build & upload Windows (unsigned)
@@ -361,9 +390,12 @@ jobs:
         # Same tag the macOS job bundles (resolved once in the draft job),
         # using the Linux assets stdiod-release.yml publishes. Staged into
         # bin/stdiod/<arch>/edison-stdiod for linux.extraResources.
+        env:
+          # Via env, not inline `${{ }}` - see the macOS job's step.
+          STDIOD_TAG: ${{ needs.draft.outputs.stdiod_tag }}
         run: |
           mkdir -p stdiod-dl
-          TAG="${{ needs.draft.outputs.stdiod_tag }}"
+          TAG="$STDIOD_TAG"
           echo "Bundling stdiod release: $TAG"
           gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
             --pattern 'edison-stdiod-linux-x64' \

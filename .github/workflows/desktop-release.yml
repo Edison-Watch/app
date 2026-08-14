@@ -70,14 +70,23 @@ jobs:
         # as a draft so every publisher instance finds and reuses it; the
         # publish job flips it public once all assets (incl. the per-platform
         # update manifests) are uploaded.
+        # An existing release is only reused if it is still a DRAFT: on a rerun
+        # after v$VERSION was published, blindly reusing it would let the build
+        # jobs upload straight into the public release.
         run: |
           VERSION="${{ steps.ver.outputs.version }}"
-          gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
+          EXISTING_DRAFT=$(gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" \
+            --json isDraft --jq '.isDraft' 2>/dev/null || true)
+          if [ "$EXISTING_DRAFT" = "false" ]; then
+            echo "::error::release v$VERSION already exists and is not a draft - bump packages/desktop/package.json instead of re-releasing"
+            exit 1
+          elif [ -z "$EXISTING_DRAFT" ]; then
             gh release create "v$VERSION" --repo "$GITHUB_REPOSITORY" \
               --target "$GITHUB_SHA" \
               --title "$VERSION" \
               --draft \
               --notes "Edison Watch $VERSION"
+          fi
 
   macos:
     name: Build, sign, notarize & upload macOS
@@ -181,6 +190,20 @@ jobs:
             [ -n "$found" ] || { echo "::error::$bin missing from packaged app"; exit 1; }
             echo "bundled: $found"
           done
+
+      - name: Verify update artifacts (auto-update sanity)
+        # Same gate as the Windows/Linux jobs: latest-mac.yml must exist and
+        # carry the release version, or electron-updater silently breaks on
+        # macOS once the publish job flips the draft public.
+        run: |
+          set -euo pipefail
+          VERSION="${{ needs.draft.outputs.version }}"
+          YML="dist/latest-mac.yml"
+          test -f "$YML" || { echo "::error::dist/latest-mac.yml missing"; exit 1; }
+          MVER=$(grep -m1 '^version:' "$YML" | awk '{print $2}' | tr -d '\r')
+          [ "$MVER" = "$VERSION" ] || { echo "::error::manifest version '$MVER' != release version '$VERSION'"; exit 1; }
+          ls dist/*.dmg dist/*.zip >/dev/null 2>&1 || { echo "::error::dmg/zip missing"; exit 1; }
+          echo "manifest version: $MVER"
 
   windows:
     name: Build & upload Windows (unsigned)
