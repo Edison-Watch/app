@@ -71,6 +71,15 @@ jobs:
         run: npm run build -w packages/shared
         working-directory: .
 
+      # Caches the cargo registry + dependency artifacts for both daemon
+      # builds below. Running on every push to main also keeps the cache warm
+      # for the Windows release jobs, which share the same rust-cache keys.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            crates/stdiod
+            crates/detectord
+
       - name: Stage bundled Python (x64 + arm64)
         # Downloads + SHA256-verifies the embeddable interpreter into
         # bin/python/<arch>/; win.extraResources copies the matching arch into

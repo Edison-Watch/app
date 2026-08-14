@@ -1,9 +1,10 @@
 name: Build macOS (desktop)
 
 # Upstream TEST build - NOT a release.
-# Pulls the latest published edison-stdiod universal binary from the stdiod
-# releases, bundles it, and produces a universal .dmg/.zip uploaded as an
-# Actions artifact.
+# Builds both daemons (edison-stdiod + edison-detectord) from the checkout,
+# bundles them, and produces a universal .dmg/.zip uploaded as an Actions
+# artifact. Running on every push to main also keeps the cargo caches warm for
+# the release workflows, which share the same rust-cache keys.
 #
 # Signing depends on the trigger:
 #   - pull_request: UNSIGNED. Code signing is the slow part of the build and
@@ -58,8 +59,6 @@ jobs:
       # false => electron-builder produces an unsigned build without probing the
       # keychain for a Developer ID identity (none exists on PR runs).
       CSC_IDENTITY_AUTO_DISCOVERY: ${{ github.event_name == 'push' && secrets.CSC_LINK != '' }}
-      # gh CLI auth for cross-repo public release download.
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       # Demo backend config. Vite's loadEnv() also reads matching keys from the
       # environment, so these flow into the bundle even without ../frontend-v2.
       # Set the DEMO_VITE_* repository variables (Settings > Variables).
@@ -110,7 +109,9 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: crates/detectord
+          workspaces: |
+            crates/stdiod
+            crates/detectord
 
       - name: Build edison-detectord from source
         # Stages crates/detectord's daemon into bin/edison-detectord (arm64).
@@ -119,26 +120,11 @@ jobs:
         # daemon until 0.6.0.
         run: npm run build:detectord
 
-      - name: Pull latest edison-stdiod (universal) from stdiod releases
-        run: |
-          mkdir -p stdiod-dl bin
-          # Releases in this repo are mixed (desktop v*, stdiod stdiod-v*), so
-          # "latest" must be resolved per component, not taken from GitHub's
-          # repo-wide latest.
-          TAG=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 100 \
-            --json tagName --jq '[.[] | select(.tagName | startswith("stdiod-v"))][0].tagName')
-          [ -n "$TAG" ] || { echo "::error::no stdiod-v* release found in $GITHUB_REPOSITORY"; exit 1; }
-          echo "Bundling stdiod release: $TAG"
-          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
-            --pattern 'edison-stdiod-macos-universal' \
-            --pattern 'SHA256SUMS' \
-            --dir stdiod-dl --clobber
-          # Verify integrity against the published checksum before trusting it.
-          ( cd stdiod-dl && grep 'edison-stdiod-macos-universal' SHA256SUMS | shasum -a 256 -c - )
-          cp stdiod-dl/edison-stdiod-macos-universal bin/edison-stdiod
-          chmod +x bin/edison-stdiod
-          xattr -c bin/edison-stdiod || true
-          lipo -info bin/edison-stdiod
+      - name: Build edison-stdiod from source
+        # Universal (arm64 + x86_64, lipo'd) from crates/stdiod, staged into
+        # bin/edison-stdiod for mac.extraResources. Both daemons build from
+        # the checkout - nothing is pulled from stdiod-v* releases any more.
+        run: npm run build:stdiod
 
       - name: Build renderer/main/preload bundles
         run: npm run build:demo

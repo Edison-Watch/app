@@ -40,7 +40,6 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.ver.outputs.version }}
-      stdiod_tag: ${{ steps.stdiod.outputs.tag }}
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
@@ -53,19 +52,6 @@ jobs:
           DEMO="${BASE}-beta.${{ github.run_number }}"
           echo "version=$DEMO" >> "$GITHUB_OUTPUT"
           echo "Demo prerelease version: $DEMO (leads stable, beta channel)"
-
-      - name: Resolve latest stdiod release tag
-        id: stdiod
-        # Resolved ONCE here so the macOS and Linux jobs bundle the same stdiod
-        # build even if a new stdiod release lands mid-run. Releases in this
-        # repo are mixed (desktop v*, stdiod stdiod-v*), so "latest" must be
-        # resolved per component, not taken from GitHub's repo-wide latest.
-        run: |
-          TAG=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 100 \
-            --json tagName --jq '[.[] | select(.tagName | startswith("stdiod-v"))][0].tagName')
-          [ -n "$TAG" ] || { echo "::error::no stdiod-v* release found in $GITHUB_REPOSITORY"; exit 1; }
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "Bundling stdiod release: $TAG"
 
       - name: Pre-create draft prerelease
         # electron-builder races itself creating the GitHub release: artifacts
@@ -151,7 +137,9 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: crates/detectord
+          workspaces: |
+            crates/stdiod
+            crates/detectord
 
       - name: Build edison-detectord from source
         # Stages crates/detectord's daemon into bin/edison-detectord (arm64).
@@ -160,24 +148,12 @@ jobs:
         # daemon until 0.6.0.
         run: npm run build:detectord
 
-      - name: Pull edison-stdiod (universal) from stdiod releases
-        env:
-          # Via env, not inline `${{ }}` in the script: the tag string comes
-          # from release metadata, and env assignment keeps it inert data
-          # instead of shell-expanded source.
-          STDIOD_TAG: ${{ needs.draft.outputs.stdiod_tag }}
-        run: |
-          mkdir -p stdiod-dl bin
-          TAG="$STDIOD_TAG"
-          echo "Bundling stdiod release: $TAG"
-          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
-            --pattern 'edison-stdiod-macos-universal' \
-            --pattern 'SHA256SUMS' \
-            --dir stdiod-dl --clobber
-          ( cd stdiod-dl && grep 'edison-stdiod-macos-universal' SHA256SUMS | shasum -a 256 -c - )
-          cp stdiod-dl/edison-stdiod-macos-universal bin/edison-stdiod
-          chmod +x bin/edison-stdiod
-          xattr -c bin/edison-stdiod || true
+      - name: Build edison-stdiod from source
+        # Universal (arm64 + x86_64, lipo'd) from crates/stdiod, staged into
+        # bin/edison-stdiod for mac.extraResources. Both daemons build from the
+        # checkout on every platform - nothing is pulled from stdiod-v*
+        # releases any more.
+        run: npm run build:stdiod
 
       - name: Build renderer/main/preload bundles (demo mode)
         run: npm run build:demo
@@ -258,15 +234,20 @@ jobs:
         run: npm run build -w packages/shared
         working-directory: .
 
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            crates/stdiod
+            crates/detectord
+
       - name: Stage bundled Python (x64 + arm64)
         # See desktop-build-windows.yml for the rationale on these staging
         # steps; they are identical here.
         run: npm run stage:python
 
       - name: Build edison-stdiod (x64 + arm64)
-        # Native per-arch cargo build from the checked-out crates/stdiod source
-        # (no Windows stdiod binaries are published to reuse). Staged into
-        # bin/stdiod/<arch>/ for win.extraResources.
+        # Native per-arch cargo build from the checked-out crates/stdiod
+        # source, staged into bin/stdiod/<arch>/ for win.extraResources.
         working-directory: crates/stdiod
         run: |
           set -euo pipefail
@@ -373,7 +354,9 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: crates/detectord
+          workspaces: |
+            crates/stdiod
+            crates/detectord
 
       - uses: mlugg/setup-zig@v2
       - uses: taiki-e/install-action@v2
@@ -381,34 +364,15 @@ jobs:
           tool: cargo-zigbuild
 
       - name: Build edison-detectord (static musl, x64 + arm64)
-        # No Linux detectord binaries are published, so build from the checkout.
         # The script cargo-zigbuilds both arches and stages them into
         # bin/detectord/<arch>/edison-detectord for linux.extraResources.
         run: npm run build:detectord:linux
 
-      - name: Pull edison-stdiod (static musl) from stdiod releases
-        # Same tag the macOS job bundles (resolved once in the draft job),
-        # using the Linux assets stdiod-release.yml publishes. Staged into
-        # bin/stdiod/<arch>/edison-stdiod for linux.extraResources.
-        env:
-          # Via env, not inline `${{ }}` - see the macOS job's step.
-          STDIOD_TAG: ${{ needs.draft.outputs.stdiod_tag }}
-        run: |
-          mkdir -p stdiod-dl
-          TAG="$STDIOD_TAG"
-          echo "Bundling stdiod release: $TAG"
-          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
-            --pattern 'edison-stdiod-linux-x64' \
-            --pattern 'edison-stdiod-linux-arm64' \
-            --pattern 'SHA256SUMS-linux' \
-            --dir stdiod-dl --clobber
-          # Verify integrity against the published checksums before trusting them.
-          ( cd stdiod-dl && grep 'edison-stdiod-linux-' SHA256SUMS-linux | sha256sum -c - )
-          for arch in x64 arm64; do
-            mkdir -p "bin/stdiod/$arch"
-            cp "stdiod-dl/edison-stdiod-linux-$arch" "bin/stdiod/$arch/edison-stdiod"
-            chmod +x "bin/stdiod/$arch/edison-stdiod"
-          done
+      - name: Build edison-stdiod (static musl, x64 + arm64)
+        # Same pattern as detectord above: both daemons build from the checkout
+        # on every platform (nothing is pulled from stdiod-v* releases), staged
+        # into bin/stdiod/<arch>/edison-stdiod for linux.extraResources.
+        run: npm run build:stdiod:linux
 
       - name: Build renderer/main/preload bundles (demo mode)
         run: npm run build:demo
