@@ -6,10 +6,11 @@ name: Build Windows (desktop, unsigned demo)
 # unsigned NSIS installer versioned <base>-demo.<run>, sanity-checks the
 # auto-update manifest, and uploads the installers as a workflow artifact.
 #
-# No publish step: this repo's auto-update rides the GitHub provider baked into
-# electron-builder.yml (the monorepo's Cloudflare R2 generic feed does not
-# apply here). Windows releases will join the GitHub-release flow alongside
-# the macOS release workflows when Windows release jobs are added.
+# No publish step: this workflow is the per-push CI gate + test-artifact
+# builder only. Published Windows releases come from the windows jobs in
+# desktop-release.yml (stable) and desktop-release-demo.yml (demo), which
+# mirror these build steps and upload into the shared GitHub Release that
+# auto-update rides (the GitHub provider baked into electron-builder.yml).
 #
 # Unsigned on purpose: NSIS auto-update verifies the package via the sha512 in
 # latest.yml (not Authenticode), so updates apply unsigned - users only see a

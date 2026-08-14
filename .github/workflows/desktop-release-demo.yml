@@ -1,34 +1,104 @@
-name: Release macOS (desktop, demo prerelease)
+name: Release desktop (demo prerelease)
 
 # Manually-triggered DEMO prerelease to GitHub Releases (channel: beta).
-# Builds a signed + NOTARIZED universal macOS app versioned as a prerelease of
-# the NEXT stable: `${package.json version}-beta.${run_number}` (e.g.
-# 0.5.4-beta.137 while stable is 0.5.3). Because that is always semver-greater
-# than the released stable, demo installs only ever update within the demo
-# channel and are never pulled down onto a stable release.
+# One shared draft prerelease collects assets from three per-OS build jobs
+# (macOS signed + notarized; Windows + Linux unsigned - see desktop-release.yml
+# for the signing rationale), and a final gate job flips it public only after
+# ALL platforms uploaded their installers + update manifests (beta.yml for
+# Windows, beta-mac.yml, beta-linux*.yml - per-platform filenames, no
+# collisions on the tag).
 #
-# This is the "manual pre-release" tier. The fast per-commit signed builds
-# (desktop-build-macos.yml, Actions artifacts, NOT published) auto-update TO whatever
-# this workflow publishes - that's why those builds are usable upstream.
+# Versioned as a prerelease of the NEXT stable:
+# `${package.json version}-beta.${run_number}` (e.g. 0.5.4-beta.137 while
+# stable is 0.5.3). Because that is always semver-greater than the released
+# stable, demo installs only ever update within the demo channel and are never
+# pulled down onto a stable release.
+#
+# This is the "manual pre-release" tier. The fast per-commit builds
+# (desktop-build-macos.yml / desktop-build-windows.yml, Actions artifacts, NOT
+# published) auto-update TO whatever this workflow publishes - that's why those
+# builds are usable upstream.
 
 on:
   workflow_dispatch:
     inputs:
       notarize:
-        description: 'Notarize the build (false = faster, signed-only; testers must run xattr -dr com.apple.quarantine to open)'
+        description: 'Notarize the macOS build (false = faster, signed-only; testers must run xattr -dr com.apple.quarantine to open)'
         type: boolean
         default: true
 
 concurrency:
-  group: release-macos-demo
+  group: release-desktop-demo
   cancel-in-progress: false
 
 permissions:
   contents: write # create / publish the prerelease
 
 jobs:
-  release-demo:
-    name: Build, sign, notarize & publish (demo prerelease)
+  draft:
+    name: Pre-create draft prerelease
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+      stdiod_tag: ${{ steps.stdiod.outputs.tag }}
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Compute demo prerelease version
+        id: ver
+        run: |
+          BASE=$(node -p "require('./packages/desktop/package.json').version")
+          DEMO="${BASE}-beta.${{ github.run_number }}"
+          echo "version=$DEMO" >> "$GITHUB_OUTPUT"
+          echo "Demo prerelease version: $DEMO (leads stable, beta channel)"
+
+      - name: Resolve latest stdiod release tag
+        id: stdiod
+        # Resolved ONCE here so the macOS and Linux jobs bundle the same stdiod
+        # build even if a new stdiod release lands mid-run. Releases in this
+        # repo are mixed (desktop v*, stdiod stdiod-v*), so "latest" must be
+        # resolved per component, not taken from GitHub's repo-wide latest.
+        run: |
+          TAG=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 100 \
+            --json tagName --jq '[.[] | select(.tagName | startswith("stdiod-v"))][0].tagName')
+          [ -n "$TAG" ] || { echo "::error::no stdiod-v* release found in $GITHUB_REPOSITORY"; exit 1; }
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Bundling stdiod release: $TAG"
+
+      - name: Pre-create draft prerelease
+        # electron-builder races itself creating the GitHub release: artifacts
+        # finish near-simultaneously, PublishManager spawns multiple
+        # GitHubPublisher instances (async cache-miss race), and both POST
+        # /releases for the same tag - the loser dies with 422 "Published
+        # releases must have a valid tag" and the job fails after a successful
+        # notarization, leaving a half-uploaded release without beta.yml.
+        # Pre-creating the release means every publisher instance (now across
+        # three OS jobs) finds and reuses it instead of racing to create it.
+        # Draft keeps it invisible to auto-updaters until all assets are up.
+        # An existing release is only reused if it is still a DRAFT (a rerun of
+        # a failed attempt keeps the same run_number/tag): once published,
+        # reusing it would let the build jobs upload straight into the public
+        # prerelease.
+        run: |
+          TAG="v${{ steps.ver.outputs.version }}"
+          EXISTING_DRAFT=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --json isDraft --jq '.isDraft' 2>/dev/null || true)
+          if [ "$EXISTING_DRAFT" = "false" ]; then
+            echo "::error::release $TAG already exists and is not a draft"
+            exit 1
+          elif [ -z "$EXISTING_DRAFT" ]; then
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" \
+              --title "${{ steps.ver.outputs.version }}" \
+              --draft --prerelease \
+              --notes "Demo prerelease build (run ${{ github.run_number }})"
+          fi
+
+  macos:
+    name: Build, sign, notarize & upload macOS
+    needs: draft
     runs-on: macos-latest
     defaults:
       run:
@@ -90,15 +160,15 @@ jobs:
         # daemon until 0.6.0.
         run: npm run build:detectord
 
-      - name: Pull latest edison-stdiod (universal) from stdiod releases
+      - name: Pull edison-stdiod (universal) from stdiod releases
+        env:
+          # Via env, not inline `${{ }}` in the script: the tag string comes
+          # from release metadata, and env assignment keeps it inert data
+          # instead of shell-expanded source.
+          STDIOD_TAG: ${{ needs.draft.outputs.stdiod_tag }}
         run: |
           mkdir -p stdiod-dl bin
-          # Releases in this repo are mixed (desktop v*, stdiod stdiod-v*), so
-          # "latest" must be resolved per component, not taken from GitHub's
-          # repo-wide latest.
-          TAG=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 100 \
-            --json tagName --jq '[.[] | select(.tagName | startswith("stdiod-v"))][0].tagName')
-          [ -n "$TAG" ] || { echo "::error::no stdiod-v* release found in $GITHUB_REPOSITORY"; exit 1; }
+          TAG="$STDIOD_TAG"
           echo "Bundling stdiod release: $TAG"
           gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
             --pattern 'edison-stdiod-macos-universal' \
@@ -109,45 +179,19 @@ jobs:
           chmod +x bin/edison-stdiod
           xattr -c bin/edison-stdiod || true
 
-      - name: Compute demo prerelease version
-        id: ver
-        run: |
-          BASE=$(node -p "require('./package.json').version")
-          DEMO="${BASE}-beta.${{ github.run_number }}"
-          echo "version=$DEMO" >> "$GITHUB_OUTPUT"
-          echo "Demo prerelease version: $DEMO (leads stable, beta channel)"
-
       - name: Build renderer/main/preload bundles (demo mode)
         run: npm run build:demo
 
-      - name: Pre-create draft release
-        # electron-builder races itself creating the GitHub release: the dmg
-        # and zip artifacts finish near-simultaneously, PublishManager spawns
-        # two GitHubPublisher instances (async cache-miss race), and both POST
-        # /releases for the same tag - the loser dies with 422 "Published
-        # releases must have a valid tag" and the job fails after a successful
-        # notarization, leaving a half-uploaded release without beta.yml.
-        # Pre-creating the release means every publisher instance finds and
-        # reuses it instead of racing to create it. Draft keeps it invisible
-        # to auto-updaters until all assets (incl. beta.yml) are up.
-        run: |
-          TAG="v${{ steps.ver.outputs.version }}"
-          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
-            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" \
-              --target "$GITHUB_SHA" \
-              --title "${{ steps.ver.outputs.version }}" \
-              --draft --prerelease \
-              --notes "Demo prerelease build (run ${{ github.run_number }})"
-
       - name: Package, sign, notarize & upload prerelease assets
         # extraMetadata.version sets the app/asset/yaml version without editing
-        # package.json. channel: beta writes beta.yml; releaseType: prerelease
-        # marks the GitHub release as a prerelease (both required for the GitHub
-        # provider to resolve the demo channel correctly). Assets go into the
-        # draft pre-created above; the next step flips it public.
+        # package.json. channel: beta writes beta-mac.yml; releaseType:
+        # prerelease marks the GitHub release as a prerelease (both required
+        # for the GitHub provider to resolve the demo channel correctly).
+        # Assets go into the draft pre-created by the draft job; the publish
+        # job flips it public.
         run: |
           npx electron-builder --mac --publish always \
-            -c.extraMetadata.version="${{ steps.ver.outputs.version }}" \
+            -c.extraMetadata.version="${{ needs.draft.outputs.version }}" \
             -c.mac.notarize=${{ inputs.notarize }} \
             -c.publish.channel=beta \
             -c.publish.releaseType=prerelease
@@ -163,8 +207,257 @@ jobs:
             echo "bundled: $found"
           done
 
-      - name: Publish prerelease
-        # All assets + beta.yml are uploaded - make the release visible.
+      - name: Verify update artifacts (auto-update sanity)
+        # Same gate as the Windows/Linux jobs: beta-mac.yml must exist and
+        # carry the prerelease version, or electron-updater silently breaks on
+        # macOS once the publish job flips the draft public.
         run: |
-          gh release edit "v${{ steps.ver.outputs.version }}" \
+          set -euo pipefail
+          VERSION="${{ needs.draft.outputs.version }}"
+          YML="dist/beta-mac.yml"
+          test -f "$YML" || { echo "::error::dist/beta-mac.yml missing"; exit 1; }
+          MVER=$(grep -m1 '^version:' "$YML" | awk '{print $2}' | tr -d '\r')
+          [ "$MVER" = "$VERSION" ] || { echo "::error::manifest version '$MVER' != release version '$VERSION'"; exit 1; }
+          ls dist/*.dmg dist/*.zip >/dev/null 2>&1 || { echo "::error::dmg/zip missing"; exit 1; }
+          echo "manifest version: $MVER"
+
+  windows:
+    name: Build & upload Windows (unsigned)
+    needs: draft
+    runs-on: windows-latest
+    # Natively builds edison-stdiod + edison-detectord for both arches (release
+    # `ring` C-crypto compile) and stages the Python + npx/uvx runtimes.
+    # Mirrors desktop-build-windows.yml, which stays the per-push CI gate.
+    timeout-minutes: 45
+    # Git Bash for the scripted steps. The Python/runtime staging steps run
+    # via npm scripts (-> pwsh).
+    defaults:
+      run:
+        shell: bash
+        working-directory: packages/desktop
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Demo backend config (DEMO_VITE_* repository variables).
+      VITE_DEPLOY_ENV: ${{ vars.DEMO_VITE_DEPLOY_ENV }}
+      VITE_API_BASE_URL: ${{ vars.DEMO_VITE_API_BASE_URL }}
+      VITE_MCP_BASE_URL: ${{ vars.DEMO_VITE_MCP_BASE_URL }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies (workspace root)
+        run: npm ci
+        working-directory: .
+
+      - name: Build @edison-watch/shared
+        run: npm run build -w packages/shared
+        working-directory: .
+
+      - name: Stage bundled Python (x64 + arm64)
+        # See desktop-build-windows.yml for the rationale on these staging
+        # steps; they are identical here.
+        run: npm run stage:python
+
+      - name: Build edison-stdiod (x64 + arm64)
+        # Native per-arch cargo build from the checked-out crates/stdiod source
+        # (no Windows stdiod binaries are published to reuse). Staged into
+        # bin/stdiod/<arch>/ for win.extraResources.
+        working-directory: crates/stdiod
+        run: |
+          set -euo pipefail
+          rustup target add x86_64-pc-windows-msvc aarch64-pc-windows-msvc
+          for spec in "x64:x86_64-pc-windows-msvc" "arm64:aarch64-pc-windows-msvc"; do
+            arch="${spec%%:*}"
+            target="${spec##*:}"
+            echo "Building edison-stdiod for $target ..."
+            cargo build --release --target "$target" --bin edison-stdiod
+            mkdir -p "../../packages/desktop/bin/stdiod/$arch"
+            cp "target/$target/release/edison-stdiod.exe" "../../packages/desktop/bin/stdiod/$arch/edison-stdiod.exe"
+          done
+
+      - name: Build edison-detectord (x64 + arm64)
+        # The cargo binary is mcp_detector_daemon; win.extraResources expects
+        # it staged as bin/detectord/<arch>/edison-detectord.exe.
+        working-directory: crates/detectord
+        run: |
+          set -euo pipefail
+          rustup target add x86_64-pc-windows-msvc aarch64-pc-windows-msvc
+          for spec in "x64:x86_64-pc-windows-msvc" "arm64:aarch64-pc-windows-msvc"; do
+            arch="${spec%%:*}"
+            target="${spec##*:}"
+            echo "Building mcp_detector_daemon for $target ..."
+            cargo build --release --target "$target" --bin mcp_detector_daemon
+            mkdir -p "../../packages/desktop/bin/detectord/$arch"
+            cp "target/$target/release/mcp_detector_daemon.exe" "../../packages/desktop/bin/detectord/$arch/edison-detectord.exe"
+          done
+
+      - name: Stage bundled runtimes (npx/uvx, x64 + arm64)
+        run: npm run stage:runtimes
+
+      - name: Build renderer/main/preload bundles (demo mode)
+        run: npm run build:demo
+
+      - name: Package & upload prerelease assets (unsigned)
+        # channel: beta writes beta.yml (the Windows manifest name on the beta
+        # channel). Assets go into the shared draft; the publish job flips it.
+        run: |
+          npx electron-builder --win --publish always \
+            -c.extraMetadata.version="${{ needs.draft.outputs.version }}" \
+            -c.publish.channel=beta \
+            -c.publish.releaseType=prerelease
+
+      - name: Verify update artifacts (auto-update sanity)
+        # Fail BEFORE the publish job flips the draft public: a wrong version
+        # in beta.yml or a missing installer silently breaks electron-updater.
+        run: |
+          set -euo pipefail
+          VERSION="${{ needs.draft.outputs.version }}"
+          YML="dist/beta.yml"
+          test -f "$YML" || { echo "::error::dist/beta.yml missing"; exit 1; }
+          MVER=$(grep -m1 '^version:' "$YML" | awk '{print $2}' | tr -d '\r')
+          [ "$MVER" = "$VERSION" ] || { echo "::error::manifest version '$MVER' != release version '$VERSION'"; exit 1; }
+          ls dist/*.exe >/dev/null 2>&1 || { echo "::error::no NSIS installer (.exe) produced"; exit 1; }
+          echo "manifest version: $MVER"
+
+  linux:
+    name: Build & upload Linux AppImage (unsigned)
+    needs: draft
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: packages/desktop
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Demo backend config (DEMO_VITE_* repository variables).
+      VITE_DEPLOY_ENV: ${{ vars.DEMO_VITE_DEPLOY_ENV }}
+      VITE_API_BASE_URL: ${{ vars.DEMO_VITE_API_BASE_URL }}
+      VITE_MCP_BASE_URL: ${{ vars.DEMO_VITE_MCP_BASE_URL }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Cache electron-builder downloads
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cache/electron
+            ~/.cache/electron-builder
+          key: ${{ runner.os }}-electron-${{ hashFiles('package-lock.json') }}
+          restore-keys: ${{ runner.os }}-electron-
+
+      - name: Install dependencies (workspace root)
+        run: npm ci
+        working-directory: .
+
+      - name: Build @edison-watch/shared
+        run: npm run build -w packages/shared
+        working-directory: .
+
+      # Static musl for both arches so one binary runs on any distro. zig +
+      # cargo-zigbuild supply the C cross-toolchain `ring` needs for the arm64
+      # cross-build - the exact setup stdiod-release.yml's linux job uses.
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl, aarch64-unknown-linux-musl
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: crates/detectord
+
+      - uses: mlugg/setup-zig@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-zigbuild
+
+      - name: Build edison-detectord (static musl, x64 + arm64)
+        # No Linux detectord binaries are published, so build from the checkout.
+        # The script cargo-zigbuilds both arches and stages them into
+        # bin/detectord/<arch>/edison-detectord for linux.extraResources.
+        run: npm run build:detectord:linux
+
+      - name: Pull edison-stdiod (static musl) from stdiod releases
+        # Same tag the macOS job bundles (resolved once in the draft job),
+        # using the Linux assets stdiod-release.yml publishes. Staged into
+        # bin/stdiod/<arch>/edison-stdiod for linux.extraResources.
+        env:
+          # Via env, not inline `${{ }}` - see the macOS job's step.
+          STDIOD_TAG: ${{ needs.draft.outputs.stdiod_tag }}
+        run: |
+          mkdir -p stdiod-dl
+          TAG="$STDIOD_TAG"
+          echo "Bundling stdiod release: $TAG"
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern 'edison-stdiod-linux-x64' \
+            --pattern 'edison-stdiod-linux-arm64' \
+            --pattern 'SHA256SUMS-linux' \
+            --dir stdiod-dl --clobber
+          # Verify integrity against the published checksums before trusting them.
+          ( cd stdiod-dl && grep 'edison-stdiod-linux-' SHA256SUMS-linux | sha256sum -c - )
+          for arch in x64 arm64; do
+            mkdir -p "bin/stdiod/$arch"
+            cp "stdiod-dl/edison-stdiod-linux-$arch" "bin/stdiod/$arch/edison-stdiod"
+            chmod +x "bin/stdiod/$arch/edison-stdiod"
+          done
+
+      - name: Build renderer/main/preload bundles (demo mode)
+        run: npm run build:demo
+
+      - name: Package & upload prerelease assets (unsigned)
+        # AppImages (x64 + arm64) on the static AppImage runtime (see
+        # electron-builder.yml). channel: beta writes beta-linux*.yml.
+        run: |
+          npx electron-builder --linux --publish always \
+            -c.extraMetadata.version="${{ needs.draft.outputs.version }}" \
+            -c.publish.channel=beta \
+            -c.publish.releaseType=prerelease
+
+      - name: Verify bundled daemons
+        # electron-builder treats a missing extraResources source as a warning,
+        # so assert both daemons actually made it into both unpacked arch dirs.
+        run: |
+          set -euo pipefail
+          for dir in dist/linux-unpacked dist/linux-arm64-unpacked; do
+            for bin in edison-stdiod edison-detectord; do
+              test -f "$dir/resources/bin/$bin" || { echo "::error::$bin missing from $dir"; exit 1; }
+              echo "bundled: $dir/resources/bin/$bin"
+            done
+          done
+
+      - name: Verify update artifacts (auto-update sanity)
+        # beta-linux.yml (x64) + beta-linux-arm64.yml must exist and carry the
+        # prerelease version, or electron-updater silently breaks on Linux.
+        run: |
+          set -euo pipefail
+          VERSION="${{ needs.draft.outputs.version }}"
+          for yml in dist/beta-linux.yml dist/beta-linux-arm64.yml; do
+            test -f "$yml" || { echo "::error::$yml missing"; exit 1; }
+            MVER=$(grep -m1 '^version:' "$yml" | awk '{print $2}' | tr -d '\r')
+            [ "$MVER" = "$VERSION" ] || { echo "::error::$yml version '$MVER' != release version '$VERSION'"; exit 1; }
+            echo "$yml version: $MVER"
+          done
+          ls dist/*.AppImage >/dev/null 2>&1 || { echo "::error::no AppImage produced"; exit 1; }
+
+  publish:
+    name: Publish prerelease
+    # All assets + per-platform beta manifests are uploaded across the three
+    # build jobs - make the prerelease visible.
+    needs: [draft, macos, windows, linux]
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Publish prerelease
+        run: |
+          gh release edit "v${{ needs.draft.outputs.version }}" \
             --repo "$GITHUB_REPOSITORY" --draft=false --prerelease

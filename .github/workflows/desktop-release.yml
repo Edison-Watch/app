@@ -1,9 +1,20 @@
-name: Release macOS (desktop, stable)
+name: Release desktop (stable)
 
 # Manually-triggered STABLE release to GitHub Releases (channel: latest).
-# Builds a signed + NOTARIZED universal macOS app and publishes it as a normal
-# (non-prerelease) GitHub Release. electron-updater on the 'latest' channel picks
-# it up.
+# One shared draft release (tag v<version>) collects assets from three per-OS
+# build jobs, and a final gate job flips it public only after ALL platforms
+# uploaded their installers + update manifests - so electron-updater can never
+# see a half-uploaded release. Per-platform manifest filenames (latest.yml for
+# Windows, latest-mac.yml, latest-linux*.yml) never collide on the tag.
+#
+#   - macos:   signed + NOTARIZED universal .dmg/.zip (unchanged from the
+#              original single-job version of this workflow)
+#   - windows: UNSIGNED NSIS installers (x64 + arm64). NSIS auto-update
+#              verifies packages via the sha512 in latest.yml, not Authenticode,
+#              so updates apply unsigned - users only see a SmartScreen prompt
+#              on first install. Authenticode signing is deferred until before
+#              public release (same stance as desktop-build-windows.yml).
+#   - linux:   unsigned AppImages (x64 + arm64) on the static AppImage runtime.
 #
 # VERSIONING INVARIANT (keeps demo installs on demo, never pulled onto stable):
 #   packages/desktop/package.json `version` is the in-development NEXT stable (e.g.
@@ -23,20 +34,63 @@ on:
         type: boolean
         default: false
       stdiod_tag:
-        description: 'edison-stdiod release tag in this repo to bundle (pin for reproducible stable builds)'
+        description: 'edison-stdiod release tag in this repo to bundle (pin for reproducible stable builds; macOS + Linux only - Windows builds stdiod natively from the checkout since no Windows stdiod binaries are published)'
         type: string
         default: stdiod-v0.0.1
 
 concurrency:
-  group: release-macos-stable
+  group: release-desktop-stable
   cancel-in-progress: false
 
 permissions:
   contents: write # create / publish the GitHub Release
 
 jobs:
-  release:
-    name: Build, sign, notarize & publish (stable)
+  draft:
+    name: Pre-create draft release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Compute release version
+        id: ver
+        run: |
+          VERSION=$(node -p "require('./packages/desktop/package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Stable release version: $VERSION"
+
+      - name: Pre-create draft release
+        # electron-builder races itself creating the GitHub release (multiple
+        # publisher instances per job, and now three OS jobs - see
+        # desktop-release-demo.yml for the 422 details). Pre-create the release
+        # as a draft so every publisher instance finds and reuses it; the
+        # publish job flips it public once all assets (incl. the per-platform
+        # update manifests) are uploaded.
+        # An existing release is only reused if it is still a DRAFT: on a rerun
+        # after v$VERSION was published, blindly reusing it would let the build
+        # jobs upload straight into the public release.
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+          EXISTING_DRAFT=$(gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" \
+            --json isDraft --jq '.isDraft' 2>/dev/null || true)
+          if [ "$EXISTING_DRAFT" = "false" ]; then
+            echo "::error::release v$VERSION already exists and is not a draft - bump packages/desktop/package.json instead of re-releasing"
+            exit 1
+          elif [ -z "$EXISTING_DRAFT" ]; then
+            gh release create "v$VERSION" --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" \
+              --title "$VERSION" \
+              --draft \
+              --notes "Edison Watch $VERSION"
+          fi
+
+  macos:
+    name: Build, sign, notarize & upload macOS
+    needs: draft
     runs-on: macos-latest
     defaults:
       run:
@@ -114,25 +168,11 @@ jobs:
       - name: Build renderer/main/preload bundles (release mode)
         run: npm run build:release
 
-      - name: Pre-create draft release
-        # electron-builder races itself creating the GitHub release (two
-        # publisher instances, both POST /releases, loser 422s - see
-        # desktop-release-demo.yml for details). Pre-create the release as a draft so
-        # every publisher instance finds and reuses it; the last step publishes
-        # it once all assets (incl. latest.yml) are uploaded.
-        run: |
-          VERSION=$(node -p "require('./package.json').version")
-          gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
-            gh release create "v$VERSION" --repo "$GITHUB_REPOSITORY" \
-              --target "$GITHUB_SHA" \
-              --title "$VERSION" \
-              --draft \
-              --notes "Edison Watch $VERSION"
-
       - name: Package, sign, notarize & upload to GitHub Releases
         # Tag = v${version} from package.json. Assets upload into the draft
-        # pre-created above; the next step publishes it (or leaves it a draft
-        # to publish manually in the UI when the publish input is false).
+        # pre-created by the draft job; the publish job flips it public (or
+        # leaves it a draft to publish manually in the UI when the publish
+        # input is false).
         run: |
           echo "Releasing $(node -p "require('./package.json').version")"
           npx electron-builder --mac --publish always \
@@ -151,11 +191,271 @@ jobs:
             echo "bundled: $found"
           done
 
-      - name: Publish release
-        # Only when publish=true; otherwise the draft stays for manual publish
-        # in the UI (safer once Windows/Linux jobs are added - publish once all
-        # are up).
-        if: ${{ inputs.publish }}
+      - name: Verify update artifacts (auto-update sanity)
+        # Same gate as the Windows/Linux jobs: latest-mac.yml must exist and
+        # carry the release version, or electron-updater silently breaks on
+        # macOS once the publish job flips the draft public.
         run: |
-          VERSION=$(node -p "require('./package.json').version")
-          gh release edit "v$VERSION" --repo "$GITHUB_REPOSITORY" --draft=false --latest
+          set -euo pipefail
+          VERSION="${{ needs.draft.outputs.version }}"
+          YML="dist/latest-mac.yml"
+          test -f "$YML" || { echo "::error::dist/latest-mac.yml missing"; exit 1; }
+          MVER=$(grep -m1 '^version:' "$YML" | awk '{print $2}' | tr -d '\r')
+          [ "$MVER" = "$VERSION" ] || { echo "::error::manifest version '$MVER' != release version '$VERSION'"; exit 1; }
+          ls dist/*.dmg dist/*.zip >/dev/null 2>&1 || { echo "::error::dmg/zip missing"; exit 1; }
+          echo "manifest version: $MVER"
+
+  windows:
+    name: Build & upload Windows (unsigned)
+    needs: draft
+    runs-on: windows-latest
+    # Natively builds edison-stdiod + edison-detectord for both arches (release
+    # `ring` C-crypto compile) and stages the Python + npx/uvx runtimes.
+    # Mirrors desktop-build-windows.yml, which stays the per-push CI gate.
+    timeout-minutes: 45
+    # Git Bash for the scripted steps. The Python/runtime staging steps run
+    # via npm scripts (-> pwsh).
+    defaults:
+      run:
+        shell: bash
+        working-directory: packages/desktop
+    env:
+      # electron-builder reads GH_TOKEN to upload assets to the release.
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Stable backend config (RELEASE_VITE_* repository variables).
+      VITE_DEPLOY_ENV: ${{ vars.RELEASE_VITE_DEPLOY_ENV }}
+      VITE_API_BASE_URL: ${{ vars.RELEASE_VITE_API_BASE_URL }}
+      VITE_MCP_BASE_URL: ${{ vars.RELEASE_VITE_MCP_BASE_URL }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies (workspace root)
+        run: npm ci
+        working-directory: .
+
+      - name: Build @edison-watch/shared
+        run: npm run build -w packages/shared
+        working-directory: .
+
+      - name: Stage bundled Python (x64 + arm64)
+        # Downloads + SHA256-verifies the embeddable interpreter into
+        # bin/python/<arch>/; win.extraResources copies the matching arch into
+        # resources/python/. The session hooks need a Python runtime Windows
+        # does not reliably provide. Runs via npm script (-> pwsh).
+        run: npm run stage:python
+
+      - name: Build edison-stdiod (x64 + arm64)
+        # Native per-arch cargo build on the Windows runner. Staged into
+        # packages/desktop/bin/stdiod/<arch>/ so win.extraResources copies the
+        # matching-arch edison-stdiod.exe into resources/bin/. Without this the
+        # packaged app ships with no stdio daemon. NOTE: unlike macOS/Linux,
+        # this builds from the checked-out crates/stdiod source, NOT from the
+        # pinned stdiod_tag release - no Windows stdiod binaries are published.
+        working-directory: crates/stdiod
+        run: |
+          set -euo pipefail
+          rustup target add x86_64-pc-windows-msvc aarch64-pc-windows-msvc
+          for spec in "x64:x86_64-pc-windows-msvc" "arm64:aarch64-pc-windows-msvc"; do
+            arch="${spec%%:*}"
+            target="${spec##*:}"
+            echo "Building edison-stdiod for $target ..."
+            cargo build --release --target "$target" --bin edison-stdiod
+            mkdir -p "../../packages/desktop/bin/stdiod/$arch"
+            cp "target/$target/release/edison-stdiod.exe" "../../packages/desktop/bin/stdiod/$arch/edison-stdiod.exe"
+          done
+
+      - name: Build edison-detectord (x64 + arm64)
+        # Same native per-arch pattern as stdiod above. The cargo binary is
+        # mcp_detector_daemon; win.extraResources expects it staged as
+        # bin/detectord/<arch>/edison-detectord.exe. Without this the packaged
+        # app ships without the detector daemon (electron-builder only warns).
+        working-directory: crates/detectord
+        run: |
+          set -euo pipefail
+          rustup target add x86_64-pc-windows-msvc aarch64-pc-windows-msvc
+          for spec in "x64:x86_64-pc-windows-msvc" "arm64:aarch64-pc-windows-msvc"; do
+            arch="${spec%%:*}"
+            target="${spec##*:}"
+            echo "Building mcp_detector_daemon for $target ..."
+            cargo build --release --target "$target" --bin mcp_detector_daemon
+            mkdir -p "../../packages/desktop/bin/detectord/$arch"
+            cp "target/$target/release/mcp_detector_daemon.exe" "../../packages/desktop/bin/detectord/$arch/edison-detectord.exe"
+          done
+
+      - name: Stage bundled runtimes (npx/uvx, x64 + arm64)
+        # Downloads Node (npx) + uv (uvx) into bin/runtimes/<arch>/;
+        # win.extraResources copies the matching arch into resources/runtimes/.
+        # The stdiod daemon spawns child MCP servers via npx/uvx, which Windows
+        # users often lack. Runs via the npm script (-> pwsh). Mirrors `build:win`.
+        run: npm run stage:runtimes
+
+      - name: Build renderer/main/preload bundles (release mode)
+        run: npm run build:release
+
+      - name: Package & upload to GitHub Releases (unsigned)
+        # Version = package.json, same as the macOS job. Assets upload into the
+        # shared draft; the publish job flips it public.
+        run: |
+          echo "Releasing $(node -p "require('./package.json').version")"
+          npx electron-builder --win --publish always \
+            -c.publish.channel=latest \
+            -c.publish.releaseType=draft
+
+      - name: Verify update artifacts (auto-update sanity)
+        # Fail BEFORE the publish job flips the draft public: a wrong version in
+        # latest.yml or a missing installer silently breaks electron-updater on
+        # Windows.
+        run: |
+          set -euo pipefail
+          VERSION="${{ needs.draft.outputs.version }}"
+          YML="dist/latest.yml"
+          test -f "$YML" || { echo "::error::dist/latest.yml missing"; exit 1; }
+          MVER=$(grep -m1 '^version:' "$YML" | awk '{print $2}' | tr -d '\r')
+          [ "$MVER" = "$VERSION" ] || { echo "::error::manifest version '$MVER' != release version '$VERSION'"; exit 1; }
+          ls dist/*.exe >/dev/null 2>&1 || { echo "::error::no NSIS installer (.exe) produced"; exit 1; }
+          echo "manifest version: $MVER"
+          for f in dist/*.exe; do
+            SIZE_MB=$(( $(wc -c < "$f") / 1024 / 1024 )); echo "installer: $(basename "$f") (${SIZE_MB} MB)"
+          done
+
+  linux:
+    name: Build & upload Linux AppImage (unsigned)
+    needs: draft
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: packages/desktop
+    env:
+      # gh CLI (stdiod download) + electron-builder asset upload.
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Stable backend config (RELEASE_VITE_* repository variables).
+      VITE_DEPLOY_ENV: ${{ vars.RELEASE_VITE_DEPLOY_ENV }}
+      VITE_API_BASE_URL: ${{ vars.RELEASE_VITE_API_BASE_URL }}
+      VITE_MCP_BASE_URL: ${{ vars.RELEASE_VITE_MCP_BASE_URL }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Cache electron-builder downloads
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cache/electron
+            ~/.cache/electron-builder
+          key: ${{ runner.os }}-electron-${{ hashFiles('package-lock.json') }}
+          restore-keys: ${{ runner.os }}-electron-
+
+      - name: Install dependencies (workspace root)
+        run: npm ci
+        working-directory: .
+
+      - name: Build @edison-watch/shared
+        run: npm run build -w packages/shared
+        working-directory: .
+
+      # Static musl for both arches so one binary runs on any distro. zig +
+      # cargo-zigbuild supply the C cross-toolchain `ring` needs for the arm64
+      # cross-build - the exact setup stdiod-release.yml's linux job uses.
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl, aarch64-unknown-linux-musl
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: crates/detectord
+
+      - uses: mlugg/setup-zig@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-zigbuild
+
+      - name: Build edison-detectord (static musl, x64 + arm64)
+        # No Linux detectord binaries are published, so build from the checkout.
+        # The script cargo-zigbuilds both arches and stages them into
+        # bin/detectord/<arch>/edison-detectord for linux.extraResources.
+        run: npm run build:detectord:linux
+
+      - name: Pull pinned edison-stdiod (static musl) from stdiod releases
+        # Same pin as the macOS job, using the Linux assets stdiod-release.yml
+        # publishes alongside the macOS universal binary. Staged into
+        # bin/stdiod/<arch>/edison-stdiod for linux.extraResources.
+        run: |
+          mkdir -p stdiod-dl
+          gh release download "${{ inputs.stdiod_tag }}" --repo "$GITHUB_REPOSITORY" \
+            --pattern 'edison-stdiod-linux-x64' \
+            --pattern 'edison-stdiod-linux-arm64' \
+            --pattern 'SHA256SUMS-linux' \
+            --dir stdiod-dl --clobber
+          # Verify integrity against the published checksums before trusting them.
+          ( cd stdiod-dl && grep 'edison-stdiod-linux-' SHA256SUMS-linux | sha256sum -c - )
+          for arch in x64 arm64; do
+            mkdir -p "bin/stdiod/$arch"
+            cp "stdiod-dl/edison-stdiod-linux-$arch" "bin/stdiod/$arch/edison-stdiod"
+            chmod +x "bin/stdiod/$arch/edison-stdiod"
+          done
+
+      - name: Build renderer/main/preload bundles (release mode)
+        run: npm run build:release
+
+      - name: Package & upload to GitHub Releases (unsigned)
+        # AppImages (x64 + arm64) on the static AppImage runtime (see
+        # electron-builder.yml). Assets + latest-linux*.yml upload into the
+        # shared draft; the publish job flips it public.
+        run: |
+          echo "Releasing $(node -p "require('./package.json').version")"
+          npx electron-builder --linux --publish always \
+            -c.publish.channel=latest \
+            -c.publish.releaseType=draft
+
+      - name: Verify bundled daemons
+        # electron-builder treats a missing extraResources source as a warning,
+        # so assert both daemons actually made it into both unpacked arch dirs.
+        run: |
+          set -euo pipefail
+          for dir in dist/linux-unpacked dist/linux-arm64-unpacked; do
+            for bin in edison-stdiod edison-detectord; do
+              test -f "$dir/resources/bin/$bin" || { echo "::error::$bin missing from $dir"; exit 1; }
+              echo "bundled: $dir/resources/bin/$bin"
+            done
+          done
+
+      - name: Verify update artifacts (auto-update sanity)
+        # latest-linux.yml (x64) + latest-linux-arm64.yml must exist and carry
+        # the release version, or electron-updater silently breaks on Linux.
+        run: |
+          set -euo pipefail
+          VERSION="${{ needs.draft.outputs.version }}"
+          for yml in dist/latest-linux.yml dist/latest-linux-arm64.yml; do
+            test -f "$yml" || { echo "::error::$yml missing"; exit 1; }
+            MVER=$(grep -m1 '^version:' "$yml" | awk '{print $2}' | tr -d '\r')
+            [ "$MVER" = "$VERSION" ] || { echo "::error::$yml version '$MVER' != release version '$VERSION'"; exit 1; }
+            echo "$yml version: $MVER"
+          done
+          ls dist/*.AppImage >/dev/null 2>&1 || { echo "::error::no AppImage produced"; exit 1; }
+
+  publish:
+    name: Publish release
+    # Only when publish=true; otherwise the draft (with all six installers +
+    # manifests) stays for manual publish in the UI.
+    if: ${{ inputs.publish }}
+    needs: [draft, macos, windows, linux]
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Publish release
+        run: |
+          gh release edit "v${{ needs.draft.outputs.version }}" \
+            --repo "$GITHUB_REPOSITORY" --draft=false --latest
