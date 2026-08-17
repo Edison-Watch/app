@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
-# Build the mcp_detector_daemon (edison-detectord) for Apple Silicon (arm64) and
-# stage it into desktop/bin/ so electron-builder's mac.extraResources rule copies
-# it into Contents/Resources/bin/ of the packaged .app.
+# Build the mcp_detector_daemon (edison-detectord) as a universal macOS binary
+# and stage it into desktop/bin/ so electron-builder's mac.extraResources rule
+# copies it into Contents/Resources/bin/ of the packaged .app.
 #
 # Mirrors build-stdiod.sh. The daemon source is the sibling `detectord/` clone
 # (edison-client/detectord). The cargo binary is `mcp_detector_daemon`; we stage
 # it under the friendlier name `edison-detectord` (matching the stdiod naming).
 #
-# arm64-only: we no longer build the x86_64 slice or lipo a universal binary.
-# NOTE: if electron-builder.yml still sets mac.target: universal, the bundled
-# binaries must match: target arm64 there too, or the universal merge fails.
+# Why universal: electron-builder.yml's mac.target ships BOTH arm64 and x64
+# .dmg/.zip. extraResources copies one staged file into both .app bundles, so a
+# thin arm64 daemon would leave the Intel build with a binary it cannot exec.
+# One universal Mach-O satisfies both; each app loads its own slice.
 
 set -euo pipefail
 
@@ -24,7 +25,6 @@ else
   DETECTORD_DIR="$REPO_ROOT/detectord"
 fi
 BIN_NAME="mcp_detector_daemon"
-TARGET="aarch64-apple-darwin"
 OUT_DIR="$CLIENT_DIR/bin"
 OUT_BIN="$OUT_DIR/edison-detectord"
 
@@ -40,17 +40,34 @@ fi
 
 mkdir -p "$OUT_DIR"
 
-if ! rustup target list --installed | grep -q "^${TARGET}\$"; then
-  echo "Installing rustup target $TARGET ..."
-  rustup target add "$TARGET"
-fi
+# Ensure both rustup targets are installed. The user's machine usually has
+# only the host target by default.
+for target in aarch64-apple-darwin x86_64-apple-darwin; do
+  if ! rustup target list --installed | grep -q "^${target}\$"; then
+    echo "Installing rustup target $target ..."
+    rustup target add "$target"
+  fi
+done
 
-echo "Building $BIN_NAME for $TARGET ..."
-( cd "$DETECTORD_DIR" && cargo build --release --bin "$BIN_NAME" --target "$TARGET" )
+echo "Building $BIN_NAME for aarch64-apple-darwin ..."
+( cd "$DETECTORD_DIR" && cargo build --release --bin "$BIN_NAME" --target aarch64-apple-darwin )
 
-echo "Staging binary at $OUT_BIN ..."
-cp "$DETECTORD_DIR/target/$TARGET/release/$BIN_NAME" "$OUT_BIN"
+echo "Building $BIN_NAME for x86_64-apple-darwin ..."
+( cd "$DETECTORD_DIR" && cargo build --release --bin "$BIN_NAME" --target x86_64-apple-darwin )
+
+# Unlink before writing. cargo ad-hoc (linker-)signs its output, and overwriting
+# an existing staged binary IN PLACE leaves the kernel's cached code-signing
+# state pointing at the old contents - every later mmap of that path then dies
+# with SIGKILL "Code Signature Invalid" (CODESIGNING / Invalid Page), including
+# the `lipo -info` below. A fresh inode sidesteps the stale cache.
+rm -f "$OUT_BIN"
+
+echo "Creating universal binary at $OUT_BIN ..."
+lipo -create \
+  "$DETECTORD_DIR/target/aarch64-apple-darwin/release/$BIN_NAME" \
+  "$DETECTORD_DIR/target/x86_64-apple-darwin/release/$BIN_NAME" \
+  -output "$OUT_BIN"
 chmod +x "$OUT_BIN"
 
-echo "Verifying architecture ..."
+echo "Verifying architectures ..."
 lipo -info "$OUT_BIN"

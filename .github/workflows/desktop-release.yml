@@ -1,20 +1,29 @@
 name: Release desktop (stable)
 
 # Manually-triggered STABLE release to GitHub Releases (channel: latest).
-# One shared draft release (tag v<version>) collects assets from three per-OS
-# build jobs, and a final gate job flips it public only after ALL platforms
-# uploaded their installers + update manifests - so electron-updater can never
-# see a half-uploaded release. Per-platform manifest filenames (latest.yml for
-# Windows, latest-mac.yml, latest-linux*.yml) never collide on the tag.
+# One shared draft release (tag v<version>) collects assets from five build jobs
+# (macOS, plus x64/arm64 legs for Windows and Linux), and a final gate job flips
+# it public only after ALL of them uploaded their installers + update manifests -
+# so electron-updater can never see a half-uploaded release. Every manifest
+# filename is distinct on the tag: latest-mac.yml, latest-linux.yml,
+# latest-linux-arm64.yml, latest.yml (Windows x64) and latest-arm64.yml
+# (Windows arm64 - see the PER-ARCH UPDATE CHANNELS note on the windows job).
 #
-#   - macos:   signed + NOTARIZED universal .dmg/.zip (unchanged from the
-#              original single-job version of this workflow)
-#   - windows: UNSIGNED NSIS installers (x64 + arm64). NSIS auto-update
-#              verifies packages via the sha512 in latest.yml, not Authenticode,
-#              so updates apply unsigned - users only see a SmartScreen prompt
-#              on first install. Authenticode signing is deferred until before
-#              public release (same stance as desktop-build-windows.yml).
-#   - linux:   unsigned AppImages (x64 + arm64) on the static AppImage runtime.
+# Both daemons (edison-stdiod, edison-detectord) are built FROM SOURCE out of
+# crates/ in every job, so a release always matches the checked-out commit.
+#
+#   - macos:   signed + NOTARIZED .dmg/.zip for arm64 AND x64, both from one
+#              job (a single electron-builder run, so they share one
+#              latest-mac.yml listing both zips). The bundled daemons are
+#              universal lipo binaries; each .app loads its own slice.
+#   - windows: UNSIGNED NSIS installer, one job per arch. NSIS auto-update
+#              verifies packages via the sha512 in the manifest, not
+#              Authenticode, so updates apply unsigned - users only see a
+#              SmartScreen prompt on first install. Authenticode signing is
+#              deferred until before public release (same stance as
+#              desktop-build-windows.yml).
+#   - linux:   unsigned AppImage, one job per arch, on the static AppImage
+#              runtime.
 #
 # VERSIONING INVARIANT (keeps demo installs on demo, never pulled onto stable):
 #   packages/desktop/package.json `version` is the in-development NEXT stable (e.g.
@@ -33,10 +42,6 @@ on:
         description: 'Publish immediately (true) or upload into a draft to publish manually (false)'
         type: boolean
         default: false
-      stdiod_tag:
-        description: 'edison-stdiod release tag in this repo to bundle (pin for reproducible stable builds; macOS + Linux only - Windows builds stdiod natively from the checkout since no Windows stdiod binaries are published)'
-        type: string
-        default: stdiod-v0.0.1
 
 concurrency:
   group: release-desktop-stable
@@ -143,7 +148,12 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: crates/detectord
+          # Same cache as desktop-build-macos.yml / desktop-release-demo.yml -
+          # identical crates and Darwin targets. See the note there.
+          shared-key: macos-daemons
+          workspaces: |
+            crates/detectord
+            crates/stdiod
 
       - name: Build edison-detectord from source
         # Stages crates/detectord's daemon into bin/edison-detectord (arm64).
@@ -152,18 +162,12 @@ jobs:
         # daemon until 0.6.0.
         run: npm run build:detectord
 
-      - name: Pull pinned edison-stdiod (universal) from stdiod releases
-        run: |
-          mkdir -p stdiod-dl bin
-          # Pinned to a specific tag so a stable release is reproducible.
-          gh release download "${{ inputs.stdiod_tag }}" --repo "$GITHUB_REPOSITORY" \
-            --pattern 'edison-stdiod-macos-universal' \
-            --pattern 'SHA256SUMS' \
-            --dir stdiod-dl --clobber
-          ( cd stdiod-dl && grep 'edison-stdiod-macos-universal' SHA256SUMS | shasum -a 256 -c - )
-          cp stdiod-dl/edison-stdiod-macos-universal bin/edison-stdiod
-          chmod +x bin/edison-stdiod
-          xattr -c bin/edison-stdiod || true
+      - name: Build edison-stdiod from source (universal)
+        # Built from the checkout, same as detectord - no downloading a pinned
+        # published binary, so the release always matches crates/stdiod at this
+        # commit. The script builds both Darwin arches and lipo-merges them into
+        # bin/edison-stdiod for mac.extraResources.
+        run: npm run build:stdiod
 
       - name: Build renderer/main/preload bundles (release mode)
         run: npm run build:release
@@ -182,19 +186,36 @@ jobs:
 
       - name: Verify bundled daemons
         # electron-builder treats a missing extraResources source as a warning,
-        # so assert both daemons actually made it into the packaged .app.
+        # so assert both daemons made it into BOTH arch bundles - and that each
+        # is universal. One staged file is copied verbatim into both .app
+        # bundles, so a thin arm64 daemon would ship an unrunnable binary in the
+        # Intel app and nothing upstream of here would complain.
         run: |
           set -euo pipefail
-          for bin in edison-stdiod edison-detectord; do
-            found=$(find dist -path "*Contents/Resources/bin/$bin" | head -1)
-            [ -n "$found" ] || { echo "::error::$bin missing from packaged app"; exit 1; }
-            echo "bundled: $found"
+          shopt -s nullglob
+          apps=(dist/mac/*.app dist/mac-arm64/*.app)
+          [ ${#apps[@]} -eq 2 ] || {
+            echo "::error::expected 2 .app bundles (x64 + arm64), found ${#apps[@]}"; exit 1; }
+          for app in "${apps[@]}"; do
+            for bin in edison-stdiod edison-detectord; do
+              f="$app/Contents/Resources/bin/$bin"
+              test -f "$f" || { echo "::error::$bin missing from $app"; exit 1; }
+              info=$(lipo -info "$f")
+              case "$info" in
+                *x86_64*arm64*|*arm64*x86_64*) ;;
+                *) echo "::error::$f is not universal: $info"; exit 1 ;;
+              esac
+              echo "bundled: $f -> $info"
+            done
           done
 
       - name: Verify update artifacts (auto-update sanity)
         # Same gate as the Windows/Linux jobs: latest-mac.yml must exist and
         # carry the release version, or electron-updater silently breaks on
-        # macOS once the publish job flips the draft public.
+        # macOS once the publish job flips the draft public. macOS manifests are
+        # NOT arch-suffixed - both arches share latest-mac.yml and
+        # electron-updater picks the zip whose URL matches process.arch, so the
+        # manifest has to list BOTH or one arch silently updates to the other.
         run: |
           set -euo pipefail
           VERSION="${{ needs.draft.outputs.version }}"
@@ -202,17 +223,48 @@ jobs:
           test -f "$YML" || { echo "::error::dist/latest-mac.yml missing"; exit 1; }
           MVER=$(grep -m1 '^version:' "$YML" | awk '{print $2}' | tr -d '\r')
           [ "$MVER" = "$VERSION" ] || { echo "::error::manifest version '$MVER' != release version '$VERSION'"; exit 1; }
-          ls dist/*.dmg dist/*.zip >/dev/null 2>&1 || { echo "::error::dmg/zip missing"; exit 1; }
+          for a in arm64 x64; do
+            ls dist/*-mac-$a.dmg >/dev/null 2>&1 || { echo "::error::no $a .dmg produced"; exit 1; }
+            ls dist/*-$a.zip >/dev/null 2>&1 || { echo "::error::no $a .zip produced"; exit 1; }
+            grep -q -- "-$a.zip" "$YML" || {
+              echo "::error::latest-mac.yml does not list the $a zip - that arch would update to the wrong build"; exit 1; }
+          done
           echo "manifest version: $MVER"
 
   windows:
-    name: Build & upload Windows (unsigned)
+    name: Build & upload Windows ${{ matrix.arch }} (unsigned)
     needs: draft
     runs-on: windows-latest
-    # Natively builds edison-stdiod + edison-detectord for both arches (release
-    # `ring` C-crypto compile) and stages the Python + npx/uvx runtimes.
+    # One job per arch: each leg natively builds edison-stdiod + edison-detectord
+    # for its own arch only (release `ring` C-crypto compile), stages the
+    # matching Python + npx/uvx runtimes, and packages a single-arch installer.
     # Mirrors desktop-build-windows.yml, which stays the per-push CI gate.
+    #
+    # PER-ARCH UPDATE CHANNELS: unlike Linux, electron-builder never arch-suffixes
+    # the Windows update manifest (getArchPrefixForUpdateFile is LINUX-only), so
+    # both legs would emit `latest.yml` and the second upload would clobber the
+    # first. Giving arm64 its own CHANNEL sidesteps that: `latest-arm64` makes
+    # electron-builder write latest-arm64.yml AND bakes `channel: latest-arm64`
+    # into that build's app-update.yml, so arm64 installs poll their own manifest
+    # (electron-updater's getCustomChannelName appends no arch prefix on Windows,
+    # it just uses the channel name it was built with).
     timeout-minutes: 45
+    strategy:
+      # Both arches are required for a complete release, but don't cancel a
+      # healthy leg on the other's failure - one rerun then shows both results.
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            target: x86_64-pc-windows-msvc
+            channel: latest
+            manifest: latest.yml
+            unpacked: win-unpacked
+          - arch: arm64
+            target: aarch64-pc-windows-msvc
+            channel: latest-arm64
+            manifest: latest-arm64.yml
+            unpacked: win-arm64-unpacked
     # Git Bash for the scripted steps. The Python/runtime staging steps run
     # via npm scripts (-> pwsh).
     defaults:
@@ -243,97 +295,154 @@ jobs:
         run: npm run build -w packages/shared
         working-directory: .
 
-      - name: Stage bundled Python (x64 + arm64)
+      - name: Stage bundled Python (${{ matrix.arch }})
         # Downloads + SHA256-verifies the embeddable interpreter into
         # bin/python/<arch>/; win.extraResources copies the matching arch into
         # resources/python/. The session hooks need a Python runtime Windows
         # does not reliably provide. Runs via npm script (-> pwsh).
-        run: npm run stage:python
+        run: npm run stage:python -- -Arch ${{ matrix.arch }}
 
-      - name: Build edison-stdiod (x64 + arm64)
-        # Native per-arch cargo build on the Windows runner. Staged into
-        # packages/desktop/bin/stdiod/<arch>/ so win.extraResources copies the
-        # matching-arch edison-stdiod.exe into resources/bin/. Without this the
-        # packaged app ships with no stdio daemon. NOTE: unlike macOS/Linux,
-        # this builds from the checked-out crates/stdiod source, NOT from the
-        # pinned stdiod_tag release - no Windows stdiod binaries are published.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          # Shared with the windows legs of desktop-release-demo.yml and
+          # desktop-build-windows.yml for the SAME arch - all three compile the
+          # same two crates for the same *-pc-windows-msvc target. Arch stays in
+          # the key for the same reason as the linux legs: the matrix legs build
+          # different targets and cache entries are immutable per key.
+          # No toolchain step here on purpose - windows runners ship rustup, and
+          # the cargo steps below just `rustup target add` onto it.
+          shared-key: windows-daemons-${{ matrix.arch }}
+          workspaces: |
+            crates/detectord
+            crates/stdiod
+
+      - name: Build edison-stdiod (${{ matrix.arch }})
+        # Native cargo build on the Windows runner, this leg's arch only. Staged
+        # into packages/desktop/bin/stdiod/<arch>/ so win.extraResources copies
+        # the matching-arch edison-stdiod.exe into resources/bin/. Without this
+        # the packaged app ships with no stdio daemon.
         working-directory: crates/stdiod
         run: |
           set -euo pipefail
-          rustup target add x86_64-pc-windows-msvc aarch64-pc-windows-msvc
-          for spec in "x64:x86_64-pc-windows-msvc" "arm64:aarch64-pc-windows-msvc"; do
-            arch="${spec%%:*}"
-            target="${spec##*:}"
-            echo "Building edison-stdiod for $target ..."
-            cargo build --release --target "$target" --bin edison-stdiod
-            mkdir -p "../../packages/desktop/bin/stdiod/$arch"
-            cp "target/$target/release/edison-stdiod.exe" "../../packages/desktop/bin/stdiod/$arch/edison-stdiod.exe"
-          done
+          rustup target add ${{ matrix.target }}
+          echo "Building edison-stdiod for ${{ matrix.target }} ..."
+          cargo build --release --target "${{ matrix.target }}" --bin edison-stdiod
+          mkdir -p "../../packages/desktop/bin/stdiod/${{ matrix.arch }}"
+          cp "target/${{ matrix.target }}/release/edison-stdiod.exe" \
+            "../../packages/desktop/bin/stdiod/${{ matrix.arch }}/edison-stdiod.exe"
 
-      - name: Build edison-detectord (x64 + arm64)
-        # Same native per-arch pattern as stdiod above. The cargo binary is
+      - name: Build edison-detectord (${{ matrix.arch }})
+        # Same native pattern as stdiod above. The cargo binary is
         # mcp_detector_daemon; win.extraResources expects it staged as
         # bin/detectord/<arch>/edison-detectord.exe. Without this the packaged
         # app ships without the detector daemon (electron-builder only warns).
         working-directory: crates/detectord
         run: |
           set -euo pipefail
-          rustup target add x86_64-pc-windows-msvc aarch64-pc-windows-msvc
-          for spec in "x64:x86_64-pc-windows-msvc" "arm64:aarch64-pc-windows-msvc"; do
-            arch="${spec%%:*}"
-            target="${spec##*:}"
-            echo "Building mcp_detector_daemon for $target ..."
-            cargo build --release --target "$target" --bin mcp_detector_daemon
-            mkdir -p "../../packages/desktop/bin/detectord/$arch"
-            cp "target/$target/release/mcp_detector_daemon.exe" "../../packages/desktop/bin/detectord/$arch/edison-detectord.exe"
-          done
+          rustup target add ${{ matrix.target }}
+          echo "Building mcp_detector_daemon for ${{ matrix.target }} ..."
+          cargo build --release --target "${{ matrix.target }}" --bin mcp_detector_daemon
+          mkdir -p "../../packages/desktop/bin/detectord/${{ matrix.arch }}"
+          cp "target/${{ matrix.target }}/release/mcp_detector_daemon.exe" \
+            "../../packages/desktop/bin/detectord/${{ matrix.arch }}/edison-detectord.exe"
 
-      - name: Stage bundled runtimes (npx/uvx, x64 + arm64)
+      - name: Stage bundled runtimes (npx/uvx, ${{ matrix.arch }})
         # Downloads Node (npx) + uv (uvx) into bin/runtimes/<arch>/;
         # win.extraResources copies the matching arch into resources/runtimes/.
         # The stdiod daemon spawns child MCP servers via npx/uvx, which Windows
-        # users often lack. Runs via the npm script (-> pwsh). Mirrors `build:win`.
-        run: npm run stage:runtimes
+        # users often lack. Runs via the npm script (-> pwsh). Mirrors
+        # `build:win:${{ matrix.arch }}`.
+        run: npm run stage:runtimes -- -Arch ${{ matrix.arch }}
 
       - name: Build renderer/main/preload bundles (release mode)
         run: npm run build:release
 
       - name: Package & upload to GitHub Releases (unsigned)
         # Version = package.json, same as the macOS job. Assets upload into the
-        # shared draft; the publish job flips it public.
+        # shared draft; the publish job flips it public. Single-arch build, on
+        # this leg's own update channel (see the PER-ARCH UPDATE CHANNELS note
+        # at the top of this job).
+        #
+        # `-c.win.target=nsis` is LOAD-BEARING, not redundant with --${{ matrix.arch }}:
+        # electron-builder.yml's win.target lists BOTH arches, and when a target
+        # entry carries its own arch list the CLI --x64/--arm64 flag does NOT
+        # restrict it - the leg would build both arches, with the other arch's
+        # daemons unstaged (a WARNING only, so it would ship a daemon-less
+        # installer) and both legs racing to upload the same assets. Collapsing
+        # the target to its string form drops the arch list so the CLI flag
+        # governs. nsis.* options live under the top-level `nsis:` key, so
+        # artifactName and friends are unaffected.
         run: |
-          echo "Releasing $(node -p "require('./package.json').version")"
-          npx electron-builder --win --publish always \
-            -c.publish.channel=latest \
+          echo "Releasing $(node -p "require('./package.json').version") (${{ matrix.arch }})"
+          npx electron-builder --win --${{ matrix.arch }} --publish always \
+            -c.win.target=nsis \
+            -c.publish.channel=${{ matrix.channel }} \
             -c.publish.releaseType=draft
+
+      - name: Verify bundled daemons
+        # electron-builder treats a missing extraResources source as a warning,
+        # so assert both daemons actually made it into the packaged app.
+        run: |
+          set -euo pipefail
+          for bin in edison-stdiod.exe edison-detectord.exe; do
+            found="dist/${{ matrix.unpacked }}/resources/bin/$bin"
+            test -f "$found" || { echo "::error::$bin missing from $found"; exit 1; }
+            echo "bundled: $found"
+          done
 
       - name: Verify update artifacts (auto-update sanity)
         # Fail BEFORE the publish job flips the draft public: a wrong version in
-        # latest.yml or a missing installer silently breaks electron-updater on
-        # Windows.
+        # the manifest or a missing installer silently breaks electron-updater on
+        # Windows. Each leg checks its OWN channel manifest.
         run: |
           set -euo pipefail
           VERSION="${{ needs.draft.outputs.version }}"
-          YML="dist/latest.yml"
-          test -f "$YML" || { echo "::error::dist/latest.yml missing"; exit 1; }
+          YML="dist/${{ matrix.manifest }}"
+          test -f "$YML" || { echo "::error::$YML missing"; exit 1; }
           MVER=$(grep -m1 '^version:' "$YML" | awk '{print $2}' | tr -d '\r')
           [ "$MVER" = "$VERSION" ] || { echo "::error::manifest version '$MVER' != release version '$VERSION'"; exit 1; }
-          ls dist/*.exe >/dev/null 2>&1 || { echo "::error::no NSIS installer (.exe) produced"; exit 1; }
+          # The installer name carries the arch (nsis.artifactName), and
+          # electron-updater resolves the download by matching process.arch
+          # against the URL - so a manifest listing the wrong arch would hand
+          # users the other build.
+          ls dist/*-${{ matrix.arch }}-setup.exe >/dev/null 2>&1 || {
+            echo "::error::no ${{ matrix.arch }} NSIS installer produced"; exit 1; }
           echo "manifest version: $MVER"
-          for f in dist/*.exe; do
+          for f in dist/*-${{ matrix.arch }}-setup.exe; do
             SIZE_MB=$(( $(wc -c < "$f") / 1024 / 1024 )); echo "installer: $(basename "$f") (${SIZE_MB} MB)"
           done
 
   linux:
-    name: Build & upload Linux AppImage (unsigned)
+    name: Build & upload Linux ${{ matrix.arch }} AppImage (unsigned)
     needs: draft
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    # One job per arch. Unlike Windows, no channel gymnastics are needed here:
+    # electron-builder arch-suffixes the Linux update manifest natively
+    # (latest-linux.yml / latest-linux-arm64.yml), so the two legs publish
+    # non-colliding assets on the shared `latest` channel.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            # appimageArch: what ${arch} expands to in appImage.artifactName.
+            # electron-builder rewrites x64 -> x86_64 for AppImage/rpm/flatpak
+            # (builder-util getArtifactArchName); arm64 is left alone. NSIS .exe
+            # names get no such rewrite, which is why the windows job just uses
+            # matrix.arch.
+            appimageArch: x86_64
+            manifest: latest-linux.yml
+            unpacked: linux-unpacked
+          - arch: arm64
+            appimageArch: arm64
+            manifest: latest-linux-arm64.yml
+            unpacked: linux-arm64-unpacked
     defaults:
       run:
         working-directory: packages/desktop
     env:
-      # gh CLI (stdiod download) + electron-builder asset upload.
+      # electron-builder asset upload.
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       # Stable backend config (RELEASE_VITE_* repository variables).
       VITE_DEPLOY_ENV: ${{ vars.RELEASE_VITE_DEPLOY_ENV }}
@@ -365,90 +474,96 @@ jobs:
         run: npm run build -w packages/shared
         working-directory: .
 
-      # Static musl for both arches so one binary runs on any distro. zig +
-      # cargo-zigbuild supply the C cross-toolchain `ring` needs for the arm64
-      # cross-build - the exact setup stdiod-release.yml's linux job uses.
+      # Static musl so one binary runs on any distro. zig + cargo-zigbuild supply
+      # the C cross-toolchain `ring` needs when this leg's arch differs from the
+      # runner's - the exact setup stdiod-release.yml's linux job uses.
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: x86_64-unknown-linux-musl, aarch64-unknown-linux-musl
 
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: crates/detectord
+          # Shared with desktop-release-demo.yml's linux leg for the SAME arch.
+          # The arch MUST stay in the key: the two matrix legs compile different
+          # musl targets, and cache entries are immutable per key - one shared
+          # key would let whichever leg finished first win the save, leaving the
+          # other restoring a cache with none of its own target artifacts.
+          shared-key: linux-daemons-${{ matrix.arch }}
+          workspaces: |
+            crates/detectord
+            crates/stdiod
 
       - uses: mlugg/setup-zig@v2
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-zigbuild
 
-      - name: Build edison-detectord (static musl, x64 + arm64)
+      - name: Build edison-detectord (static musl, ${{ matrix.arch }})
         # No Linux detectord binaries are published, so build from the checkout.
-        # The script cargo-zigbuilds both arches and stages them into
+        # TARGET_ARCHES restricts the script to this leg's arch; it stages into
         # bin/detectord/<arch>/edison-detectord for linux.extraResources.
         run: npm run build:detectord:linux
+        env:
+          TARGET_ARCHES: ${{ matrix.arch }}
 
-      - name: Pull pinned edison-stdiod (static musl) from stdiod releases
-        # Same pin as the macOS job, using the Linux assets stdiod-release.yml
-        # publishes alongside the macOS universal binary. Staged into
-        # bin/stdiod/<arch>/edison-stdiod for linux.extraResources.
-        run: |
-          mkdir -p stdiod-dl
-          gh release download "${{ inputs.stdiod_tag }}" --repo "$GITHUB_REPOSITORY" \
-            --pattern 'edison-stdiod-linux-x64' \
-            --pattern 'edison-stdiod-linux-arm64' \
-            --pattern 'SHA256SUMS-linux' \
-            --dir stdiod-dl --clobber
-          # Verify integrity against the published checksums before trusting them.
-          ( cd stdiod-dl && grep 'edison-stdiod-linux-' SHA256SUMS-linux | sha256sum -c - )
-          for arch in x64 arm64; do
-            mkdir -p "bin/stdiod/$arch"
-            cp "stdiod-dl/edison-stdiod-linux-$arch" "bin/stdiod/$arch/edison-stdiod"
-            chmod +x "bin/stdiod/$arch/edison-stdiod"
-          done
+      - name: Build edison-stdiod (static musl, ${{ matrix.arch }})
+        # Built from the checkout, same as detectord - no downloading a pinned
+        # published binary, so the release always matches crates/stdiod at this
+        # commit. Stages into bin/stdiod/<arch>/edison-stdiod for
+        # linux.extraResources.
+        run: npm run build:stdiod:linux
+        env:
+          TARGET_ARCHES: ${{ matrix.arch }}
 
       - name: Build renderer/main/preload bundles (release mode)
         run: npm run build:release
 
       - name: Package & upload to GitHub Releases (unsigned)
-        # AppImages (x64 + arm64) on the static AppImage runtime (see
-        # electron-builder.yml). Assets + latest-linux*.yml upload into the
-        # shared draft; the publish job flips it public.
+        # Single-arch AppImage on the static AppImage runtime (see
+        # electron-builder.yml). Asset + this arch's latest-linux*.yml upload
+        # into the shared draft; the publish job flips it public.
+        #
+        # `-c.linux.target=AppImage` is LOAD-BEARING - see the equivalent note on
+        # the windows job. Without it the config's arch list wins over
+        # --${{ matrix.arch }} and this leg builds both AppImages.
         run: |
-          echo "Releasing $(node -p "require('./package.json').version")"
-          npx electron-builder --linux --publish always \
+          echo "Releasing $(node -p "require('./package.json').version") (${{ matrix.arch }})"
+          npx electron-builder --linux --${{ matrix.arch }} --publish always \
+            -c.linux.target=AppImage \
             -c.publish.channel=latest \
             -c.publish.releaseType=draft
 
       - name: Verify bundled daemons
         # electron-builder treats a missing extraResources source as a warning,
-        # so assert both daemons actually made it into both unpacked arch dirs.
+        # so assert both daemons actually made it into the unpacked app.
         run: |
           set -euo pipefail
-          for dir in dist/linux-unpacked dist/linux-arm64-unpacked; do
-            for bin in edison-stdiod edison-detectord; do
-              test -f "$dir/resources/bin/$bin" || { echo "::error::$bin missing from $dir"; exit 1; }
-              echo "bundled: $dir/resources/bin/$bin"
-            done
+          dir="dist/${{ matrix.unpacked }}"
+          for bin in edison-stdiod edison-detectord; do
+            test -f "$dir/resources/bin/$bin" || { echo "::error::$bin missing from $dir"; exit 1; }
+            echo "bundled: $dir/resources/bin/$bin"
           done
 
       - name: Verify update artifacts (auto-update sanity)
-        # latest-linux.yml (x64) + latest-linux-arm64.yml must exist and carry
-        # the release version, or electron-updater silently breaks on Linux.
+        # This leg's manifest (latest-linux.yml for x64, latest-linux-arm64.yml
+        # for arm64) must exist and carry the release version, or
+        # electron-updater silently breaks on Linux.
         run: |
           set -euo pipefail
           VERSION="${{ needs.draft.outputs.version }}"
-          for yml in dist/latest-linux.yml dist/latest-linux-arm64.yml; do
-            test -f "$yml" || { echo "::error::$yml missing"; exit 1; }
-            MVER=$(grep -m1 '^version:' "$yml" | awk '{print $2}' | tr -d '\r')
-            [ "$MVER" = "$VERSION" ] || { echo "::error::$yml version '$MVER' != release version '$VERSION'"; exit 1; }
-            echo "$yml version: $MVER"
-          done
-          ls dist/*.AppImage >/dev/null 2>&1 || { echo "::error::no AppImage produced"; exit 1; }
+          YML="dist/${{ matrix.manifest }}"
+          test -f "$YML" || { echo "::error::$YML missing"; exit 1; }
+          MVER=$(grep -m1 '^version:' "$YML" | awk '{print $2}' | tr -d '\r')
+          [ "$MVER" = "$VERSION" ] || { echo "::error::$YML version '$MVER' != release version '$VERSION'"; exit 1; }
+          echo "$YML version: $MVER"
+          ls dist/*-${{ matrix.appimageArch }}.AppImage >/dev/null 2>&1 || {
+            echo "::error::no ${{ matrix.arch }} AppImage produced"; exit 1; }
 
   publish:
     name: Publish release
-    # Only when publish=true; otherwise the draft (with all six installers +
-    # manifests) stays for manual publish in the UI.
+    # Only when publish=true; otherwise the draft (with every installer +
+    # manifest) stays for manual publish in the UI. `needs` lists the matrix
+    # jobs by name, so ALL legs of windows/linux must succeed first.
     if: ${{ inputs.publish }}
     needs: [draft, macos, windows, linux]
     runs-on: ubuntu-latest
