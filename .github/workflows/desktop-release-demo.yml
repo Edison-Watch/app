@@ -8,7 +8,8 @@ name: Release desktop (demo prerelease)
 # manifests. Every manifest filename is distinct on the tag: beta-mac.yml,
 # beta-linux.yml, beta-linux-arm64.yml, beta.yml (Windows x64) and
 # beta-arm64.yml (Windows arm64 - see the PER-ARCH UPDATE CHANNELS note on the
-# windows job).
+# windows job). The windows-manifest job then rewrites beta.yml to list BOTH
+# Windows installers, because that is the manifest every Windows install polls.
 #
 # Both daemons (edison-stdiod, edison-detectord) are built FROM SOURCE out of
 # crates/ in every job, so a prerelease always matches the checked-out commit.
@@ -240,9 +241,15 @@ jobs:
     # update manifest (getArchPrefixForUpdateFile is LINUX-only), so both legs
     # would emit `beta.yml` and the second upload would clobber the first. The
     # arm64 leg therefore rides its own channel - `beta-arm64` writes
-    # beta-arm64.yml and bakes `channel: beta-arm64` into that build's
-    # app-update.yml, so arm64 installs poll their own manifest. Same scheme as
+    # beta-arm64.yml, so both legs upload non-colliding assets. Same scheme as
     # desktop-release.yml's latest / latest-arm64.
+    #
+    # That split is a BUILD-TIME convenience only - beta-arm64.yml is unreachable
+    # at runtime. On a prerelease channel GitHubProvider derives the channel from
+    # the resolved tag's prerelease id (0.6.5-beta.7 -> `beta`), overriding both
+    # autoUpdater.channel and the channel baked into app-update.yml, so EVERY
+    # Windows demo install polls beta.yml. The windows-manifest job below merges
+    # the arm64 entry into beta.yml; without it arm64 users get the x64 installer.
     timeout-minutes: 45
     strategy:
       fail-fast: false
@@ -369,6 +376,45 @@ jobs:
           ls dist/*-${{ matrix.arch }}-setup.exe >/dev/null 2>&1 || {
             echo "::error::no ${{ matrix.arch }} NSIS installer produced"; exit 1; }
           echo "manifest version: $MVER"
+
+  windows-manifest:
+    name: Merge Windows update manifests
+    # Both Windows legs are done, so beta.yml (x64) and beta-arm64.yml are on the
+    # draft. Rewrite beta.yml to list BOTH installers: it is the only Windows
+    # manifest demo installs ever fetch (see the PER-ARCH UPDATE CHANNELS note
+    # above), and electron-updater picks the download by matching process.arch
+    # against the file url, which nsis.artifactName carries.
+    needs: [draft, windows]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Merge beta-arm64.yml into beta.yml
+        # js-yaml goes into a temp dir (no workspace install needed - this job
+        # builds nothing) and the script is copied next to it so `require`
+        # resolves. The script validates versions + one installer per arch and
+        # fails the job rather than publishing a manifest that strands an arch.
+        run: |
+          set -euo pipefail
+          TAG="v${{ needs.draft.outputs.version }}"
+          WORK="$(mktemp -d)"
+          cp packages/desktop/scripts/merge-win-update-manifest.cjs "$WORK/"
+          cd "$WORK"
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern beta.yml --pattern beta-arm64.yml
+          npm install --silent --no-save --no-package-lock --no-audit --no-fund js-yaml@4.1.0
+          node merge-win-update-manifest.cjs \
+            beta.yml beta-arm64.yml merged/beta.yml "${{ needs.draft.outputs.version }}"
+          gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber merged/beta.yml
+          echo "--- published beta.yml ---"
+          cat merged/beta.yml
 
   linux:
     name: Build & upload Linux ${{ matrix.arch }} AppImage (unsigned)
@@ -509,9 +555,9 @@ jobs:
   publish:
     name: Publish prerelease
     # All assets + per-platform beta manifests are uploaded across the build
-    # jobs (macOS, plus both arch legs of Windows and Linux) - make the
-    # prerelease visible.
-    needs: [draft, macos, windows, linux]
+    # jobs (macOS, plus both arch legs of Windows and Linux) and beta.yml carries
+    # both Windows installers (windows-manifest) - make the prerelease visible.
+    needs: [draft, macos, windows, windows-manifest, linux]
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

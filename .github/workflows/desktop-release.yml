@@ -8,6 +8,8 @@ name: Release desktop (stable)
 # filename is distinct on the tag: latest-mac.yml, latest-linux.yml,
 # latest-linux-arm64.yml, latest.yml (Windows x64) and latest-arm64.yml
 # (Windows arm64 - see the PER-ARCH UPDATE CHANNELS note on the windows job).
+# The windows-manifest job then rewrites latest.yml to list BOTH Windows
+# installers, because that is the manifest every Windows install actually polls.
 #
 # Both daemons (edison-stdiod, edison-detectord) are built FROM SOURCE out of
 # crates/ in every job, so a release always matches the checked-out commit.
@@ -244,10 +246,16 @@ jobs:
     # the Windows update manifest (getArchPrefixForUpdateFile is LINUX-only), so
     # both legs would emit `latest.yml` and the second upload would clobber the
     # first. Giving arm64 its own CHANNEL sidesteps that: `latest-arm64` makes
-    # electron-builder write latest-arm64.yml AND bakes `channel: latest-arm64`
-    # into that build's app-update.yml, so arm64 installs poll their own manifest
-    # (electron-updater's getCustomChannelName appends no arch prefix on Windows,
-    # it just uses the channel name it was built with).
+    # electron-builder write latest-arm64.yml (electron-updater's
+    # getCustomChannelName appends no arch prefix on Windows, it just uses the
+    # channel name it was built with), so both legs upload non-colliding assets.
+    #
+    # Splitting the BUILD channels does NOT split what installed builds poll:
+    # updateManager.ts pins autoUpdater.channel to this build environment
+    # ('latest'), which GitHubProvider prefers over the channel baked into
+    # app-update.yml - so arm64 installs ask for latest.yml too. The
+    # windows-manifest job below therefore merges the arm64 entry INTO latest.yml;
+    # without it arm64 users are offered the x64 installer.
     timeout-minutes: 45
     strategy:
       # Both arches are required for a complete release, but don't cancel a
@@ -412,6 +420,48 @@ jobs:
             SIZE_MB=$(( $(wc -c < "$f") / 1024 / 1024 )); echo "installer: $(basename "$f") (${SIZE_MB} MB)"
           done
 
+  windows-manifest:
+    name: Merge Windows update manifests
+    # Both Windows legs are done, so latest.yml (x64) and latest-arm64.yml are on
+    # the draft. Rewrite latest.yml to list BOTH installers: that is the manifest
+    # every Windows install polls (see the PER-ARCH UPDATE CHANNELS note above),
+    # and electron-updater picks the download by matching process.arch against the
+    # file url, which nsis.artifactName carries.
+    #
+    # NOT gated on inputs.publish: the draft must be correct before anything makes
+    # it public, including a human hitting "Publish release" in the UI later.
+    needs: [draft, windows]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Merge latest-arm64.yml into latest.yml
+        # js-yaml goes into a temp dir (no workspace install needed - this job
+        # builds nothing) and the script is copied next to it so `require`
+        # resolves. The script validates versions + one installer per arch and
+        # fails the job rather than publishing a manifest that strands an arch.
+        run: |
+          set -euo pipefail
+          TAG="v${{ needs.draft.outputs.version }}"
+          WORK="$(mktemp -d)"
+          cp packages/desktop/scripts/merge-win-update-manifest.cjs "$WORK/"
+          cd "$WORK"
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern latest.yml --pattern latest-arm64.yml
+          npm install --silent --no-save --no-package-lock --no-audit --no-fund js-yaml@4.1.0
+          node merge-win-update-manifest.cjs \
+            latest.yml latest-arm64.yml merged/latest.yml "${{ needs.draft.outputs.version }}"
+          gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber merged/latest.yml
+          echo "--- published latest.yml ---"
+          cat merged/latest.yml
+
   linux:
     name: Build & upload Linux ${{ matrix.arch }} AppImage (unsigned)
     needs: draft
@@ -563,9 +613,11 @@ jobs:
     name: Publish release
     # Only when publish=true; otherwise the draft (with every installer +
     # manifest) stays for manual publish in the UI. `needs` lists the matrix
-    # jobs by name, so ALL legs of windows/linux must succeed first.
+    # jobs by name, so ALL legs of windows/linux must succeed first -
+    # windows-manifest included, or the release could go public with a latest.yml
+    # that only offers the x64 installer.
     if: ${{ inputs.publish }}
-    needs: [draft, macos, windows, linux]
+    needs: [draft, macos, windows, windows-manifest, linux]
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

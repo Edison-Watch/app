@@ -97,6 +97,16 @@ function emit(): void {
  * while 0.5.3 is stable), so on the beta channel they only ever update to newer
  * demo prereleases and never get pulled down onto a stable release. `dev` isn't
  * packaged, so the updater never runs there.
+ *
+ * NOT arch-aware, deliberately. The Windows release legs BUILD on split channels
+ * ('latest'/'latest-arm64', 'beta'/'beta-arm64') so their manifests don't collide
+ * on the release, but arm64 installs still poll the unsuffixed manifest: this
+ * channel wins over the one baked into app-update.yml, and on the beta channel
+ * GitHubProvider overrides both with the resolved tag's prerelease id ('beta'),
+ * so '<channel>-arm64' is unreachable there no matter what is set here. The
+ * release workflows therefore merge both Windows installers into the shared
+ * latest.yml / beta.yml (windows-manifest job + scripts/merge-win-update-manifest.cjs)
+ * and electron-updater matches process.arch against the file url to pick one.
  */
 function updateChannel(): 'latest' | 'beta' {
   return getBuildDefaultEnv() === 'release' ? 'latest' : 'beta'
