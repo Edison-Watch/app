@@ -12,8 +12,8 @@
 use std::sync::{Arc, Mutex};
 
 use anyhow::{anyhow, bail, Context, Result};
-use sealgate_tunnel_protocol::TunnelFrame;
 use futures_util::{SinkExt, StreamExt};
+use sealgate_tunnel_protocol::TunnelFrame;
 use thiserror::Error;
 use tokio::net::TcpStream;
 use tokio::sync::mpsc;

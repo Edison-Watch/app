@@ -14,7 +14,7 @@ pub mod seen_store;
 mod statedb;
 
 pub use configstore::{
-    ConfigStore, FileConfigStore, QuarantineRecord, backup_path, sealgate_url, install_sealgate,
+    ConfigStore, FileConfigStore, QuarantineRecord, backup_path, install_sealgate, sealgate_url,
     uninstall_sealgate,
 };
 pub use error::{Error, Result};

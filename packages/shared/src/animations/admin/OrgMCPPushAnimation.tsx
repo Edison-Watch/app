@@ -11,7 +11,14 @@
  * 10s loop. Pure SVG + CSS. Respects `prefers-reduced-motion`.
  */
 
-import { ADMIN_PATH, SealGateLogo, FlowLine, McpPacket, ProgressBar, VerdictBadge } from '../_shared'
+import {
+  ADMIN_PATH,
+  SealGateLogo,
+  FlowLine,
+  McpPacket,
+  ProgressBar,
+  VerdictBadge
+} from '../_shared'
 import {
   OUTLOOK_SVG,
   OUTLOOK_SVG_VIEWBOX,

@@ -22,7 +22,11 @@
  *   </div>
  */
 
-import { SEALGATE_E_PATH, SEALGATE_FRAME_PATH, SEALGATE_LOGO_VIEWBOX } from '../../svg/sealgate-logo-svg'
+import {
+  SEALGATE_E_PATH,
+  SEALGATE_FRAME_PATH,
+  SEALGATE_LOGO_VIEWBOX
+} from '../../svg/sealgate-logo-svg'
 import { McpIcon, ORANGE, ProgressBar } from '../_shared'
 
 const CSS = `

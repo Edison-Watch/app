@@ -8,8 +8,8 @@
 
 use std::path::{Path, PathBuf};
 
-use sealgate_detectord::{HookBinding, HookInstall, HookScriptKind, HookStyle};
 use regex::Regex;
+use sealgate_detectord::{HookBinding, HookInstall, HookScriptKind, HookStyle};
 use serde_json::{Map, Value, json};
 
 use crate::configstore::{backup_path, parse, read, serialize, write};

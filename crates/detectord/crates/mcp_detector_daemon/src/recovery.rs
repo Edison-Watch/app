@@ -4,8 +4,8 @@
 
 use std::path::{Path, PathBuf};
 
-use sealgate_detectord::{LocationExtra, SourceKind};
 use mcp_quarantine::{ConfigStore, FileConfigStore, QuarantineRecord};
+use sealgate_detectord::{LocationExtra, SourceKind};
 
 use crate::agents;
 

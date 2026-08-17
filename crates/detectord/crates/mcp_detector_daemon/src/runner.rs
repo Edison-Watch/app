@@ -10,7 +10,6 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use sealgate_detectord::{Agent, DiscoveredServer, ServerConfig, fingerprint};
 use mcp_backend::{BackendClient, KnownStatus};
 use mcp_quarantine::{
     Action as SeenAction, ConfigStore, FileConfigStore, Policy, QuarantineRecord, ReconcileAction,
@@ -18,6 +17,7 @@ use mcp_quarantine::{
 };
 use notify::RecursiveMode;
 use notify_debouncer_full::{DebounceEventResult, new_debouncer};
+use sealgate_detectord::{Agent, DiscoveredServer, ServerConfig, fingerprint};
 use tokio::sync::broadcast;
 
 use crate::agents;

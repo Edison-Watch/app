@@ -4,7 +4,7 @@
 use std::path::{Path, PathBuf};
 
 use crate::error::Result;
-use crate::types::{DiscoveredServer, SealGateInstall, HookInstall};
+use crate::types::{DiscoveredServer, HookInstall, SealGateInstall};
 use crate::watch::WatchTargets;
 
 /// A source of MCP server configuration that the daemon can observe.

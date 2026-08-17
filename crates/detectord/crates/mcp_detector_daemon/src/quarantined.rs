@@ -3,8 +3,8 @@
 
 use serde::{Deserialize, Serialize};
 
-use sealgate_detectord::ServerConfig;
 use mcp_quarantine::QuarantineRecord;
+use sealgate_detectord::ServerConfig;
 
 use crate::paths;
 

@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use crate::agent::Agent;
 use crate::clients::common::parse_json_servers_map;
 use crate::error::Result;
-use crate::types::{DiscoveredServer, SealGateInstall, SealGateStyle, Scope, SourceKind};
+use crate::types::{DiscoveredServer, Scope, SealGateInstall, SealGateStyle, SourceKind};
 use crate::watch::WatchTargets;
 
 const CLIENT_NAME: &str = "windsurf";

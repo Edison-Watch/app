@@ -13,8 +13,8 @@ use crate::clients::common::{read_strict_json, servers_from_map};
 use crate::clients::{detect_transport, server_config_from_value};
 use crate::error::{Error, Result};
 use crate::types::{
-    ConfigLocation, DiscoveredServer, SealGateInstall, SealGateStyle, HookBinding, HookInstall,
-    HookScriptKind, HookStyle, LocationExtra, Scope, SourceKind,
+    ConfigLocation, DiscoveredServer, HookBinding, HookInstall, HookScriptKind, HookStyle,
+    LocationExtra, Scope, SealGateInstall, SealGateStyle, SourceKind,
 };
 use crate::watch::WatchTargets;
 

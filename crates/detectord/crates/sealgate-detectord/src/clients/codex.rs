@@ -9,8 +9,8 @@ use crate::agent::Agent;
 use crate::clients::common::servers_from_map;
 use crate::error::Result;
 use crate::types::{
-    DiscoveredServer, SealGateInstall, SealGateStyle, HookBinding, HookInstall, HookScriptKind,
-    HookStyle, Scope, SourceKind,
+    DiscoveredServer, HookBinding, HookInstall, HookScriptKind, HookStyle, Scope, SealGateInstall,
+    SealGateStyle, SourceKind,
 };
 use crate::watch::WatchTargets;
 

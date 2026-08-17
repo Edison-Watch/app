@@ -71,7 +71,7 @@ jargon; **user-visible text may not**.
 | ---------------------------------------------- | ----------------------------------------------------------------------------------------------- |
 | Lethal trifecta                                | "Three-way risk" or label the three corners (private data / outside content / outbound channel) |
 | MCP / MCP server                               | "Connector" or the tool name ("Slack connector")                                                |
-| MCP proxy                                      | "SealGate Gateway" (canonical)                                                                    |
+| MCP proxy                                      | "SealGate Gateway" (canonical)                                                                  |
 | Prompt injection                               | "Hidden instructions in content" / "poisoned content"                                           |
 | Jailbreak                                      | "Bypasses the agent's rules"                                                                    |
 | Tool call / tool-use                           | Name the action: "send email", "read file"                                                      |

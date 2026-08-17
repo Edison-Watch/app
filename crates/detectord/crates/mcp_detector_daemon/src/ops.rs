@@ -5,12 +5,12 @@ use std::path::PathBuf;
 use std::sync::LazyLock;
 
 use anyhow::Context;
-use sealgate_detectord::{DiscoveredServer, SealGateInstall, ServerConfig, fingerprint};
 use mcp_backend::{BackendClient, Error as BackendError, KnownStatus, SubmitRequest};
 use mcp_quarantine::{
     Action as SeenAction, ConfigStore, FileConfigStore, QuarantineRecord, SeenStore,
     is_sealgate_entry,
 };
+use sealgate_detectord::{DiscoveredServer, SealGateInstall, ServerConfig, fingerprint};
 
 use crate::agents;
 use crate::enrollment::Enrollment;
@@ -452,8 +452,11 @@ pub async fn enroll(
     retain_manageable(&mut new_agents);
     let mcp_base_url =
         mcp_base_url.or_else(|| existing.as_ref().and_then(|e| e.mcp_base_url.clone()));
-    let sealgate_secret_key =
-        secret.or_else(|| existing.as_ref().and_then(|e| e.sealgate_secret_key.clone()));
+    let sealgate_secret_key = secret.or_else(|| {
+        existing
+            .as_ref()
+            .and_then(|e| e.sealgate_secret_key.clone())
+    });
     // `armed` is a straight set (not additive): the UI arms enforcement when
     // onboarding completes; a missing value keeps the prior state.
     let armed = armed.unwrap_or_else(|| existing.as_ref().map(|e| e.armed).unwrap_or(false));
@@ -780,9 +783,7 @@ fn install_sealgate_entries_for(
 ) -> Vec<IntegrationChange> {
     let Some(mcp_base) = e.mcp_base_url.as_deref() else {
         if !wanted.is_empty() {
-            tracing::warn!(
-                "agents selected but no mcp_base_url set — skipping sealgate install"
-            );
+            tracing::warn!("agents selected but no mcp_base_url set — skipping sealgate install");
         }
         return Vec::new();
     };
@@ -1353,7 +1354,9 @@ mod tests {
             "error should name the path: {err}"
         );
     }
-    use sealgate_detectord::{ConfigLocation, SealGateStyle, HttpKind, Scope, SourceKind, Transport};
+    use sealgate_detectord::{
+        ConfigLocation, HttpKind, Scope, SealGateStyle, SourceKind, Transport,
+    };
     use std::path::PathBuf;
 
     fn install(path: &str, key_path: &[&str]) -> SealGateInstall {

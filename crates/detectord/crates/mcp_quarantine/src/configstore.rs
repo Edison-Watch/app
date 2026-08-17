@@ -22,8 +22,8 @@
 use std::path::{Path, PathBuf};
 
 use sealgate_detectord::{
-    ConfigLocation, SealGateInstall, SealGateStyle, HttpKind, LocationExtra, ServerConfig, SourceKind,
-    StateShape,
+    ConfigLocation, HttpKind, LocationExtra, SealGateInstall, SealGateStyle, ServerConfig,
+    SourceKind, StateShape,
 };
 use serde_json::{Map, Value, json};
 
@@ -910,7 +910,13 @@ mod tests {
         )
         .unwrap();
 
-        uninstall_sealgate(&sealgate(&cfg, &["mcpServers"], SealGateStyle::Http, "cursor")).unwrap();
+        uninstall_sealgate(&sealgate(
+            &cfg,
+            &["mcpServers"],
+            SealGateStyle::Http,
+            "cursor",
+        ))
+        .unwrap();
 
         let v: Value = serde_json::from_str(&std::fs::read_to_string(&cfg).unwrap()).unwrap();
         assert!(v["mcpServers"].get("sealgate").is_none());

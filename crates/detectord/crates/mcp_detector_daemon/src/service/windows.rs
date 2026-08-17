@@ -330,7 +330,11 @@ mod tests {
 
     #[test]
     fn render_task_xml_enforce_vs_report() {
-        let e = render_task_xml(Path::new(r"C:\Apps\sealgate-detectord.exe"), r"WS\dimi", true);
+        let e = render_task_xml(
+            Path::new(r"C:\Apps\sealgate-detectord.exe"),
+            r"WS\dimi",
+            true,
+        );
         assert!(e.contains(r"<Command>C:\Apps\sealgate-detectord.exe</Command>"));
         assert!(e.contains("<Arguments>daemon --enforce</Arguments>"));
         assert!(e.contains("<LogonTrigger>"));

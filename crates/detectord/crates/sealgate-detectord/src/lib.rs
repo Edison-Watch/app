@@ -70,8 +70,8 @@ pub use agent::Agent;
 pub use error::{Error, Result};
 pub use fingerprint::fingerprint;
 pub use types::{
-    ChangeEvent, ConfigLocation, DiscoveredServer, SealGateInstall, SealGateStyle, HookBinding,
-    HookInstall, HookScriptKind, HookStyle, HttpKind, LocationExtra, OpaqueReason, Scope,
+    ChangeEvent, ConfigLocation, DiscoveredServer, HookBinding, HookInstall, HookScriptKind,
+    HookStyle, HttpKind, LocationExtra, OpaqueReason, Scope, SealGateInstall, SealGateStyle,
     ServerConfig, SourceKind, StateShape, Transport,
 };
 pub use watch::{WatchDir, WatchTargets};

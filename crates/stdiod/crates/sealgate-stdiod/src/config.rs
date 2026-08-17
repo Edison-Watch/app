@@ -297,7 +297,9 @@ impl Resolved {
                         .flatten()
                 })
             } else {
-                overrides.sealgate_secret_key.or(persisted.sealgate_secret_key)
+                overrides
+                    .sealgate_secret_key
+                    .or(persisted.sealgate_secret_key)
             },
             device_id: if has_legacy_override {
                 overrides.device_id.or_else(|| {
@@ -541,7 +543,10 @@ mod tests {
         assert_eq!(selected.kind(), CredentialKind::LegacyApiKey);
         assert_eq!(selected.token(), "flag-key");
         assert_eq!(merged.backend_url.as_deref(), Some("https://other.test"));
-        assert_eq!(merged.sealgate_secret_key.as_deref(), Some("explicit-secret"));
+        assert_eq!(
+            merged.sealgate_secret_key.as_deref(),
+            Some("explicit-secret")
+        );
         assert_eq!(merged.device_id.as_deref(), Some("explicit-device"));
     }
 

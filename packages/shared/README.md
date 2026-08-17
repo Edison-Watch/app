@@ -69,18 +69,18 @@ TLDR: import the subpath you need; see [`package.json`](package.json) `exports` 
 
 Each entrypoint is independently tree-shakeable.
 
-| Entrypoint                                    | Contents                                     |
-| --------------------------------------------- | -------------------------------------------- |
-| `@sealgate/shared`                              | Root barrel re-exporting the public surface  |
-| `@sealgate/shared/ui` and `@sealgate/shared/ui/*` | React UI components                          |
-| `@sealgate/shared/hooks/*`                      | React hooks                                  |
-| `@sealgate/shared/theme/tokens.css`             | SealGate design tokens (CSS custom properties) |
-| `@sealgate/shared/animations`                   | Product and security SVG animations          |
-| `@sealgate/shared/svg`                          | SVG asset path/string exports                |
-| `@sealgate/shared/auth`                         | Browser auth and Supabase client             |
-| `@sealgate/shared/config`                       | Client/runtime environment configuration     |
-| `@sealgate/shared/crypto`                       | Client-side crypto utilities                 |
-| `@sealgate/shared/agent-registry`               | Canonical agent icon and metadata registry   |
+| Entrypoint                                        | Contents                                       |
+| ------------------------------------------------- | ---------------------------------------------- |
+| `@sealgate/shared`                                | Root barrel re-exporting the public surface    |
+| `@sealgate/shared/ui` and `@sealgate/shared/ui/*` | React UI components                            |
+| `@sealgate/shared/hooks/*`                        | React hooks                                    |
+| `@sealgate/shared/theme/tokens.css`               | SealGate design tokens (CSS custom properties) |
+| `@sealgate/shared/animations`                     | Product and security SVG animations            |
+| `@sealgate/shared/svg`                            | SVG asset path/string exports                  |
+| `@sealgate/shared/auth`                           | Browser auth and Supabase client               |
+| `@sealgate/shared/config`                         | Client/runtime environment configuration       |
+| `@sealgate/shared/crypto`                         | Client-side crypto utilities                   |
+| `@sealgate/shared/agent-registry`                 | Canonical agent icon and metadata registry     |
 
 </details>
 

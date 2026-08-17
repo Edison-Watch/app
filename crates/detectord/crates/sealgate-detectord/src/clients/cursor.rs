@@ -22,8 +22,8 @@ use crate::clients::common::{file_uri_to_path, read_strict_json, servers_from_ma
 use crate::clients::statedb::read_state_db_value;
 use crate::error::Result;
 use crate::types::{
-    ConfigLocation, DiscoveredServer, SealGateInstall, SealGateStyle, HookBinding, HookInstall,
-    HookScriptKind, HookStyle, HttpKind, LocationExtra, OpaqueReason, Scope, ServerConfig,
+    ConfigLocation, DiscoveredServer, HookBinding, HookInstall, HookScriptKind, HookStyle,
+    HttpKind, LocationExtra, OpaqueReason, Scope, SealGateInstall, SealGateStyle, ServerConfig,
     SourceKind, StateShape, Transport,
 };
 use crate::watch::{WatchDir, WatchTargets};
