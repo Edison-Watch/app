@@ -1,7 +1,7 @@
 /**
  * Org-approved MCP push animation - horizontal layout.
  *
- * Left: 3 employee laptops. Center: Edison Gateway. Right: Outlook MCP.
+ * Left: 3 employee laptops. Center: SealGate Gateway. Right: Outlook MCP.
  *
  * Phase 1 - Admin toggles on the Outlook MCP in the gateway.
  * Phase 2 - Outlook icons magically appear on each laptop screen.
@@ -11,7 +11,7 @@
  * 10s loop. Pure SVG + CSS. Respects `prefers-reduced-motion`.
  */
 
-import { ADMIN_PATH, EdisonLogo, FlowLine, McpPacket, ProgressBar, VerdictBadge } from '../_shared'
+import { ADMIN_PATH, SealGateLogo, FlowLine, McpPacket, ProgressBar, VerdictBadge } from '../_shared'
 import {
   OUTLOOK_SVG,
   OUTLOOK_SVG_VIEWBOX,
@@ -307,7 +307,7 @@ export default function OrgMCPPushAnimation(): React.ReactNode {
               strokeOpacity="0.3"
               strokeWidth="0.8"
             />
-            <EdisonLogo x={30} y={y + 6} w={20} h={19} />
+            <SealGateLogo x={30} y={y + 6} w={20} h={19} />
             <text
               x={43}
               y={y + 62}
@@ -351,7 +351,7 @@ export default function OrgMCPPushAnimation(): React.ReactNode {
           />
         </g>
 
-        {/* ===== All 3 MCP icons appearing on each laptop (below Edison logo, centered) ===== */}
+        {/* ===== All 3 MCP icons appearing on each laptop (below SealGate logo, centered) ===== */}
         {/* Employee A */}
         <g className="om-mcp1">
           <svg
@@ -434,7 +434,7 @@ export default function OrgMCPPushAnimation(): React.ReactNode {
           />
         </g>
 
-        {/* ===== EDISON GATEWAY PANEL (center) ===== */}
+        {/* ===== SEALGATE GATEWAY PANEL (center) ===== */}
         <rect
           className="om-panel-glow"
           x={150}
@@ -461,9 +461,9 @@ export default function OrgMCPPushAnimation(): React.ReactNode {
           fontFamily="system-ui,sans-serif"
           fillOpacity="0.6"
         >
-          Edison Gateway
+          SealGate Gateway
         </text>
-        <EdisonLogo x={298} y={44} w={22} h={21} />
+        <SealGateLogo x={298} y={44} w={22} h={21} />
 
         {/* MCP server entry rows */}
         <rect

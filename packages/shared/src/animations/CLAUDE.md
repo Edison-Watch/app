@@ -25,17 +25,17 @@ metaphors below; don't reinvent.
 
 Canonical implementations - copy from these.
 
-- **A. Admin sets policy → packets route through Edison → verdict
+- **A. Admin sets policy → packets route through SealGate → verdict
   badge.** The dominant arc. `admin/OrgMCPPushAnimation.tsx`.
-- **B. Before/after Edison.** Color encodes time: `ORANGE`=pre-Edison,
-  `var(--accent)`=Edison-mediated. Split-screen
+- **B. Before/after SealGate.** Color encodes time: `ORANGE`=pre-SealGate,
+  `var(--accent)`=SealGate-mediated. Split-screen
   (`feature/StdioVsHttpAnimation.tsx`) vs phase-swap with packet recolor
   at the gateway (`admin/AdminFleetAnimation.tsx:111-115`).
 - **C. Lethal trifecta.** Three-corner Agent↔Attacker↔Email loop,
-  broken by inserting Edison on one edge.
+  broken by inserting SealGate on one edge.
   `threat/TrifectaDefenseAnimation.tsx`.
 - **D. Encryption.** Orange open padlock + plaintext → accent closed
-  padlock + `$EDISON$1$…` cipher. `feature/KeyEncryptionAnimation.tsx`.
+  padlock + `$SEALGATE$1$…` cipher. `feature/KeyEncryptionAnimation.tsx`.
 - **E. Visibility.** Eye-slash (`DANGER`) ↔ eye (`var(--accent)`) swap
   - dashed vision rays.
     `admin/AdminFleetBlindAnimation.tsx#AdminNoVisibilityOverlay`.
@@ -49,8 +49,8 @@ Infrastructure` / `Deno Sandbox`.
   pips. `admin/ScalePilotAnimation.tsx:214-271`. Department names -
   Engineering / Sales / Finance / Legal / HR.
 
-Labels carry meaning - don't drift: "Edison Gateway", "Edison Watch",
-"Edison On-Prem", "Edison Cloud", "Edison Databases".
+Labels carry meaning - don't drift: "SealGate Gateway", "SealGate",
+"SealGate On-Prem", "SealGate Cloud", "SealGate Databases".
 
 ## Copywriting
 
@@ -71,7 +71,7 @@ jargon; **user-visible text may not**.
 | ---------------------------------------------- | ----------------------------------------------------------------------------------------------- |
 | Lethal trifecta                                | "Three-way risk" or label the three corners (private data / outside content / outbound channel) |
 | MCP / MCP server                               | "Connector" or the tool name ("Slack connector")                                                |
-| MCP proxy                                      | "Edison Gateway" (canonical)                                                                    |
+| MCP proxy                                      | "SealGate Gateway" (canonical)                                                                    |
 | Prompt injection                               | "Hidden instructions in content" / "poisoned content"                                           |
 | Jailbreak                                      | "Bypasses the agent's rules"                                                                    |
 | Tool call / tool-use                           | Name the action: "send email", "read file"                                                      |
@@ -90,7 +90,7 @@ Rules:
 1. **One clause per caption**, <=8 words. Two ideas - en-dash.
 2. **Define an acronym before animating it.** If `MCP` or `RBAC` must
    appear, the first phase caption spells it once, then it's free.
-3. **One name per concept.** `Edison Gateway` stays - don't drift to
+3. **One name per concept.** `SealGate Gateway` stays - don't drift to
    "proxy", "broker", "shim" (same rule as the metaphors section).
 4. **Outcomes, not implementations.** "Sent to IT" beats "Routed via
    webhook"; "Blocked" beats "Policy denied tool-call".
@@ -107,9 +107,9 @@ Surface (`_shared/index.ts`):
 - `colors.ts`: `ORANGE`/`RED`/`DANGER`/`GREEN`
 - `svg-paths.ts`: `EYE_PATH`, `EYE_SLASH_PATH`, `ADMIN_PATH`,
   `SHIELD_CHECK_PATH`, `PERSON_PATH`, `POISON_PATH`
-- `icons.tsx`: `McpIcon`, `RobotIcon`, `AgentIcon`, `EdisonLogo`,
+- `icons.tsx`: `McpIcon`, `RobotIcon`, `AgentIcon`, `SealGateLogo`,
   `McpPacket`, `ProgressBar`
 - `badges.tsx`: `VerdictBadge` - allow/deny circle (metaphor A glyph)
 - `flow.tsx`: `FlowLine` - dashed `3 3` connector
-- `gateway.tsx`: `EdisonGateway` - pulse ring + logo + optional label
+- `gateway.tsx`: `BrandGateway` - pulse ring + logo + optional label
 - `admin.tsx`: `AdminFigure` - top-of-fleet persona

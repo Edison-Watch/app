@@ -1,7 +1,7 @@
 name: Build macOS (desktop)
 
 # Upstream TEST build - NOT a release.
-# Builds both daemons (edison-stdiod, edison-detectord) from source out of
+# Builds both daemons (sealgate-stdiod, sealgate-detectord) from source out of
 # crates/, bundles them, and produces a .dmg/.zip uploaded as an Actions
 # artifact.
 #
@@ -104,9 +104,9 @@ jobs:
         run: npm ci
         working-directory: .
 
-      # The app consumes the workspace-linked @edison-watch/shared, whose
+      # The app consumes the workspace-linked @sealgate/shared, whose
       # package entry points live in dist/ - build it first.
-      - name: Build @edison-watch/shared
+      - name: Build @sealgate/shared
         run: npm run build -w packages/shared
         working-directory: .
 
@@ -125,22 +125,22 @@ jobs:
             crates/detectord
             crates/stdiod
 
-      - name: Build edison-detectord from source
-        # Stages crates/detectord's daemon into bin/edison-detectord (arm64).
+      - name: Build sealgate-detectord from source
+        # Stages crates/detectord's daemon into bin/sealgate-detectord (arm64).
         # mac.extraResources expects it; electron-builder only WARNS when the
         # file is missing, which is how releases shipped without the detector
         # daemon until 0.6.0.
         run: npm run build:detectord
 
-      - name: Build edison-stdiod from source (universal)
+      - name: Build sealgate-stdiod from source (universal)
         # Built from the checkout, same as detectord - so this gate actually
         # tests the stdiod source at this commit instead of the last published
         # binary. The script builds both Darwin arches and lipo-merges them into
-        # bin/edison-stdiod for mac.extraResources.
+        # bin/sealgate-stdiod for mac.extraResources.
         run: npm run build:stdiod
 
       - name: Report bundled stdiod architectures
-        run: lipo -info bin/edison-stdiod
+        run: lipo -info bin/sealgate-stdiod
 
       - name: Build renderer/main/preload bundles
         run: npm run build:demo
@@ -166,7 +166,7 @@ jobs:
           [ ${#apps[@]} -eq 2 ] || {
             echo "::error::expected 2 .app bundles (x64 + arm64), found ${#apps[@]}"; exit 1; }
           for app in "${apps[@]}"; do
-            for bin in edison-stdiod edison-detectord; do
+            for bin in sealgate-stdiod sealgate-detectord; do
               f="$app/Contents/Resources/bin/$bin"
               test -f "$f" || { echo "::error::$bin missing from $app"; exit 1; }
               info=$(lipo -info "$f")
@@ -181,7 +181,7 @@ jobs:
       - name: Upload app artifact
         uses: actions/upload-artifact@v7
         with:
-          name: edison-watch-macos
+          name: sealgate-macos
           path: |
             packages/desktop/dist/*.dmg
             packages/desktop/dist/*.zip

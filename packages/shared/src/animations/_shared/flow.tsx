@@ -1,6 +1,6 @@
 /**
  * Dashed flow line - the universal "MCP traffic" connector between
- * laptops, Edison, and MCP servers. Every animation declares the same
+ * laptops, SealGate, and MCP servers. Every animation declares the same
  * `strokeDasharray="3 3"` + marching-ants keyframe; this component just
  * standardizes the markup so the per-animation CSS only has to declare
  * the keyframe.
@@ -27,8 +27,8 @@ export function FlowLine({
   x2: number
   y2: number
   /**
-   * Stroke color. Pass `var(--text-muted)` for "before Edison" / inert,
-   * `var(--accent)` for "via Edison", or a `DANGER`/`RED`/`GREEN`
+   * Stroke color. Pass `var(--text-muted)` for "before SealGate" / inert,
+   * `var(--accent)` for "via SealGate", or a `DANGER`/`RED`/`GREEN`
    * constant for semantic flows.
    */
   stroke: string

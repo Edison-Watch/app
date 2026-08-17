@@ -55,7 +55,7 @@ test.describe("Setup Wizard", () => {
     // On first load, the app checks setup:getData which may briefly show a spinner
     // The spinner or the wizard should appear within timeout
     const contentVisible = await firstWindow
-      .locator("text=Edison Watch, [class*='animate-spin']")
+      .locator("text=SealGate, [class*='animate-spin']")
       .first()
       .isVisible()
       .catch(() => false);
@@ -94,7 +94,7 @@ test.describe("Tray and Background Services", () => {
   test("app registers deep link protocol handler", async ({ electronApp }) => {
     // Verify the app has registered the protocol
     const isDefaultProtocol = await electronApp.evaluate(async ({ app }) => {
-      return app.isDefaultProtocolClient("edison-watch");
+      return app.isDefaultProtocolClient("sealgate");
     });
     // May or may not be true depending on OS permissions, but should not throw
     expect(typeof isDefaultProtocol).toBe("boolean");

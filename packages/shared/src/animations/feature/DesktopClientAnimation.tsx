@@ -4,8 +4,8 @@
  * Phase 1 - "Blind": A large employee laptop runs AI agents (Claude,
  *           Cursor, Codex) with MCP configs. A rogue "shadow-tool" MCP
  *           appears. The admin has NO visibility into the config.
- * Transition: Edison Watch desktop app activates on the laptop.
- * Phase 2 - "Watch": Edison scans the configs, quarantines the rogue
+ * Transition: SealGate desktop app activates on the laptop.
+ * Phase 2 - "Watch": SealGate scans the configs, quarantines the rogue
  *           MCP, and the admin gains full visibility with a review panel.
  *
  * 12s loop. Pure SVG + CSS. Respects `prefers-reduced-motion`.
@@ -15,7 +15,7 @@ import {
   ADMIN_PATH,
   AgentIcon,
   DANGER,
-  EdisonLogo,
+  SealGateLogo,
   EYE_PATH,
   EYE_SLASH_PATH,
   McpIcon,
@@ -33,7 +33,7 @@ const fg = 'var(--text-primary)'
 const muted = 'var(--text-muted)'
 const accent = 'var(--accent)'
 
-const CSS = `.dca{color:${fg}}.dca .dca-line{stroke-dashoffset:0;animation:dca-lf 2s linear infinite}.dca .dca-pkt path,.dca .dca-pkt circle{fill:currentColor}.dca .dca-phase1{animation:dca-p1 12s ease-in-out infinite}.dca .dca-edison{animation:dca-ed 12s ease-in-out infinite;transform-origin:279px 151px}.dca .dca-phase2{animation:dca-p2 12s ease-in-out infinite}.dca .dca-rogue{animation:dca-rogue 12s ease-in-out infinite}.dca .dca-rglow{animation:dca-rglow 1.5s ease-in-out infinite}.dca .dca-pulse{transform-origin:279px 151px;animation:dca-pulse 1.33s cubic-bezier(.2,.8,.4,1) infinite}.dca .dca-v1{animation:dca-v1 12s ease-in-out infinite}.dca .dca-v2{animation:dca-v2 12s ease-in-out infinite}.dca .dca-v3{animation:dca-v3 12s ease-in-out infinite}.dca .dca-pkt1{color:${accent};animation:dca-pkt1 12s ease-in-out infinite}.dca .dca-scan{animation:dca-scan 12s ease-in-out infinite}.dca .dca-progress{transform-origin:20px 248px;animation:dca-prog 12s linear infinite}@keyframes dca-lf{to{stroke-dashoffset:-12}}@keyframes dca-p1{0%,46%{opacity:1}54%{opacity:0}100%{opacity:0}}@keyframes dca-ed{0%,48%{opacity:0;transform:scale(.85)}56%{opacity:1;transform:scale(1)}100%{opacity:1;transform:scale(1)}}@keyframes dca-p2{0%,48%{opacity:0}56%{opacity:1}100%{opacity:1}}@keyframes dca-rogue{0%,4%{opacity:0}10%{opacity:1}100%{opacity:1}}@keyframes dca-rglow{0%,100%{stroke-opacity:.3}50%{stroke-opacity:.65}}@keyframes dca-pulse{0%{transform:scale(1);opacity:0}10%{transform:scale(1);opacity:.4}60%{transform:scale(1.5);opacity:0}100%{transform:scale(1.5);opacity:0}}@keyframes dca-v1{0%,62%{opacity:0;transform:scale(0.5)}65%{opacity:1;transform:scale(1)}100%{opacity:1;transform:scale(1)}}@keyframes dca-v2{0%,68%{opacity:0;transform:scale(0.5)}71%{opacity:1;transform:scale(1)}100%{opacity:1;transform:scale(1)}}@keyframes dca-v3{0%,74%{opacity:0;transform:scale(0.5)}77%{opacity:1;transform:scale(1)}100%{opacity:1;transform:scale(1)}}@keyframes dca-pkt1{0%,76%{opacity:0}78%{transform:translate(330px,100px);opacity:.8;color:${accent}}86%{transform:translate(470px,75px);opacity:1;color:${accent}}88%{transform:translate(470px,75px);opacity:0}100%{opacity:0}}@keyframes dca-scan{0%,56%{opacity:0;transform:translateY(0)}58%{opacity:.7;transform:translateY(0)}70%{opacity:.7;transform:translateY(82px)}72%{opacity:0;transform:translateY(82px)}100%{opacity:0}}@keyframes dca-prog{0%{transform:scaleX(0)}100%{transform:scaleX(1)}}@media(prefers-reduced-motion:reduce){.dca .dca-line,.dca .dca-phase1,.dca .dca-phase2,.dca .dca-edison,.dca .dca-rogue,.dca .dca-rglow,.dca .dca-pulse,.dca .dca-v1,.dca .dca-v2,.dca .dca-v3,.dca .dca-pkt1,.dca .dca-scan{animation:none}.dca .dca-phase1{opacity:0}.dca .dca-phase2,.dca .dca-edison{opacity:1;transform:scale(1)}.dca .dca-rogue{opacity:1}.dca .dca-v1,.dca .dca-v2,.dca .dca-v3{opacity:1;transform:scale(1)}.dca .dca-pkt1{opacity:0}.dca .dca-progress{animation:none;transform:scaleX(1)}}.dca.anim-static .dca-line,.dca.anim-static .dca-phase1,.dca.anim-static .dca-phase2,.dca.anim-static .dca-edison,.dca.anim-static .dca-rogue,.dca.anim-static .dca-rglow,.dca.anim-static .dca-pulse,.dca.anim-static .dca-v1,.dca.anim-static .dca-v2,.dca.anim-static .dca-v3,.dca.anim-static .dca-pkt1,.dca.anim-static .dca-scan{animation:none}.dca.anim-static .dca-phase1{opacity:0}.dca.anim-static .dca-phase2,.dca.anim-static .dca-edison{opacity:1;transform:scale(1)}.dca.anim-static .dca-rogue{opacity:1}.dca.anim-static .dca-v1,.dca.anim-static .dca-v2,.dca.anim-static .dca-v3{opacity:1;transform:scale(1)}.dca.anim-static .dca-pkt1{opacity:0}.dca.anim-static .dca-progress{animation:none;transform:scaleX(1)}`
+const CSS = `.dca{color:${fg}}.dca .dca-line{stroke-dashoffset:0;animation:dca-lf 2s linear infinite}.dca .dca-pkt path,.dca .dca-pkt circle{fill:currentColor}.dca .dca-phase1{animation:dca-p1 12s ease-in-out infinite}.dca .dca-sealgate{animation:dca-ed 12s ease-in-out infinite;transform-origin:279px 151px}.dca .dca-phase2{animation:dca-p2 12s ease-in-out infinite}.dca .dca-rogue{animation:dca-rogue 12s ease-in-out infinite}.dca .dca-rglow{animation:dca-rglow 1.5s ease-in-out infinite}.dca .dca-pulse{transform-origin:279px 151px;animation:dca-pulse 1.33s cubic-bezier(.2,.8,.4,1) infinite}.dca .dca-v1{animation:dca-v1 12s ease-in-out infinite}.dca .dca-v2{animation:dca-v2 12s ease-in-out infinite}.dca .dca-v3{animation:dca-v3 12s ease-in-out infinite}.dca .dca-pkt1{color:${accent};animation:dca-pkt1 12s ease-in-out infinite}.dca .dca-scan{animation:dca-scan 12s ease-in-out infinite}.dca .dca-progress{transform-origin:20px 248px;animation:dca-prog 12s linear infinite}@keyframes dca-lf{to{stroke-dashoffset:-12}}@keyframes dca-p1{0%,46%{opacity:1}54%{opacity:0}100%{opacity:0}}@keyframes dca-ed{0%,48%{opacity:0;transform:scale(.85)}56%{opacity:1;transform:scale(1)}100%{opacity:1;transform:scale(1)}}@keyframes dca-p2{0%,48%{opacity:0}56%{opacity:1}100%{opacity:1}}@keyframes dca-rogue{0%,4%{opacity:0}10%{opacity:1}100%{opacity:1}}@keyframes dca-rglow{0%,100%{stroke-opacity:.3}50%{stroke-opacity:.65}}@keyframes dca-pulse{0%{transform:scale(1);opacity:0}10%{transform:scale(1);opacity:.4}60%{transform:scale(1.5);opacity:0}100%{transform:scale(1.5);opacity:0}}@keyframes dca-v1{0%,62%{opacity:0;transform:scale(0.5)}65%{opacity:1;transform:scale(1)}100%{opacity:1;transform:scale(1)}}@keyframes dca-v2{0%,68%{opacity:0;transform:scale(0.5)}71%{opacity:1;transform:scale(1)}100%{opacity:1;transform:scale(1)}}@keyframes dca-v3{0%,74%{opacity:0;transform:scale(0.5)}77%{opacity:1;transform:scale(1)}100%{opacity:1;transform:scale(1)}}@keyframes dca-pkt1{0%,76%{opacity:0}78%{transform:translate(330px,100px);opacity:.8;color:${accent}}86%{transform:translate(470px,75px);opacity:1;color:${accent}}88%{transform:translate(470px,75px);opacity:0}100%{opacity:0}}@keyframes dca-scan{0%,56%{opacity:0;transform:translateY(0)}58%{opacity:.7;transform:translateY(0)}70%{opacity:.7;transform:translateY(82px)}72%{opacity:0;transform:translateY(82px)}100%{opacity:0}}@keyframes dca-prog{0%{transform:scaleX(0)}100%{transform:scaleX(1)}}@media(prefers-reduced-motion:reduce){.dca .dca-line,.dca .dca-phase1,.dca .dca-phase2,.dca .dca-sealgate,.dca .dca-rogue,.dca .dca-rglow,.dca .dca-pulse,.dca .dca-v1,.dca .dca-v2,.dca .dca-v3,.dca .dca-pkt1,.dca .dca-scan{animation:none}.dca .dca-phase1{opacity:0}.dca .dca-phase2,.dca .dca-sealgate{opacity:1;transform:scale(1)}.dca .dca-rogue{opacity:1}.dca .dca-v1,.dca .dca-v2,.dca .dca-v3{opacity:1;transform:scale(1)}.dca .dca-pkt1{opacity:0}.dca .dca-progress{animation:none;transform:scaleX(1)}}.dca.anim-static .dca-line,.dca.anim-static .dca-phase1,.dca.anim-static .dca-phase2,.dca.anim-static .dca-sealgate,.dca.anim-static .dca-rogue,.dca.anim-static .dca-rglow,.dca.anim-static .dca-pulse,.dca.anim-static .dca-v1,.dca.anim-static .dca-v2,.dca.anim-static .dca-v3,.dca.anim-static .dca-pkt1,.dca.anim-static .dca-scan{animation:none}.dca.anim-static .dca-phase1{opacity:0}.dca.anim-static .dca-phase2,.dca.anim-static .dca-sealgate{opacity:1;transform:scale(1)}.dca.anim-static .dca-rogue{opacity:1}.dca.anim-static .dca-v1,.dca.anim-static .dca-v2,.dca.anim-static .dca-v3{opacity:1;transform:scale(1)}.dca.anim-static .dca-pkt1{opacity:0}.dca.anim-static .dca-progress{animation:none;transform:scaleX(1)}`
 
 export default function DesktopClientAnimation() {
   return (
@@ -277,7 +277,7 @@ export default function DesktopClientAnimation() {
           ))}
         </g>
 
-        {/* ===== PHASE 2: EDISON WATCH ACTIVE ===== */}
+        {/* ===== PHASE 2: SEALGATE ACTIVE ===== */}
 
         <g className="dca-phase2">
           <rect
@@ -292,13 +292,13 @@ export default function DesktopClientAnimation() {
             strokeOpacity="0.4"
             strokeWidth="1.5"
           />
-          <EdisonLogo x={10} y={38} w={18} h={17.5} />
+          <SealGateLogo x={10} y={38} w={18} h={17.5} />
           <svg x={260} y={34} width={14} height={14} viewBox="0 0 256 256">
             <path d={SHIELD_CHECK_PATH} fill={accent} fillOpacity="0.6" />
           </svg>
         </g>
 
-        <g className="dca-edison" style={{ transformOrigin: '279px 151px' }}>
+        <g className="dca-sealgate" style={{ transformOrigin: '279px 151px' }}>
           <circle
             className="dca-pulse"
             cx={279}
@@ -309,7 +309,7 @@ export default function DesktopClientAnimation() {
             strokeOpacity="0.5"
             strokeWidth="1.5"
           />
-          <EdisonLogo x={270} y={142} w={18} h={17.5} />
+          <SealGateLogo x={270} y={142} w={18} h={17.5} />
         </g>
 
         <g className="dca-scan">
@@ -557,7 +557,7 @@ export default function DesktopClientAnimation() {
             fontSize="7.5"
             fontFamily="system-ui,sans-serif"
           >
-            Running Edison Watch
+            Running SealGate
           </text>
         </g>
         <g className="dca-phase2">

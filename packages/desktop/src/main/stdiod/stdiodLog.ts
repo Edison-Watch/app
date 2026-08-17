@@ -24,8 +24,8 @@ export function getClientLogPath(): string {
   // ~/.local/state on Windows (no XDG state dir there).
   const dir =
     process.platform === 'win32'
-      ? path.join(os.homedir(), '.local', 'state', 'edison-stdiod')
-      : path.join(os.homedir(), 'Library', 'Logs', 'edison-stdiod')
+      ? path.join(os.homedir(), '.local', 'state', 'sealgate-stdiod')
+      : path.join(os.homedir(), 'Library', 'Logs', 'sealgate-stdiod')
   return path.join(dir, 'client.log')
 }
 

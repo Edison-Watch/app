@@ -2,7 +2,7 @@
 //
 // Everything here used to be answered by opening the agent's own files: its
 // hook file to count injected hooks, its MCP config to see whether the
-// edison-watch entry was there and pointed at the right URL, its workspace
+// sealgate entry was there and pointed at the right URL, its workspace
 // `tasks.json` files to count registration tasks. The daemon already walks all
 // of that (it watches those files anyway) and it is the component that holds
 // the OS permissions to reach them, so the app asks instead of reading.
@@ -25,12 +25,12 @@ export interface AgentFacts {
   hooksTotal: number
   workspaceHooksInstalled: number
   workspaceHooksTotal: number
-  /** URL of the installed edison-watch entry, or null when there is none. */
-  edisonUrl: string | null
+  /** URL of the installed sealgate entry, or null when there is none. */
+  sealgateUrl: string | null
   /** The agent's user-scope config file, when it has one. */
   configPath: string | null
   /**
-   * Whether Edison can manage this agent, or only report that it's installed.
+   * Whether SealGate can manage this agent, or only report that it's installed.
    * False for connector-only hosts (ChatGPT), whose MCP servers live in the
    * vendor's account rather than in a file on this machine.
    */
@@ -43,7 +43,7 @@ const UNKNOWN: AgentFacts = {
   hooksTotal: 0,
   workspaceHooksInstalled: 0,
   workspaceHooksTotal: 0,
-  edisonUrl: null,
+  sealgateUrl: null,
   configPath: null,
   manageable: true
 }
@@ -55,7 +55,7 @@ function toFacts(a: AgentInfo): AgentFacts {
     hooksTotal: a.hooks_total ?? 0,
     workspaceHooksInstalled: a.workspace_hooks_installed ?? 0,
     workspaceHooksTotal: a.workspace_hooks_total ?? 0,
-    edisonUrl: a.edison_url ?? null,
+    sealgateUrl: a.sealgate_url ?? null,
     configPath: a.config_path ?? null,
     // Absent means an older daemon, where every agent was manageable.
     manageable: a.manageable ?? true

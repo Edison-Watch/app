@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Cross-build mcp_detector_daemon (edison-detectord) for Windows (arm64 + x64)
+# Cross-build mcp_detector_daemon (sealgate-detectord) for Windows (arm64 + x64)
 # from macOS/Linux and stage it into desktop/bin/detectord/<arch>/ so an
 # electron-builder win.extraResources rule can copy the matching-arch binary
 # into the packaged app. Mirrors build-stdiod-win.sh.
@@ -82,8 +82,8 @@ for spec in "${ALL_SPECS[@]}"; do
   echo "Building $BIN_NAME for $target ..."
   ( cd "$DETECTORD_DIR" && cargo zigbuild --release --target "$target" --bin "$BIN_NAME" )
   mkdir -p "$OUT_ROOT/$arch"
-  cp "$DETECTORD_DIR/target/$target/release/$BIN_NAME.exe" "$OUT_ROOT/$arch/edison-detectord.exe"
-  echo "Staged -> $OUT_ROOT/$arch/edison-detectord.exe"
+  cp "$DETECTORD_DIR/target/$target/release/$BIN_NAME.exe" "$OUT_ROOT/$arch/sealgate-detectord.exe"
+  echo "Staged -> $OUT_ROOT/$arch/sealgate-detectord.exe"
 done
 
 echo "Done. Windows daemon binaries staged under $OUT_ROOT/<arch>/"

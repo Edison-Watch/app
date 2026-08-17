@@ -29,7 +29,7 @@ function agent(over: Partial<AgentFacts> = {}): AgentFacts {
     hooksTotal: 4,
     workspaceHooksInstalled: 0,
     workspaceHooksTotal: 0,
-    edisonUrl: EXPECTED_URL,
+    sealgateUrl: EXPECTED_URL,
     configPath: '/home/u/.claude.json',
     manageable: true,
     ...over
@@ -63,8 +63,8 @@ describe('getHookStatus', () => {
 
   it('does NOT report connected when the entry points at a different gateway', async () => {
     // A leftover entry from another account/environment: `claude mcp get
-    // edison-watch` happily says "connected" - to somebody else's server.
-    facts = claudeCode({ edisonUrl: 'https://mcp.other-org.example/mcp?client=claude-code' })
+    // sealgate` happily says "connected" - to somebody else's server.
+    facts = claudeCode({ sealgateUrl: 'https://mcp.other-org.example/mcp?client=claude-code' })
     const s = await statusFor('claude-code', EXPECTED_URL, true, 'connected')
     expect(s.mcpConfigured).toBe(false)
     expect(s.mcpConnected).toBe(false)
@@ -73,8 +73,8 @@ describe('getHookStatus', () => {
   })
 
   it('does NOT report connected when there is no entry at our install location', async () => {
-    // e.g. edison-watch exists only in some project's config.
-    facts = claudeCode({ edisonUrl: null })
+    // e.g. sealgate exists only in some project's config.
+    facts = claudeCode({ sealgateUrl: null })
     const s = await statusFor('claude-code', EXPECTED_URL, true, 'connected')
     expect(s.mcpConnected).toBe(false)
   })
@@ -86,7 +86,7 @@ describe('getHookStatus', () => {
   })
 
   it('ignores query strings and trailing slashes when matching the URL', async () => {
-    facts = claudeCode({ edisonUrl: 'https://mcp.edison.watch/mcp/' })
+    facts = claudeCode({ sealgateUrl: 'https://mcp.edison.watch/mcp/' })
     const s = await statusFor('claude-code', 'https://mcp.edison.watch/mcp?client=claude-code', true, 'connected')
     expect(s.mcpConfigured).toBe(true)
   })

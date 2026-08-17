@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Button, Card } from "@edison-watch/shared/ui";
+import { Button, Card } from "@sealgate/shared/ui";
 import { AppLogo } from "../AppLogo";
 import { CONNECTOR_BACKED_REASON } from "../clientSupport";
 
@@ -8,7 +8,7 @@ interface DetectedClient {
   name: string;
   configPath: string;
   /**
-   * Whether Edison can configure this client at all. False for hosts whose MCP
+   * Whether SealGate can configure this client at all. False for hosts whose MCP
    * servers are Connectors in the vendor's account - they are shown so the user
    * knows they're unprotected, but there is nothing to select.
    */
@@ -298,7 +298,7 @@ export default function AppsStep({
         boxShadow: client.enabled ? "0 0 12px 0 rgba(125, 255, 246, 0.08)" : "none",
       }}
     >
-      {/* Row. Toggles selection for clients Edison can configure; for the rest
+      {/* Row. Toggles selection for clients SealGate can configure; for the rest
           it is inert text, because a checkbox whose value is discarded is worse
           than no checkbox. */}
       <button
@@ -374,7 +374,7 @@ export default function AppsStep({
       <div className="text-center">
         <h2 className="text-lg font-semibold text-[var(--text-primary)]">Connect Your Apps</h2>
         <p className="mt-1 text-sm text-[var(--text-secondary)]">
-          Select which MCP clients to configure with Edison Watch.
+          Select which MCP clients to configure with SealGate.
         </p>
       </div>
 
@@ -425,7 +425,7 @@ export default function AppsStep({
               <div className="mb-3 rounded-md border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs text-amber-100/90">
                 We currently only support local MCP servers, not Connectors. You
                 should remove your connectors manually for your safety and request
-                an equivalent server in Edison Watch from your admin.
+                an equivalent server in SealGate from your admin.
               </div>
               <div className="flex flex-col gap-2">
                 {partiallySupportedClients.map(renderClientCard)}

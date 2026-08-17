@@ -18,7 +18,7 @@ export interface StdiodServerEntry {
 }
 
 // Mirrors the daemon's on-disk state.json schema (see
-// stdiod/crates/edison-stdiod/src/state.rs). Fields are optional because
+// stdiod/crates/sealgate-stdiod/src/state.rs). Fields are optional because
 // the daemon may not have populated them yet on the first connection
 // attempt.
 export interface StdiodLiveState {
@@ -49,7 +49,7 @@ export interface StdiodStatus {
 export interface StdiodLoginInput {
   backend: string
   apiKey: string
-  edisonSecretKey?: string
+  sealgateSecretKey?: string
   deviceId?: string
   deviceLabel?: string
 }

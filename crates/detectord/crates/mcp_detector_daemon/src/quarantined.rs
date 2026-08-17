@@ -3,7 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use edison_detectord::ServerConfig;
+use sealgate_detectord::ServerConfig;
 use mcp_quarantine::QuarantineRecord;
 
 use crate::paths;
@@ -14,7 +14,7 @@ pub struct QuarantinedEntry {
     pub agent: String,
     pub fingerprint: String,
     pub record: QuarantineRecord,
-    /// The server's launch config, kept so a post-quarantine "send to EW"
+    /// The server's launch config, kept so a post-quarantine "send to SG"
     /// disposition can submit it. `None` for older entries / opaque servers.
     #[serde(default)]
     pub config: Option<ServerConfig>,
@@ -94,10 +94,10 @@ mod tests {
             fingerprint: fingerprint.into(),
             config: None,
             record: QuarantineRecord {
-                kind: edison_detectord::SourceKind::Json,
+                kind: sealgate_detectord::SourceKind::Json,
                 source_path: PathBuf::from("/home/u/.cursor/mcp.json"),
                 disabled_path: PathBuf::from("/home/u/.cursor/ewd-disabled_mcp.json"),
-                backup_path: PathBuf::from("/home/u/.cursor/mcp.json.ew-backup"),
+                backup_path: PathBuf::from("/home/u/.cursor/mcp.json.sg-backup"),
                 key_path: vec!["mcpServers".into()],
                 server_key: name.into(),
                 extra: Default::default(),

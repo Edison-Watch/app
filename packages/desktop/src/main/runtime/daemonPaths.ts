@@ -17,14 +17,14 @@ export interface DaemonSpec {
 
 export const STDIOD: DaemonSpec = {
   crate: 'stdiod',
-  cargoBin: 'edison-stdiod',
-  shippedName: 'edison-stdiod'
+  cargoBin: 'sealgate-stdiod',
+  shippedName: 'sealgate-stdiod'
 }
 
 export const DETECTORD: DaemonSpec = {
   crate: 'detectord',
   cargoBin: 'mcp_detector_daemon',
-  shippedName: 'edison-detectord'
+  shippedName: 'sealgate-detectord'
 }
 
 const exe = (name: string, win: boolean): string => (win ? `${name}.exe` : name)

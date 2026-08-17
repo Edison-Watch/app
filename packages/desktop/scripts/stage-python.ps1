@@ -5,7 +5,7 @@
   can copy it into resources/python/ of the packaged app.
 
 .DESCRIPTION
-  The Edison Watch session hooks (edison-session-*.py) are spawned by AI agent
+  The SealGate session hooks (sealgate-session-*.py) are spawned by AI agent
   apps (Claude Code, Cursor, VS Code) outside the Electron process and need a
   Python interpreter. macOS/Linux ship one; Windows frequently does not, so we
   bundle the official embeddable build. The hooks are stdlib-only

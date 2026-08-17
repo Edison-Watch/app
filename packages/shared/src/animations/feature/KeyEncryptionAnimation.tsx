@@ -2,14 +2,14 @@
  * Zero-knowledge credential encryption animation for key setup.
  *
  * Shows a laptop with credential cards that get encrypted locally
- * using the user's key, then sent as encrypted blobs to Edison.
+ * using the user's key, then sent as encrypted blobs to SealGate.
  * A large crossed-out eye emphasises zero-knowledge storage.
  *
  * Three acts:
  *   1. Laptop displays credential cards with open padlocks (orange)
  *   2. Key appears -> laptop flashes -> cards transform to locked (accent)
- *   3. Encrypted packet travels to Edison -> big eye with animated
- *      slash shows Edison cannot read the secrets
+ *   3. Encrypted packet travels to SealGate -> big eye with animated
+ *      slash shows SealGate cannot read the secrets
  *
  * Matches EncryptionAnimation's laptop visual language.
  * 8s loop. Pure SVG + CSS. Respects `prefers-reduced-motion`.
@@ -22,7 +22,7 @@
  *   </div>
  */
 
-import { EDISON_E_PATH, EDISON_FRAME_PATH, EDISON_LOGO_VIEWBOX } from '../../svg/edison-logo-svg'
+import { SEALGATE_E_PATH, SEALGATE_FRAME_PATH, SEALGATE_LOGO_VIEWBOX } from '../../svg/sealgate-logo-svg'
 import { McpIcon, ORANGE, ProgressBar } from '../_shared'
 
 const CSS = `
@@ -120,7 +120,7 @@ const CSS = `
   100%     { opacity: 0; }
 }
 
-/* Packet travels laptop -> Edison vault */
+/* Packet travels laptop -> SealGate vault */
 @keyframes ek-pkt {
   0%,32%   { transform: translate(176px, 71px); opacity: 0; }
   36%      { transform: translate(176px, 71px); opacity: .8; }
@@ -129,7 +129,7 @@ const CSS = `
   100%     { opacity: 0; }
 }
 
-/* Edison vault content appears on packet arrival */
+/* SealGate vault content appears on packet arrival */
 @keyframes ek-vault {
   0%,50%   { opacity: 0; }
   58%      { opacity: 1; }
@@ -386,9 +386,9 @@ export default function KeyEncryptionAnimation(): React.ReactNode {
 
         {/* Encrypted credential cards (phase 2) */}
         <g className="ek-enc">
-          <CredentialCard y={30} label="$EDISON$1$a3B..." locked />
-          <CredentialCard y={59} label="$EDISON$1$k7P..." locked />
-          <CredentialCard y={88} label="$EDISON$1$mN2..." locked />
+          <CredentialCard y={30} label="$SEALGATE$1$a3B..." locked />
+          <CredentialCard y={59} label="$SEALGATE$1$k7P..." locked />
+          <CredentialCard y={88} label="$SEALGATE$1$mN2..." locked />
         </g>
 
         {/* Accent flash overlay on laptop */}
@@ -476,17 +476,17 @@ export default function KeyEncryptionAnimation(): React.ReactNode {
           </text>
         </g>
 
-        {/* Edison logo + label */}
-        <svg x="378" y="-22" width="36" height="36" viewBox={EDISON_LOGO_VIEWBOX}>
+        {/* SealGate logo + label */}
+        <svg x="378" y="-22" width="36" height="36" viewBox={SEALGATE_LOGO_VIEWBOX}>
           <path
-            d={EDISON_E_PATH}
+            d={SEALGATE_E_PATH}
             fill="var(--accent)"
             fillOpacity="0.7"
             stroke="var(--accent)"
             strokeWidth="5"
             strokeMiterlimit="10"
           />
-          <path d={EDISON_FRAME_PATH} fill="var(--accent)" fillOpacity="0.7" />
+          <path d={SEALGATE_FRAME_PATH} fill="var(--accent)" fillOpacity="0.7" />
         </svg>
         <text
           x="395"
@@ -498,10 +498,10 @@ export default function KeyEncryptionAnimation(): React.ReactNode {
           fontFamily="system-ui,sans-serif"
           opacity="0.7"
         >
-          Edison Databases
+          SealGate Databases
         </text>
 
-        {/* Edison vault */}
+        {/* SealGate vault */}
         <rect
           x="330"
           y="38"
@@ -528,7 +528,7 @@ export default function KeyEncryptionAnimation(): React.ReactNode {
             fontFamily="ui-monospace,monospace"
             opacity="0.6"
           >
-            $EDISON$1$a3B...
+            $SEALGATE$1$a3B...
           </text>
           <McpIcon x={336} y={66} size={12} color="var(--accent)" opacity="0.5" />
           <PadlockClosed x={350} y={66} />
@@ -541,7 +541,7 @@ export default function KeyEncryptionAnimation(): React.ReactNode {
             fontFamily="ui-monospace,monospace"
             opacity="0.6"
           >
-            $EDISON$1$k7P...
+            $SEALGATE$1$k7P...
           </text>
           <McpIcon x={336} y={88} size={12} color="var(--accent)" opacity="0.5" />
           <PadlockClosed x={350} y={88} />
@@ -554,11 +554,11 @@ export default function KeyEncryptionAnimation(): React.ReactNode {
             fontFamily="ui-monospace,monospace"
             opacity="0.6"
           >
-            $EDISON$1$mN2...
+            $SEALGATE$1$mN2...
           </text>
         </g>
 
-        {/* Shield (next to Edison logo) */}
+        {/* Shield (next to SealGate logo) */}
         <g className="ek-shield">
           <svg x={350} y={-18} width={28} height={28} viewBox="0 0 24 24">
             <path
@@ -582,7 +582,7 @@ export default function KeyEncryptionAnimation(): React.ReactNode {
           </svg>
         </g>
 
-        {/* Flow line (laptop -> Edison) */}
+        {/* Flow line (laptop -> SealGate) */}
         <g className="ek-flow">
           <line
             className="ek-line"
@@ -664,7 +664,7 @@ export default function KeyEncryptionAnimation(): React.ReactNode {
             fontFamily="system-ui,sans-serif"
             opacity="0.6"
           >
-            Edison cannot read encrypted credentials
+            SealGate cannot read encrypted credentials
           </text>
         </g>
 

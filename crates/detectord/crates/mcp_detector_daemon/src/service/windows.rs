@@ -23,7 +23,7 @@ use anyhow::{Context, Result, anyhow};
 use tracing::{debug, info, warn};
 
 /// Base name. The live task name appends the user's SID (see `task_name`).
-const TASK_BASENAME: &str = "Edison Watch detectord";
+const TASK_BASENAME: &str = "SealGate detectord";
 
 /// CREATE_NO_WINDOW: the daemon has no console, so spawning console programs
 /// (schtasks/whoami) would otherwise flash a window.
@@ -89,7 +89,7 @@ fn render_task_xml(binary: &Path, user: &str, enforce: bool) -> String {
         r#"<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo>
-    <Description>Edison Watch MCP detector and quarantine daemon</Description>
+    <Description>SealGate MCP detector and quarantine daemon</Description>
   </RegistrationInfo>
   <Triggers>
     <LogonTrigger>
@@ -168,7 +168,7 @@ pub fn install(enforce: bool) -> Result<()> {
     }
     let task = task_name();
     let xml = render_task_xml(&binary, &user, enforce);
-    let xml_path = std::env::temp_dir().join("edison-detectord-task.xml");
+    let xml_path = std::env::temp_dir().join("sealgate-detectord-task.xml");
     write_task_xml(&xml_path, &xml)?;
     info!(path = %xml_path.display(), enforce, "wrote scheduled task definition");
 
@@ -241,7 +241,7 @@ fn all_matching_tasks() -> Vec<String> {
     for line in stdout.lines() {
         if let Some(rest) = line.trim().strip_prefix("TaskName:") {
             let full = rest.trim();
-            // TaskName is a path like `\Edison Watch detectord S-1-5-...`; match
+            // TaskName is a path like `\SealGate detectord S-1-5-...`; match
             // on the leaf so a task nested in a folder still matches.
             let leaf = full.rsplit('\\').next().unwrap_or(full);
             if leaf.starts_with(TASK_BASENAME) {
@@ -330,8 +330,8 @@ mod tests {
 
     #[test]
     fn render_task_xml_enforce_vs_report() {
-        let e = render_task_xml(Path::new(r"C:\Apps\edison-detectord.exe"), r"WS\dimi", true);
-        assert!(e.contains(r"<Command>C:\Apps\edison-detectord.exe</Command>"));
+        let e = render_task_xml(Path::new(r"C:\Apps\sealgate-detectord.exe"), r"WS\dimi", true);
+        assert!(e.contains(r"<Command>C:\Apps\sealgate-detectord.exe</Command>"));
         assert!(e.contains("<Arguments>daemon --enforce</Arguments>"));
         assert!(e.contains("<LogonTrigger>"));
         assert!(e.contains("<UserId>WS\\dimi</UserId>"));

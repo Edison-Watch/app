@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
-import { Button, Badge } from "@edison-watch/shared/ui";
-import { deviceSignOut } from "@edison-watch/shared/auth";
-import { getActiveEnvName, getEnv } from "@edison-watch/shared/config";
-import { clearCachedSecretKey } from "@edison-watch/shared/crypto";
-import edisonIcon from "../../assets/edison-icon.png";
+import { Button, Badge } from "@sealgate/shared/ui";
+import { deviceSignOut } from "@sealgate/shared/auth";
+import { getActiveEnvName, getEnv } from "@sealgate/shared/config";
+import { clearCachedSecretKey } from "@sealgate/shared/crypto";
+import sealgateIcon from "../../assets/sealgate-icon.png";
 import ClientsView from "./ClientsView";
 import MyMcpsView from "./MyMcpsView";
 import StdiodEnableCard from "../StdiodEnableCard";
@@ -32,7 +32,7 @@ interface SetupData {
   mcpBaseUrl?: string;
   apiBaseUrl?: string;
   apiKey?: string;
-  edisonSecretKey?: string;
+  sealgateSecretKey?: string;
 }
 
 interface SavedAccount {
@@ -56,7 +56,7 @@ export default function MainMenu(): React.ReactNode {
   // `stdiod login` if the user is enabling the daemon post-onboarding.
   // EncryptionStep stashed it during setup; null if the user signed in
   // pre-keychain-rollout or cleared their data.
-  const [edisonSecretKey, setEdisonSecretKey] = useState<string | null>(null);
+  const [sealgateSecretKey, setSealGateSecretKey] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -77,7 +77,7 @@ export default function MainMenu(): React.ReactNode {
       const saved = await window.api.accounts.list();
       setAccounts(saved);
       const secret = await window.api.keychain.load();
-      setEdisonSecretKey(secret);
+      setSealGateSecretKey(secret);
       // Default tab is "clients" which needs taller window for the list
       await window.api.menu.resizeWindow(461, 749);
     })();
@@ -194,10 +194,10 @@ export default function MainMenu(): React.ReactNode {
         <div className="mx-auto flex max-w-sm flex-col gap-4">
           {/* Header */}
           <div className="flex items-center gap-3">
-            <img src={edisonIcon} alt="Edison Watch" className="h-8 w-8 rounded-lg" />
+            <img src={sealgateIcon} alt="SealGate" className="h-8 w-8 rounded-lg" />
             <div className="flex-1 min-w-0">
               <h2 className="text-sm font-semibold text-[var(--text-primary)] leading-tight">
-                Edison Watch
+                SealGate
               </h2>
               <p className="text-xs text-[var(--text-muted)] truncate">
                 {setupData.userEmail || ""}
@@ -377,7 +377,7 @@ export default function MainMenu(): React.ReactNode {
             <StdiodEnableCard
               apiBaseUrl={setupData.apiBaseUrl}
               apiKey={setupData.apiKey}
-              edisonSecretKey={edisonSecretKey ?? undefined}
+              sealgateSecretKey={sealgateSecretKey ?? undefined}
             />
           )}
 
@@ -385,10 +385,10 @@ export default function MainMenu(): React.ReactNode {
               Moved here from the onboarding wizard. */}
           {setupData.apiKey && (
             <OrgKeyCard
-              personalKey={edisonSecretKey}
-              currentComposite={setupData.edisonSecretKey}
+              personalKey={sealgateSecretKey}
+              currentComposite={setupData.sealgateSecretKey}
               onSaved={(composite) =>
-                setSetupData((prev) => (prev ? { ...prev, edisonSecretKey: composite } : prev))
+                setSetupData((prev) => (prev ? { ...prev, sealgateSecretKey: composite } : prev))
               }
             />
           )}
@@ -412,7 +412,7 @@ export default function MainMenu(): React.ReactNode {
                   onClick={handleCopyMcpConfig}
                   className="w-full"
                 >
-                  {copied ? "Copied!" : "Copy EdisonWatch MCP config"}
+                  {copied ? "Copied!" : "Copy SealGate MCP config"}
                 </Button>
                 {copied && (
                   <p className="text-center text-[11px] text-[var(--text-muted)] -mt-0.5">

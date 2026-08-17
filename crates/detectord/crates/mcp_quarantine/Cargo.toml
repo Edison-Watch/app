@@ -10,7 +10,7 @@ description = "Mutation, persistent state, and the reconcile planner for MCP qua
 [dependencies]
 # Only the types + fingerprint are needed, not the concrete agents, so the
 # agent features (and their rusqlite cost) are left off.
-edison-detectord = { path = "../edison-detectord", default-features = false }
+sealgate-detectord = { path = "../sealgate-detectord", default-features = false }
 # Claude matches a hook group's `matcher` as a regex against the tool name,
 # so deciding whether a group covers a binding means running one. String
 # comparison cannot: `mcp__.*` and `mcp__*` select the same calls.

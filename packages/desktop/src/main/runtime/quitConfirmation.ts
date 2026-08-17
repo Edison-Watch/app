@@ -23,12 +23,12 @@ const QUARANTINE_LOOKUP_TIMEOUT_MS = 1_500
 
 export const QUIT_BASE_DETAIL =
   'MCP servers running on this computer may become unavailable to your remote ' +
-  'AI agents while Edison Watch is closed.'
+  'AI agents while SealGate is closed.'
 
 export const QUIT_QUARANTINE_DETAIL =
   'Heads up: your organization has quarantine turned on. Quitting does NOT stop ' +
   'the quarantine protection - it keeps running in the background and new MCP ' +
-  'servers will still be held for review. However, you need Edison Watch open ' +
+  'servers will still be held for review. However, you need SealGate open ' +
   'to send approval requests for quarantined servers, so consider keeping it open.'
 
 export function buildQuitConfirmationDetail(quarantineEnabled: boolean): string {
@@ -85,8 +85,8 @@ async function confirmQuit(): Promise<void> {
     buttons: ['Cancel', 'Quit'],
     defaultId: 0,
     cancelId: 0,
-    title: 'Quit Edison Watch',
-    message: 'Are you sure you want to quit Edison Watch?',
+    title: 'Quit SealGate',
+    message: 'Are you sure you want to quit SealGate?',
     detail: buildQuitConfirmationDetail(quarantineEnabled)
   })
   if (response === 1) {

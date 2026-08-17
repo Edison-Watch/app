@@ -5,11 +5,11 @@ use std::path::PathBuf;
 use std::sync::LazyLock;
 
 use anyhow::Context;
-use edison_detectord::{DiscoveredServer, EdisonInstall, ServerConfig, fingerprint};
+use sealgate_detectord::{DiscoveredServer, SealGateInstall, ServerConfig, fingerprint};
 use mcp_backend::{BackendClient, Error as BackendError, KnownStatus, SubmitRequest};
 use mcp_quarantine::{
     Action as SeenAction, ConfigStore, FileConfigStore, QuarantineRecord, SeenStore,
-    is_edison_entry,
+    is_sealgate_entry,
 };
 
 use crate::agents;
@@ -35,7 +35,7 @@ static UNMANAGEABLE: LazyLock<Vec<&'static str>> = LazyLock::new(|| {
         .collect()
 });
 
-/// Drop agent names Edison cannot manage — ChatGPT, whose servers live in the
+/// Drop agent names SealGate cannot manage — ChatGPT, whose servers live in the
 /// vendor's account, and the Claude hosts, whose config file takes stdio
 /// entries only — from a selection list.
 ///
@@ -68,13 +68,13 @@ pub fn list_agents(user: &str) -> Vec<AgentInfo> {
     // another, so a config appearing in between could put an entry and its
     // owner's paths in different worlds.
     let built = agents::build();
-    // One discovery pass for every agent's edison entry, rather than one per
+    // One discovery pass for every agent's sealgate entry, rather than one per
     // agent: discovery walks the same config set either way.
     let observed = agents::discover_all(&built);
     built
         .iter()
         .map(|a| {
-            let installs = a.edison_installs(&home);
+            let installs = a.sealgate_installs(&home);
             let targets = a.hook_workspace_targets(&home);
             let workspace_hooks_installed = targets
                 .iter()
@@ -91,8 +91,8 @@ pub fn list_agents(user: &str) -> Vec<AgentInfo> {
                 hooks_installed,
                 workspace_hooks_total: targets.len() as u32,
                 workspace_hooks_installed,
-                edison_url: installed_edison_entry(a.name(), &installs, &observed)
-                    .and_then(|s| edison_entry_url(&s.config)),
+                sealgate_url: installed_sealgate_entry(a.name(), &installs, &observed)
+                    .and_then(|s| sealgate_entry_url(&s.config)),
                 config_path: a.config_path(&home).map(|p| p.display().to_string()),
                 manageable: a.is_manageable(),
             }
@@ -100,43 +100,43 @@ pub fn list_agents(user: &str) -> Vec<AgentInfo> {
         .collect()
 }
 
-/// The `edison-watch` entry that lives exactly where this agent's install
+/// The `sealgate` entry that lives exactly where this agent's install
 /// writes one, if there is one.
 ///
 /// Matching is on the (file, key-path) pair, not the file alone: Claude Code
 /// keeps user-scope and project-scope servers in the SAME file
 /// (`~/.claude.json`, under `mcpServers` and `projects.<dir>.mcpServers`), so a
 /// path-only check would accept a project entry as ours. It also keeps
-/// `edison_url` consistent with the `config_path` reported alongside it - the
+/// `sealgate_url` consistent with the `config_path` reported alongside it - the
 /// UI shows one and previews the other, and they have to describe the same
 /// entry.
 ///
 /// Deliberately strict: an entry that exists only in some project's config is
 /// not reported. It covers that one project, and calling the agent "configured"
 /// on the strength of it would tell the user they're protected everywhere.
-fn installed_edison_entry<'a>(
+fn installed_sealgate_entry<'a>(
     agent_name: &str,
-    installs: &[EdisonInstall],
+    installs: &[SealGateInstall],
     observed: &'a [DiscoveredServer],
 ) -> Option<&'a DiscoveredServer> {
     observed.iter().find(|s| {
         s.client == agent_name
-            && is_edison_entry(s)
+            && is_sealgate_entry(s)
             && installs
                 .iter()
                 .any(|i| i.path == s.location.path && i.key_path == s.location.key_path)
     })
 }
 
-/// The upstream URL of an `edison-watch` entry, whichever shape it is in: an
+/// The upstream URL of an `sealgate` entry, whichever shape it is in: an
 /// HTTP entry carries it directly, an `npx -y mcp-remote <url> …` shim hides it
 /// in the args.
 ///
-/// Edison writes only the first. The stdio arm covers a hand-written shim in a
-/// *manageable* agent's install location — reached via `installed_edison_entry`,
-/// which requires a matching `EdisonInstall`, so the Claude hosts' leftovers
+/// SealGate writes only the first. The stdio arm covers a hand-written shim in a
+/// *manageable* agent's install location — reached via `installed_sealgate_entry`,
+/// which requires a matching `SealGateInstall`, so the Claude hosts' leftovers
 /// never arrive here.
-fn edison_entry_url(config: &ServerConfig) -> Option<String> {
+fn sealgate_entry_url(config: &ServerConfig) -> Option<String> {
     match config {
         ServerConfig::Http { url, .. } => Some(url.clone()),
         ServerConfig::Stdio { args, .. } => args
@@ -147,7 +147,7 @@ fn edison_entry_url(config: &ServerConfig) -> Option<String> {
     }
 }
 
-/// Install the `edison-watch` entry + session hooks for `agents`, reporting what
+/// Install the `sealgate` entry + session hooks for `agents`, reporting what
 /// changed per agent. The agents are added to the enrolled selection, so a
 /// later self-heal keeps them installed.
 ///
@@ -174,15 +174,15 @@ pub fn apply_integrations(
     e.save_for(user)?;
 
     let home = user_home(user);
-    let changes = install_edison_entries_for(user, &e, &home, &wanted);
-    purge_stale_edison_entries(user);
+    let changes = install_sealgate_entries_for(user, &e, &home, &wanted);
+    purge_stale_sealgate_entries(user);
     // Hooks only for what was asked for. The machine-wide sweep is enroll's job
     // (`apply_install`), which runs on every app start.
     apply_hooks_for(&home, Some(&wanted));
     Ok(changes)
 }
 
-/// Remove the `edison-watch` entry for `agents` and drop them from the enrolled
+/// Remove the `sealgate` entry for `agents` and drop them from the enrolled
 /// selection, so the self-heal doesn't put them straight back.
 pub fn revert_integrations(
     user: &str,
@@ -194,11 +194,11 @@ pub fn revert_integrations(
         if !agents_to_remove.iter().any(|s| s == agent.name()) {
             continue;
         }
-        for inst in agent.edison_installs(&home) {
+        for inst in agent.sealgate_installs(&home) {
             let res = if inst.prefer_cli {
                 crate::claude_cli::remove(user)
             } else {
-                mcp_quarantine::uninstall_edison(&inst).map_err(Into::into)
+                mcp_quarantine::uninstall_sealgate(&inst).map_err(Into::into)
             };
             changes.push(IntegrationChange {
                 agent: agent.name().to_string(),
@@ -299,8 +299,8 @@ pub fn classify(
         ServerConfig::Http { .. } => "http",
         ServerConfig::Opaque { .. } => "opaque",
     };
-    let state = if is_edison_entry(s) {
-        "edison"
+    let state = if is_sealgate_entry(s) {
+        "sealgate"
     } else {
         match &s.config {
             ServerConfig::Opaque {
@@ -388,11 +388,11 @@ pub async fn refresh_policy(user: &str) -> anyhow::Result<Status> {
 }
 
 /// Online enrollment handshake: validate the key, resolve the org, cache the
-/// policy and known set, then install the `edison-watch` proxy entry into the
+/// policy and known set, then install the `sealgate` proxy entry into the
 /// selected agents (when an MCP base URL was given).
 /// `mcp_base_url`, `selected_agents`, and `secret` are all optional inputs from
 /// the UI/CLI: `None`/unspecified keeps the previous value, so re-running
-/// `enroll` acts as an update. The selection diff uninstalls edison-watch from
+/// `enroll` acts as an update. The selection diff uninstalls sealgate from
 /// agents dropped from the set.
 #[allow(clippy::too_many_arguments)]
 pub async fn enroll(
@@ -452,8 +452,8 @@ pub async fn enroll(
     retain_manageable(&mut new_agents);
     let mcp_base_url =
         mcp_base_url.or_else(|| existing.as_ref().and_then(|e| e.mcp_base_url.clone()));
-    let edison_secret_key =
-        secret.or_else(|| existing.as_ref().and_then(|e| e.edison_secret_key.clone()));
+    let sealgate_secret_key =
+        secret.or_else(|| existing.as_ref().and_then(|e| e.sealgate_secret_key.clone()));
     // `armed` is a straight set (not additive): the UI arms enforcement when
     // onboarding completes; a missing value keeps the prior state.
     let armed = armed.unwrap_or_else(|| existing.as_ref().map(|e| e.armed).unwrap_or(false));
@@ -468,7 +468,7 @@ pub async fn enroll(
         quarantine: policy.quarantine,
         mcp_base_url,
         selected_agents: new_agents.clone(),
-        edison_secret_key,
+        sealgate_secret_key,
         armed,
     };
     paths::ensure_user_dir(user)?;
@@ -510,17 +510,17 @@ fn user_home(user: &str) -> std::path::PathBuf {
         .unwrap_or_default()
 }
 
-/// Apply everything under the target user's home: the `edison-watch` MCP entry
+/// Apply everything under the target user's home: the `sealgate` MCP entry
 /// for the *selected* agents, and hooks for *all installed* agents (as the app
 /// does). Best-effort — a failure on one agent is logged, not fatal.
 pub fn apply_install(user: &str, e: &Enrollment) {
     let home = user_home(user);
-    install_edison_entries(user, e, &home);
-    purge_stale_edison_entries(user);
+    install_sealgate_entries(user, e, &home);
+    purge_stale_sealgate_entries(user);
     apply_hooks(&home);
 }
 
-/// Hosts whose `edison-watch` entry Edison no longer writes.
+/// Hosts whose `sealgate` entry SealGate no longer writes.
 ///
 /// Frozen rather than derived from the adapters: this is a fact about what past
 /// builds wrote, so deriving it would make it drift with the code instead of
@@ -528,12 +528,12 @@ pub fn apply_install(user: &str, e: &Enrollment) {
 /// resolve, because a rename would otherwise disable the sweep in silence.
 const STDIO_SHIM_HOSTS: [&str; 2] = ["claude_desktop", "claude_cowork"];
 
-/// Why an `edison-watch` entry found on disk has to come out.
+/// Why an `sealgate` entry found on disk has to come out.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Stale {
     /// A *project-scoped* Cursor entry. `<project>/.cursor/mcp.json` takes
     /// precedence over the user-level `~/.cursor/mcp.json`, so this one shadows
-    /// the registration we just installed and the user sees "edison-watch not
+    /// the registration we just installed and the user sees "sealgate not
     /// recognized". Only Cursor has this precedence rule; other agents' project
     /// configs merge, and an entry there may well be deliberate.
     Shadowing,
@@ -546,14 +546,14 @@ enum Stale {
 
 fn stale_reason(server: &DiscoveredServer) -> Option<Stale> {
     if server.client == "cursor" {
-        return matches!(server.scope, edison_detectord::Scope::Project(_))
+        return matches!(server.scope, sealgate_detectord::Scope::Project(_))
             .then_some(Stale::Shadowing);
     }
     (STDIO_SHIM_HOSTS.contains(&server.client) && is_mcp_remote_shim(&server.config))
         .then_some(Stale::LegacyShim)
 }
 
-/// Take out every `edison-watch` entry that should no longer be on disk.
+/// Take out every `sealgate` entry that should no longer be on disk.
 ///
 /// One sweep for two unrelated causes ([`Stale`]) because both end the same
 /// way: remove the entry, record it so `restore` can put it back, and undo the
@@ -566,7 +566,7 @@ fn stale_reason(server: &DiscoveredServer) -> Option<Stale> {
 /// the published way to reach a remote MCP server from Claude Desktop, so an
 /// entry someone hand-wrote against their own gateway looks identical to one we
 /// wrote. Recording it is what makes deleting it safe.
-fn purge_stale_edison_entries(user: &str) {
+fn purge_stale_sealgate_entries(user: &str) {
     let mut q = match QuarantinedState::load_for(user) {
         Ok(q) => q,
         Err(err) => {
@@ -591,7 +591,7 @@ fn purge_stale_edison_entries(user: &str) {
         std::collections::HashSet::new();
 
     for server in &agents::discover_all(&agents::build()) {
-        if !is_edison_entry(server) {
+        if !is_sealgate_entry(server) {
             continue;
         }
         let Some(reason) = stale_reason(server) else {
@@ -609,7 +609,7 @@ fn purge_stale_edison_entries(user: &str) {
                     client = %server.client,
                     path = %loc.path.display(),
                     ?reason,
-                    "removed a stale edison-watch entry (restorable)"
+                    "removed a stale sealgate entry (restorable)"
                 )
             }
             Err(err) => tracing::warn!(
@@ -617,16 +617,16 @@ fn purge_stale_edison_entries(user: &str) {
                 path = %loc.path.display(),
                 ?reason,
                 error = %err,
-                "removing a stale edison-watch entry failed"
+                "removing a stale sealgate entry failed"
             ),
         }
     }
     commit_purge(&undo, || q.save_for(user));
 }
 
-/// Whether an entry is the shim **Edison itself wrote**.
+/// Whether an entry is the shim **SealGate itself wrote**.
 ///
-/// Deliberately not a general `mcp-remote` detector. Edison emitted exactly one
+/// Deliberately not a general `mcp-remote` detector. SealGate emitted exactly one
 /// shape, from one function, unchanged for the writer's whole life:
 ///
 /// ```text
@@ -647,7 +647,7 @@ fn purge_stale_edison_entries(user: &str) {
 /// None of that generality serves a migration whose input is one known string.
 ///
 /// A hand-written `mcp-remote` entry in some other shape is therefore left
-/// alone, which is the right outcome twice over: it is not Edison's to remove,
+/// alone, which is the right outcome twice over: it is not SealGate's to remove,
 /// and it still reaches whatever gateway its author pointed it at.
 fn is_mcp_remote_shim(config: &ServerConfig) -> bool {
     let ServerConfig::Stdio { command, args, .. } = config else {
@@ -657,7 +657,7 @@ fn is_mcp_remote_shim(config: &ServerConfig) -> bool {
         return false;
     }
     let mut rest = args.iter().map(String::as_str).peekable();
-    // `-y` is what Edison wrote; tolerated as optional only because removing it
+    // `-y` is what SealGate wrote; tolerated as optional only because removing it
     // is an edit that leaves the entry otherwise untouched.
     if matches!(rest.peek(), Some(&"-y") | Some(&"--yes")) {
         rest.next();
@@ -708,7 +708,7 @@ fn commit_purge(
     }
     let Err(err) = save() else { return true };
     // The records did not reach disk, so put every entry back. The shadowing
-    // entry returns with it - the user keeps seeing "edison-watch not
+    // entry returns with it - the user keeps seeing "sealgate not
     // recognized" until the next `apply_install` retries - but that is a
     // visible, retryable problem, where a removal nothing recorded is silent
     // and permanent.
@@ -764,15 +764,15 @@ fn quarantined_entry(server: &DiscoveredServer, record: QuarantineRecord) -> Qua
     }
 }
 
-fn install_edison_entries(user: &str, e: &Enrollment, home: &std::path::Path) {
+fn install_sealgate_entries(user: &str, e: &Enrollment, home: &std::path::Path) {
     let selected = e.selected_agents.clone();
-    install_edison_entries_for(user, e, home, &selected);
+    install_sealgate_entries_for(user, e, home, &selected);
 }
 
-/// Install the `edison-watch` entry for `wanted` agents, reporting per-agent
-/// outcomes. `install_edison_entries` passes the whole enrolled selection;
+/// Install the `sealgate` entry for `wanted` agents, reporting per-agent
+/// outcomes. `install_sealgate_entries` passes the whole enrolled selection;
 /// `apply_integrations` passes just the agents the UI asked for.
-fn install_edison_entries_for(
+fn install_sealgate_entries_for(
     user: &str,
     e: &Enrollment,
     home: &std::path::Path,
@@ -781,28 +781,28 @@ fn install_edison_entries_for(
     let Some(mcp_base) = e.mcp_base_url.as_deref() else {
         if !wanted.is_empty() {
             tracing::warn!(
-                "agents selected but no mcp_base_url set — skipping edison-watch install"
+                "agents selected but no mcp_base_url set — skipping sealgate install"
             );
         }
         return Vec::new();
     };
-    let secret = e.edison_secret_key.as_deref();
+    let secret = e.sealgate_secret_key.as_deref();
     let mut changes = Vec::new();
     for agent in agents::build() {
         if !wanted.iter().any(|s| s == agent.name()) {
             continue;
         }
-        for inst in agent.edison_installs(home) {
+        for inst in agent.sealgate_installs(home) {
             // Claude Code goes through its own CLI (as the user); the file write
             // is the fallback.
             let done_via_cli = inst.prefer_cli
                 && {
-                    let url = mcp_quarantine::edison_url(mcp_base, &e.api_key, &inst.client_id);
+                    let url = mcp_quarantine::sealgate_url(mcp_base, &e.api_key, &inst.client_id);
                     match crate::claude_cli::install(user, &url, secret) {
                         Ok(()) => {
                             tracing::info!(
                                 agent = agent.name(),
-                                "installed edison-watch (via claude CLI)"
+                                "installed sealgate (via claude CLI)"
                             );
                             true
                         }
@@ -825,13 +825,13 @@ fn install_edison_entries_for(
             // The backup is taken on the first edit only, so report it just
             // when it's actually on disk.
             let backup = mcp_quarantine::backup_path(&inst.path);
-            let res = mcp_quarantine::install_edison(&inst, mcp_base, &e.api_key, secret);
+            let res = mcp_quarantine::install_sealgate(&inst, mcp_base, &e.api_key, secret);
             match &res {
                 Ok(()) => {
-                    tracing::info!(agent = agent.name(), path = %inst.path.display(), "installed edison-watch")
+                    tracing::info!(agent = agent.name(), path = %inst.path.display(), "installed sealgate")
                 }
                 Err(err) => {
-                    tracing::warn!(agent = agent.name(), error = %err, "edison-watch install failed")
+                    tracing::warn!(agent = agent.name(), error = %err, "sealgate install failed")
                 }
             }
             changes.push(IntegrationChange {
@@ -846,12 +846,12 @@ fn install_edison_entries_for(
     changes
 }
 
-/// Re-install the edison-watch entry for any *selected* agent where it's
+/// Re-install the sealgate entry for any *selected* agent where it's
 /// currently missing — e.g. the user replaced/overwrote a config file, dropping
 /// our entry. Only writes when the entry is absent (checked against live
 /// discovery), so it never rewrites a config that already has it and can't loop
 /// the fs watcher. Returns how many agents were (re-)installed.
-pub fn heal_edison_install(user: &str, e: &Enrollment) -> usize {
+pub fn heal_sealgate_install(user: &str, e: &Enrollment) -> usize {
     let Some(mcp_base) = e.mcp_base_url.as_deref() else {
         return 0;
     };
@@ -863,10 +863,10 @@ pub fn heal_edison_install(user: &str, e: &Enrollment) -> usize {
     let built = agents::build();
     let present: std::collections::HashSet<&str> = agents::discover_all(&built)
         .iter()
-        .filter(|s| is_edison_entry(s))
+        .filter(|s| is_sealgate_entry(s))
         .map(|s| s.client)
         .collect();
-    let secret = e.edison_secret_key.as_deref();
+    let secret = e.sealgate_secret_key.as_deref();
     let mut healed = 0;
     for agent in &built {
         if !e.selected_agents.iter().any(|s| s == agent.name()) {
@@ -883,25 +883,25 @@ pub fn heal_edison_install(user: &str, e: &Enrollment) -> usize {
         //
         // A failed write does not count either. Claiming a heal for an install
         // that errored would put the same false signal back for the case that
-        // matters most: the config Edison could not repair.
+        // matters most: the config SealGate could not repair.
         //
         // The error goes to `debug`, not `warn`, because this loop is on the
         // 20s rescan: a config that cannot be repaired fails identically
         // forever, and one warn per pass would bury the warnings that mean
-        // something new. `install_edison_entries_for` can afford `warn` because
+        // something new. `install_sealgate_entries_for` can afford `warn` because
         // it runs when the user asks. The durable signal here is the count -
         // a failing agent now stays out of it, which is the whole point.
         let mut wrote = false;
-        for inst in agent.edison_installs(&home) {
+        for inst in agent.sealgate_installs(&home) {
             let done_via_cli = inst.prefer_cli && {
-                let url = mcp_quarantine::edison_url(mcp_base, &e.api_key, &inst.client_id);
+                let url = mcp_quarantine::sealgate_url(mcp_base, &e.api_key, &inst.client_id);
                 crate::claude_cli::install(user, &url, secret).is_ok()
             };
             if done_via_cli {
                 wrote = true;
                 continue;
             }
-            match mcp_quarantine::install_edison(&inst, mcp_base, &e.api_key, secret) {
+            match mcp_quarantine::install_sealgate(&inst, mcp_base, &e.api_key, secret) {
                 Ok(()) => wrote = true,
                 Err(err) => {
                     tracing::debug!(
@@ -918,18 +918,18 @@ pub fn heal_edison_install(user: &str, e: &Enrollment) -> usize {
         }
         tracing::info!(
             agent = agent.name(),
-            "re-installed missing edison-watch entry (self-heal)"
+            "re-installed missing sealgate entry (self-heal)"
         );
         healed += 1;
     }
     healed
 }
 
-/// Materialise the hook scripts under `home/.edison-watch`, then inject hooks
+/// Materialise the hook scripts under `home/.sealgate`, then inject hooks
 /// into every *installed* agent that has a hook surface (matching the app).
 ///
 /// This machine-wide sweep belongs to the enroll path, which runs on every app
-/// start: session hooks are how Edison observes what agents do, independent of
+/// start: session hooks are how SealGate observes what agents do, independent of
 /// which of them are registered with the gateway.
 fn apply_hooks(home: &std::path::Path) {
     apply_hooks_for(home, None)
@@ -942,7 +942,7 @@ fn apply_hooks(home: &std::path::Path) {
 /// an unexplained modification (plus a backup) in a config they didn't select.
 /// Coverage isn't lost by scoping: enroll sweeps every installed agent.
 fn apply_hooks_for(home: &std::path::Path, only: Option<&[String]>) {
-    let scripts = match mcp_quarantine::ensure_scripts(&home.join(".edison-watch")) {
+    let scripts = match mcp_quarantine::ensure_scripts(&home.join(".sealgate")) {
         Ok(s) => s,
         Err(err) => {
             tracing::warn!(error = %err, "materialising hook scripts failed");
@@ -983,21 +983,21 @@ fn apply_hooks_for(home: &std::path::Path, only: Option<&[String]>) {
     }
 }
 
-/// Remove the `edison-watch` entry from the given agents under `user`'s home.
-fn remove_edison_for(user: &str, agents_to_remove: &[String]) {
+/// Remove the `sealgate` entry from the given agents under `user`'s home.
+fn remove_sealgate_for(user: &str, agents_to_remove: &[String]) {
     let home = user_home(user);
     for agent in agents::build() {
         if !agents_to_remove.iter().any(|s| s == agent.name()) {
             continue;
         }
-        for inst in agent.edison_installs(&home) {
+        for inst in agent.sealgate_installs(&home) {
             let res = if inst.prefer_cli {
                 crate::claude_cli::remove(user)
             } else {
-                mcp_quarantine::uninstall_edison(&inst).map_err(Into::into)
+                mcp_quarantine::uninstall_sealgate(&inst).map_err(Into::into)
             };
             if let Err(err) = res {
-                tracing::warn!(agent = agent.name(), error = %err, "edison-watch uninstall failed");
+                tracing::warn!(agent = agent.name(), error = %err, "sealgate uninstall failed");
             }
         }
     }
@@ -1031,7 +1031,7 @@ pub async fn verify_secret(user: &str, key: String) -> anyhow::Result<mcp_backen
         .await
         .context("verifying secret key")?;
     if result.valid {
-        e.edison_secret_key = Some(key);
+        e.sealgate_secret_key = Some(key);
         e.save_for(user)?;
         apply_install(user, &e);
     }
@@ -1047,24 +1047,24 @@ pub async fn reset_secret(user: &str, key: String) -> anyhow::Result<mcp_backend
         .reset_secret_key(&key)
         .await
         .context("resetting secret key")?;
-    e.edison_secret_key = Some(key);
+    e.sealgate_secret_key = Some(key);
     e.save_for(user)?;
     apply_install(user, &e);
     Ok(result)
 }
 
-/// Remove `user`'s enrollment (uninstalling edison-watch first); returns the org
+/// Remove `user`'s enrollment (uninstalling sealgate first); returns the org
 /// name if it was enrolled.
 pub fn unenroll(user: &str) -> anyhow::Result<Option<String>> {
     let removed = Enrollment::remove_for(user)?;
     if let Some(e) = &removed {
-        remove_edison_for(user, &e.selected_agents);
+        remove_sealgate_for(user, &e.selected_agents);
         remove_all_hooks_for(user); // full teardown removes hooks everywhere
     }
     Ok(removed.map(|e| e.org_name))
 }
 
-/// Dispose of a discovered, fingerprint-able server: send it to EW (submit +
+/// Dispose of a discovered, fingerprint-able server: send it to SG (submit +
 /// remove) or skip (remove + mark dismissed). Both remove it locally
 /// (quarantine-first).
 pub async fn disposition(
@@ -1096,7 +1096,7 @@ pub async fn disposition(
         .filter(|s| {
             s.name == name
                 && agent.is_none_or(|a| s.client == a)
-                && !is_edison_entry(s)
+                && !is_sealgate_entry(s)
                 && fingerprint(&s.name, &s.config).is_some()
         })
         .collect();
@@ -1119,7 +1119,7 @@ pub async fn disposition(
             let cfg = match submit_config {
                 Some(c) => c,
                 None => {
-                    edison_detectord::secret_detection::templatize_for_fingerprint(&server.config)
+                    sealgate_detectord::secret_detection::templatize_for_fingerprint(&server.config)
                 }
             };
             submit_to_ew(&e, name, &cfg, register).await?
@@ -1163,9 +1163,9 @@ async fn disposition_quarantined(
                 Some(c) => c,
                 None => {
                     let raw = entry.config.clone().ok_or_else(|| {
-                        anyhow::anyhow!("no stored config for '{}' — cannot send to EW", entry.name)
+                        anyhow::anyhow!("no stored config for '{}' — cannot send to SG", entry.name)
                     })?;
-                    edison_detectord::secret_detection::templatize_for_fingerprint(&raw)
+                    sealgate_detectord::secret_detection::templatize_for_fingerprint(&raw)
                 }
             };
             // Submit under the (possibly renamed) name, but keep marking the
@@ -1231,7 +1231,7 @@ fn conflict_detail(err: &BackendError, name: &str) -> String {
         BackendError::Status {
             detail: Some(d), ..
         } if !d.is_empty() => d.clone(),
-        _ => format!("'{name}' is already registered at Edison Watch"),
+        _ => format!("'{name}' is already registered at SealGate"),
     }
 }
 
@@ -1271,9 +1271,9 @@ mod tests {
             kind: SourceKind::Json,
             source_path: PathBuf::from(path),
             disabled_path: PathBuf::from(format!("{path}.disabled")),
-            backup_path: PathBuf::from(format!("{path}.ew-backup")),
+            backup_path: PathBuf::from(format!("{path}.sg-backup")),
             key_path: vec!["mcpServers".into()],
-            server_key: "edison-watch".into(),
+            server_key: "sealgate".into(),
             extra: Default::default(),
         }
     }
@@ -1284,7 +1284,7 @@ mod tests {
     fn quarantined_entry_carries_the_record_and_a_usable_fingerprint() {
         let server = entry(
             "cursor",
-            "edison-watch",
+            "sealgate",
             "/home/u/work/app/.cursor/mcp.json",
             &["mcpServers"],
             Scope::Project(PathBuf::from("/home/u/work/app")),
@@ -1293,7 +1293,7 @@ mod tests {
         let record = quarantine_record("/home/u/work/app/.cursor/mcp.json");
 
         let e = quarantined_entry(&server, record.clone());
-        assert_eq!(e.name, "edison-watch");
+        assert_eq!(e.name, "sealgate");
         assert_eq!(e.agent, "cursor");
         assert_eq!(e.record.disabled_path, record.disabled_path);
         assert!(e.config.is_some(), "kept so it can be resubmitted later");
@@ -1314,7 +1314,7 @@ mod tests {
         );
         server.config = ServerConfig::Opaque {
             removable: true,
-            reason: edison_detectord::OpaqueReason::CursorPlugin,
+            reason: sealgate_detectord::OpaqueReason::CursorPlugin,
         };
 
         let e = quarantined_entry(
@@ -1353,14 +1353,14 @@ mod tests {
             "error should name the path: {err}"
         );
     }
-    use edison_detectord::{ConfigLocation, EdisonStyle, HttpKind, Scope, SourceKind, Transport};
+    use sealgate_detectord::{ConfigLocation, SealGateStyle, HttpKind, Scope, SourceKind, Transport};
     use std::path::PathBuf;
 
-    fn install(path: &str, key_path: &[&str]) -> EdisonInstall {
-        EdisonInstall {
+    fn install(path: &str, key_path: &[&str]) -> SealGateInstall {
+        SealGateInstall {
             path: PathBuf::from(path),
             key_path: key_path.iter().map(|s| s.to_string()).collect(),
-            style: EdisonStyle::Http,
+            style: SealGateStyle::Http,
             client_id: "test".into(),
             prefer_cli: false,
         }
@@ -1406,7 +1406,7 @@ mod tests {
         std::fs::create_dir_all(cfg.parent().unwrap()).unwrap();
         std::fs::write(
             &cfg,
-            r#"{"mcpServers":{"edison-watch":{"url":"https://mcp.edison.watch/mcp"},"other":{"url":"https://x"}}}"#,
+            r#"{"mcpServers":{"sealgate":{"url":"https://mcp.edison.watch/mcp"},"other":{"url":"https://x"}}}"#,
         )
         .unwrap();
 
@@ -1414,7 +1414,7 @@ mod tests {
             kind: SourceKind::Json,
             path: cfg.clone(),
             key_path: vec!["mcpServers".into()],
-            server_key: "edison-watch".into(),
+            server_key: "sealgate".into(),
             extra: Default::default(),
         };
         let config = ServerConfig::Http {
@@ -1427,7 +1427,7 @@ mod tests {
         let after: serde_json::Value =
             serde_json::from_str(&std::fs::read_to_string(&cfg).unwrap()).unwrap();
         assert!(
-            after["mcpServers"].get("edison-watch").is_none(),
+            after["mcpServers"].get("sealgate").is_none(),
             "precondition: the purge removed it"
         );
 
@@ -1438,7 +1438,7 @@ mod tests {
         let back: serde_json::Value =
             serde_json::from_str(&std::fs::read_to_string(&cfg).unwrap()).unwrap();
         assert_eq!(
-            back["mcpServers"]["edison-watch"]["url"], "https://mcp.edison.watch/mcp",
+            back["mcpServers"]["sealgate"]["url"], "https://mcp.edison.watch/mcp",
             "the entry did not come back - it is stranded with no record"
         );
         assert!(
@@ -1458,14 +1458,14 @@ mod tests {
             std::fs::create_dir_all(cfg.parent().unwrap()).unwrap();
             std::fs::write(
                 &cfg,
-                r#"{"mcpServers":{"edison-watch":{"url":"https://mcp.edison.watch/mcp"}}}"#,
+                r#"{"mcpServers":{"sealgate":{"url":"https://mcp.edison.watch/mcp"}}}"#,
             )
             .unwrap();
             let loc = ConfigLocation {
                 kind: SourceKind::Json,
                 path: cfg.clone(),
                 key_path: vec!["mcpServers".into()],
-                server_key: "edison-watch".into(),
+                server_key: "sealgate".into(),
                 extra: Default::default(),
             };
             let config = ServerConfig::Http {
@@ -1485,7 +1485,7 @@ mod tests {
 
             let v: serde_json::Value =
                 serde_json::from_str(&std::fs::read_to_string(&cfg).unwrap()).unwrap();
-            let present = v["mcpServers"].get("edison-watch").is_some();
+            let present = v["mcpServers"].get("sealgate").is_some();
             assert_eq!(stands, save_ok, "{label}: wrong commit result");
             assert_eq!(
                 present, !save_ok,
@@ -1512,15 +1512,15 @@ mod tests {
         let installs = vec![install("/home/u/.cursor/mcp.json", &["mcpServers"])];
         let observed = vec![entry(
             "cursor",
-            "edison-watch",
+            "sealgate",
             "/home/u/.cursor/mcp.json",
             &["mcpServers"],
             Scope::Global,
             "https://mcp.edison.watch/mcp?client=cursor",
         )];
-        let found = installed_edison_entry("cursor", &installs, &observed);
+        let found = installed_sealgate_entry("cursor", &installs, &observed);
         assert_eq!(
-            found.and_then(|s| edison_entry_url(&s.config)).as_deref(),
+            found.and_then(|s| sealgate_entry_url(&s.config)).as_deref(),
             Some("https://mcp.edison.watch/mcp?client=cursor")
         );
     }
@@ -1534,13 +1534,13 @@ mod tests {
         let installs = vec![install("/home/u/.claude.json", &["mcpServers"])];
         let observed = vec![entry(
             "claude_code",
-            "edison-watch",
+            "sealgate",
             "/home/u/.claude.json",
             &["projects", "/home/u/work/app", "mcpServers"],
             Scope::Project(PathBuf::from("/home/u/work/app")),
             "https://stale.example/mcp",
         )];
-        assert!(installed_edison_entry("claude_code", &installs, &observed).is_none());
+        assert!(installed_sealgate_entry("claude_code", &installs, &observed).is_none());
     }
 
     #[test]
@@ -1548,13 +1548,13 @@ mod tests {
         let installs = vec![install("/home/u/.cursor/mcp.json", &["mcpServers"])];
         let observed = vec![entry(
             "cursor",
-            "edison-watch",
+            "sealgate",
             "/home/u/work/app/.cursor/mcp.json",
             &["mcpServers"],
             Scope::Project(PathBuf::from("/home/u/work/app")),
             "https://team-gateway.example/mcp",
         )];
-        assert!(installed_edison_entry("cursor", &installs, &observed).is_none());
+        assert!(installed_sealgate_entry("cursor", &installs, &observed).is_none());
     }
 
     /// The URL reported for one agent must not come from another's config.
@@ -1563,20 +1563,20 @@ mod tests {
         let installs = vec![install("/home/u/.cursor/mcp.json", &["mcpServers"])];
         let observed = vec![entry(
             "vscode",
-            "edison-watch",
+            "sealgate",
             "/home/u/.cursor/mcp.json",
             &["mcpServers"],
             Scope::Global,
             "https://mcp.edison.watch/mcp?client=vscode",
         )];
-        assert!(installed_edison_entry("cursor", &installs, &observed).is_none());
+        assert!(installed_sealgate_entry("cursor", &installs, &observed).is_none());
     }
 
     #[test]
     fn picks_the_url_out_of_a_stdio_shim_entry() {
-        // A hand-written shim in an install location Edison does write to.
+        // A hand-written shim in an install location SealGate does write to.
         // `?client=cursor`, not a Claude host: those have no install location,
-        // so `installed_edison_entry` never routes their entries here.
+        // so `installed_sealgate_entry` never routes their entries here.
         let config = ServerConfig::Stdio {
             command: "npx".into(),
             args: vec![
@@ -1587,7 +1587,7 @@ mod tests {
             env: Default::default(),
         };
         assert_eq!(
-            edison_entry_url(&config).as_deref(),
+            sealgate_entry_url(&config).as_deref(),
             Some("https://mcp.edison.watch/mcp?client=cursor")
         );
     }
@@ -1601,7 +1601,7 @@ mod tests {
     }
 
     #[test]
-    fn recognises_the_entry_edison_wrote() {
+    fn recognises_the_entry_sealgate_wrote() {
         // The exact shape, with and without the trailing secret header.
         assert!(is_mcp_remote_shim(&stdio(
             "npx",
@@ -1641,8 +1641,8 @@ mod tests {
     }
 
     #[test]
-    fn leaves_alone_every_shape_edison_never_wrote() {
-        // These are NOT oversights. Edison emitted one shape from one function
+    fn leaves_alone_every_shape_sealgate_never_wrote() {
+        // These are NOT oversights. SealGate emitted one shape from one function
         // for the writer's whole life, so anything else is someone's own entry:
         // not ours to delete, and still reaching the gateway its author chose.
         // Recognising them was what kept this predicate wrong - each launcher
@@ -1656,7 +1656,7 @@ mod tests {
             stdio("npx", &["--", "mcp-remote", "https://x"]),
             stdio("npx", &["-w", "some-workspace", "mcp-remote", "https://x"]),
         ] {
-            assert!(!is_mcp_remote_shim(&other), "{other:?} is not Edison's");
+            assert!(!is_mcp_remote_shim(&other), "{other:?} is not SealGate's");
         }
     }
 
@@ -1699,7 +1699,7 @@ mod tests {
         assert!(!is_mcp_remote_shim(&ServerConfig::Http {
             url: "https://mcp.edison.watch/mcp/K/".into(),
             headers: Default::default(),
-            kind: edison_detectord::HttpKind::Http,
+            kind: sealgate_detectord::HttpKind::Http,
         }));
     }
 
@@ -1724,7 +1724,7 @@ mod tests {
         // user-level one is what we just installed.
         let mut cursor = entry(
             "cursor",
-            "edison-watch",
+            "sealgate",
             "/home/u/p/.cursor/mcp.json",
             &["mcpServers"],
             Scope::Project(PathBuf::from("/home/u/p")),
@@ -1735,10 +1735,10 @@ mod tests {
         assert_eq!(stale_reason(&cursor), None);
 
         // A Claude host is stale only when the entry is the shim. An HTTP entry
-        // there is someone's own doing - Edison never wrote one.
+        // there is someone's own doing - SealGate never wrote one.
         let mut claude = entry(
             "claude_desktop",
-            "edison-watch",
+            "sealgate",
             "/home/u/claude_desktop_config.json",
             &["mcpServers"],
             Scope::Global,
@@ -1748,7 +1748,7 @@ mod tests {
         claude.config = stdio("npx", &["-y", "mcp-remote", "https://x"]);
         assert_eq!(stale_reason(&claude), Some(Stale::LegacyShim));
 
-        // The same shim under a host Edison never wrote it to stays put.
+        // The same shim under a host SealGate never wrote it to stays put.
         let mut elsewhere = claude.clone();
         elsewhere.client = "vscode";
         assert_eq!(stale_reason(&elsewhere), None);

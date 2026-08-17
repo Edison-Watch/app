@@ -18,7 +18,7 @@
  * So the shared manifest has to describe both arches. That is safe because
  * electron-updater picks the download by matching process.arch against the file
  * URL (Provider.findFile), and nsis.artifactName carries the arch:
- * EdisonWatch-<version>-x64-setup.exe / -arm64-setup.exe.
+ * SealGate-<version>-x64-setup.exe / -arm64-setup.exe.
  *
  * The per-arch manifests are left on the release untouched - they are correct
  * for their own arch, so whichever one an installed build ends up polling hands

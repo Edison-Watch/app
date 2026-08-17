@@ -6,13 +6,13 @@
  *          The Phase 1 scene is the standalone {@link AdminFleetBlindAnimation},
  *          whose building blocks (laptops, servers, no-visibility overlay,
  *          direct connection lines) are re-imported here.
- * Transition: Edison Watch fades in as a central gateway.
- * Phase 2 - "Control": All connections route through Edison. The admin
- *          gains full visibility with local Edison wrappers on each
+ * Transition: SealGate fades in as a central gateway.
+ * Phase 2 - "Control": All connections route through SealGate. The admin
+ *          gains full visibility with local SealGate wrappers on each
  *          laptop and policy enforcement (accept/deny) at the gateway.
  *          The Phase 2 scene is the standalone {@link AdminFleetGovernedAnimation},
  *          whose building blocks (routed lines, full-visibility overlay,
- *          local Edison wrappers, policy icon) are re-imported here.
+ *          local SealGate wrappers, policy icon) are re-imported here.
  *
  * 12s loop. Pure SVG + CSS. Respects `prefers-reduced-motion`.
  */
@@ -21,7 +21,7 @@ import { AGENT_REGISTRY } from '../../agent-registry/index'
 import {
   AdminFigure,
   DANGER,
-  EdisonGateway,
+  BrandGateway,
   McpPacket,
   ORANGE as O,
   ProgressBar,
@@ -55,7 +55,7 @@ const CSS = `
 
 /* ── phase visibility (12s cycle) ── */
 .afc .afc-direct  { animation: afc-dv 12s ease-in-out infinite; }
-.afc .afc-edison  { animation: afc-ev 12s ease-in-out infinite; transform-origin: 340px 130px; }
+.afc .afc-sealgate  { animation: afc-ev 12s ease-in-out infinite; transform-origin: 340px 130px; }
 .afc .afc-routed  { animation: afc-rv 12s ease-in-out infinite; }
 /* packets */
 .afc .afc-pkt-p1 { color:${O}; animation: afc-pkt-p1 12s ease-in-out infinite; }
@@ -73,7 +73,7 @@ const CSS = `
   54%     { opacity:0; }
   100%    { opacity:0; }
 }
-/* Edison fades in at ~50% */
+/* SealGate fades in at ~50% */
 @keyframes afc-ev {
   0%,48%  { opacity:0; transform:scale(.85); }
   56%     { opacity:1; transform:scale(1); }
@@ -119,7 +119,7 @@ const CSS = `
   37%,100%{ opacity:0; }
 }
 
-/* ── Phase 2 pkt1: L1 → Edison → GitHub (allowed) ── */
+/* ── Phase 2 pkt1: L1 → SealGate → GitHub (allowed) ── */
 @keyframes afc-pkt1 {
   0%,57%  { opacity:0; }
   58%     { transform:translate(120px,33px);  opacity:.8; color:${O}; }
@@ -131,7 +131,7 @@ const CSS = `
   75%,100%{ opacity:0; }
 }
 
-/* ── Phase 2 pkt2: L2 → Edison → Slack (allowed) ── */
+/* ── Phase 2 pkt2: L2 → SealGate → Slack (allowed) ── */
 @keyframes afc-pkt2 {
   0%,64%  { opacity:0; }
   65%     { transform:translate(120px,133px); opacity:.8; color:${O}; }
@@ -143,7 +143,7 @@ const CSS = `
   82%,100%{ opacity:0; }
 }
 
-/* ── Phase 2 pkt3: L3 → Edison → DENIED ── */
+/* ── Phase 2 pkt3: L3 → SealGate → DENIED ── */
 @keyframes afc-pkt3 {
   0%,71%  { opacity:0; }
   72%     { transform:translate(120px,233px); opacity:.8; color:${O}; }
@@ -169,20 +169,20 @@ const CSS = `
 
 @media (prefers-reduced-motion:reduce) {
   .afc .afc-line, .afc .afc-pkt-p1, .afc .afc-pkt1, .afc .afc-pkt2, .afc .afc-pkt3,
-  .afc .afc-pulse, .afc .afc-direct, .afc .afc-edison,
+  .afc .afc-pulse, .afc .afc-direct, .afc .afc-sealgate,
   .afc .afc-routed, .afc .afc-v1, .afc .afc-v2, .afc .afc-v3 { animation:none; }
   .afc .afc-pkt-p1, .afc .afc-pkt1, .afc .afc-pkt2, .afc .afc-pkt3 { opacity:0; }
   .afc .afc-progress { animation:none; transform:scaleX(1); }
-  .afc .afc-edison { opacity:1; transform:scale(1); }
+  .afc .afc-sealgate { opacity:1; transform:scale(1); }
   .afc .afc-direct { opacity:0; }
   .afc .afc-routed { opacity:1; }
 }
 .afc.anim-static .afc-line, .afc.anim-static .afc-pkt-p1, .afc.anim-static .afc-pkt1, .afc.anim-static .afc-pkt2, .afc.anim-static .afc-pkt3,
-.afc.anim-static .afc-pulse, .afc.anim-static .afc-direct, .afc.anim-static .afc-edison,
+.afc.anim-static .afc-pulse, .afc.anim-static .afc-direct, .afc.anim-static .afc-sealgate,
 .afc.anim-static .afc-routed, .afc.anim-static .afc-v1, .afc.anim-static .afc-v2, .afc.anim-static .afc-v3 { animation:none; }
 .afc.anim-static .afc-pkt-p1, .afc.anim-static .afc-pkt1, .afc.anim-static .afc-pkt2, .afc.anim-static .afc-pkt3 { opacity:0; }
 .afc.anim-static .afc-progress { animation:none; transform:scaleX(1); }
-.afc.anim-static .afc-edison { opacity:1; transform:scale(1); }
+.afc.anim-static .afc-sealgate { opacity:1; transform:scale(1); }
 .afc.anim-static .afc-direct { opacity:0; }
 .afc.anim-static .afc-routed { opacity:1; }
 `
@@ -215,15 +215,15 @@ export default function AdminFleetAnimation(): React.ReactNode {
           <FleetDirectLines lineClassName="afc-line" />
         </g>
 
-        {/* ══ Edison gateway (fades in for phase 2) ══ */}
-        <g className="afc-edison">
-          <EdisonGateway
+        {/* ══ SealGate gateway (fades in for phase 2) ══ */}
+        <g className="afc-sealgate">
+          <BrandGateway
             cx={340}
             cy={130}
             r={30}
             logoW={54}
             pulseClassName="afc-pulse"
-            label="Edison Watch"
+            label="SealGate"
           />
           <AdminFullVisibilityOverlay />
         </g>
@@ -238,16 +238,16 @@ export default function AdminFleetAnimation(): React.ReactNode {
         <Laptop y={105} agents={[CODEX]} />
         <Laptop y={205} agents={[CURSOR]} />
 
-        {/* ══ Local Edison wrapper + shield on each laptop (Phase 2) ══ */}
+        {/* ══ Local SealGate wrapper + shield on each laptop (Phase 2) ══ */}
         <g className="afc-routed">
           <FleetLocalWrappers />
         </g>
 
-        {/* ══ Policy verdicts near Edison (Phase 2, staggered) ══ */}
+        {/* ══ Policy verdicts near SealGate (Phase 2, staggered) ══ */}
         <VerdictBadge className="afc-v1" cx={290} cy={108} r={9} variant="allow" />
         <VerdictBadge className="afc-v2" cx={290} cy={130} r={9} variant="allow" />
         <VerdictBadge className="afc-v3" cx={290} cy={152} r={9} variant="deny" />
-        {/* Policy icon near Edison */}
+        {/* Policy icon near SealGate */}
         <g className="afc-routed">
           <FleetPolicyIcon />
         </g>

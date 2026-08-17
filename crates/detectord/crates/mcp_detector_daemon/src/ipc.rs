@@ -32,7 +32,7 @@ pub fn default_socket_path() -> PathBuf {
 #[cfg(windows)]
 pub fn default_socket_path() -> PathBuf {
     PathBuf::from(format!(
-        r"\\.\pipe\edison-detectord.{}",
+        r"\\.\pipe\sealgate-detectord.{}",
         crate::paths::current_username()
     ))
 }

@@ -19,7 +19,7 @@ import { getUpdateSettings, setUpdateSettings } from '../infra/updateSettings'
 
 describe('updateSettings', () => {
   beforeEach(() => {
-    userDataDir = mkdtempSync(join(tmpdir(), 'ew-update-settings-'))
+    userDataDir = mkdtempSync(join(tmpdir(), 'sg-update-settings-'))
     activeEnv = 'demo'
   })
   afterEach(() => {

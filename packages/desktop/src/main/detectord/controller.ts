@@ -2,7 +2,7 @@
 //
 // Like stdiod/controller.ts, this only orchestrates one-shot CLI subcommands
 // (`service install|uninstall|status`). The LaunchAgent registered by
-// `edison-detectord service install` is what actually keeps the daemon running;
+// `sealgate-detectord service install` is what actually keeps the daemon running;
 // live operations go through the socket (see socket.ts), not this controller.
 
 import { spawn } from 'node:child_process'
@@ -21,10 +21,10 @@ export interface ServiceStatus {
   socket: string
 }
 
-// EDISON_DRY_RUN (Playwright/Storybook) short-circuits subprocess calls so test
+// SEALGATE_DRY_RUN (Playwright/Storybook) short-circuits subprocess calls so test
 // runs don't touch launchctl on the host, matching stdiod's controller.
 function dryRun(): boolean {
-  return process.env.EDISON_DRY_RUN === '1'
+  return process.env.SEALGATE_DRY_RUN === '1'
 }
 
 function runDetectord(args: string[]): Promise<SpawnResult> {

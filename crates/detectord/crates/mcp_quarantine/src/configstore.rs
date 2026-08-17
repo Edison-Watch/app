@@ -21,8 +21,8 @@
 
 use std::path::{Path, PathBuf};
 
-use edison_detectord::{
-    ConfigLocation, EdisonInstall, EdisonStyle, HttpKind, LocationExtra, ServerConfig, SourceKind,
+use sealgate_detectord::{
+    ConfigLocation, SealGateInstall, SealGateStyle, HttpKind, LocationExtra, ServerConfig, SourceKind,
     StateShape,
 };
 use serde_json::{Map, Value, json};
@@ -30,9 +30,9 @@ use serde_json::{Map, Value, json};
 use crate::error::{Error, Result};
 use crate::statedb::{read_row, write_row};
 
-const QUARANTINED_BY: &str = "Edison Watch";
-const META_ORIGINAL_FILE: &str = "_edisonOriginalFile";
-const META_KEY_PATH: &str = "_edisonKeyPath";
+const QUARANTINED_BY: &str = "SealGate";
+const META_ORIGINAL_FILE: &str = "_sealgateOriginalFile";
+const META_KEY_PATH: &str = "_sealgateKeyPath";
 
 /// What a [`ConfigStore`] needs to undo a quarantine.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -57,7 +57,7 @@ pub trait ConfigStore: Send + Sync {
 
 /// Writer covering every actionable [`SourceKind`]: JSON/JSONC files, Claude
 /// Code project scope (nested edit of `~/.claude.json`), Codex TOML, marketplace
-/// `state.vscdb` (SQLite), and Cursor plugin dirs (rename to `ew-disabled-*`).
+/// `state.vscdb` (SQLite), and Cursor plugin dirs (rename to `sg-disabled-*`).
 #[derive(Default)]
 pub struct FileConfigStore;
 
@@ -137,7 +137,7 @@ fn restore_json(rec: &QuarantineRecord) -> Result<()> {
     let raw = read(&rec.source_path)?;
     let mut root = parse(&raw, &rec.source_path)?;
     if let Value::Object(m) = &mut entry {
-        m.retain(|k, _| !k.starts_with("_edison"));
+        m.retain(|k, _| !k.starts_with("_sealgate"));
     }
     nav_create(&mut root, &rec.key_path)
         .ok_or_else(|| Error::NotAnObject(rec.key_path.clone()))?
@@ -192,7 +192,7 @@ fn quarantine_toml(loc: &ConfigLocation, cfg: &ServerConfig) -> Result<Quarantin
 fn restore_toml(rec: &QuarantineRecord) -> Result<()> {
     let (disabled, mut entry) = take_disabled_entry(rec)?;
     if let Value::Object(m) = &mut entry {
-        m.retain(|k, _| !k.starts_with("_edison"));
+        m.retain(|k, _| !k.starts_with("_sealgate"));
     }
     let toml_entry = toml::Value::try_from(&entry).map_err(|e| Error::Json {
         path: rec.source_path.clone(),
@@ -324,8 +324,8 @@ fn blob_insert(blob: &mut Value, shape: &StateShape, server_key: &str, value: Va
 
 // ── Cursor plugin-directory writer ───────────────────────────────────────────
 //
-// Neutralise a plugin by renaming its directory to `ew-disabled-<name>` (Cursor
-// then ignores it; our discovery scan already skips `ew-disabled-*`). No sidecar
+// Neutralise a plugin by renaming its directory to `sg-disabled-<name>` (Cursor
+// then ignores it; our discovery scan already skips `sg-disabled-*`). No sidecar
 // or backup — the rename itself is the reversible state.
 
 fn quarantine_plugin_dir(loc: &ConfigLocation) -> Result<QuarantineRecord> {
@@ -334,7 +334,7 @@ fn quarantine_plugin_dir(loc: &ConfigLocation) -> Result<QuarantineRecord> {
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_else(|| "plugin".into());
-    let disabled = dir.with_file_name(format!("ew-disabled-{name}"));
+    let disabled = dir.with_file_name(format!("sg-disabled-{name}"));
     // A stale disabled copy from a prior quarantine blocks the rename
     // (ENOTEMPTY); the live dir is the one to neutralise now, so drop the stale
     // copy first.
@@ -472,29 +472,29 @@ fn disabled_path(path: &Path) -> PathBuf {
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_else(|| "config.json".into());
-    // Daemon-distinct prefix (`ewd-` = edison-watch daemon) so we never share the
+    // Daemon-distinct prefix (`ewd-` = sealgate daemon) so we never share the
     // Electron app's `disabled_<config>.json` sidecar — different schema, and
     // concurrent writes would race.
     path.with_file_name(format!("ewd-disabled_{name}"))
 }
 
-/// The one-time backup taken before Edison first edits `path`. Public so the
+/// The one-time backup taken before SealGate first edits `path`. Public so the
 /// daemon can report it to the UI, which offers "revert this config".
 pub fn backup_path(path: &Path) -> PathBuf {
     let name = path
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_else(|| "config.json".into());
-    path.with_file_name(format!("{name}.ew-backup"))
+    path.with_file_name(format!("{name}.sg-backup"))
 }
 
-// ── edison-watch install (the inverse of quarantine: ADD an entry) ───────────
+// ── sealgate install (the inverse of quarantine: ADD an entry) ───────────
 
-const EDISON_SERVER_NAME: &str = "edison-watch";
-const EDISON_SECRET_HEADER: &str = "X-Edison-Secret-Key";
+const SEALGATE_SERVER_NAME: &str = "sealgate";
+const SEALGATE_SECRET_HEADER: &str = "X-Edison-Secret-Key";
 
-/// The edison-watch proxy URL: `<mcp_base>/mcp/<api_key>/?client=<client_id>`.
-pub fn edison_url(mcp_base: &str, api_key: &str, client_id: &str) -> String {
+/// The sealgate proxy URL: `<mcp_base>/mcp/<api_key>/?client=<client_id>`.
+pub fn sealgate_url(mcp_base: &str, api_key: &str, client_id: &str) -> String {
     format!(
         "{}/mcp/{}/?client={}",
         mcp_base.trim_end_matches('/'),
@@ -503,50 +503,50 @@ pub fn edison_url(mcp_base: &str, api_key: &str, client_id: &str) -> String {
     )
 }
 
-/// Install the `edison-watch` proxy entry into `inst`'s config (creating the
+/// Install the `sealgate` proxy entry into `inst`'s config (creating the
 /// file if needed, alongside existing servers, with a one-time backup). The URL
 /// is `<mcp_base>/mcp/<api_key>/?client=<client_id>`; when `secret` is set it is
 /// carried in the `X-Edison-Secret-Key` header.
-pub fn install_edison(
-    inst: &EdisonInstall,
+pub fn install_sealgate(
+    inst: &SealGateInstall,
     mcp_base: &str,
     api_key: &str,
     secret: Option<&str>,
 ) -> Result<()> {
-    let url = edison_url(mcp_base, api_key, &inst.client_id);
+    let url = sealgate_url(mcp_base, api_key, &inst.client_id);
     match inst.style {
-        EdisonStyle::Http => install_json(inst, http_entry(&url, secret)),
-        EdisonStyle::Toml => install_toml(inst, &url, secret),
+        SealGateStyle::Http => install_json(inst, http_entry(&url, secret)),
+        SealGateStyle::Toml => install_toml(inst, &url, secret),
     }
 }
 
 fn http_entry(url: &str, secret: Option<&str>) -> Value {
     let mut entry = json!({ "type": "http", "url": url });
     if let Some(s) = secret {
-        entry["headers"] = json!({ EDISON_SECRET_HEADER: s });
+        entry["headers"] = json!({ SEALGATE_SECRET_HEADER: s });
     }
     entry
 }
 
-/// Remove the `edison-watch` entry from `inst`'s config (no-op if absent).
-pub fn uninstall_edison(inst: &EdisonInstall) -> Result<()> {
+/// Remove the `sealgate` entry from `inst`'s config (no-op if absent).
+pub fn uninstall_sealgate(inst: &SealGateInstall) -> Result<()> {
     match inst.style {
-        EdisonStyle::Toml => uninstall_toml(inst),
+        SealGateStyle::Toml => uninstall_toml(inst),
         // Named rather than `_`, so a third style has to decide for itself
-        // instead of silently inheriting JSON removal. `install_edison` is
+        // instead of silently inheriting JSON removal. `install_sealgate` is
         // exhaustive for the same reason; the pair should fail together.
-        EdisonStyle::Http => uninstall_json(inst),
+        SealGateStyle::Http => uninstall_json(inst),
     }
 }
 
-fn uninstall_json(inst: &EdisonInstall) -> Result<()> {
+fn uninstall_json(inst: &SealGateInstall) -> Result<()> {
     if !inst.path.exists() {
         return Ok(());
     }
     let raw = read(&inst.path)?;
     let mut root = parse(&raw, &inst.path)?;
     if let Some(map) = nav_mut(&mut root, &inst.key_path) {
-        map.remove(EDISON_SERVER_NAME);
+        map.remove(SEALGATE_SERVER_NAME);
     }
     write(&inst.path, &serialize(&root))
 }
@@ -561,7 +561,7 @@ fn ensure_parent(path: &Path) -> Result<()> {
     Ok(())
 }
 
-fn install_json(inst: &EdisonInstall, entry: Value) -> Result<()> {
+fn install_json(inst: &SealGateInstall, entry: Value) -> Result<()> {
     ensure_parent(&inst.path)?;
     let existed = inst.path.exists();
     let raw = if existed {
@@ -582,11 +582,11 @@ fn install_json(inst: &EdisonInstall, entry: Value) -> Result<()> {
     }
     nav_create(&mut root, &inst.key_path)
         .ok_or_else(|| Error::NotAnObject(inst.key_path.clone()))?
-        .insert(EDISON_SERVER_NAME.to_string(), entry);
+        .insert(SEALGATE_SERVER_NAME.to_string(), entry);
     write(&inst.path, &serialize(&root))
 }
 
-fn install_toml(inst: &EdisonInstall, url: &str, secret: Option<&str>) -> Result<()> {
+fn install_toml(inst: &SealGateInstall, url: &str, secret: Option<&str>) -> Result<()> {
     ensure_parent(&inst.path)?;
     let existed = inst.path.exists();
     let raw = if existed {
@@ -610,7 +610,7 @@ fn install_toml(inst: &EdisonInstall, url: &str, secret: Option<&str>) -> Result
     if let Some(s) = secret {
         let mut headers = toml::Table::new();
         headers.insert(
-            EDISON_SECRET_HEADER.into(),
+            SEALGATE_SECRET_HEADER.into(),
             toml::Value::String(s.to_string()),
         );
         entry.insert("http_headers".into(), toml::Value::Table(headers));
@@ -623,7 +623,7 @@ fn install_toml(inst: &EdisonInstall, url: &str, secret: Option<&str>) -> Result
         .or_insert_with(|| toml::Value::Table(toml::Table::new()))
         .as_table_mut()
         .ok_or_else(|| Error::NotAnObject(inst.key_path.clone()))?;
-    servers.insert(EDISON_SERVER_NAME.to_string(), toml::Value::Table(entry));
+    servers.insert(SEALGATE_SERVER_NAME.to_string(), toml::Value::Table(entry));
 
     let text = toml::to_string(&root).map_err(|e| Error::Json {
         path: inst.path.clone(),
@@ -632,7 +632,7 @@ fn install_toml(inst: &EdisonInstall, url: &str, secret: Option<&str>) -> Result
     write(&inst.path, &text)
 }
 
-fn uninstall_toml(inst: &EdisonInstall) -> Result<()> {
+fn uninstall_toml(inst: &SealGateInstall) -> Result<()> {
     if !inst.path.exists() {
         return Ok(());
     }
@@ -643,7 +643,7 @@ fn uninstall_toml(inst: &EdisonInstall) -> Result<()> {
         .and_then(|t| t.get_mut(&inst.key_path[0]))
         .and_then(|v| v.as_table_mut())
     {
-        servers.remove(EDISON_SERVER_NAME);
+        servers.remove(SEALGATE_SERVER_NAME);
     }
     let text = toml::to_string(&root).map_err(|e| Error::Json {
         path: inst.path.clone(),
@@ -742,7 +742,7 @@ mod tests {
             path: path.to_path_buf(),
             key_path: key_path.iter().map(|s| s.to_string()).collect(),
             server_key: server_key.into(),
-            extra: edison_detectord::LocationExtra::None,
+            extra: sealgate_detectord::LocationExtra::None,
         }
     }
 
@@ -795,13 +795,13 @@ mod tests {
         assert_eq!(entry[META_KEY_PATH], json!(["servers"]));
     }
 
-    fn edison(
+    fn sealgate(
         path: &std::path::Path,
         key: &[&str],
-        style: EdisonStyle,
+        style: SealGateStyle,
         client: &str,
-    ) -> EdisonInstall {
-        EdisonInstall {
+    ) -> SealGateInstall {
+        SealGateInstall {
             path: path.to_path_buf(),
             key_path: key.iter().map(|s| s.to_string()).collect(),
             style,
@@ -811,47 +811,47 @@ mod tests {
     }
 
     #[test]
-    fn install_edison_http_adds_alongside_and_uninstall_removes() {
+    fn install_sealgate_http_adds_alongside_and_uninstall_removes() {
         let dir = tempdir().unwrap();
         let cfg = dir.path().join("mcp.json");
         std::fs::write(&cfg, r#"{"mcpServers":{"keep":{"command":"x"}}}"#).unwrap();
-        let inst = edison(&cfg, &["mcpServers"], EdisonStyle::Http, "cursor");
+        let inst = sealgate(&cfg, &["mcpServers"], SealGateStyle::Http, "cursor");
 
-        install_edison(&inst, "http://localhost:3000/", "edison_KEY", None).unwrap();
+        install_sealgate(&inst, "http://localhost:3000/", "sealgate_KEY", None).unwrap();
         let v: Value = serde_json::from_str(&std::fs::read_to_string(&cfg).unwrap()).unwrap();
-        assert_eq!(v["mcpServers"]["edison-watch"]["type"], "http");
+        assert_eq!(v["mcpServers"]["sealgate"]["type"], "http");
         assert_eq!(
-            v["mcpServers"]["edison-watch"]["url"],
-            "http://localhost:3000/mcp/edison_KEY/?client=cursor"
+            v["mcpServers"]["sealgate"]["url"],
+            "http://localhost:3000/mcp/sealgate_KEY/?client=cursor"
         );
         assert!(v["mcpServers"]["keep"].is_object()); // existing preserved
-        assert!(cfg.with_file_name("mcp.json.ew-backup").exists());
+        assert!(cfg.with_file_name("mcp.json.sg-backup").exists());
 
-        uninstall_edison(&inst).unwrap();
+        uninstall_sealgate(&inst).unwrap();
         let v: Value = serde_json::from_str(&std::fs::read_to_string(&cfg).unwrap()).unwrap();
-        assert!(v["mcpServers"].get("edison-watch").is_none());
+        assert!(v["mcpServers"].get("sealgate").is_none());
         assert!(v["mcpServers"]["keep"].is_object());
     }
 
     #[test]
-    fn install_edison_with_secret_adds_header() {
+    fn install_sealgate_with_secret_adds_header() {
         let dir = tempdir().unwrap();
         let cfg = dir.path().join("mcp.json");
-        let inst = edison(&cfg, &["mcpServers"], EdisonStyle::Http, "cursor");
-        install_edison(&inst, "http://localhost:3000", "K", Some("user:SEKRET")).unwrap();
+        let inst = sealgate(&cfg, &["mcpServers"], SealGateStyle::Http, "cursor");
+        install_sealgate(&inst, "http://localhost:3000", "K", Some("user:SEKRET")).unwrap();
         let v: Value = serde_json::from_str(&std::fs::read_to_string(&cfg).unwrap()).unwrap();
         assert_eq!(
-            v["mcpServers"]["edison-watch"]["headers"]["X-Edison-Secret-Key"],
+            v["mcpServers"]["sealgate"]["headers"]["X-Edison-Secret-Key"],
             "user:SEKRET"
         );
 
         // TOML variant carries it under http_headers.
         let tcfg = dir.path().join("config.toml");
-        let tinst = edison(&tcfg, &["mcp_servers"], EdisonStyle::Toml, "codex");
-        install_edison(&tinst, "http://localhost:3000", "K", Some("user:SEKRET")).unwrap();
+        let tinst = sealgate(&tcfg, &["mcp_servers"], SealGateStyle::Toml, "codex");
+        install_sealgate(&tinst, "http://localhost:3000", "K", Some("user:SEKRET")).unwrap();
         let t: toml::Value = toml::from_str(&std::fs::read_to_string(&tcfg).unwrap()).unwrap();
         assert_eq!(
-            t["mcp_servers"]["edison-watch"]["http_headers"]["X-Edison-Secret-Key"]
+            t["mcp_servers"]["sealgate"]["http_headers"]["X-Edison-Secret-Key"]
                 .as_str()
                 .unwrap(),
             "user:SEKRET"
@@ -867,8 +867,8 @@ mod tests {
             r#"{"mcpServers":{"zebra":{"command":"z"},"apple":{"command":"a"},"mango":{"command":"m"}}}"#,
         )
         .unwrap();
-        install_edison(
-            &edison(&cfg, &["mcpServers"], EdisonStyle::Http, "cursor"),
+        install_sealgate(
+            &sealgate(&cfg, &["mcpServers"], SealGateStyle::Http, "cursor"),
             "http://h",
             "K",
             None,
@@ -879,60 +879,60 @@ mod tests {
             text.find("zebra").unwrap(),
             text.find("apple").unwrap(),
             text.find("mango").unwrap(),
-            text.find("edison-watch").unwrap(),
+            text.find("sealgate").unwrap(),
         );
         assert!(
             z < a && a < m && m < e,
-            "original order kept, edison appended:\n{text}"
+            "original order kept, sealgate appended:\n{text}"
         );
     }
 
     #[test]
-    fn install_edison_creates_missing_file_and_dirs() {
+    fn install_sealgate_creates_missing_file_and_dirs() {
         let dir = tempdir().unwrap();
         let cfg = dir.path().join("nested/mcp.json"); // parent absent
-        let inst = edison(&cfg, &["mcpServers"], EdisonStyle::Http, "cursor");
-        install_edison(&inst, "http://localhost:3000", "K", None).unwrap();
+        let inst = sealgate(&cfg, &["mcpServers"], SealGateStyle::Http, "cursor");
+        install_sealgate(&inst, "http://localhost:3000", "K", None).unwrap();
         let v: Value = serde_json::from_str(&std::fs::read_to_string(&cfg).unwrap()).unwrap();
         assert_eq!(
-            v["mcpServers"]["edison-watch"]["url"],
+            v["mcpServers"]["sealgate"]["url"],
             "http://localhost:3000/mcp/K/?client=cursor"
         );
     }
 
     #[test]
-    fn uninstall_edison_leaves_the_user_servers_alone() {
+    fn uninstall_sealgate_leaves_the_user_servers_alone() {
         let dir = tempdir().unwrap();
         let cfg = dir.path().join("mcp.json");
         std::fs::write(
             &cfg,
-            r#"{"mcpServers":{"edison-watch":{"type":"http","url":"https://x"},"mine":{"command":"x"}}}"#,
+            r#"{"mcpServers":{"sealgate":{"type":"http","url":"https://x"},"mine":{"command":"x"}}}"#,
         )
         .unwrap();
 
-        uninstall_edison(&edison(&cfg, &["mcpServers"], EdisonStyle::Http, "cursor")).unwrap();
+        uninstall_sealgate(&sealgate(&cfg, &["mcpServers"], SealGateStyle::Http, "cursor")).unwrap();
 
         let v: Value = serde_json::from_str(&std::fs::read_to_string(&cfg).unwrap()).unwrap();
-        assert!(v["mcpServers"].get("edison-watch").is_none());
+        assert!(v["mcpServers"].get("sealgate").is_none());
         assert!(v["mcpServers"].get("mine").is_some());
     }
 
     #[test]
-    fn install_edison_toml() {
+    fn install_sealgate_toml() {
         let dir = tempdir().unwrap();
         let cfg = dir.path().join("config.toml");
         std::fs::write(&cfg, "[mcp_servers.keep]\ncommand = \"x\"\n").unwrap();
-        let inst = edison(&cfg, &["mcp_servers"], EdisonStyle::Toml, "codex");
-        install_edison(&inst, "http://localhost:3000", "K", None).unwrap();
+        let inst = sealgate(&cfg, &["mcp_servers"], SealGateStyle::Toml, "codex");
+        install_sealgate(&inst, "http://localhost:3000", "K", None).unwrap();
         let t: toml::Value = toml::from_str(&std::fs::read_to_string(&cfg).unwrap()).unwrap();
         assert_eq!(
-            t["mcp_servers"]["edison-watch"]["url"].as_str().unwrap(),
+            t["mcp_servers"]["sealgate"]["url"].as_str().unwrap(),
             "http://localhost:3000/mcp/K/?client=codex"
         );
         assert!(t["mcp_servers"].get("keep").is_some());
-        uninstall_edison(&inst).unwrap();
+        uninstall_sealgate(&inst).unwrap();
         let t: toml::Value = toml::from_str(&std::fs::read_to_string(&cfg).unwrap()).unwrap();
-        assert!(t["mcp_servers"].get("edison-watch").is_none());
+        assert!(t["mcp_servers"].get("sealgate").is_none());
     }
 
     #[test]
@@ -1062,7 +1062,7 @@ mod tests {
             path: cfg.clone(),
             key_path: vec!["mcp_servers".into()],
             server_key: "evil".into(),
-            extra: edison_detectord::LocationExtra::None,
+            extra: sealgate_detectord::LocationExtra::None,
         };
 
         let rec = store.quarantine(&loc, &stdio("run", &["--bad"])).unwrap();
@@ -1205,7 +1205,7 @@ mod tests {
                 .file_name()
                 .unwrap()
                 .to_string_lossy()
-                .starts_with("ew-disabled-")
+                .starts_with("sg-disabled-")
         );
 
         store.restore(&rec).unwrap();

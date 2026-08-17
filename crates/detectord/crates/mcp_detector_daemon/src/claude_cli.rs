@@ -1,5 +1,5 @@
 //! Claude Code integration via its own `claude mcp` CLI. Claude Code misbehaves
-//! if the edison-watch entry is written directly rather than through the CLI, so
+//! if the sealgate entry is written directly rather than through the CLI, so
 //! we shell out. Under root we drop to the target user first (setuid/setgid +
 //! HOME) so `--scope user` writes *that user's* `~/.claude.json`, not root's.
 
@@ -10,7 +10,7 @@ use anyhow::Context;
 #[cfg(unix)]
 use crate::{paths, platform};
 
-/// `claude mcp add --transport http --scope user [--header …] edison-watch <url>`.
+/// `claude mcp add --transport http --scope user [--header …] sealgate <url>`.
 pub fn install(user: &str, url: &str, secret: Option<&str>) -> anyhow::Result<()> {
     // `--header` is variadic, so it must come AFTER the <name> <url> positionals
     // or it greedily consumes them (matches the CLI's own help example).
@@ -21,7 +21,7 @@ pub fn install(user: &str, url: &str, secret: Option<&str>) -> anyhow::Result<()
         "http".into(),
         "--scope".into(),
         "user".into(),
-        "edison-watch".into(),
+        "sealgate".into(),
         url.to_string(),
     ];
     if let Some(s) = secret {
@@ -31,14 +31,14 @@ pub fn install(user: &str, url: &str, secret: Option<&str>) -> anyhow::Result<()
     run_as(user, &args)
 }
 
-/// Remove the edison-watch entry from both user and project scope.
+/// Remove the sealgate entry from both user and project scope.
 pub fn remove(user: &str) -> anyhow::Result<()> {
     let _ = run_as(
         user,
         &[
             "mcp".into(),
             "remove".into(),
-            "edison-watch".into(),
+            "sealgate".into(),
             "--scope".into(),
             "project".into(),
         ],
@@ -48,7 +48,7 @@ pub fn remove(user: &str) -> anyhow::Result<()> {
         &[
             "mcp".into(),
             "remove".into(),
-            "edison-watch".into(),
+            "sealgate".into(),
             "--scope".into(),
             "user".into(),
         ],

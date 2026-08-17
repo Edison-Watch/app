@@ -1,6 +1,6 @@
 // Route onboarding's "register these servers" actions through the daemon.
 //
-// In primary mode the daemon owns submit (templatize secrets, send to EW, mark
+// In primary mode the daemon owns submit (templatize secrets, send to SG, mark
 // seen, remove locally) and handles stdio servers the client's own http-only
 // submit path can't. Onboarding's bulk submit + rename-resubmit map cleanly onto
 // per-server `disposition(send_to_ew[, rename])` calls.

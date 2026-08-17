@@ -109,13 +109,13 @@ function showMissingBinaryDialog(): void {
     const parent = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed())
     const options = {
       type: 'error' as const,
-      title: 'Edison Watch is not protecting this machine',
-      message: 'The Edison Watch detector daemon is missing from this installation.',
+      title: 'SealGate is not protecting this machine',
+      message: 'The SealGate detector daemon is missing from this installation.',
       detail:
-        'Without it, Edison Watch cannot detect MCP servers, review them, or quarantine ' +
+        'Without it, SealGate cannot detect MCP servers, review them, or quarantine ' +
         'unapproved ones - the app will run but it is not protecting anything.\n\n' +
         `Expected at:\n${getDetectordBinaryPath()}\n\n` +
-        'Reinstall Edison Watch to restore protection.',
+        'Reinstall SealGate to restore protection.',
       buttons: ['Quit', 'Continue Without Protection'],
       defaultId: 0,
       cancelId: 1,

@@ -5,7 +5,7 @@
 //
 // Logging: we emit console.log with the SAME prefixes the TS pipeline uses
 // (`[Monitor]`, `[Quarantine]`, `[SeenStore]`) so monitorLog's tee captures them
-// into /tmp/ew-monitor.log, so the client "still produces the detection and
+// into /tmp/sg-monitor.log, so the client "still produces the detection and
 // quarantine logs" even though the daemon is the one doing the work. Install /
 // enroll use a `[detectord]` prefix.
 
@@ -42,7 +42,7 @@ export interface DetectordEnrollInput {
   apiUrl?: string
   mcpUrl?: string
   apiKey?: string
-  edisonSecretKey?: string
+  sealgateSecretKey?: string
 }
 
 /**
@@ -154,12 +154,12 @@ export async function warnAgentsNotRepointed(what: string, reason?: string): Pro
   const options = {
     type: 'warning' as const,
     title: 'Your apps were not updated',
-    message: `Edison Watch switched to ${what}, but your MCP apps were not updated.`,
+    message: `SealGate switched to ${what}, but your MCP apps were not updated.`,
     detail:
       'The detector daemon kept the previous credentials, so your apps still connect using ' +
       'them until this is repaired.\n\n' +
       `Reason: ${reason ?? 'enrollment failed'}\n\n` +
-      'Restart Edison Watch to retry. If it keeps failing, check your network connection.',
+      'Restart SealGate to retry. If it keeps failing, check your network connection.',
     buttons: ['OK'],
     defaultId: 0,
     noLink: true
@@ -205,7 +205,7 @@ async function enrollDaemon(
   const apiUrl = override?.apiUrl ?? getApiBaseUrl()
   const mcpUrl = override?.mcpUrl ?? getMcpBaseUrl()
   const apiKey = override?.apiKey ?? stored?.apiKey
-  const edisonSecretKey = override?.edisonSecretKey ?? stored?.edisonSecretKey
+  const sealgateSecretKey = override?.sealgateSecretKey ?? stored?.sealgateSecretKey
   const setup = getSetupData()
   if (!apiUrl || !apiKey) {
     console.warn('[detectord] not enrolling: no api url / key yet')
@@ -213,13 +213,13 @@ async function enrollDaemon(
   }
   // Only the apps the user has actually configured. Empty (e.g. a new user who
   // hasn't reached the app-selection step yet) => a base enroll with no agents:
-  // the daemon installs edison-watch on nothing until onboarding adds them.
+  // the daemon installs sealgate on nothing until onboarding adds them.
   // Agents are additive daemon-side, so an empty set never removes any.
   const appIds = setup.configuredApps ?? []
   const agents = appIds.map(toAgent)
   // Arm auto-quarantine only once onboarding is complete. While a new user is
   // still in onboarding the daemon stays detect-only (lists/reports, quarantines
-  // nothing) so onboarding can review + send-to-EW first. setup:complete runs
+  // nothing) so onboarding can review + send-to-SG first. setup:complete runs
   // markSetupComplete before this, so it re-enrolls armed.
   const armed = isSetupComplete()
   try {
@@ -228,8 +228,8 @@ async function enrollDaemon(
       key: apiKey,
       mcpUrl: mcpUrl ?? undefined,
       agents,
-      secret: edisonSecretKey,
-      // primary => the daemon installs edison-watch + hooks; shadow => detect-only.
+      secret: sealgateSecretKey,
+      // primary => the daemon installs sealgate + hooks; shadow => detect-only.
       install: primary,
       armed
     })
@@ -247,7 +247,7 @@ async function enrollDaemon(
 async function logInitialDetection(client: DetectordClient): Promise<void> {
   try {
     const servers = await client.listServers()
-    const actionable = servers.filter((s) => s.state !== 'edison')
+    const actionable = servers.filter((s) => s.state !== 'sealgate')
     console.log(`[Monitor] daemon discovered ${actionable.length} MCP server(s)`)
     for (const s of actionable) logServer('[Monitor]', s)
   } catch (err) {
@@ -288,7 +288,7 @@ async function flushBatch(client: DetectordClient): Promise<void> {
   batchTimer = null
   if (dialogOpen || pendingBatch.length === 0) return
   const batch = pendingBatch.splice(0, pendingBatch.length)
-  // Owners/admins register directly ("Add to Edison"); everyone else files a
+  // Owners/admins register directly ("Add to SealGate"); everyone else files a
   // request. The daemon enforces this by role regardless; this is the label.
   let isAdminOrOwner = false
   try {
@@ -313,7 +313,7 @@ async function handleDaemonEvent(client: DetectordClient, ev: DetectordEvent): P
         `[Quarantine] daemon quarantined ${ev.name} (${ev.agent}) state=${ev.state}` +
           (ev.fingerprint ? ` fp=${ev.fingerprint}` : '')
       )
-      // New (unknown) servers need the user's call: send to EW or keep quarantined.
+      // New (unknown) servers need the user's call: send to SG or keep quarantined.
       if (ev.state === 'quarantine-prompt') {
         enqueuePrompt(client, ev)
       }

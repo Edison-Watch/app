@@ -1,11 +1,11 @@
-# @edison/shared
+# @sealgate/shared
 
 [![CI](https://github.com/Edison-Watch/shared/actions/workflows/ci.yaml/badge.svg?branch=main)](https://github.com/Edison-Watch/shared/actions/workflows/ci.yaml)
 [![Coverage](https://codecov.io/gh/Edison-Watch/shared/graph/badge.svg)](https://codecov.io/gh/Edison-Watch/shared)
 [![License: AGPL-3.0-only](https://img.shields.io/badge/license-AGPL--3.0--only-blue.svg)](LICENSE)
 [![Node.js >= 22](https://img.shields.io/badge/node-%3E%3D22-339933?logo=node.js&logoColor=white)](package.json)
 
-**Shared React components, design tokens, and client-side utilities for Edison Watch.**
+**Shared React components, design tokens, and client-side utilities for SealGate.**
 
 <a href="#what-is-this">What is this</a> •
 <a href="#quick-start">Quick start</a> •
@@ -17,19 +17,19 @@
 
 ## What is this
 
-- React UI components and Edison design tokens
-- Product and security animations used in the Edison Watch clients
+- React UI components and SealGate design tokens
+- Product and security animations used in the SealGate clients
 - Agent registry data and SVG assets
 - Browser-side authentication, configuration, and crypto utilities
 
-This repository is public so that the shared client code used across Edison Watch can be audited and evaluated. It is intentionally an Edison Watch package, not a generic component library or a hosted service SDK.
+This repository is public so that the shared client code used across SealGate can be audited and evaluated. It is intentionally an SealGate package, not a generic component library or a hosted service SDK.
 
 <p align="center">
-  <img src="docs/architecture.svg" alt="Architecture: Edison Watch applications share @edison/shared, which provides a design-system domain and a client-services domain, shipped as standard JS modules." width="900" />
+  <img src="docs/architecture.svg" alt="Architecture: SealGate applications share @sealgate/shared, which provides a design-system domain and a client-services domain, shipped as standard JS modules." width="900" />
 </p>
 
 > [!NOTE]
-> `@edison/shared` is at `0.1.0` and is not published to npm. Edison Watch repositories consume it from source, including through Git submodules. Module subpaths and build output are kept stable so publishing can change without redesigning the public surface. Only values safe to expose in browser bundles belong here: no server credentials, private keys, or privileged tokens.
+> `@sealgate/shared` is at `0.1.0` and is not published to npm. SealGate repositories consume it from source, including through Git submodules. Module subpaths and build output are kept stable so publishing can change without redesigning the public surface. Only values safe to expose in browser bundles belong here: no server credentials, private keys, or privileged tokens.
 
 ## Quick start
 
@@ -71,16 +71,16 @@ Each entrypoint is independently tree-shakeable.
 
 | Entrypoint                                    | Contents                                     |
 | --------------------------------------------- | -------------------------------------------- |
-| `@edison/shared`                              | Root barrel re-exporting the public surface  |
-| `@edison/shared/ui` and `@edison/shared/ui/*` | React UI components                          |
-| `@edison/shared/hooks/*`                      | React hooks                                  |
-| `@edison/shared/theme/tokens.css`             | Edison design tokens (CSS custom properties) |
-| `@edison/shared/animations`                   | Product and security SVG animations          |
-| `@edison/shared/svg`                          | SVG asset path/string exports                |
-| `@edison/shared/auth`                         | Browser auth and Supabase client             |
-| `@edison/shared/config`                       | Client/runtime environment configuration     |
-| `@edison/shared/crypto`                       | Client-side crypto utilities                 |
-| `@edison/shared/agent-registry`               | Canonical agent icon and metadata registry   |
+| `@sealgate/shared`                              | Root barrel re-exporting the public surface  |
+| `@sealgate/shared/ui` and `@sealgate/shared/ui/*` | React UI components                          |
+| `@sealgate/shared/hooks/*`                      | React hooks                                  |
+| `@sealgate/shared/theme/tokens.css`             | SealGate design tokens (CSS custom properties) |
+| `@sealgate/shared/animations`                   | Product and security SVG animations          |
+| `@sealgate/shared/svg`                          | SVG asset path/string exports                |
+| `@sealgate/shared/auth`                         | Browser auth and Supabase client             |
+| `@sealgate/shared/config`                       | Client/runtime environment configuration     |
+| `@sealgate/shared/crypto`                       | Client-side crypto utilities                 |
+| `@sealgate/shared/agent-registry`               | Canonical agent icon and metadata registry   |
 
 </details>
 
@@ -105,7 +105,7 @@ TLDR: a design-system half and a client-services half; browse [`src/`](src) for 
 
 ## Configuration scope
 
-The client configuration in [`src/config/env-config.ts`](src/config/env-config.ts) intentionally contains Edison Watch service endpoints and browser-facing values. This keeps client behavior auditable and supports the apps that consume the package. Both `demo` and `release` configs are baked into the bundle at build time, a `local` config resolves against the page origin for the fully-offline stack, and a `custom` config resolves from URLs stored under `CUSTOM_BACKEND_STORAGE_KEY` when the user points the app at a self-hosted deployment (telemetry values stay empty for it).
+The client configuration in [`src/config/env-config.ts`](src/config/env-config.ts) intentionally contains SealGate service endpoints and browser-facing values. This keeps client behavior auditable and supports the apps that consume the package. Both `demo` and `release` configs are baked into the bundle at build time, a `local` config resolves against the page origin for the fully-offline stack, and a `custom` config resolves from URLs stored under `CUSTOM_BACKEND_STORAGE_KEY` when the user points the app at a self-hosted deployment (telemetry values stay empty for it).
 
 ```ts
 export interface EnvConfig {

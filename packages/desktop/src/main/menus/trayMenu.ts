@@ -60,7 +60,7 @@ export function buildTrayMenuItems(deps: TrayMenuDeps): MenuItemConstructorOptio
   const daemonHealth = getDetectordHealth()
 
   const items: MenuItemConstructorOptions[] = [
-    { label: 'Open Edison Watch', click: () => deps.showMainWindow() },
+    { label: 'Open SealGate', click: () => deps.showMainWindow() },
     ...(daemonHealth.ok
       ? []
       : ([
@@ -130,7 +130,7 @@ export function buildTrayMenuItems(deps: TrayMenuDeps): MenuItemConstructorOptio
       : [
           { type: 'separator' as const },
           {
-            label: 'Copy EdisonWatch MCP config',
+            label: 'Copy SealGate MCP config',
             enabled: Boolean(getMcpUrl()),
             click: () => {
               const mcpConfig = getMcpConfig()
@@ -138,7 +138,7 @@ export function buildTrayMenuItems(deps: TrayMenuDeps): MenuItemConstructorOptio
                 clipboard.writeText(mcpConfig)
                 if (Notification.isSupported()) {
                   new Notification({
-                    title: 'Edison Watch',
+                    title: 'SealGate',
                     body: 'MCP config copied - paste into VSCode, Cursor, or your MCP client',
                     ...(process.platform !== 'darwin' && { icon: trayIconPath })
                   }).show()
@@ -155,7 +155,7 @@ export function buildTrayMenuItems(deps: TrayMenuDeps): MenuItemConstructorOptio
                 clipboard.writeText(url)
                 if (Notification.isSupported()) {
                   new Notification({
-                    title: 'Edison Watch',
+                    title: 'SealGate',
                     body: 'MCP URL copied to clipboard',
                     ...(process.platform !== 'darwin' && { icon: trayIconPath })
                   }).show()
@@ -203,7 +203,7 @@ export function buildTrayMenuItems(deps: TrayMenuDeps): MenuItemConstructorOptio
                 ? 'Update check failed. Please check your connection.'
                 : "You're already on the latest version."
           new Notification({
-            title: 'Edison Watch',
+            title: 'SealGate',
             body,
             ...(process.platform !== 'darwin' && { icon: trayIconPath })
           }).show()
@@ -224,7 +224,7 @@ export function buildTrayMenuItems(deps: TrayMenuDeps): MenuItemConstructorOptio
       click: () =>
         showUpdateKeysWindow(
           getSetupData,
-          (key) => markSetupComplete({ edisonSecretKey: key }),
+          (key) => markSetupComplete({ sealgateSecretKey: key }),
           async (compositeKey) => {
             // Hand the key straight to the enrollment rather than relying on
             // what was just persisted. Enrollment otherwise reads it back via
@@ -238,16 +238,16 @@ export function buildTrayMenuItems(deps: TrayMenuDeps): MenuItemConstructorOptio
             // every one of them still sends the old header.
             if (!getMcpBaseUrl() || !getCredentialsForEnv()?.apiKey) {
               throw new Error(
-                'Sign in to Edison Watch before updating keys - your apps were not changed.'
+                'Sign in to SealGate before updating keys - your apps were not changed.'
               )
             }
-            const outcome = await bootstrapDetectord({ edisonSecretKey: compositeKey })
+            const outcome = await bootstrapDetectord({ sealgateSecretKey: compositeKey })
             // `applied` is the only proof the new key reached the agents: a
             // daemon still enrolled from before reports ok=true while every
             // agent keeps the old secret header.
             if (!outcome.applied) {
               throw new Error(
-                "Couldn't apply the new key - the Edison Watch detector daemon did not accept it, " +
+                "Couldn't apply the new key - the SealGate detector daemon did not accept it, " +
                   `so your apps still use the previous key. ${outcome.reason ?? ''}`.trim()
               )
             }

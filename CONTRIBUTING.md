@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for your interest in improving Edison Watch's client components! This is
+Thanks for your interest in improving SealGate's client components! This is
 early-stage, fast-moving software, so the contribution process is intentionally
 lightweight.
 
@@ -9,7 +9,7 @@ lightweight.
 This repo holds four components:
 
 - `packages/desktop` - Electron desktop app (npm workspace)
-- `packages/shared` - `@edison-watch/shared` React library (npm workspace)
+- `packages/shared` - `@sealgate/shared` React library (npm workspace)
 - `crates/stdiod` - Rust daemon (its own Cargo workspace)
 - `crates/detectord` - Rust library + daemon (its own Cargo workspace)
 
@@ -59,7 +59,7 @@ changes.
 - **Match the surrounding style.** Follow the existing naming, comment density,
   and module layout; the formatters handle formatting.
 - **Update docs alongside code.** If you change stdiod's wire protocol, update
-  [`crates/stdiod/schema/edison-tunnel-protocol.json`](./crates/stdiod/schema/edison-tunnel-protocol.json)
+  [`crates/stdiod/schema/sealgate-tunnel-protocol.json`](./crates/stdiod/schema/sealgate-tunnel-protocol.json)
   (the single source of truth) and
   [`crates/stdiod/ARCHITECTURE.md`](./crates/stdiod/ARCHITECTURE.md). If you
   change a CLI or config surface, update the component's README.

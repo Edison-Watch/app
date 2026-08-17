@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Build the mcp_detector_daemon (edison-detectord) as a universal macOS binary
+# Build the mcp_detector_daemon (sealgate-detectord) as a universal macOS binary
 # and stage it into desktop/bin/ so electron-builder's mac.extraResources rule
 # copies it into Contents/Resources/bin/ of the packaged .app.
 #
 # Mirrors build-stdiod.sh. The daemon source is the sibling `detectord/` clone
-# (edison-client/detectord). The cargo binary is `mcp_detector_daemon`; we stage
-# it under the friendlier name `edison-detectord` (matching the stdiod naming).
+# (sealgate-client/detectord). The cargo binary is `mcp_detector_daemon`; we stage
+# it under the friendlier name `sealgate-detectord` (matching the stdiod naming).
 #
 # Why universal: electron-builder.yml's mac.target ships BOTH arm64 and x64
 # .dmg/.zip. extraResources copies one staged file into both .app bundles, so a
@@ -26,7 +26,7 @@ else
 fi
 BIN_NAME="mcp_detector_daemon"
 OUT_DIR="$CLIENT_DIR/bin"
-OUT_BIN="$OUT_DIR/edison-detectord"
+OUT_BIN="$OUT_DIR/sealgate-detectord"
 
 if [[ "$(uname -s)" != "Darwin" ]]; then
   echo "build-detectord.sh: only supported on macOS (got $(uname -s))" >&2

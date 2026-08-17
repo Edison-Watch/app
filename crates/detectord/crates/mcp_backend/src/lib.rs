@@ -1,4 +1,4 @@
-//! Edison Watch backend REST client.
+//! SealGate backend REST client.
 //!
 //! Thin async wrapper over the three endpoints the daemon needs, all
 //! authenticated with a bearer API key (the same key the desktop app uses; the
@@ -15,7 +15,7 @@
 
 use serde::Deserialize;
 
-use edison_detectord::{HttpKind, ServerConfig};
+use sealgate_detectord::{HttpKind, ServerConfig};
 
 const DOMAIN_CONFIG_PATH: &str = "/api/v1/user/domain-config";
 const FINGERPRINTS_PATH: &str = "/api/v1/servers/fingerprints";

@@ -41,7 +41,7 @@ vi.mock('../detectord/lifecycle', () => ({
 vi.mock('../infra/setupConfig', () => ({
   getApiBaseUrl: () => 'https://api.example',
   getMcpBaseUrl: () => 'https://mcp.example',
-  getCredentialsForEnv: () => ({ apiKey: 'ew_key', edisonSecretKey: 'user:KEY' }),
+  getCredentialsForEnv: () => ({ apiKey: 'sg_key', sealgateSecretKey: 'user:KEY' }),
   getSetupData: () => ({ configuredApps: ['cursor'] }),
   isSetupComplete: () => true
 }))
@@ -49,7 +49,7 @@ vi.mock('../infra/setupConfig', () => ({
 vi.mock('../detectord/approvalDialog', () => ({ showDaemonApprovalDialog: () => {} }))
 vi.mock('../detectord/binary', () => ({
   detectordBinaryExists: () => true,
-  getDetectordBinaryPath: () => '/bin/edison-detectord'
+  getDetectordBinaryPath: () => '/bin/sealgate-detectord'
 }))
 vi.mock('electron', () => ({
   app: { getPath: () => '/tmp', isReady: () => true, whenReady: () => Promise.resolve(), quit: () => {} },
@@ -68,7 +68,7 @@ describe('bootstrapDetectord outcome', () => {
   })
 
   it('reports applied when it enrolled with the credentials given', async () => {
-    const r = await bootstrapDetectord({ edisonSecretKey: 'user:NEW' })
+    const r = await bootstrapDetectord({ sealgateSecretKey: 'user:NEW' })
     expect(r).toMatchObject({ ok: true, applied: true })
   })
 
@@ -76,7 +76,7 @@ describe('bootstrapDetectord outcome', () => {
     // Enroll fails (backend down) but the daemon is still enrolled from before,
     // so it keeps protecting the machine - with the PREVIOUS credentials.
     enrollSucceeds = false
-    const r = await bootstrapDetectord({ edisonSecretKey: 'user:NEW' })
+    const r = await bootstrapDetectord({ sealgateSecretKey: 'user:NEW' })
     expect(r.ok).toBe(true)
     expect(r.applied).toBe(false)
     expect(r.reason).toBeTruthy()

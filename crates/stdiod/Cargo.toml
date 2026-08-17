@@ -1,15 +1,15 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/edison-stdiod",
-    "crates/edison-tunnel-protocol",
+    "crates/sealgate-stdiod",
+    "crates/sealgate-tunnel-protocol",
 ]
 
 [workspace.package]
 edition = "2021"
 version = "0.0.1"
 license = "AGPL-3.0-only"
-authors = ["Edison Watch"]
+authors = ["SealGate"]
 repository = "https://github.com/Edison-Watch/stdiod"
 homepage = "https://github.com/Edison-Watch/stdiod"
 
@@ -35,4 +35,4 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 webbrowser = "1"
 
 # Workspace member crates
-edison-tunnel-protocol = { path = "crates/edison-tunnel-protocol", version = "0.0.1" }
+sealgate-tunnel-protocol = { path = "crates/sealgate-tunnel-protocol", version = "0.0.1" }

@@ -4,7 +4,7 @@
  */
 
 /**
- * Base CSS: reset, Edison design tokens (matches packages/shared/src/theme/tokens.css),
+ * Base CSS: reset, SealGate design tokens (matches packages/shared/src/theme/tokens.css),
  * body, and shared typography.
  */
 export const BASE_CSS = `

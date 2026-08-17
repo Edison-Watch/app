@@ -29,7 +29,7 @@ const VALID_TOKEN = {
   scope: ['api:full'],
   user_id: 'user-1',
   org_id: 'org-1',
-  api_key: 'ew_key'
+  api_key: 'sg_key'
 }
 
 function jsonResponse(body: unknown, status = 200, headers: Record<string, string> = {}): Response {
@@ -115,7 +115,7 @@ describe('pollDeviceToken', () => {
 
   it('returns a validated token body', async () => {
     const result = await pollOnce(jsonResponse(VALID_TOKEN))
-    expect(result).toMatchObject({ access_token: 'ewc_token', api_key: 'ew_key' })
+    expect(result).toMatchObject({ access_token: 'ewc_token', api_key: 'sg_key' })
   })
 
   it('rejects a 2xx response with a malformed body instead of returning it', async () => {
@@ -199,7 +199,7 @@ describe('deviceSignOut', () => {
 
   it('clears the stored session even when revocation is unconfirmed', async () => {
     storeDeviceSession('demo', {
-      apiKey: 'ew_key',
+      apiKey: 'sg_key',
       clientAccessToken: 'ewc_x',
       clientInstallationId: 'inst-1',
       userId: 'user-1',

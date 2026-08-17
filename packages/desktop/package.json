@@ -1,13 +1,13 @@
 {
-  "name": "@edison-watch/desktop",
+  "name": "@sealgate/desktop",
   "version": "0.6.4",
   "private": true,
-  "description": "Edison Watch Desktop Client v2 - Electron + React 19",
+  "description": "SealGate Desktop Client v2 - Electron + React 19",
   "main": "./out/main/index.js",
-  "author": "Edison Watch Team <hello@edison.watch>",
+  "author": "SealGate Team <hello@edison.watch>",
   "scripts": {
     "dev": "electron-vite dev",
-    "dev:dry": "cross-env EDISON_DRY_RUN=1 electron-vite dev",
+    "dev:dry": "cross-env SEALGATE_DRY_RUN=1 electron-vite dev",
     "build": "npm run typecheck && electron-vite build",
     "build:demo": "npm run typecheck && electron-vite build --mode demo",
     "build:release": "npm run typecheck && electron-vite build --mode release",
@@ -47,7 +47,7 @@
     "smol-toml": "^1.6.1"
   },
   "devDependencies": {
-    "@edison-watch/shared": "^0.1.0",
+    "@sealgate/shared": "^0.1.0",
     "@electron-toolkit/tsconfig": "^2.0.0",
     "@playwright/test": "^1.58.2",
     "@storybook/addon-a11y": "^10.5.7",

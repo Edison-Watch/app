@@ -2,7 +2,7 @@
  * Desktop app install & onboarding wizard animation.
  *
  * Clean two-phase loop on a single laptop:
- *   Phase 1 (0-40%): Download arrow drops, Edison app icon pops in.
+ *   Phase 1 (0-40%): Download arrow drops, SealGate app icon pops in.
  *   Phase 2 (46-92%): Screen clears to wizard with step dots lighting
  *           up, progress bar filling, and a final checkmark.
  *
@@ -11,7 +11,7 @@
  * 10s loop. Pure SVG + CSS. Respects `prefers-reduced-motion`.
  */
 
-import { EdisonLogo, ProgressBar } from '../_shared'
+import { SealGateLogo, ProgressBar } from '../_shared'
 
 const fg = 'var(--text-primary)'
 const muted = 'var(--text-muted)'
@@ -238,7 +238,7 @@ const CSS = `
 .di-anim.anim-static .di-wcur, .di-anim.anim-static .di-wclk,
 .di-anim.anim-static .di-wrip1, .di-anim.anim-static .di-wrip2, .di-anim.anim-static .di-wrip3,
 .di-anim.anim-static .di-wiz, .di-anim.anim-static .di-done { animation: none; }
-/* Thumbnail frame = Phase 1: download arrow + Edison app icon, so the still
+/* Thumbnail frame = Phase 1: download arrow + SealGate app icon, so the still
    reads as "install the desktop app" rather than the "All set!" end-state.
    (The prefers-reduced-motion block above still shows the resolved state.) */
 .di-anim.anim-static .di-cursor { opacity: 0; }
@@ -318,7 +318,7 @@ export default function DesktopInstallAnimation(): React.ReactNode {
             />
           </g>
 
-          {/* Edison app icon (pops in after arrow lands) */}
+          {/* SealGate app icon (pops in after arrow lands) */}
           <g className="di-icon">
             <rect
               x={226}
@@ -332,7 +332,7 @@ export default function DesktopInstallAnimation(): React.ReactNode {
               strokeOpacity="0.35"
               strokeWidth="1.5"
             />
-            <EdisonLogo x={233} y={57} w={34} h={33} />
+            <SealGateLogo x={233} y={57} w={34} h={33} />
             <text
               x={250}
               y={116}
@@ -343,7 +343,7 @@ export default function DesktopInstallAnimation(): React.ReactNode {
               fontFamily="system-ui,sans-serif"
               fillOpacity="0.5"
             >
-              Edison Watch
+              SealGate
             </text>
           </g>
 
@@ -400,8 +400,8 @@ export default function DesktopInstallAnimation(): React.ReactNode {
           {/* Title bar */}
           <rect x={170} y={26} width={160} height={16} rx={5} fill={accent} fillOpacity="0.06" />
           <rect x={170} y={37} width={160} height={5} fill={accent} fillOpacity="0.06" />
-          {/* Edison logo in title bar */}
-          <EdisonLogo x={174} y={28} w={12} h={12} />
+          {/* SealGate logo in title bar */}
+          <SealGateLogo x={174} y={28} w={12} h={12} />
           <text
             x={190}
             y={37}
@@ -411,7 +411,7 @@ export default function DesktopInstallAnimation(): React.ReactNode {
             fontFamily="system-ui,sans-serif"
             fillOpacity="0.5"
           >
-            Edison Watch
+            SealGate
           </text>
           {/* Window dots */}
           <circle cx={316} cy={34} r={2} fill={muted} fillOpacity="0.2" />

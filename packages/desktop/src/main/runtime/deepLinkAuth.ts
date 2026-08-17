@@ -1,5 +1,5 @@
 /**
- * Single-instance lock + `edison-watch://` deep-link auth-callback wiring.
+ * Single-instance lock + `sealgate://` deep-link auth-callback wiring.
  *
  * Extracted from index.ts (800-line CI limit). The renderer receives SSO/OAuth
  * callbacks either via the loopback server (authLoopbackServer) or, as a
@@ -79,7 +79,7 @@ export function initDeepLinkAuth(deps: {
 
   // Cold start via protocol (Win/Linux): the URL is in argv, not 'open-url'.
   if (process.platform !== 'darwin') {
-    const argvUrl = process.argv.find((arg) => arg.startsWith('edison-watch://'))
+    const argvUrl = process.argv.find((arg) => arg.startsWith('sealgate://'))
     if (argvUrl) {
       log('cold-start deep link found in argv')
       pendingAuthCallbackUrl = argvUrl
@@ -87,24 +87,24 @@ export function initDeepLinkAuth(deps: {
   }
 
   app.on('open-url', (_event, url) => {
-    if (url.startsWith('edison-watch://')) deliverAuthCallback(url, 'open-url')
+    if (url.startsWith('sealgate://')) deliverAuthCallback(url, 'open-url')
   })
 
   app.on('second-instance', (_event, commandLine) => {
     // Relaunching while the app lives in the tray: reopen the GUI, recreating the
     // window if it was destroyed on close (showMainWindow handles both cases).
     showMainWindow()
-    const url = commandLine.find((arg) => arg.startsWith('edison-watch://'))
+    const url = commandLine.find((arg) => arg.startsWith('sealgate://'))
     if (url) deliverAuthCallback(url, 'second-instance')
-    else log('second-instance fired with no edison-watch:// url in argv')
+    else log('second-instance fired with no sealgate:// url in argv')
   })
 
   if (process.defaultApp) {
     if (process.argv.length >= 2) {
-      app.setAsDefaultProtocolClient('edison-watch', process.execPath, [process.argv[1]!])
+      app.setAsDefaultProtocolClient('sealgate', process.execPath, [process.argv[1]!])
     }
   } else {
-    app.setAsDefaultProtocolClient('edison-watch')
+    app.setAsDefaultProtocolClient('sealgate')
   }
 
   return gotLock

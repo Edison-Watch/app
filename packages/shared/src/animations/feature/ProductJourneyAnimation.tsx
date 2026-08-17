@@ -1,12 +1,12 @@
 /**
  * Product Journey Animation - 4-phase progressive accumulation narrative.
  *
- * Phase 1 - "Onboard": Edison client installs on employee laptops (staggered),
+ * Phase 1 - "Onboard": SealGate client installs on employee laptops (staggered),
  *           scans configs, discovers shadow agents/MCPs. Admin has no
  *           visibility (admin+eye-slash effect).
- * Phase 2 - "Observe": Edison gateway materializes, replacing the blind
- *           spot; all agentic actions flow through Edison with visibility.
- * Phase 3 - "Enforce": Edison blocks policy violations and data
+ * Phase 2 - "Observe": SealGate gateway materializes, replacing the blind
+ *           spot; all agentic actions flow through SealGate with visibility.
+ * Phase 3 - "Enforce": SealGate blocks policy violations and data
  *           exfiltration; verdict badges (allow/deny) appear.
  * Phase 4 - "Unify": Laptops fade, replaced by ScalePilot-style department
  *           rows showing org-wide AI governance across all teams.
@@ -19,7 +19,7 @@ import {
   ADMIN_PATH,
   AgentIcon,
   DANGER,
-  EdisonLogo,
+  SealGateLogo,
   EYE_PATH,
   EYE_SLASH_PATH,
   McpIcon,
@@ -63,7 +63,7 @@ const CSS = `
 .pj .pj-p3 { animation: pj-p3 20s ease-in-out infinite; }
 .pj .pj-p4 { animation: pj-p4 20s ease-in-out infinite; }
 
-/* Phase 1 "blind" state - visible only during Phase 1, fades when Edison arrives */
+/* Phase 1 "blind" state - visible only during Phase 1, fades when SealGate arrives */
 .pj .pj-blind { animation: pj-blind 20s ease-in-out infinite; }
 
 /* Phase 4: fade left-side laptops to make room for department rows */
@@ -81,11 +81,11 @@ const CSS = `
 .pj .pj-s3 { animation: pj-s3 20s ease-in-out infinite; }
 .pj .pj-s4 { animation: pj-s4 20s ease-in-out infinite; }
 
-/* Edison gateway */
-.pj .pj-edison { animation: pj-ed 20s ease-in-out infinite; transform-origin: 350px 153px; }
+/* SealGate gateway */
+.pj .pj-sealgate { animation: pj-ed 20s ease-in-out infinite; transform-origin: 350px 153px; }
 .pj .pj-pulse  { transform-origin: 350px 153px; animation: pj-pulse 1.4s cubic-bezier(.2,.8,.4,1) infinite; }
 
-/* Phase 1: staggered Edison client install on each laptop */
+/* Phase 1: staggered SealGate client install on each laptop */
 .pj .pj-inst1 { animation: pj-inst1 20s ease-in-out infinite; transform-origin: 84px 68px; }
 .pj .pj-inst2 { animation: pj-inst2 20s ease-in-out infinite; transform-origin: 84px 143px; }
 .pj .pj-inst3 { animation: pj-inst3 20s ease-in-out infinite; transform-origin: 84px 218px; }
@@ -93,7 +93,7 @@ const CSS = `
 .pj .pj-iglow2 { animation: pj-iglow2 20s ease-in-out infinite; }
 .pj .pj-iglow3 { animation: pj-iglow3 20s ease-in-out infinite; }
 
-/* Phase 1 shadow (per-laptop, fades as Edison installs on that laptop) */
+/* Phase 1 shadow (per-laptop, fades as SealGate installs on that laptop) */
 .pj .pj-shad1 { animation: pj-shad1 20s ease-in-out infinite; }
 .pj .pj-shad2 { animation: pj-shad2 20s ease-in-out infinite; }
 .pj .pj-shad3 { animation: pj-shad3 20s ease-in-out infinite; }
@@ -123,7 +123,7 @@ const CSS = `
 @keyframes pj-p3 { 0%,47% { opacity:0; } 53% { opacity:1; } 100% { opacity:1; } }
 @keyframes pj-p4 { 0%,72% { opacity:0; } 78% { opacity:1; } 100% { opacity:1; } }
 
-/* Phase 1 blind state - fades out when Edison arrives */
+/* Phase 1 blind state - fades out when SealGate arrives */
 @keyframes pj-blind {
   0%    { opacity:0; }
   3%    { opacity:1; }
@@ -151,7 +151,7 @@ const CSS = `
 @keyframes pj-s3 { 0%,47% { opacity:.2; } 53% { opacity:1; } 100% { opacity:1; } }
 @keyframes pj-s4 { 0%,72% { opacity:.2; } 78% { opacity:1; } 100% { opacity:1; } }
 
-/* Edison gateway */
+/* SealGate gateway */
 @keyframes pj-ed {
   0%,22% { opacity:0; transform:scale(.85); }
   28%    { opacity:1; transform:scale(1); }
@@ -164,13 +164,13 @@ const CSS = `
   100% { transform:scale(1.6); opacity:0;  }
 }
 
-/* Shadow MCP reveal per laptop - fades out as Edison installs on that laptop */
+/* Shadow MCP reveal per laptop - fades out as SealGate installs on that laptop */
 @keyframes pj-shad1 { 0% { opacity:0; } 3% { opacity:1; } 8% { opacity:1; } 10% { opacity:0; } 100% { opacity:0; } }
 @keyframes pj-shad2 { 0% { opacity:0; } 3% { opacity:1; } 11% { opacity:1; } 13% { opacity:0; } 100% { opacity:0; } }
 @keyframes pj-shad3 { 0% { opacity:0; } 3% { opacity:1; } 14% { opacity:1; } 16% { opacity:0; } 100% { opacity:0; } }
 @keyframes pj-sglow  { 0%,100% { stroke-opacity:.3; } 50% { stroke-opacity:.65; } }
 
-/* Staggered Edison client install: pop-in with overshoot on each laptop */
+/* Staggered SealGate client install: pop-in with overshoot on each laptop */
 @keyframes pj-inst1 {
   0%,8%  { opacity:0; transform:scale(0); }
   10%    { opacity:1; transform:scale(1.3); }
@@ -232,7 +232,7 @@ const CSS = `
   100%    { opacity:0; }
 }
 
-/* Phase 2 observe packet: laptop 1 -> Edison -> tool 1 */
+/* Phase 2 observe packet: laptop 1 -> SealGate -> tool 1 */
 @keyframes pj-pkt1 {
   0%,31%  { opacity:0; }
   33%     { transform:translate(158px,78px);  opacity:.8; color:${O}; }
@@ -244,7 +244,7 @@ const CSS = `
   100%    { opacity:0; }
 }
 
-/* Phase 3 enforce packet - BLOCKED: laptop 3 -> Edison -> denied */
+/* Phase 3 enforce packet - BLOCKED: laptop 3 -> SealGate -> denied */
 @keyframes pj-pkt2 {
   0%,54%  { opacity:0; }
   56%     { transform:translate(158px,228px); opacity:.8; color:${O}; }
@@ -254,7 +254,7 @@ const CSS = `
   100%    { opacity:0; }
 }
 
-/* Phase 3 enforce packet - ALLOWED: laptop 2 -> Edison -> tool 2 */
+/* Phase 3 enforce packet - ALLOWED: laptop 2 -> SealGate -> tool 2 */
 @keyframes pj-pkt3 {
   0%,63%  { opacity:0; }
   65%     { transform:translate(158px,153px); opacity:.8; color:${O}; }
@@ -266,7 +266,7 @@ const CSS = `
   100%    { opacity:0; }
 }
 
-/* Phase 4 unified packet: dept row -> Edison -> tool 3 */
+/* Phase 4 unified packet: dept row -> SealGate -> tool 3 */
 @keyframes pj-pkt4 {
   0%,79%  { opacity:0; }
   81%     { transform:translate(190px,62px);  opacity:.8; color:${O}; }
@@ -291,7 +291,7 @@ const CSS = `
   .pj .pj-p1, .pj .pj-p2, .pj .pj-p3, .pj .pj-p4, .pj .pj-blind, .pj .pj-pre4,
   .pj .pj-l1, .pj .pj-l2, .pj .pj-l3, .pj .pj-l4,
   .pj .pj-s1, .pj .pj-s2, .pj .pj-s3, .pj .pj-s4,
-  .pj .pj-edison,
+  .pj .pj-sealgate,
   .pj .pj-inst1, .pj .pj-inst2, .pj .pj-inst3,
   .pj .pj-iglow1, .pj .pj-iglow2, .pj .pj-iglow3,
   .pj .pj-shad1, .pj .pj-shad2, .pj .pj-shad3, .pj .pj-sglow,
@@ -303,7 +303,7 @@ const CSS = `
   .pj .pj-l1, .pj .pj-l2, .pj .pj-l3 { opacity:0; }
   .pj .pj-l4 { opacity:1; }
   .pj .pj-s1, .pj .pj-s2, .pj .pj-s3, .pj .pj-s4 { opacity:1; }
-  .pj .pj-edison { opacity:1; transform:scale(1); }
+  .pj .pj-sealgate { opacity:1; transform:scale(1); }
   .pj .pj-inst1, .pj .pj-inst2, .pj .pj-inst3 { opacity:1; transform:scale(1); }
   .pj .pj-iglow1, .pj .pj-iglow2, .pj .pj-iglow3 { opacity:0; }
   .pj .pj-shad1, .pj .pj-shad2, .pj .pj-shad3 { opacity:0; }
@@ -315,7 +315,7 @@ const CSS = `
 .pj.anim-static .pj-p1, .pj.anim-static .pj-p2, .pj.anim-static .pj-p3, .pj.anim-static .pj-p4, .pj.anim-static .pj-blind, .pj.anim-static .pj-pre4,
 .pj.anim-static .pj-l1, .pj.anim-static .pj-l2, .pj.anim-static .pj-l3, .pj.anim-static .pj-l4,
 .pj.anim-static .pj-s1, .pj.anim-static .pj-s2, .pj.anim-static .pj-s3, .pj.anim-static .pj-s4,
-.pj.anim-static .pj-edison,
+.pj.anim-static .pj-sealgate,
 .pj.anim-static .pj-inst1, .pj.anim-static .pj-inst2, .pj.anim-static .pj-inst3,
 .pj.anim-static .pj-iglow1, .pj.anim-static .pj-iglow2, .pj.anim-static .pj-iglow3,
 .pj.anim-static .pj-shad1, .pj.anim-static .pj-shad2, .pj.anim-static .pj-shad3, .pj.anim-static .pj-sglow,
@@ -327,7 +327,7 @@ const CSS = `
 .pj.anim-static .pj-l1, .pj.anim-static .pj-l2, .pj.anim-static .pj-l3 { opacity:0; }
 .pj.anim-static .pj-l4 { opacity:1; }
 .pj.anim-static .pj-s1, .pj.anim-static .pj-s2, .pj.anim-static .pj-s3, .pj.anim-static .pj-s4 { opacity:1; }
-.pj.anim-static .pj-edison { opacity:1; transform:scale(1); }
+.pj.anim-static .pj-sealgate { opacity:1; transform:scale(1); }
 .pj.anim-static .pj-inst1, .pj.anim-static .pj-inst2, .pj.anim-static .pj-inst3 { opacity:1; transform:scale(1); }
 .pj.anim-static .pj-iglow1, .pj.anim-static .pj-iglow2, .pj.anim-static .pj-iglow3 { opacity:0; }
 .pj.anim-static .pj-shad1, .pj.anim-static .pj-shad2, .pj.anim-static .pj-shad3 { opacity:0; }
@@ -439,7 +439,7 @@ export default function ProductJourneyAnimation(): React.ReactNode {
             fontSize="7.5"
             fontFamily="system-ui,sans-serif"
           >
-            Install Edison &middot; Discover shadow agents
+            Install SealGate &middot; Discover shadow agents
           </text>
         </g>
         <g className="pj-l2">
@@ -617,7 +617,7 @@ export default function ProductJourneyAnimation(): React.ReactNode {
             </text>
           </g>
 
-          {/* Edison client wrapping local MCPs (staggered install) */}
+          {/* SealGate client wrapping local MCPs (staggered install) */}
           <g className="pj-iglow1">
             <rect
               x={10}
@@ -644,7 +644,7 @@ export default function ProductJourneyAnimation(): React.ReactNode {
               strokeOpacity="0.5"
               strokeWidth="1.5"
             />
-            <EdisonLogo x={36} y={49} w={16} h={15.5} />
+            <SealGateLogo x={36} y={49} w={16} h={15.5} />
             <svg x={122} y={57} width={14} height={14} viewBox="0 0 256 256">
               <path d={SHIELD_CHECK_PATH} fill={accent} fillOpacity="0.7" />
             </svg>
@@ -675,7 +675,7 @@ export default function ProductJourneyAnimation(): React.ReactNode {
               strokeOpacity="0.5"
               strokeWidth="1.5"
             />
-            <EdisonLogo x={36} y={124} w={16} h={15.5} />
+            <SealGateLogo x={36} y={124} w={16} h={15.5} />
             <svg x={122} y={132} width={14} height={14} viewBox="0 0 256 256">
               <path d={SHIELD_CHECK_PATH} fill={accent} fillOpacity="0.7" />
             </svg>
@@ -706,13 +706,13 @@ export default function ProductJourneyAnimation(): React.ReactNode {
               strokeOpacity="0.5"
               strokeWidth="1.5"
             />
-            <EdisonLogo x={36} y={199} w={16} h={15.5} />
+            <SealGateLogo x={36} y={199} w={16} h={15.5} />
             <svg x={122} y={207} width={14} height={14} viewBox="0 0 256 256">
               <path d={SHIELD_CHECK_PATH} fill={accent} fillOpacity="0.7" />
             </svg>
           </g>
 
-          {/* Shadow MCP reveal - per laptop, fades as Edison installs */}
+          {/* Shadow MCP reveal - per laptop, fades as SealGate installs */}
           <g className="pj-shad1">
             {[52, 74, 96].map((mx) => (
               <rect
@@ -835,7 +835,7 @@ export default function ProductJourneyAnimation(): React.ReactNode {
           </text>
         </g>
 
-        {/* ══ PHASE 1: No visibility (fades when Edison arrives) ══ */}
+        {/* ══ PHASE 1: No visibility (fades when SealGate arrives) ══ */}
         <g className="pj-blind">
           <svg x={338} y={82} width={22} height={22} viewBox="0 0 256 256">
             <path d={EYE_SLASH_PATH} fill={DANGER} fillOpacity="0.7" />
@@ -1015,8 +1015,8 @@ export default function ProductJourneyAnimation(): React.ReactNode {
           />
         </g>
 
-        {/* ══ CENTER: Edison Gateway (Phase 2+) ══ */}
-        <g className="pj-edison">
+        {/* ══ CENTER: SealGate Gateway (Phase 2+) ══ */}
+        <g className="pj-sealgate">
           <circle
             className="pj-pulse"
             cx={350}
@@ -1027,7 +1027,7 @@ export default function ProductJourneyAnimation(): React.ReactNode {
             strokeOpacity="0.5"
             strokeWidth="1.5"
           />
-          <EdisonLogo x={323} y={127} w={54} h={52.5} />
+          <SealGateLogo x={323} y={127} w={54} h={52.5} />
           <text
             x="350"
             y="195"
@@ -1037,7 +1037,7 @@ export default function ProductJourneyAnimation(): React.ReactNode {
             fontWeight="bold"
             fontFamily="system-ui,sans-serif"
           >
-            Edison Gateway
+            SealGate Gateway
           </text>
         </g>
 
@@ -1066,7 +1066,7 @@ export default function ProductJourneyAnimation(): React.ReactNode {
 
         {/* ══ CONNECTION LINES (Phase 2+) ══ */}
         <g className="pj-p2">
-          {/* Laptop → Edison lines: hidden in Phase 4 with laptops */}
+          {/* Laptop → SealGate lines: hidden in Phase 4 with laptops */}
           <g className="pj-pre4">
             <line
               className="pj-line"
@@ -1102,7 +1102,7 @@ export default function ProductJourneyAnimation(): React.ReactNode {
               strokeDasharray="3 3"
             />
           </g>
-          {/* Edison → Tools lines: persist through Phase 4 */}
+          {/* SealGate → Tools lines: persist through Phase 4 */}
           <line
             className="pj-line"
             x1="378"
@@ -1343,7 +1343,7 @@ export default function ProductJourneyAnimation(): React.ReactNode {
             )
           })}
 
-          {/* Connection lines: all 5 dept rows → Edison */}
+          {/* Connection lines: all 5 dept rows → SealGate */}
           {DEPTS.map((dept) => (
             <line
               key={dept.label}

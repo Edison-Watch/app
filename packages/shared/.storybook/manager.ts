@@ -1,9 +1,9 @@
 import { addons } from 'storybook/manager-api'
 import { create } from 'storybook/theming/create'
 
-const edisonTheme = create({
+const sealgateTheme = create({
   base: 'dark',
-  brandTitle: 'Edison Watch',
+  brandTitle: 'SealGate',
   brandUrl: '/',
 
   // Dark navy backgrounds
@@ -38,4 +38,4 @@ const edisonTheme = create({
   booleanSelectedBg: '#2A4A48'
 })
 
-addons.setConfig({ theme: edisonTheme })
+addons.setConfig({ theme: sealgateTheme })

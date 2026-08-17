@@ -1,11 +1,11 @@
 /**
  * Trifecta defense animation - before/after contrast.
  *
- * Phase 1 (without Edison): Attack succeeds - attacker sends poison email,
+ * Phase 1 (without SealGate): Attack succeeds - attacker sends poison email,
  *   email infects agent, agent exfiltrates data to attacker.
- * Phase 2 (with Edison): Email routes through Edison Gateway (which flags it
+ * Phase 2 (with SealGate): Email routes through SealGate Gateway (which flags it
  *   with a ! warning), agent still gets infected, but when it tries to
- *   exfiltrate, Edison blocks the leak.
+ *   exfiltrate, SealGate blocks the leak.
  *
  * 10s loop. Pure SVG + CSS. Respects `prefers-reduced-motion`.
  */
@@ -25,7 +25,7 @@ import {
 } from '../../svg/attacker-svg'
 import {
   DANGER,
-  EdisonLogo,
+  SealGateLogo,
   GREEN as G,
   POISON_PATH,
   ProgressBar,
@@ -88,8 +88,8 @@ const CSS = `
 .td-anim .td-a2-4 { animation: td-a2-4 10s ease-in-out infinite; }
 .td-anim .td-pk2-4 { animation: td-pk2-4 10s ease-in-out infinite; }
 
-/* ── Edison + shield + block + exclamation ── */
-.td-anim .td-edison { animation: td-edison 10s ease-in-out infinite; transform-origin: 267px 24px; }
+/* ── SealGate + shield + block + exclamation ── */
+.td-anim .td-sealgate { animation: td-sealgate 10s ease-in-out infinite; transform-origin: 267px 24px; }
 .td-anim .td-exclaim { animation: td-exclaim 10s ease-in-out infinite; transform-origin: 290px 38px; }
 .td-anim .td-shield { animation: td-shield 10s ease-in-out infinite; transform-origin: 267px 24px; }
 .td-anim .td-blocked { animation: td-blocked 10s ease-in-out infinite; transform-origin: 236px 23px; }
@@ -312,7 +312,7 @@ const CSS = `
   100%   { opacity: 0; }
 }
 
-/* P2 Arrow 2: Email → Edison */
+/* P2 Arrow 2: Email → SealGate */
 @keyframes td-a2-2 {
   0%,60% { opacity: 0; }
   64%    { opacity: 1; }
@@ -328,7 +328,7 @@ const CSS = `
   100%   { opacity: 0; }
 }
 
-/* P2 Arrow 3: Edison → Laptop (with ! warning) */
+/* P2 Arrow 3: SealGate → Laptop (with ! warning) */
 @keyframes td-a2-3 {
   0%,66% { opacity: 0; }
   70%    { opacity: 1; }
@@ -344,7 +344,7 @@ const CSS = `
   100%   { opacity: 0; }
 }
 
-/* P2 Arrow 4: Laptop → Edison (exfiltration attempt, blocked) */
+/* P2 Arrow 4: Laptop → SealGate (exfiltration attempt, blocked) */
 @keyframes td-a2-4 {
   0%,76% { opacity: 0; }
   80%    { opacity: 1; }
@@ -360,8 +360,8 @@ const CSS = `
   100%   { opacity: 0; }
 }
 
-/* Edison fades in between phases */
-@keyframes td-edison {
+/* SealGate fades in between phases */
+@keyframes td-sealgate {
   0%,44% { opacity: 0; transform: scale(0.85); }
   50%    { opacity: 1; transform: scale(1); }
   92%    { opacity: 1; transform: scale(1); }
@@ -369,7 +369,7 @@ const CSS = `
   100%   { opacity: 0; }
 }
 
-/* Exclamation ! pops in when email passes through Edison */
+/* Exclamation ! pops in when email passes through SealGate */
 @keyframes td-exclaim {
   0%,66% { opacity: 0; transform: scale(0.5); }
   69%    { opacity: 1; transform: scale(1.15); }
@@ -430,7 +430,7 @@ const CSS = `
   .td-anim .td-a2-3, .td-anim .td-pk2-3,
   .td-anim .td-a2-4, .td-anim .td-pk2-4,
   .td-anim .td-apulse, .td-anim .td-apulse-wrap,
-  .td-anim .td-edison, .td-anim .td-exclaim,
+  .td-anim .td-sealgate, .td-anim .td-exclaim,
   .td-anim .td-shield, .td-anim .td-blocked,
   .td-anim .td-label1, .td-anim .td-label2 { animation: none; }
   .td-anim .td-p1 { opacity: 0; }
@@ -440,7 +440,7 @@ const CSS = `
   .td-anim .td-bot2-dirty { opacity: 1; }
   .td-anim .td-poison1 { opacity: 0; }
   .td-anim .td-poison2 { opacity: 1; }
-  .td-anim .td-edison { opacity: 1; transform: scale(1); }
+  .td-anim .td-sealgate { opacity: 1; transform: scale(1); }
   .td-anim .td-exclaim { opacity: 0; }
   .td-anim .td-shield { opacity: 1; transform: scale(1); }
   .td-anim .td-blocked { opacity: 1; transform: scale(1); }
@@ -471,7 +471,7 @@ const CSS = `
 .td-anim.anim-static .td-a2-3, .td-anim.anim-static .td-pk2-3,
 .td-anim.anim-static .td-a2-4, .td-anim.anim-static .td-pk2-4,
 .td-anim.anim-static .td-apulse, .td-anim.anim-static .td-apulse-wrap,
-.td-anim.anim-static .td-edison, .td-anim.anim-static .td-exclaim,
+.td-anim.anim-static .td-sealgate, .td-anim.anim-static .td-exclaim,
 .td-anim.anim-static .td-shield, .td-anim.anim-static .td-blocked,
 .td-anim.anim-static .td-label1, .td-anim.anim-static .td-label2 { animation: none; }
 .td-anim.anim-static .td-p1 { opacity: 0; }
@@ -481,7 +481,7 @@ const CSS = `
 .td-anim.anim-static .td-bot2-dirty { opacity: 1; }
 .td-anim.anim-static .td-poison1 { opacity: 0; }
 .td-anim.anim-static .td-poison2 { opacity: 1; }
-.td-anim.anim-static .td-edison { opacity: 1; transform: scale(1); }
+.td-anim.anim-static .td-sealgate { opacity: 1; transform: scale(1); }
 .td-anim.anim-static .td-exclaim { opacity: 0; }
 .td-anim.anim-static .td-shield { opacity: 1; transform: scale(1); }
 .td-anim.anim-static .td-blocked { opacity: 1; transform: scale(1); }
@@ -904,8 +904,8 @@ export default function TrifectaDefenseAnimation(): React.ReactNode {
           </text>
         </g>
 
-        {/* ═══ EDISON GATEWAY (fades in between phases) ═══ */}
-        <g className="td-edison">
+        {/* ═══ SEALGATE GATEWAY (fades in between phases) ═══ */}
+        <g className="td-sealgate">
           <rect
             x="245"
             y="4"
@@ -918,7 +918,7 @@ export default function TrifectaDefenseAnimation(): React.ReactNode {
             strokeOpacity="0.4"
             strokeWidth="1.2"
           />
-          <EdisonLogo x={255} y={8} w={24} h={23} />
+          <SealGateLogo x={255} y={8} w={24} h={23} />
         </g>
 
         {/* ═══ PHASE 2 ARROWS ═══ */}
@@ -937,7 +937,7 @@ export default function TrifectaDefenseAnimation(): React.ReactNode {
             markerEnd="url(#td-arrR)"
           />
         </g>
-        {/* P2 Arrow 2: Email → Edison */}
+        {/* P2 Arrow 2: Email → SealGate */}
         <g className="td-a2-2">
           <line
             className="td-line"
@@ -952,7 +952,7 @@ export default function TrifectaDefenseAnimation(): React.ReactNode {
             markerEnd="url(#td-arrR)"
           />
         </g>
-        {/* P2 Arrow 3: Edison → Laptop */}
+        {/* P2 Arrow 3: SealGate → Laptop */}
         <g className="td-a2-3">
           <line
             className="td-line"
@@ -967,7 +967,7 @@ export default function TrifectaDefenseAnimation(): React.ReactNode {
             markerEnd="url(#td-arrR)"
           />
         </g>
-        {/* P2 Arrow 4: Laptop → Edison (exfiltration attempt) */}
+        {/* P2 Arrow 4: Laptop → SealGate (exfiltration attempt) */}
         <g className="td-a2-4">
           <line
             className="td-line"
@@ -1073,7 +1073,7 @@ export default function TrifectaDefenseAnimation(): React.ReactNode {
           />
         </g>
 
-        {/* Exclamation ! badge (appears when email passes through Edison) */}
+        {/* Exclamation ! badge (appears when email passes through SealGate) */}
         <g className="td-exclaim" style={{ transformOrigin: '290px 38px' }}>
           <circle
             cx="290"
@@ -1105,7 +1105,7 @@ export default function TrifectaDefenseAnimation(): React.ReactNode {
           </svg>
         </g>
 
-        {/* Red X denied badge (left of Edison) */}
+        {/* Red X denied badge (left of SealGate) */}
         <g className="td-blocked" style={{ transformOrigin: '236px 23px' }}>
           <circle
             cx="236"
@@ -1149,7 +1149,7 @@ export default function TrifectaDefenseAnimation(): React.ReactNode {
             fontFamily="system-ui,sans-serif"
             opacity="0.9"
           >
-            Edison blocked the leak
+            SealGate blocked the leak
           </text>
         </g>
 

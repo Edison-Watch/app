@@ -2,7 +2,7 @@
 //
 // In primary mode the daemon auto-quarantines new servers and emits a
 // `quarantine-prompt` event for each. The client's job is the human decision:
-// send to Edison Watch (register/request) or keep quarantined, plus
+// send to SealGate (register/request) or keep quarantined, plus
 // rename-on-conflict. A whole batch of newly-quarantined servers is shown in a
 // SINGLE window (one row each, with bulk actions), driving the daemon's
 // `disposition` op directly (the daemon owns config, submit, secret-templatizing,
@@ -35,7 +35,7 @@ const toClientId = (agent: string): string => agent.replace(/_/g, '-')
 
 /**
  * Show one window listing every server in `servers` (a batch of newly
- * quarantined ones), each with Send-to-EW / Keep-quarantined + inline
+ * quarantined ones), each with Send-to-SG / Keep-quarantined + inline
  * rename-on-conflict. Resolves when the window closes. Only one window at a
  * time. The caller batches; a second call while one is open is ignored.
  */
@@ -153,8 +153,8 @@ function rowHtml(server: ServerView, index: number, primaryLabel: string): strin
 }
 
 function buildHtml(servers: ServerView[], isAdminOrOwner: boolean, channel: string): string {
-  const primaryLabel = isAdminOrOwner ? 'Add to Edison' : 'Request Approval'
-  const bulkLabel = isAdminOrOwner ? 'Add all to Edison' : 'Request all'
+  const primaryLabel = isAdminOrOwner ? 'Add to SealGate' : 'Request Approval'
+  const bulkLabel = isAdminOrOwner ? 'Add all to SealGate' : 'Request all'
   const rows = servers.map((s, i) => rowHtml(s, i, primaryLabel)).join('')
   return `<!DOCTYPE html>
 <html>
@@ -212,7 +212,7 @@ function buildHtml(servers: ServerView[], isAdminOrOwner: boolean, channel: stri
       let res
       try { res = await ipcRenderer.invoke(CHANNEL, rename ? { index: idx, rename } : { index: idx }) }
       catch (e) { setMsg(item, String(e), 'error'); item.querySelectorAll('button').forEach(b => b.disabled = false); return }
-      if (res.ok) { markResolved(item, 'Sent to Edison Watch'); return }
+      if (res.ok) { markResolved(item, 'Sent to SealGate'); return }
       if (res.conflict) {
         item.querySelector('.rename-row').style.display = 'flex'
         setMsg(item, (res.message || 'Name already taken') + '. Choose a different name.', 'error')
@@ -220,7 +220,7 @@ function buildHtml(servers: ServerView[], isAdminOrOwner: boolean, channel: stri
         item.querySelector('.rename-input').focus()
         return
       }
-      setMsg(item, res.message || 'Failed to send to Edison Watch.', 'error')
+      setMsg(item, res.message || 'Failed to send to SealGate.', 'error')
       item.querySelectorAll('button').forEach(b => b.disabled = false)
     }
 

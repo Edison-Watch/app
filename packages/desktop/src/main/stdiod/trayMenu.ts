@@ -13,7 +13,7 @@ const CONNECTION_LABELS: Record<string, string> = {
   connected: 'connected',
   reconnecting: 'reconnecting',
   needs_reauth: 'needs reauth (Sign In)',
-  needs_upgrade: 'needs upgrade (update Edison Watch)'
+  needs_upgrade: 'needs upgrade (update SealGate)'
 }
 
 export function buildStdiodMenuItems(
@@ -45,8 +45,8 @@ export function buildStdiodMenuItems(
           // ~/.local/state (matches the daemon's paths.rs).
           const logDir =
             process.platform === 'darwin'
-              ? join(homedir(), 'Library', 'Logs', 'edison-stdiod')
-              : join(homedir(), '.local', 'state', 'edison-stdiod')
+              ? join(homedir(), 'Library', 'Logs', 'sealgate-stdiod')
+              : join(homedir(), '.local', 'state', 'sealgate-stdiod')
           shell.openPath(logDir).catch(() => {})
         }
       }
@@ -93,7 +93,7 @@ export function buildStdiodMenuItems(
         clipboard.writeText(deviceId)
         if (Notification.isSupported()) {
           new Notification({
-            title: 'Edison Watch',
+            title: 'SealGate',
             body: 'Device ID copied to clipboard',
             ...(process.platform !== 'darwin' && { icon: trayIconPath })
           }).show()

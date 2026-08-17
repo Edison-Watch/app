@@ -100,7 +100,7 @@ pub use imp::*;
 /// Best-effort machine hostname, sent to the backend so a local (stdio) server
 /// can be approved for the specific host it lives on.
 ///
-/// IMPORTANT: this must stay aligned with edison-stdiod's `config::hostname()`
+/// IMPORTANT: this must stay aligned with sealgate-stdiod's `config::hostname()`
 /// (env `HOSTNAME`, then `COMPUTERNAME`, then the `hostname` command) so the
 /// backend keys the *same* machine identity for both daemons. The command
 /// fallback is what works on macOS, where `HOSTNAME` isn't exported to

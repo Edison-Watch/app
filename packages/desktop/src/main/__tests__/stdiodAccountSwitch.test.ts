@@ -15,10 +15,10 @@ vi.mock('../stdiod/controller', () => ({
 vi.mock('../stdiod/stdiodLog', () => ({ stdiodLog: () => {} }))
 
 // Active-account credentials. Overridden per test.
-let apiBaseUrl: string | null = 'https://api.testedison.example'
-let creds: { apiKey: string; edisonSecretKey?: string } | null = {
+let apiBaseUrl: string | null = 'https://api.testsealgate.example'
+let creds: { apiKey: string; sealgateSecretKey?: string } | null = {
   apiKey: 'test-key',
-  edisonSecretKey: 'test-secret'
+  sealgateSecretKey: 'test-secret'
 }
 
 vi.mock('../infra/setupConfig', () => ({
@@ -35,7 +35,7 @@ describe('teardownStdiodForSignOut', () => {
   beforeEach(() => {
     uninstallMock.mockClear()
     resetMock.mockClear()
-    delete process.env.EDISON_DRY_RUN
+    delete process.env.SEALGATE_DRY_RUN
   })
 
   it('unloads the daemon but keeps config.toml (purge:false)', async () => {
@@ -56,12 +56,12 @@ describe('reprovisionStdiodForActiveAccount', () => {
     uninstallMock.mockClear()
     resetMock.mockClear()
     launchAgentLoaded = true
-    apiBaseUrl = 'https://api.testedison.example'
-    creds = { apiKey: 'test-key', edisonSecretKey: 'test-secret' }
-    delete process.env.EDISON_DRY_RUN
+    apiBaseUrl = 'https://api.testsealgate.example'
+    creds = { apiKey: 'test-key', sealgateSecretKey: 'test-secret' }
+    delete process.env.SEALGATE_DRY_RUN
   })
   afterEach(() => {
-    delete process.env.EDISON_DRY_RUN
+    delete process.env.SEALGATE_DRY_RUN
   })
 
   it('does nothing when the daemon is not installed', async () => {
@@ -75,9 +75,9 @@ describe('reprovisionStdiodForActiveAccount', () => {
     await reprovisionStdiodForActiveAccount()
     expect(resetMock).toHaveBeenCalledTimes(1)
     expect(resetMock).toHaveBeenCalledWith({
-      backend: 'https://api.testedison.example',
+      backend: 'https://api.testsealgate.example',
       apiKey: 'test-key',
-      edisonSecretKey: 'test-secret'
+      sealgateSecretKey: 'test-secret'
     })
     expect(uninstallMock).not.toHaveBeenCalled()
   })
@@ -96,8 +96,8 @@ describe('reprovisionStdiodForActiveAccount', () => {
     expect(uninstallMock).toHaveBeenCalledWith({ purge: false })
   })
 
-  it('is a no-op under EDISON_DRY_RUN (no launchctl probe in e2e)', async () => {
-    process.env.EDISON_DRY_RUN = '1'
+  it('is a no-op under SEALGATE_DRY_RUN (no launchctl probe in e2e)', async () => {
+    process.env.SEALGATE_DRY_RUN = '1'
     await reprovisionStdiodForActiveAccount()
     expect(resetMock).not.toHaveBeenCalled()
     expect(uninstallMock).not.toHaveBeenCalled()

@@ -1,7 +1,7 @@
 // Read the daemon's atomically-written state.json without spawning a
 // subprocess. This is the cheap path the tray uses to poll live status.
 //
-// The daemon (see stdiod/crates/edison-stdiod/src/state.rs) rewrites
+// The daemon (see stdiod/crates/sealgate-stdiod/src/state.rs) rewrites
 // the file on every connection-state transition and every child spawn /
 // death, using write-then-rename so a reader never observes a torn file.
 
@@ -12,13 +12,13 @@ import path from 'node:path'
 import type { StdiodLiveState } from './types'
 
 // Mirrors crate::paths::state_file - kept hardcoded rather than spawned
-// from `edison-stdiod` so polling stays subprocess-free.
+// from `sealgate-stdiod` so polling stays subprocess-free.
 export function getStateFilePath(): string {
-  return path.join(os.homedir(), '.config', 'edison-stdiod', 'state.json')
+  return path.join(os.homedir(), '.config', 'sealgate-stdiod', 'state.json')
 }
 
 export function getConfigFilePath(): string {
-  return path.join(os.homedir(), '.config', 'edison-stdiod', 'config.toml')
+  return path.join(os.homedir(), '.config', 'sealgate-stdiod', 'config.toml')
 }
 
 export interface StateFileSnapshot {

@@ -23,10 +23,10 @@
 
 ---
 
-**stdiod** is a small Rust daemon that bridges local [stdio MCP servers](https://modelcontextprotocol.io/) to the Edison Watch backend over one outbound WebSocket tunnel. It runs on a user's machine, dials out to the backend (no inbound ports), and lets the backend drive locally-spawned MCP server subprocesses - forwarding MCP frames in both directions. An AI client talking to the backend's gateway reaches these local servers as if they were hosted remotely, while the processes (and their filesystem and credentials) stay on the user's device.
+**stdiod** is a small Rust daemon that bridges local [stdio MCP servers](https://modelcontextprotocol.io/) to the SealGate backend over one outbound WebSocket tunnel. It runs on a user's machine, dials out to the backend (no inbound ports), and lets the backend drive locally-spawned MCP server subprocesses - forwarding MCP frames in both directions. An AI client talking to the backend's gateway reaches these local servers as if they were hosted remotely, while the processes (and their filesystem and credentials) stay on the user's device.
 
 <p align="center">
-  <img src="docs/architecture.svg" alt="An AI client reaches the Edison backend gateway, which drives the stdiod daemon over a single outbound WebSocket tunnel; the daemon spawns and supervises local stdio MCP servers on the user's machine." width="760">
+  <img src="docs/architecture.svg" alt="An AI client reaches the SealGate backend gateway, which drives the stdiod daemon over a single outbound WebSocket tunnel; the daemon spawns and supervises local stdio MCP servers on the user's machine." width="760">
 </p>
 
 > [!WARNING]
@@ -39,17 +39,17 @@
 - **Child supervision.** The backend pushes a desired set of servers; the daemon spawns/stops the matching subprocesses and pumps their stdio.
 - **Survival.** It reconnects with backoff across network blips and machine sleep/resume, and reconciles desired state on every (re)connect.
 
-See [`ARCHITECTURE.md`](./ARCHITECTURE.md) for the full design and [`schema/edison-tunnel-protocol.json`](./schema/edison-tunnel-protocol.json) for the wire protocol - the single source of truth for the frame types.
+See [`ARCHITECTURE.md`](./ARCHITECTURE.md) for the full design and [`schema/sealgate-tunnel-protocol.json`](./schema/sealgate-tunnel-protocol.json) for the wire protocol - the single source of truth for the frame types.
 
 ## Install
 
-Requires a [Rust toolchain](https://rustup.rs/) (the pinned channel is in [`rust-toolchain.toml`](./rust-toolchain.toml)). Build and install the `edison-stdiod` binary straight from a checkout:
+Requires a [Rust toolchain](https://rustup.rs/) (the pinned channel is in [`rust-toolchain.toml`](./rust-toolchain.toml)). Build and install the `sealgate-stdiod` binary straight from a checkout:
 
 ```sh
-cargo install --path crates/edison-stdiod
+cargo install --path crates/sealgate-stdiod
 ```
 
-The repository is a Cargo workspace; the `edison-stdiod` binary is the daemon **and** the control CLI.
+The repository is a Cargo workspace; the `sealgate-stdiod` binary is the daemon **and** the control CLI.
 
 <details>
 <summary>⚙️ Building in place (without installing)</summary>
@@ -57,7 +57,7 @@ The repository is a Cargo workspace; the `edison-stdiod` binary is the daemon **
 ```sh
 git clone https://github.com/Edison-Watch/stdiod.git
 cd stdiod
-cargo build --release   # binary at target/release/edison-stdiod
+cargo build --release   # binary at target/release/sealgate-stdiod
 ```
 
 </details>
@@ -66,31 +66,31 @@ cargo build --release   # binary at target/release/edison-stdiod
 
 ```sh
 # 1. Authorize this installation in a browser. The credential and backend URL
-#    are stored in ~/.config/edison-stdiod/config.toml (mode 0600).
-edison-stdiod login --backend https://dashboard.edison.watch
+#    are stored in ~/.config/sealgate-stdiod/config.toml (mode 0600).
+sealgate-stdiod login --backend https://dashboard.edison.watch
 
 # 2. Register the OS supervisor unit (macOS LaunchAgent) so the daemon
 #    starts at login and is restarted on crash. Requires `login` first.
-edison-stdiod install
+sealgate-stdiod install
 
 # 3. Check connection + per-child health at any time.
-edison-stdiod status
+sealgate-stdiod status
 
 # 4. Tail the logs (-f to follow).
-edison-stdiod logs -f
+sealgate-stdiod logs -f
 ```
 
 On a headless machine, pass `--no-open` and open the printed HTTP(S) URL on
-another device. Run `edison-stdiod logout` to remove the local credential
+another device. Run `sealgate-stdiod logout` to remove the local credential
 immediately and then best-effort revoke it remotely. The backend URL and local
 display preferences are retained.
 
 To run the daemon in the foreground without installing a service unit (useful for development):
 
 ```sh
-edison-stdiod run --backend http://localhost:3001 --api-key <KEY>
+sealgate-stdiod run --backend http://localhost:3001 --api-key <KEY>
 # …or rely on the persisted config from `login`:
-edison-stdiod run
+sealgate-stdiod run
 ```
 
 ### Registering a local MCP server
@@ -98,24 +98,24 @@ edison-stdiod run
 ```sh
 # Submit a local stdio MCP server for admin approval. Once approved, tool calls
 # appear in the gateway namespaced as `<name>_<tool>`.
-edison-stdiod server add filesystem \
+sealgate-stdiod server add filesystem \
   --command npx \
   --arg -y --arg @modelcontextprotocol/server-filesystem --arg "$HOME"
 
-edison-stdiod server list
-edison-stdiod server remove filesystem
+sealgate-stdiod server list
+sealgate-stdiod server remove filesystem
 ```
 
 ## CLI Commands
 
-TLDR: `edison-stdiod --help` (and `edison-stdiod <command> --help` for any subcommand).
+TLDR: `sealgate-stdiod --help` (and `sealgate-stdiod <command> --help` for any subcommand).
 
 <details>
 <summary>Expand</summary>
 
 | Command | What it does |
 | --- | --- |
-| `login` | Start browser/device authorization and persist the resulting scoped client credential in `~/.config/edison-stdiod/config.toml` (mode `0600`). Use `--no-open` for headless login. The deprecated `--api-key` path remains for existing desktop clients. |
+| `login` | Start browser/device authorization and persist the resulting scoped client credential in `~/.config/sealgate-stdiod/config.toml` (mode `0600`). Use `--no-open` for headless login. The deprecated `--api-key` path remains for existing desktop clients. |
 | `logout` | Atomically remove local credentials and account/device bindings, then best-effort revoke the prior client credential. Retains the backend URL and unrelated preferences. |
 | `install` | Register the OS supervisor unit (macOS LaunchAgent) so the daemon starts at login and restarts on crash. Requires `login` first. |
 | `uninstall` | Stop and remove the supervisor unit. Pass `--purge` to also delete the persisted config and logs. |
@@ -130,7 +130,7 @@ TLDR: `edison-stdiod --help` (and `edison-stdiod <command> --help` for any subco
 
 ## Configuration
 
-TLDR: `edison-stdiod login` writes everything to `~/.config/edison-stdiod/config.toml` (mode `0600`).
+TLDR: `sealgate-stdiod login` writes everything to `~/.config/sealgate-stdiod/config.toml` (mode `0600`).
 
 <details>
 <summary>Expand</summary>
@@ -138,32 +138,32 @@ TLDR: `edison-stdiod login` writes everything to `~/.config/edison-stdiod/config
 Settings resolve in two layers, highest precedence first:
 
 1. **CLI flags / environment variables** - handy for development overrides.
-2. **`~/.config/edison-stdiod/config.toml`** - written by `edison-stdiod login`; this is what the OS supervisor unit reads (service units don't carry secrets in their environment).
+2. **`~/.config/sealgate-stdiod/config.toml`** - written by `sealgate-stdiod login`; this is what the OS supervisor unit reads (service units don't carry secrets in their environment).
 
 ```toml
-# ~/.config/edison-stdiod/config.toml  (mode 0600)
+# ~/.config/sealgate-stdiod/config.toml  (mode 0600)
 backend_url      = "https://dashboard.edison.watch"  # Backend base URL (http://localhost:3001 for dev)
 client_access_token = "…"                             # Long-lived opaque Bearer client token (plaintext, 0600)
 client_installation_id = "…"                          # Account/install namespace issued by the backend
 authenticated_user_id = "…"
 authenticated_org_id = "…"
 scopes = ["tunnel:connect", "mcp_requests:create", "mcp_requests:read", "servers:self:read"]
-edison_secret_key = "…"                               # Optional X-Edison-Secret-Key for per-user secret decryption
+sealgate_secret_key = "…"                               # Optional X-Edison-Secret-Key for per-user secret decryption
 device_id        = "…"                                 # Server-issued device identifier
 device_label     = "My Laptop"                         # Human-readable label shown in the dashboard
 ```
 
 | Field (`config.toml`) | Env var | Description |
 | --- | --- | --- |
-| `backend_url` | `EDISON_BACKEND_URL` | Backend base URL (`http://localhost:3001` for dev, `https://dashboard.edison.watch` for prod). |
+| `backend_url` | `SEALGATE_BACKEND_URL` | Backend base URL (`http://localhost:3001` for dev, `https://dashboard.edison.watch` for prod). |
 | `client_access_token` | - | Opaque client Bearer token issued by browser/device authorization. Stored in plaintext at mode `0600`; no refresh token is used in the MVP. |
 | `client_installation_id` | - | Backend-issued installation/account namespace. Local per-server environment values are isolated by this ID. |
-| `api_key` | `EDISON_API_KEY` | Deprecated legacy API key. Explicit flag/env values still override persisted client auth. |
-| `edison_secret_key` | `EDISON_SECRET_KEY` | Optional `X-Edison-Secret-Key` for per-user secret decryption. |
-| `device_id` | `EDISON_DEVICE_ID` | Stable device identifier; defaults to the machine hostname. |
-| `device_label` | `EDISON_DEVICE_LABEL` | Human-readable label shown in the dashboard. |
+| `api_key` | `SEALGATE_API_KEY` | Deprecated legacy API key. Explicit flag/env values still override persisted client auth. |
+| `sealgate_secret_key` | `SEALGATE_SECRET_KEY` | Optional `X-Edison-Secret-Key` for per-user secret decryption. |
+| `device_id` | `SEALGATE_DEVICE_ID` | Stable device identifier; defaults to the machine hostname. |
+| `device_label` | `SEALGATE_DEVICE_LABEL` | Human-readable label shown in the dashboard. |
 
-Re-run `edison-stdiod login` to switch accounts or replace an invalid client
+Re-run `sealgate-stdiod login` to switch accounts or replace an invalid client
 credential. `logout` removes authentication while retaining preferences;
 `uninstall --purge` removes all stdiod files.
 
@@ -177,17 +177,17 @@ TLDR: the daemon keeps almost nothing durable - the backend is the source of tru
 <summary>Expand</summary>
 
 ```
-~/.config/edison-stdiod/
+~/.config/sealgate-stdiod/
   config.toml                      # backend URL, account IDs, token, device ID, secret (mode 0600)
   server_envs.json                 # legacy-auth local server values (mode 0600)
   server_envs/<namespace>.json     # client-installation-isolated server values (mode 0600)
   state.json                       # atomic writes; snapshot consumed by the desktop tray UI
-~/Library/Logs/edison-stdiod/      # macOS - platform-equivalent paths elsewhere
+~/Library/Logs/sealgate-stdiod/      # macOS - platform-equivalent paths elsewhere
   daemon.log                       # rotated daily
   child-<name>.log                 # per-child stdout/stderr capture
 ```
 
-The supervisor unit lives at `~/Library/LaunchAgents/watch.edison.stdiod.plist` on macOS (`KeepAlive=true`, `RunAtLoad=true`, no admin privileges needed). See [`ARCHITECTURE.md`](./ARCHITECTURE.md#persistence-and-survival) for Linux/Windows equivalents and the `state.json` schema.
+The supervisor unit lives at `~/Library/LaunchAgents/com.sealgate.stdiod.plist` on macOS (`KeepAlive=true`, `RunAtLoad=true`, no admin privileges needed). See [`ARCHITECTURE.md`](./ARCHITECTURE.md#persistence-and-survival) for Linux/Windows equivalents and the `state.json` schema.
 
 </details>
 
@@ -203,7 +203,7 @@ TLDR: one outbound WebSocket carries a symmetric, MCP-agnostic frame protocol; t
    ┌───────────────────────────────────────────────────────────┐
    │                                                             │
    │   ┌──────────────┐   spawn / stdio   ┌────────────────────┐│
-   │   │ edison-stdiod │◀────────────────▶│ stdio MCP server(s) ││
+   │   │ sealgate-stdiod │◀────────────────▶│ stdio MCP server(s) ││
    │   │   (daemon)    │   pumps          │  (child processes)  ││
    │   └──────┬───────┘                   └────────────────────┘│
    │          │                                                  │
@@ -213,7 +213,7 @@ TLDR: one outbound WebSocket carries a symmetric, MCP-agnostic frame protocol; t
               │  ▼ server_hello / desired_state_update / mcp_frame
               ▼
    ┌────────────────────────┐        ┌──────────────┐
-   │ Edison backend gateway  │◀──────▶│  AI client    │
+   │ SealGate backend gateway  │◀──────▶│  AI client    │
    │ (source of truth)       │  MCP   │              │
    └────────────────────────┘        └──────────────┘
 ```
@@ -238,7 +238,7 @@ cargo fmt --all --check      # formatting
 cargo clippy --workspace --all-targets -- -D warnings   # lints
 ```
 
-The `edison-tunnel-protocol` crate's Rust types are generated from [`schema/edison-tunnel-protocol.json`](./schema/edison-tunnel-protocol.json) - keep the schema and the generated types in lock-step.
+The `sealgate-tunnel-protocol` crate's Rust types are generated from [`schema/sealgate-tunnel-protocol.json`](./schema/sealgate-tunnel-protocol.json) - keep the schema and the generated types in lock-step.
 
 [`dev/spike/`](./dev/spike/) holds a throwaway v0 Python prototype that validated the wire protocol before the Rust daemon was written; it is kept as a historical record and is not part of the build.
 

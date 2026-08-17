@@ -10,7 +10,7 @@ vi.mock('electron', () => ({
 }))
 
 let apiBaseUrl: string | null = 'https://api.example.test'
-let creds: { apiKey: string } | null = { apiKey: 'ew-key' }
+let creds: { apiKey: string } | null = { apiKey: 'sg-key' }
 vi.mock('../infra/setupConfig', () => ({
   getApiBaseUrl: () => apiBaseUrl,
   getCredentialsForEnv: () => creds
@@ -51,7 +51,7 @@ describe('quitConfirmation', () => {
     showMessageBoxMock.mockReset()
     fetchAutoQuarantineEnabledMock.mockReset().mockResolvedValue(false)
     apiBaseUrl = 'https://api.example.test'
-    creds = { apiKey: 'ew-key' }
+    creds = { apiKey: 'sg-key' }
     setPlatform('darwin')
   })
 

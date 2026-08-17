@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Build Linux AppImages locally - compact and/or full tray variants, x64 + arm64.
 #
-# Cross-builds the edison-stdiod daemon (both arches) from the sibling ../stdiod
+# Cross-builds the sealgate-stdiod daemon (both arches) from the sibling ../stdiod
 # checkout, then packages with electron-builder using the static AppImage
 # runtime. Each variant gets a distinct artifact name so both can coexist.
 #
@@ -17,7 +17,7 @@
 #          (rustup target add x86_64-unknown-linux-musl aarch64-unknown-linux-musl);
 #          `npm install` already run.
 #
-# Output:  dist/EdisonWatch-<version>-<arch>-<variant>.AppImage
+# Output:  dist/SealGate-<version>-<arch>-<variant>.AppImage
 #          (static runtime - no libz.so/libfuse2 needed to launch.)
 
 set -euo pipefail
@@ -28,7 +28,7 @@ cd "$DESKTOP_DIR"
 
 VARIANTS="${VARIANTS:-compact full}"
 
-echo "==> Cross-building edison-stdiod (x64 + arm64) from ../stdiod"
+echo "==> Cross-building sealgate-stdiod (x64 + arm64) from ../stdiod"
 npm run build:stdiod:linux
 
 for variant in $VARIANTS; do
@@ -42,10 +42,10 @@ for variant in $VARIANTS; do
       exit 1
       ;;
   esac
-  echo "==> Building '$variant' AppImages (x64 + arm64, EDISON_TRAY_COMPACT=$compact)"
-  EDISON_TRAY_COMPACT=$compact npm run build
-  EDISON_TRAY_COMPACT=$compact npx electron-builder --linux \
-    -c.appImage.artifactName="EdisonWatch-\${version}-\${arch}-$variant.\${ext}"
+  echo "==> Building '$variant' AppImages (x64 + arm64, SEALGATE_TRAY_COMPACT=$compact)"
+  SEALGATE_TRAY_COMPACT=$compact npm run build
+  SEALGATE_TRAY_COMPACT=$compact npx electron-builder --linux \
+    -c.appImage.artifactName="SealGate-\${version}-\${arch}-$variant.\${ext}"
 done
 
 echo "==> Done. AppImages in dist/:"

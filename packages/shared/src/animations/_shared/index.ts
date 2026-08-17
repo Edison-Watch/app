@@ -14,8 +14,8 @@ export {
   PERSON_PATH,
   POISON_PATH
 } from './svg-paths'
-export { McpIcon, RobotIcon, AgentIcon, EdisonLogo, McpPacket, ProgressBar } from './icons'
+export { McpIcon, RobotIcon, AgentIcon, SealGateLogo, McpPacket, ProgressBar } from './icons'
 export { VerdictBadge } from './badges'
 export { FlowLine } from './flow'
-export { EdisonGateway } from './gateway'
+export { BrandGateway } from './gateway'
 export { AdminFigure } from './admin'

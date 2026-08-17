@@ -1,14 +1,14 @@
 <div align="center">
 
-# Edison Watch client apps
+# SealGate client apps
 
-<b>Everything Edison Watch runs on your machine.</b>
+<b>Everything SealGate runs on your machine.</b>
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](./LICENSE)
 
 </div>
 
-[Edison Watch](https://edison.watch) is a security gateway that sits between AI
+[SealGate](https://edison.watch) is a security gateway that sits between AI
 tools (Claude, Cursor, VS Code, and friends) and the MCP servers they call, so
 an organization can see, approve, and block what its AI agents do. Those MCP
 servers can read files, hold credentials, and reach the network, and they're
@@ -28,13 +28,13 @@ and web dashboard are server-side and live elsewhere (see below).
 | Desktop app | [`packages/desktop/`](./packages/desktop) | Electron menu-bar app: discovery, quarantine review, credential encryption, and settings. The user-facing control plane. |
 | stdiod | [`crates/stdiod/`](./crates/stdiod) | Rust daemon that spawns local stdio MCP servers and bridges them to the gateway over one outbound WebSocket. No inbound ports; the processes and their secrets stay on the device. |
 | detectord | [`crates/detectord/`](./crates/detectord) | Rust daemon and library that watches the MCP config files of host apps (Claude Code, VS Code, Cursor, ...) and enforces quarantine. |
-| Shared library | [`packages/shared/`](./packages/shared) | `@edison-watch/shared`: the React components, design tokens, and client utilities the desktop app shares with the web dashboard. |
+| Shared library | [`packages/shared/`](./packages/shared) | `@sealgate/shared`: the React components, design tokens, and client utilities the desktop app shares with the web dashboard. |
 
 Each component's README covers its own architecture and usage.
 
 ## What's not in this repo
 
-- The Edison Watch gateway (the server the daemons tunnel to) and the web
+- The SealGate gateway (the server the daemons tunnel to) and the web
   dashboard are server-side and developed separately. The split is deliberate:
   this repo is exactly the code that runs with access to your machine, so it's
   the part you can audit.

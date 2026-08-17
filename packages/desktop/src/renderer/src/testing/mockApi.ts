@@ -22,7 +22,7 @@ export interface MockClient {
   id: string
   name: string
   configPath: string
-  /** False for hosts Edison can only detect, never configure (ChatGPT). */
+  /** False for hosts SealGate can only detect, never configure (ChatGPT). */
   manageable: boolean
 }
 
@@ -164,7 +164,7 @@ export function createMockApi(): PartialApi {
  * Install the stub on `window`, returning it for per-case overrides.
  *
  * Cast at the boundary: the stub is deliberately partial in shape (every call
- * resolves to an empty result), and typing it as the full `EdisonAPI` would
+ * resolves to an empty result), and typing it as the full `SealGateAPI` would
  * force fixtures nobody reads.
  */
 export function installMockApi(): Record<string, unknown> {

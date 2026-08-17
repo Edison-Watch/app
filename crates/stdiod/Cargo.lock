@@ -339,41 +339,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "edison-stdiod"
-version = "0.0.1"
-dependencies = [
- "anyhow",
- "base64",
- "chrono",
- "clap",
- "dirs",
- "edison-tunnel-protocol",
- "futures-util",
- "getrandom 0.3.4",
- "once_cell",
- "reqwest",
- "serde",
- "serde_json",
- "sha2",
- "thiserror",
- "tokio",
- "tokio-tungstenite",
- "toml",
- "tracing",
- "tracing-subscriber",
- "url",
- "webbrowser",
-]
-
-[[package]]
-name = "edison-tunnel-protocol"
-version = "0.0.1"
-dependencies = [
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "equivalent"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1295,6 +1260,41 @@ name = "scopeguard"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
+
+[[package]]
+name = "sealgate-stdiod"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "base64",
+ "chrono",
+ "clap",
+ "dirs",
+ "futures-util",
+ "getrandom 0.3.4",
+ "once_cell",
+ "reqwest",
+ "sealgate-tunnel-protocol",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror",
+ "tokio",
+ "tokio-tungstenite",
+ "toml",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+ "webbrowser",
+]
+
+[[package]]
+name = "sealgate-tunnel-protocol"
+version = "0.0.1"
+dependencies = [
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "semver"

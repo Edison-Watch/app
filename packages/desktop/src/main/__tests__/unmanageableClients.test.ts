@@ -57,7 +57,7 @@ function agent(over: Partial<AgentFacts> = {}): AgentFacts {
     hooksTotal: 0,
     workspaceHooksInstalled: 0,
     workspaceHooksTotal: 0,
-    edisonUrl: null,
+    sealgateUrl: null,
     configPath: null,
     manageable: true,
     ...over
@@ -87,7 +87,7 @@ describe('unmanageable clients', () => {
 
   it('leaves manageable clients scored as before', async () => {
     facts = new Map([
-      ['cursor' as McpClientId, agent({ edisonUrl: EXPECTED_URL, hooksTotal: 4, hooksInstalled: 4 })]
+      ['cursor' as McpClientId, agent({ sealgateUrl: EXPECTED_URL, hooksTotal: 4, hooksInstalled: 4 })]
     ])
     const entry = (await getHookStatus(EXPECTED_URL, true)).find((s) => s.client === 'cursor')
     expect(entry?.manageable).toBe(true)
@@ -183,7 +183,7 @@ describe('mcp:readConfig', () => {
   })
 
   it('does not claim the config is missing for an unmanageable client that has one', async () => {
-    // The Claude hosts are unmanageable - Edison cannot write a gateway URL
+    // The Claude hosts are unmanageable - SealGate cannot write a gateway URL
     // into a stdio-only file - and their config still exists and is parsed on
     // every scan. Keyed on `manageable`, this branch told those users the file
     // did not exist and there was nothing to protect. It keys on the path now,

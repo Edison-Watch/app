@@ -1,6 +1,6 @@
 name: Release (stdiod)
 
-# Build the edison-stdiod daemon as a universal macOS binary and publish it.
+# Build the sealgate-stdiod daemon as a universal macOS binary and publish it.
 #
 # Two ways to trigger:
 #   * Push a tag matching stdiod-v* -> builds + attaches assets to a GitHub Release.
@@ -28,8 +28,8 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
-  BIN_NAME: edison-stdiod
-  ASSET_NAME: edison-stdiod-macos-universal
+  BIN_NAME: sealgate-stdiod
+  ASSET_NAME: sealgate-stdiod-macos-universal
 
 jobs:
   macos:
@@ -133,24 +133,24 @@ jobs:
             arch="${spec%%:*}"; target="${spec##*:}"
             echo "Building $target ..."
             cargo zigbuild --release --bin "$BIN_NAME" --target "$target"
-            cp "target/$target/release/$BIN_NAME" "dist/edison-stdiod-linux-$arch"
-            chmod +x "dist/edison-stdiod-linux-$arch"
+            cp "target/$target/release/$BIN_NAME" "dist/sealgate-stdiod-linux-$arch"
+            chmod +x "dist/sealgate-stdiod-linux-$arch"
           done
-          file dist/edison-stdiod-linux-*
+          file dist/sealgate-stdiod-linux-*
           # x64 binary is native to this runner - smoke-test it.
-          ./dist/edison-stdiod-linux-x64 --version || true
+          ./dist/sealgate-stdiod-linux-x64 --version || true
 
       - name: Generate checksums
         working-directory: crates/stdiod/dist
-        run: shasum -a 256 edison-stdiod-linux-x64 edison-stdiod-linux-arm64 > SHA256SUMS-linux
+        run: shasum -a 256 sealgate-stdiod-linux-x64 sealgate-stdiod-linux-arm64 > SHA256SUMS-linux
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v7
         with:
-          name: edison-stdiod-linux
+          name: sealgate-stdiod-linux
           path: |
-            crates/stdiod/dist/edison-stdiod-linux-x64
-            crates/stdiod/dist/edison-stdiod-linux-arm64
+            crates/stdiod/dist/sealgate-stdiod-linux-x64
+            crates/stdiod/dist/sealgate-stdiod-linux-arm64
             crates/stdiod/dist/SHA256SUMS-linux
           if-no-files-found: error
 
@@ -159,8 +159,8 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           files: |
-            crates/stdiod/dist/edison-stdiod-linux-x64
-            crates/stdiod/dist/edison-stdiod-linux-arm64
+            crates/stdiod/dist/sealgate-stdiod-linux-x64
+            crates/stdiod/dist/sealgate-stdiod-linux-arm64
             crates/stdiod/dist/SHA256SUMS-linux
           fail_on_unmatched_files: true
           generate_release_notes: true
