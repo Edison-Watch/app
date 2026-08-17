@@ -82,7 +82,7 @@ const CSS = `
 .pj .pj-s4 { animation: pj-s4 20s ease-in-out infinite; }
 
 /* SealGate gateway */
-.pj .pj-sealgate { animation: pj-ed 20s ease-in-out infinite; transform-origin: 350px 153px; }
+.pj .pj-sealgate { animation: pj-sealgate 20s ease-in-out infinite; transform-origin: 350px 153px; }
 .pj .pj-pulse  { transform-origin: 350px 153px; animation: pj-pulse 1.4s cubic-bezier(.2,.8,.4,1) infinite; }
 
 /* Phase 1: staggered SealGate client install on each laptop */
@@ -152,7 +152,7 @@ const CSS = `
 @keyframes pj-s4 { 0%,72% { opacity:.2; } 78% { opacity:1; } 100% { opacity:1; } }
 
 /* SealGate gateway */
-@keyframes pj-ed {
+@keyframes pj-sealgate {
   0%,22% { opacity:0; transform:scale(.85); }
   28%    { opacity:1; transform:scale(1); }
   100%   { opacity:1; transform:scale(1); }

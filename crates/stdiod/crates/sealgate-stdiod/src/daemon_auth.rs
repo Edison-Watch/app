@@ -16,7 +16,7 @@ pub struct RunArgs {
     /// access token in config.toml is preferred.
     #[arg(long, env = "SEALGATE_API_KEY")]
     pub api_key: Option<String>,
-    /// Optional sealgate secret key (X-Edison-Secret-Key).
+    /// Optional sealgate secret key (X-SealGate-Secret-Key).
     #[arg(long, env = "SEALGATE_SECRET_KEY")]
     pub sealgate_secret_key: Option<String>,
     /// Device identifier (must match the row in the backend's `devices` table).

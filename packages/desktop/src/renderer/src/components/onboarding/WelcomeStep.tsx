@@ -39,7 +39,7 @@ export default function WelcomeStep({ auth, onNext }: WelcomeStepProps): React.R
       <div className="text-center">
         <h2 className="text-lg font-semibold text-[var(--text-primary)]">Protect your data handled by AI Agents</h2>
         <p className="mt-1 text-sm text-[var(--text-secondary)]">
-          AI agents with access to your tools are vulnerable to prompt injection attacks that can exfiltrate sensitive data. SealGatees your agent actions and analyses each action, to protect your data.
+          AI agents with access to your tools are vulnerable to prompt injection attacks that can exfiltrate sensitive data. SealGate watches your agent actions and analyses each action, to protect your data.
         </p>
       </div>
       <PromptInjectionAnimation />

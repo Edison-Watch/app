@@ -121,18 +121,18 @@ YOUR MACHINE (everything below runs locally)
 │  AI clients (Claude · Cursor · VS Code · …)                 │
 │       │  MCP configs watched on disk                        │
 │       ▼                                                     │
-│  SealGate Desktop app                                   │
+│  SealGate Desktop app                                       │
 │     Renderer UI  ◀─ IPC / preload bridge ─▶  Main process   │
 │       │  supervises                                         │
 │       ▼                                                     │
-│  sealgate-stdiod daemon  (bridges local stdio MCP servers)    │
+│  sealgate-stdiod daemon  (bridges local stdio MCP servers)  │
 └────────────────────────────────────────────────────────────┘
       ▲                                          ▲
       │ control plane (app ⇅ backend)            │ MCP bridge
       │ backend PUSHES events to app:            │ outbound-initiated
       ▼ trifecta / approvals / quarantine        ▼ tunnel, no inbound ports
 ┌────────────────────────────────────────────────────────────┐
-│  SealGate cloud  (remote · off your machine)            │
+│  SealGate cloud  (remote · off your machine)                │
 │  backend API   ·   MCP gateway                              │
 └────────────────────────────────────────────────────────────┘
 ```

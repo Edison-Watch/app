@@ -57,7 +57,7 @@ request. The backend accepts an `ewc_`-prefixed client credential carrying the
 client credential`.
 *Source: `stdio_tunnel.py::_authenticate_ws`.*
 
-**T-06** A client SHOULD send `X-Edison-Secret-Key` when it holds one. The
+**T-06** A client SHOULD send `X-SealGate-Secret-Key` when it holds one. The
 header is optional at v2. Both the bearer token and the secret key MUST be
 treated as sensitive and MUST NOT appear in logs or in `last_error` text.
 *Source: `tunnel.rs::build_request` (`HeaderValue::set_sensitive`);
@@ -503,7 +503,6 @@ golden fixture.
 | ARCHITECTURE.md says | Implementation |
 |----------------------|----------------|
 | Version types are generated from JSON Schema via `schemars`/`typify` | Both Rust and pydantic types are hand-written and kept in step by `check_tunnel_protocol_schema.py` |
-| Schema path `schema/sealgate-tunnel-protocol.json` | Actual path is `schema/tunnel-protocol.json` |
 | WS Ping every 15s, close if no Pong within 10s | Application-level `ping` frames every 15s; staleness declared after 25s of *any* silence (`HEARTBEAT_STALE_AFTER`) |
 | TCP keepalive is enabled | Not configured; `tokio-tungstenite` defaults apply (T-58) |
 | Backoff caps at 60s | Caps at 30s (`BACKOFF_MAX`) |

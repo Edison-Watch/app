@@ -39,7 +39,7 @@
 - **Child supervision.** The backend pushes a desired set of servers; the daemon spawns/stops the matching subprocesses and pumps their stdio.
 - **Survival.** It reconnects with backoff across network blips and machine sleep/resume, and reconciles desired state on every (re)connect.
 
-See [`ARCHITECTURE.md`](./ARCHITECTURE.md) for the full design and [`schema/sealgate-tunnel-protocol.json`](./schema/sealgate-tunnel-protocol.json) for the wire protocol - the single source of truth for the frame types.
+See [`ARCHITECTURE.md`](./ARCHITECTURE.md) for the full design and [`schema/tunnel-protocol.json`](./schema/tunnel-protocol.json) for the wire protocol - the single source of truth for the frame types.
 
 ## Install
 
@@ -148,7 +148,7 @@ client_installation_id = "…"                          # Account/install namesp
 authenticated_user_id = "…"
 authenticated_org_id = "…"
 scopes = ["tunnel:connect", "mcp_requests:create", "mcp_requests:read", "servers:self:read"]
-sealgate_secret_key = "…"                               # Optional X-Edison-Secret-Key for per-user secret decryption
+sealgate_secret_key = "…"                               # Optional X-SealGate-Secret-Key for per-user secret decryption
 device_id        = "…"                                 # Server-issued device identifier
 device_label     = "My Laptop"                         # Human-readable label shown in the dashboard
 ```
@@ -159,7 +159,7 @@ device_label     = "My Laptop"                         # Human-readable label sh
 | `client_access_token` | - | Opaque client Bearer token issued by browser/device authorization. Stored in plaintext at mode `0600`; no refresh token is used in the MVP. |
 | `client_installation_id` | - | Backend-issued installation/account namespace. Local per-server environment values are isolated by this ID. |
 | `api_key` | `SEALGATE_API_KEY` | Deprecated legacy API key. Explicit flag/env values still override persisted client auth. |
-| `sealgate_secret_key` | `SEALGATE_SECRET_KEY` | Optional `X-Edison-Secret-Key` for per-user secret decryption. |
+| `sealgate_secret_key` | `SEALGATE_SECRET_KEY` | Optional `X-SealGate-Secret-Key` for per-user secret decryption. |
 | `device_id` | `SEALGATE_DEVICE_ID` | Stable device identifier; defaults to the machine hostname. |
 | `device_label` | `SEALGATE_DEVICE_LABEL` | Human-readable label shown in the dashboard. |
 
@@ -238,11 +238,11 @@ cargo fmt --all --check      # formatting
 cargo clippy --workspace --all-targets -- -D warnings   # lints
 ```
 
-The `sealgate-tunnel-protocol` crate's Rust types are generated from [`schema/sealgate-tunnel-protocol.json`](./schema/sealgate-tunnel-protocol.json) - keep the schema and the generated types in lock-step.
+The `sealgate-tunnel-protocol` crate's Rust types are generated from [`schema/tunnel-protocol.json`](./schema/tunnel-protocol.json) - keep the schema and the generated types in lock-step.
 
 [`dev/spike/`](./dev/spike/) holds a throwaway v0 Python prototype that validated the wire protocol before the Rust daemon was written; it is kept as a historical record and is not part of the build.
 
-See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the contribution workflow and [`SECURITY.md`](./SECURITY.md) for how to report vulnerabilities.
+See [`CONTRIBUTING.md`](../../CONTRIBUTING.md) for the contribution workflow and [`SECURITY.md`](../../SECURITY.md) for how to report vulnerabilities.
 
 </details>
 

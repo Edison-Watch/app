@@ -73,7 +73,7 @@ pub struct PersistedConfig {
     pub authenticated_org_id: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub scopes: Vec<String>,
-    /// Optional SealGate secret key (`X-Edison-Secret-Key`).
+    /// Optional SealGate secret key (`X-SealGate-Secret-Key`).
     #[serde(default)]
     pub sealgate_secret_key: Option<String>,
     /// Server-issued device ID for client auth, or a legacy override.

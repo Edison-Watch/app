@@ -29,7 +29,7 @@ function Chevron({ open }: { open: boolean }) {
  * Flow: reattach the org key to the user's existing personal key, validate the
  * resulting composite against the backend (/secret-key/verify -> domain_valid),
  * persist it to setup.json, and re-apply app integrations so MCP clients send
- * the new X-Edison-Secret-Key header.
+ * the new X-SealGate-Secret-Key header.
  */
 interface OrgKeyCardProps {
   /** Raw personal key (user-part) loaded from the OS keychain. */

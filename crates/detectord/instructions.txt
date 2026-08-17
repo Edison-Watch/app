@@ -3,7 +3,9 @@
   cd ~/work/mcp-detector-lib
   cargo build -p mcp_detector_daemon
   BIN=./target/debug/mcp_detector_daemon
-  KEY=sealgate_LWRP3bGRJhfxew26pJpWq6kqOb0ibieD6wFSBUi
+  # Your own org key, from the dashboard. Export it in your shell - never paste a
+  # real key into this file, it is a public repo.
+  KEY=$SEALGATE_API_KEY
 
   1. CLI — read-only (totally safe)
 

@@ -3,9 +3,8 @@
 
 import { clipboard, Notification, shell } from 'electron'
 import type { MenuItemConstructorOptions } from 'electron'
-import { homedir } from 'node:os'
-import { join } from 'node:path'
 
+import { getStdiodLogDir } from './stdiodLog'
 import { getCachedStdiodStatus } from './trayCache'
 
 const CONNECTION_LABELS: Record<string, string> = {
@@ -41,13 +40,7 @@ export function buildStdiodMenuItems(
       {
         label: 'Open logs folder',
         click: () => {
-          // macOS logs to ~/Library/Logs; Linux + Windows use
-          // ~/.local/state (matches the daemon's paths.rs).
-          const logDir =
-            process.platform === 'darwin'
-              ? join(homedir(), 'Library', 'Logs', 'sealgate-stdiod')
-              : join(homedir(), '.local', 'state', 'sealgate-stdiod')
-          shell.openPath(logDir).catch(() => {})
+          shell.openPath(getStdiodLogDir()).catch(() => {})
         }
       }
     ]

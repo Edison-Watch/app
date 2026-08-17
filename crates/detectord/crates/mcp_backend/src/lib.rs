@@ -195,7 +195,7 @@ impl BackendClient {
     ///
     /// Registers the SHA-256 hash of the key's **user part** (the base64 without
     /// the `user:` prefix) so the MCP gateway can validate the
-    /// `X-Edison-Secret-Key` header the daemon installs. Call whenever the key
+    /// `X-SealGate-Secret-Key` header the daemon installs. Call whenever the key
     /// is set or rotated. The raw key never leaves the machine.
     pub async fn register_secret_key(&self, composite_key: &str) -> Result<()> {
         let body = serde_json::json!({ "user_key_hash": user_part_hash(composite_key) });

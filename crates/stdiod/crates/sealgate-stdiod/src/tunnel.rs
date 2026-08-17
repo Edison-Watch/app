@@ -163,7 +163,7 @@ fn build_request(
         let mut secret =
             HeaderValue::from_str(secret).context("invalid SealGate secret-key header")?;
         secret.set_sensitive(true);
-        headers.insert("X-Edison-Secret-Key", secret);
+        headers.insert("X-SealGate-Secret-Key", secret);
     }
     Ok(request)
 }
@@ -327,7 +327,7 @@ mod tests {
         assert!(authorization.is_sensitive());
         assert!(request
             .headers()
-            .get("X-Edison-Secret-Key")
+            .get("X-SealGate-Secret-Key")
             .unwrap()
             .is_sensitive());
     }

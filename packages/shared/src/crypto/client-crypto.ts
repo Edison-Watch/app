@@ -6,6 +6,14 @@
  *   - Cipher:         AES-256-GCM
  *   - Wire format:    MAGIC_PREFIX + base64( nonce[12] || ciphertext )
  *
+ * STORAGE FORMAT - these literals are pinned by two other implementations (the
+ * backend's src/secrets_encryption.py and the dashboard's copy of this file) and
+ * must be changed in all three together, or nothing decrypts.
+ *
+ * The SealGate rebrand cut the format over from `$EDISON$1$` / `edison-secret:`
+ * to `$SEALGATE$1$` / `sealgate-secret:` with NO legacy read path: blobs written
+ * before the cutover derive a different key and no longer decrypt.
+ *
  * Composite key format:
  *   user:{base64_key}.admin:{base64_key}[.role:NAME:{base64_key} ...]
  */
@@ -136,8 +144,6 @@ export async function decryptSecret(
     throw new Error(`Cannot decrypt sentinel or placeholder value for ${serverName}:${templateKey}`)
   }
 
-  const key = await deriveKey(secretKey, `${serverName}:${templateKey}`)
-
   // Strip magic prefix if present (backward compat for legacy values without it)
   const rawB64 = stripMagicPrefix(encryptedBase64)
 
@@ -147,6 +153,8 @@ export async function decryptSecret(
   } catch {
     throw new Error(`Invalid base64 input for ${serverName}:${templateKey}`)
   }
+
+  const key = await deriveKey(secretKey, `${serverName}:${templateKey}`)
 
   const plainBuf = await crypto.subtle.decrypt(
     { name: 'AES-GCM', iv: raw.slice(0, 12) },
@@ -242,8 +250,6 @@ export async function decryptDomainSecret(
     throw new Error(`Cannot decrypt sentinel or placeholder value for ${serverName}:${templateKey}`)
   }
 
-  const key = await deriveDomainKey(domainKey, `${serverName}:${templateKey}`)
-
   // Strip magic prefix if present (backward compat for legacy values without it)
   const rawB64 = stripMagicPrefix(encryptedBase64)
 
@@ -253,6 +259,8 @@ export async function decryptDomainSecret(
   } catch {
     throw new Error(`Invalid base64 input for ${serverName}:${templateKey}`)
   }
+
+  const key = await deriveDomainKey(domainKey, `${serverName}:${templateKey}`)
 
   const plainBuf = await crypto.subtle.decrypt(
     { name: 'AES-GCM', iv: raw.slice(0, 12) },

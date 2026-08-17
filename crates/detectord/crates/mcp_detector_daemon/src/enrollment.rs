@@ -37,7 +37,7 @@ pub struct Enrollment {
     #[serde(default)]
     pub selected_agents: Vec<String>,
     /// The user's sealgate secret key (composite `user:<base64>`), provided by the
-    /// UI/CLI. Carried in the `X-Edison-Secret-Key` header of the installed
+    /// UI/CLI. Carried in the `X-SealGate-Secret-Key` header of the installed
     /// entry. `None` installs without the header.
     #[serde(default)]
     pub sealgate_secret_key: Option<String>,

@@ -26,7 +26,7 @@ pub fn install(user: &str, url: &str, secret: Option<&str>) -> anyhow::Result<()
     ];
     if let Some(s) = secret {
         args.push("--header".into());
-        args.push(format!("X-Edison-Secret-Key: {s}"));
+        args.push(format!("X-SealGate-Secret-Key: {s}"));
     }
     run_as(user, &args)
 }

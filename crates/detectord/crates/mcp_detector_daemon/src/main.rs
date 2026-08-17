@@ -97,7 +97,7 @@ enum Cmd {
         #[arg(long, value_delimiter = ',')]
         agents: Option<Vec<String>>,
         /// The user's sealgate secret key (composite `user:<base64>`) for the
-        /// X-Edison-Secret-Key header. Omit to keep the previous value.
+        /// X-SealGate-Secret-Key header. Omit to keep the previous value.
         #[arg(long)]
         secret: Option<String>,
     },

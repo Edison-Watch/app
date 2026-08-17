@@ -493,7 +493,7 @@ export function getMcpConfig(): string | null {
         type: "http",
         url,
         ...(creds?.sealgateSecretKey
-          ? { headers: { "X-Edison-Secret-Key": creds.sealgateSecretKey } }
+          ? { headers: { "X-SealGate-Secret-Key": creds.sealgateSecretKey } }
           : {}),
       },
     },

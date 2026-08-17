@@ -13,14 +13,13 @@
 
 import { execFileSync, spawn } from 'node:child_process'
 import { promises as fs, readdirSync } from 'node:fs'
-import { homedir } from 'node:os'
 import { join } from 'node:path'
 
 import { getStdiodBinaryPath, stdiodBinaryExists } from '../runtime/stdiodBinary'
 
 import { writeInstallStamp } from './installStamp'
 import { configFileExists, readStateFile } from './state'
-import { stdiodLog } from './stdiodLog'
+import { getStdiodLogDir, stdiodLog } from './stdiodLog'
 import type { StdiodErrorCode, StdiodLoginInput, StdiodResult, StdiodStatus } from './types'
 
 // LaunchAgent label matches stdiod/crates/sealgate-stdiod/src/platform/macos.rs.
@@ -355,18 +354,13 @@ export async function resetStdiod(input: StdiodLoginInput): Promise<StdiodResult
   return { ok: true }
 }
 
-// Tail of the daemon log, surfaced in the tray "View logs" action. We
-// resolve the path through the binary's own `logs --path` rather than
-// reimplementing the per-platform layout in TS so the source of truth
-// stays in one place. Returns null if no log exists yet.
+// Tail of the daemon log, surfaced in the tray "View logs" action. The daemon's
+// `logs` subcommand only tails (no --path flag to ask it where the file is), so
+// the layout is mirrored in TS - in ONE place, getStdiodLogDir(), which matches
+// paths::daemon_log_file() in the daemon. Returns null if no log exists yet.
 export async function getLogPath(): Promise<string | null> {
   if (dryRun()) return null
-  // Matches paths::daemon_log_file() in the daemon: macOS uses ~/Library/Logs;
-  // Windows has no XDG state dir so it falls back to ~/.local/state.
-  const logPath =
-    process.platform === 'win32'
-      ? join(homedir(), '.local', 'state', 'sealgate-stdiod', 'daemon.log')
-      : `${process.env.HOME}/Library/Logs/sealgate-stdiod/daemon.log`
+  const logPath = join(getStdiodLogDir(), 'daemon.log')
   try {
     await fs.access(logPath)
     return logPath

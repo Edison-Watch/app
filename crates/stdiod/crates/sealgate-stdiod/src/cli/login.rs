@@ -23,7 +23,7 @@ pub struct LoginArgs {
     /// verification URL and user code are still printed.
     #[arg(long)]
     pub no_open: bool,
-    /// Optional `X-Edison-Secret-Key` for per-user secret decryption.
+    /// Optional `X-SealGate-Secret-Key` for per-user secret decryption.
     #[arg(long)]
     pub sealgate_secret_key: Option<String>,
     /// Legacy device identifier override. Interactive login always uses the

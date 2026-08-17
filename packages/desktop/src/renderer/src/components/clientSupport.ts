@@ -47,7 +47,7 @@ const CONNECTOR_CAVEAT: UnmanageableReason = {
   row: "Add SealGate as a connector - this app can't be configured automatically",
   tooltip:
     "This app only accepts local commands in its config file, so SealGate " +
-    "Watch cannot install itself. Add the gateway under Settings > " +
+    "cannot install itself. Add the gateway under Settings > " +
     "Connectors to route this app's servers through it.",
 };
 

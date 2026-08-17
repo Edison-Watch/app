@@ -491,7 +491,7 @@ pub fn backup_path(path: &Path) -> PathBuf {
 // ── sealgate install (the inverse of quarantine: ADD an entry) ───────────
 
 const SEALGATE_SERVER_NAME: &str = "sealgate";
-const SEALGATE_SECRET_HEADER: &str = "X-Edison-Secret-Key";
+const SEALGATE_SECRET_HEADER: &str = "X-SealGate-Secret-Key";
 
 /// The sealgate proxy URL: `<mcp_base>/mcp/<api_key>/?client=<client_id>`.
 pub fn sealgate_url(mcp_base: &str, api_key: &str, client_id: &str) -> String {
@@ -506,7 +506,7 @@ pub fn sealgate_url(mcp_base: &str, api_key: &str, client_id: &str) -> String {
 /// Install the `sealgate` proxy entry into `inst`'s config (creating the
 /// file if needed, alongside existing servers, with a one-time backup). The URL
 /// is `<mcp_base>/mcp/<api_key>/?client=<client_id>`; when `secret` is set it is
-/// carried in the `X-Edison-Secret-Key` header.
+/// carried in the `X-SealGate-Secret-Key` header.
 pub fn install_sealgate(
     inst: &SealGateInstall,
     mcp_base: &str,
@@ -841,7 +841,7 @@ mod tests {
         install_sealgate(&inst, "http://localhost:3000", "K", Some("user:SEKRET")).unwrap();
         let v: Value = serde_json::from_str(&std::fs::read_to_string(&cfg).unwrap()).unwrap();
         assert_eq!(
-            v["mcpServers"]["sealgate"]["headers"]["X-Edison-Secret-Key"],
+            v["mcpServers"]["sealgate"]["headers"]["X-SealGate-Secret-Key"],
             "user:SEKRET"
         );
 
@@ -851,7 +851,7 @@ mod tests {
         install_sealgate(&tinst, "http://localhost:3000", "K", Some("user:SEKRET")).unwrap();
         let t: toml::Value = toml::from_str(&std::fs::read_to_string(&tcfg).unwrap()).unwrap();
         assert_eq!(
-            t["mcp_servers"]["sealgate"]["http_headers"]["X-Edison-Secret-Key"]
+            t["mcp_servers"]["sealgate"]["http_headers"]["X-SealGate-Secret-Key"]
                 .as_str()
                 .unwrap(),
             "user:SEKRET"

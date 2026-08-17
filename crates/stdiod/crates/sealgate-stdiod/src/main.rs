@@ -23,6 +23,7 @@ mod proc;
 mod process_shutdown;
 mod secure_file;
 mod state;
+mod supervisor;
 mod tunnel;
 
 /// SealGate stdiod daemon and CLI.

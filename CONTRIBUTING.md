@@ -59,7 +59,7 @@ changes.
 - **Match the surrounding style.** Follow the existing naming, comment density,
   and module layout; the formatters handle formatting.
 - **Update docs alongside code.** If you change stdiod's wire protocol, update
-  [`crates/stdiod/schema/sealgate-tunnel-protocol.json`](./crates/stdiod/schema/sealgate-tunnel-protocol.json)
+  [`crates/stdiod/schema/tunnel-protocol.json`](./crates/stdiod/schema/tunnel-protocol.json)
   (the single source of truth) and
   [`crates/stdiod/ARCHITECTURE.md`](./crates/stdiod/ARCHITECTURE.md). If you
   change a CLI or config surface, update the component's README.

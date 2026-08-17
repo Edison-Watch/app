@@ -416,7 +416,7 @@ pub async fn enroll(
     let profile = client.fetch_profile().await.context("fetching profile")?;
 
     // A newly-provided/rotated secret must be registered (its hash) so the MCP
-    // gateway will accept the X-Edison-Secret-Key header we install. Done before
+    // gateway will accept the X-SealGate-Secret-Key header we install. Done before
     // save/install so a rejected key fails the whole enroll cleanly.
     if let Some(sk) = &secret {
         client
@@ -1617,7 +1617,7 @@ mod tests {
                 "mcp-remote",
                 "https://x",
                 "--header",
-                "X-Edison-Secret-Key: s"
+                "X-SealGate-Secret-Key: s"
             ]
         )));
         // The tray snippet's variant, which a user may have pasted in.

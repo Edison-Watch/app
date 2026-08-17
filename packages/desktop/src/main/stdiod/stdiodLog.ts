@@ -19,14 +19,25 @@ import path from 'node:path'
 // Co-located with the daemon log (see controller.getLogPath) so a single
 // folder holds the full picture: what the controller asked for (client.log)
 // and what the daemon did about it (daemon.log).
+/**
+ * The daemon's log directory, mirroring `paths::log_dir()` in the daemon:
+ * macOS uses ~/Library/Logs, every other platform uses the XDG state dir
+ * (`$XDG_STATE_HOME`, or ~/.local/state when unset - which is what Windows gets
+ * too, since it has no XDG state dir). The single definition for the whole main
+ * process: controller.getLogPath and the tray's "Open logs folder" both use it,
+ * and all three used to hand-roll the branch (two of them inverted, so Linux
+ * looked under a macOS path that never exists).
+ */
+export function getStdiodLogDir(): string {
+  if (process.platform === 'darwin') {
+    return path.join(os.homedir(), 'Library', 'Logs', 'sealgate-stdiod')
+  }
+  const stateHome = process.env.XDG_STATE_HOME || path.join(os.homedir(), '.local', 'state')
+  return path.join(stateHome, 'sealgate-stdiod')
+}
+
 export function getClientLogPath(): string {
-  // Mirrors the daemon log dir (controller.getLogPath): ~/Library/Logs on macOS,
-  // ~/.local/state on Windows (no XDG state dir there).
-  const dir =
-    process.platform === 'win32'
-      ? path.join(os.homedir(), '.local', 'state', 'sealgate-stdiod')
-      : path.join(os.homedir(), 'Library', 'Logs', 'sealgate-stdiod')
-  return path.join(dir, 'client.log')
+  return path.join(getStdiodLogDir(), 'client.log')
 }
 
 export function stdiodLog(msg: string): void {
