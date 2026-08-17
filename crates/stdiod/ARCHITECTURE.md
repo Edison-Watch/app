@@ -101,10 +101,16 @@ Defined as JSON Schema at `schema/tunnel-protocol.json`. Frames are JSON with a
 - `server_hello` (backend → daemon): `protocol_version` plus a **full
   desired-state snapshot** -
   `servers: [{server_id, name, command, args, env, working_dir, enabled}]`.
-  If the daemon's `protocol_version` does not match the backend's (strict
-  equality at v2), the handshake is refused; the daemon records the
-  `needs_upgrade` connection state in `state.json` and stops retrying until the
-  binary is updated.
+  The backend accepts a **window** of client versions,
+  `MIN_SUPPORTED_PROTOCOL_VERSION` through its own `PROTOCOL_VERSION`
+  inclusive; both are 2 today, so the window is one version wide, and it opens
+  during a rollout so clients that update on an app store's schedule keep
+  working. A `client_hello` outside the window is refused with a 1008 close
+  naming `protocol_version`; the daemon records the `needs_upgrade` connection
+  state in `state.json` and stops retrying until the binary is updated. The
+  `protocol_version` on the `server_hello` reply is the backend's own value and
+  may be higher than the daemon's; the daemon logs the difference and carries
+  on, because the backend is the only peer that knows both bounds.
 - `desired_state_update` (backend → daemon): steady-state delta -
   `added` / `updated` / `removed` server lists.
 - `device_status` (daemon → backend): periodic snapshot of which children are
@@ -190,6 +196,13 @@ whether and when to respawn the dead child per the latest desired state. This
 was the one behaviour the early spike could not derive from "treat MCP frames as
 opaque" alone - it is a deliberate active signal the daemon must produce.
 
+`server_offline` is one of three codes the daemon puts on the wire, alongside
+`spawn_failed` (a child that would not start) and `server_unresponsive` (a child
+that stopped reading its stdin, which the daemon follows with a kill and
+respawn). The full set, in both directions, with the requirement governing each,
+is tabulated in [PROTOCOL.md](./PROTOCOL.md#error-codes-at-v2); that table is
+the reference, and this document does not restate the wording.
+
 ## Persistence and survival
 
 ### OS-level supervision
@@ -231,10 +244,18 @@ The daemon keeps almost nothing durable; the backend is the source of truth.
   "last_error": null,
   "servers": [
     { "name": "filesystem", "state": "running", "pid": 81342 },
-    { "name": "fetch",      "state": "starting" }
+    { "name": "fetch",      "state": "crashed", "pid": 81344 }
   ]
 }
 ```
+
+A child is reported `crashed` from the moment a pump sees the process exit
+until the next reconciliation respawns or drops it. An exit observation is what
+counts: a child whose stdin broke while the process is still alive is reported
+offline on the tunnel, but stays `running` here until it is actually gone. The
+third value the format
+allows, `starting`, has no observable trigger in a subprocess daemon and is
+never written here; see PROTOCOL.md T-69.
 
 ## Disconnect handling
 

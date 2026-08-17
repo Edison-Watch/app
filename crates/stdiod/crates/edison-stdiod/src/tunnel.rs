@@ -49,7 +49,7 @@ pub enum SessionCloseError {
     #[error("backend reports that the client credential was revoked")]
     ClientCredentialRevoked,
     #[error("backend requires a different tunnel protocol version: {reason}")]
-    ProtocolVersionMismatch { reason: String },
+    ProtocolVersionRejected { reason: String },
     #[error("backend closed WebSocket (code {code}): {reason}")]
     Closed { code: u16, reason: String },
 }
@@ -60,7 +60,7 @@ impl SessionCloseError {
     }
 
     pub fn needs_upgrade(&self) -> bool {
-        matches!(self, Self::ProtocolVersionMismatch { .. })
+        matches!(self, Self::ProtocolVersionRejected { .. })
     }
 }
 
@@ -270,11 +270,14 @@ fn session_close_error(code: CloseCode, reason: String) -> SessionCloseError {
         {
             return SessionCloseError::ClientCredentialRevoked;
         }
-        if normalized
-            .to_ascii_lowercase()
-            .starts_with("protocol_version mismatch")
-        {
-            return SessionCloseError::ProtocolVersionMismatch { reason };
+        // The backend accepts a *window* of protocol versions and closes 1008
+        // when ours falls outside it. Match on the `protocol_version` token
+        // anywhere in the reason rather than on a fixed prefix: the wording
+        // has already changed once (from `protocol_version mismatch
+        // (server=N, client=M)` to a form naming the supported range) and no
+        // other 1008 reason mentions the field. See PROTOCOL.md T-62.
+        if normalized.to_ascii_lowercase().contains("protocol_version") {
+            return SessionCloseError::ProtocolVersionRejected { reason };
         }
         SessionCloseError::Closed {
             code: code.into(),
@@ -356,12 +359,37 @@ mod tests {
     }
 
     #[test]
-    fn protocol_mismatch_requires_an_upgrade() {
-        let mismatch = session_close_error(
-            CloseCode::Policy,
-            "protocol_version mismatch (server=1, client=0)".to_string(),
+    fn protocol_rejection_requires_an_upgrade_whatever_the_wording() {
+        // Every shape the backend has used or is moving to for the same
+        // rejection. The daemon keys on the `protocol_version` token so a
+        // reworded reason cannot silently downgrade this to a retry loop.
+        for reason in [
+            "protocol_version mismatch (server=1, client=0)",
+            "protocol_version mismatch (client=3, server supports 2-2)",
+            "protocol_version out of supported range [2, 2] (client=3)",
+            "Protocol_Version out of supported range [2, 3] (client=1)",
+        ] {
+            let rejected = session_close_error(CloseCode::Policy, reason.to_string());
+            assert!(rejected.needs_upgrade(), "should need an upgrade: {reason}");
+            assert!(!rejected.needs_reauth(), "should not need reauth: {reason}");
+        }
+    }
+
+    #[test]
+    fn unrelated_policy_closes_are_not_upgrade_signals() {
+        assert!(
+            !session_close_error(CloseCode::Policy, "connection replaced".to_string())
+                .needs_upgrade()
         );
-        assert!(mismatch.needs_upgrade());
-        assert!(!mismatch.needs_reauth());
+        assert!(
+            !session_close_error(CloseCode::Policy, "expected client_hello".to_string())
+                .needs_upgrade()
+        );
+        // Same reason under a non-policy code stays a plain close.
+        assert!(!session_close_error(
+            CloseCode::Normal,
+            "protocol_version out of supported range [2, 2] (client=3)".to_string(),
+        )
+        .needs_upgrade());
     }
 }

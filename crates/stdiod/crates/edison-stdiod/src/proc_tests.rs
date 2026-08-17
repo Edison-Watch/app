@@ -2,6 +2,9 @@ use super::*;
 use serde_json::json;
 use tokio::io::duplex;
 
+use crate::child_diagnostics::mark_entry_crashed;
+use crate::state::{ServerEntry, ServerStatus};
+
 #[test]
 fn diagnostics_are_bounded_and_redacted() {
     let diagnostics = ChildDiagnostics::default();
@@ -31,6 +34,36 @@ fn diagnostics_are_bounded_and_redacted() {
 }
 
 #[test]
+fn crashed_entry_is_addressed_by_name_and_pid() {
+    let mut servers = vec![
+        ServerEntry {
+            name: "filesystem".into(),
+            state: ServerStatus::Running,
+            pid: Some(4242),
+        },
+        ServerEntry {
+            name: "fetch".into(),
+            state: ServerStatus::Running,
+            pid: Some(99),
+        },
+    ];
+
+    assert!(mark_entry_crashed(&mut servers, "filesystem", Some(4242)));
+    assert!(matches!(servers[0].state, ServerStatus::Crashed));
+    assert!(matches!(servers[1].state, ServerStatus::Running));
+
+    // A late report from a dead child must not touch the replacement that
+    // was respawned under the same name with a new PID.
+    servers[0].state = ServerStatus::Running;
+    servers[0].pid = Some(5353);
+    assert!(!mark_entry_crashed(&mut servers, "filesystem", Some(4242)));
+    assert!(matches!(servers[0].state, ServerStatus::Running));
+
+    // Unknown server: nothing published yet, nothing to update.
+    assert!(!mark_entry_crashed(&mut servers, "memory", Some(1)));
+}
+
+#[test]
 fn terminal_error_is_emitted_only_once_per_process() {
     let diagnostics = ChildDiagnostics::default();
     assert!(diagnostics.take_terminal_error("server", None).is_some());
@@ -55,7 +88,7 @@ async fn broken_stdin_replays_actionable_terminal_error() {
         stdin,
         frame_rx,
         outgoing,
-        diagnostics,
+        diagnostics.clone(),
         None,
     )
     .await;
@@ -66,6 +99,14 @@ async fn broken_stdin_replays_actionable_terminal_error() {
     };
     assert_eq!(error.code, "server_offline");
     assert!(error.message.contains("ECONNREFUSED localhost:23373"));
+    assert!(
+        diagnostics.exited.load(Ordering::Acquire),
+        "a child that cannot be written to is terminal for MCP"
+    );
+    assert!(
+        !diagnostics.has_observed_exit(),
+        "a failed write is not an exit observation, so nothing may be published as crashed"
+    );
 }
 
 #[cfg(unix)]
@@ -86,7 +127,7 @@ async fn exited_process_reports_final_stderr_once() {
     let outgoing = OutgoingHandle::new();
     let (wire_tx, mut wire_rx) = mpsc::channel(4);
     outgoing.set(wire_tx);
-    let child = ChildServer::spawn(&desired, &desired, outgoing, Vec::new()).unwrap();
+    let child = ChildServer::spawn(&desired, &desired, outgoing, Vec::new(), None).unwrap();
 
     let frame = tokio::time::timeout(Duration::from_secs(1), wire_rx.recv())
         .await

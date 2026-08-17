@@ -79,12 +79,18 @@ other frame type, and with 1003 / `bad client_hello` if the frame does not
 parse.
 *Source: `stdio_tunnel.py::_stdio_tunnel_ws_inner`; `daemon.rs::run_one_session`.*
 
-**T-09** `client_hello.protocol_version` MUST be `2`. The backend check is
-**strict equality** against its own `PROTOCOL_VERSION`; a mismatch closes with
-1008 and reason `protocol_version mismatch (server=<n>, client=<m>)`. A
-minimum-supported-version window is planned but not implemented, so a client
-MUST NOT assume any backwards compatibility window exists.
-*Source: `protocol.py::PROTOCOL_VERSION`, `stdio_tunnel.py` version check;
+**T-09** A client MUST send `client_hello.protocol_version`, and the value MUST
+fall inside the backend's supported window: the backend accepts the handshake
+iff `MIN_SUPPORTED_PROTOCOL_VERSION <= client_hello.protocol_version <=
+PROTOCOL_VERSION`. Both bounds are `2` today, so the window is degenerate and
+`2` is the only accepted value; the window exists so the backend can keep
+speaking an older version through a rollout of clients that update on an app
+store's schedule. A version outside the window closes the socket with 1008 and
+a reason naming `protocol_version` (see T-62). A client MUST NOT assume the
+window is wider than the pair of bounds the backend advertises, and MUST NOT
+infer the bounds from a successful handshake.
+*Source: `protocol.py::PROTOCOL_VERSION`,
+`protocol.py::MIN_SUPPORTED_PROTOCOL_VERSION`, `stdio_tunnel.py` version check;
 `lib.rs::PROTOCOL_VERSION`.*
 
 **T-10** `client_hello.device_id` MUST equal the `X-Edison-Device-Id` header
@@ -103,9 +109,13 @@ and the pydantic literal to move together.
 *Source: `lib.rs::Os`; `protocol.py::ClientHello.os`; `tunnel-protocol.json`.*
 
 **T-13** A client MUST treat the `server_hello` reply as the authoritative
-desired-state snapshot for the session (see T-23). The reference client logs a
-warning if `server_hello.protocol_version` differs from its own and continues;
-version enforcement lives on the backend.
+desired-state snapshot for the session (see T-23). `server_hello.protocol_version`
+carries the backend's own `PROTOCOL_VERSION`, which is the top of the window in
+T-09 and so MAY be higher than the client's. A client MUST NOT reject a
+`server_hello` on the strength of that value and MUST NOT end the session over
+it: the backend already judged the pair compatible by accepting the handshake,
+and it is the only peer that knows both bounds. The reference client logs the
+difference at `info` and continues.
 *Source: `daemon.rs::drain_incoming` (`ServerHello` arm).*
 
 ---
@@ -343,9 +353,19 @@ when the per-child queue is full.
 *Source: `daemon.rs::drain_incoming` (`TrySendError::Full` arm),
 `daemon.rs::restart_unresponsive`.*
 
-Error codes a client emits at v2: `server_offline`, `spawn_failed`,
-`server_unresponsive`. Codes it receives: `stdio_tunnel_disabled` (device-wide)
-and, internally on the backend side, `device_offline`.
+### Error codes at v2
+
+`tunnel_error.code` is a closed set of bare strings; there is no namespacing and
+no numeric mapping. A receiver MUST tolerate an unrecognised code (log and
+carry on) rather than failing the frame.
+
+| Code | Direction | Meaning | Governed by |
+|------|-----------|---------|-------------|
+| `server_offline` | client → backend | The child for `server_id` is gone: its output pump hit EOF or errored, its input pump failed to write, or a frame arrived for a child already known dead. Terminal for that child, and emitted at most once per child lifetime | T-42, T-43, T-47 |
+| `spawn_failed` | client → backend | The client tried to start `server_id` and could not (binary missing, exec refused, module URI unrecognised). Always accompanies a `server_spawn_result{ok:false}` and follows it | T-44 |
+| `server_unresponsive` | client → backend | The child for `server_id` stopped consuming its input: the per-child queue filled, so this request could not be delivered. The client then kills and respawns the child | T-51 |
+| `stdio_tunnel_disabled` | backend → client | Device-wide (`server_id` null): the org has the `stdio_tunnel_enabled` feature flag off. The backend closes with 1008 straight after | T-07, T-49 |
+| `device_offline` | backend-internal | The backend fails every outstanding call with this when a device's socket closes. A client never sends or receives it on the wire | T-50 |
 
 ---
 
@@ -411,8 +431,13 @@ change before reconnecting.
 `daemon.rs::run` (`needs_reauth` branch), `daemon.rs::wait_for_config`.*
 
 **T-62** A client MUST STOP retrying and enter a `needs_upgrade` state on a 1008
-close whose reason begins with `protocol_version mismatch`, and MUST wait for a
-binary/config change rather than reconnecting on a timer.
+close whose reason mentions `protocol_version` (the rejection in T-09), and MUST
+wait for a binary/config change rather than reconnecting on a timer. Retrying
+would loop forever: the version is a property of the binary, not of the network.
+The match MUST be on the `protocol_version` token rather than on a fixed prefix
+or an exact string. The backend owns the wording and has already reworded it
+once, and every other 1008 reason names a credential, a device, or a frame, so
+the token is unambiguous on its own.
 *Source: `tunnel.rs::session_close_error`, `tunnel.rs::SessionCloseError::needs_upgrade`,
 `daemon.rs::run` (`needs_upgrade` branch).*
 
@@ -457,8 +482,28 @@ Every member except `servers` and `generation` is nullable.
 *Source: `state.rs::ConnectionState`; `types.ts::ConnectionState`.*
 
 **T-69** Each `servers[]` entry MUST carry `name`, `state` (one of `starting`,
-`running`, `crashed`), and a nullable `pid`.
-*Source: `state.rs::ServerEntry`, `state.rs::ServerStatus`; `types.ts::StdiodServerEntry`.*
+`running`, `crashed`), and a nullable `pid`. A reader MUST accept all three
+values; a writer MUST report the value its own observations support and MUST
+NOT report `running` for a child it knows to be dead. `crashed` means the
+client observed the process exit (an exit status, or a reap during shutdown).
+A client MUST NOT report `crashed` on the strength of a failed interaction
+alone: a child whose stdin no longer accepts writes is terminal for MCP and
+gets its `server_offline` under T-42, but until its exit is observed it is
+still a running process and the entry stays `running`. The supervisor's next
+reconciliation kills and respawns such a child, so the state is self-healing.
+
+A subprocess client can honestly distinguish only two of the three. The
+reference client reports `crashed` once it has an exit observation for the
+child and `running` otherwise, keeping the entry until reconciliation respawns
+or drops it. It never reports `starting`: a stdio MCP server writes nothing until the
+backend opens a session against it, which can be hours after the spawn, so
+treating "no output yet" as `starting` would pin healthy idle children there,
+and the daemon has no other health signal to key on. A client class with a real
+activation step (the in-process client in the appendix, which acquires OS
+permissions and adapters before it can serve) MAY report `starting` for the
+duration of that step.
+*Source: `daemon.rs::child_entry`, `state.rs::ServerEntry`,
+`state.rs::ServerStatus`; `types.ts::StdiodServerEntry`.*
 
 **T-70** Writes MUST be atomic (write to a temporary path, then rename) so a
 polling reader never sees a torn file.
@@ -469,8 +514,14 @@ detect "nothing changed".
 *Source: `state.rs::StateWriter::update`.*
 
 **T-72** A client MUST write on connection-state transitions and child
-spawn/death, and MUST NOT write per forwarded frame.
-*Source: `state.rs` module docs; `daemon.rs::Supervisor::publish_state`.*
+spawn/death, and MUST NOT write per forwarded frame. Death is the one that is
+easy to miss: nothing else wakes the supervisor when a child dies on its own,
+so the reference client publishes the `crashed` entry from the same pump path
+that emits `server_offline`, once per death and only when that path saw the
+process exit (T-69). Without that write the tray would keep showing `running`
+until the next reconciliation, which may be hours away.
+*Source: `state.rs` module docs; `daemon.rs::Supervisor::publish_state`;
+`proc.rs::report_terminal` / `proc.rs::mark_entry_crashed`.*
 
 **T-73** Persisting state is best-effort: a write failure MUST be logged and
 swallowed, never allowed to stall the reconnect loop.
@@ -510,8 +561,15 @@ golden fixture.
 | Other 4xx backs off to a steady 60s | Classified as a transient `UpgradeRejected` and retried on the normal curve (T-63) |
 | `needs_reauth=true` / `needs_upgrade=true` in `state.json` | Values of the `connection_state` enum, not boolean fields (T-68) |
 | `state.json` example fields | The real struct also has `device_id` and `generation` (T-67) |
-| Backend refuses old clients when below a minimum supported version | Strict equality only (T-09) |
 | `server_hello` example shows `env` per server | Steady-state pushes always send `env: {}` (T-29) |
+| `state.json` example shows a `starting` child | The reference client reports only `running` / `crashed` (T-69) |
+
+The version-window delta is closed: `ARCHITECTURE.md` described a backend that
+refuses clients below a minimum supported version, and the backend now checks
+`MIN_SUPPORTED_PROTOCOL_VERSION <= client <= PROTOCOL_VERSION` (T-09) rather
+than strict equality. Both bounds are `2`, so nothing observable changes at v2;
+what changed is that widening the window is now a one-line backend edit instead
+of a protocol redesign.
 
 **Schema versus implementation:** the schema declares
 `additionalProperties: false` on every variant, while both implementations
@@ -520,9 +578,10 @@ ignore unknown members (T-18). `TunnelError.related_jsonrpc_id` is typed as
 but as an unconstrained `serde_json::Value` in Rust, so the Rust client accepts
 JSON-RPC ids the other two would reject.
 
-**Reported state:** `state.rs::ServerStatus` defines `starting` and `crashed`,
-but `Supervisor::snapshot_entries` writes `running` for every live child, so
-neither other value is currently produced.
+**Reported state:** `state.rs::ServerStatus` defines three values and the
+reference client produces two of them, `running` and `crashed` (T-69).
+`starting` is reserved for a client class that has an observable activation
+step; a subprocess client has none.
 
 ---
 
@@ -539,6 +598,7 @@ repo) maps three concepts differently while satisfying every MUST above.
 | Spawn | `fork`/`exec` plus stdio pumps | Activate the module: acquire OS permissions and adapters, then ack per T-37 |
 | Child death | Output pump EOF | Module fatal (adapter revoked, permission withdrawn), reported as `tunnel_error{code:"server_offline"}` per T-42 |
 | `DesiredServer.args` / `env` / `working_dir` | Process argv, environment, cwd | Module configuration. `templated_args` substitution still applies as literal string rewriting per T-35 |
+| Reported `state` (T-69) | `running` / `crashed`; no observable start-up phase | MAY add `starting` while the module acquires permissions and adapters, since that step is observable |
 | Heartbeat cadence | 15s ping / 25s stale | MAY be stretched for battery and radio budget per T-56 |
 
 Constraints that hold regardless of client class: one WebSocket per device
