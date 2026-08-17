@@ -1,9 +1,9 @@
 name: Build macOS (desktop)
 
 # Upstream TEST build - NOT a release.
-# Pulls the latest published edison-stdiod universal binary from the stdiod
-# releases, bundles it, and produces a universal .dmg/.zip uploaded as an
-# Actions artifact.
+# Builds both daemons (edison-stdiod, edison-detectord) from source out of
+# crates/, bundles them, and produces a .dmg/.zip uploaded as an Actions
+# artifact.
 #
 # Signing depends on the trigger:
 #   - pull_request: UNSIGNED. Code signing is the slow part of the build and
@@ -26,12 +26,18 @@ on:
     branches: [main]
     paths:
       - 'packages/**'
+      # Both daemons are built from source here, so their crates gate this too.
+      - 'crates/stdiod/**'
+      - 'crates/detectord/**'
       - 'package-lock.json'
       - '.github/workflows/desktop-build-macos.yml'
   push:
     branches: [main]
     paths:
       - 'packages/**'
+      # Both daemons are built from source here, so their crates gate this too.
+      - 'crates/stdiod/**'
+      - 'crates/detectord/**'
       - 'package-lock.json'
       - '.github/workflows/desktop-build-macos.yml'
 
@@ -58,8 +64,6 @@ jobs:
       # false => electron-builder produces an unsigned build without probing the
       # keychain for a Developer ID identity (none exists on PR runs).
       CSC_IDENTITY_AUTO_DISCOVERY: ${{ github.event_name == 'push' && secrets.CSC_LINK != '' }}
-      # gh CLI auth for cross-repo public release download.
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       # Demo backend config. Vite's loadEnv() also reads matching keys from the
       # environment, so these flow into the bundle even without ../frontend-v2.
       # Set the DEMO_VITE_* repository variables (Settings > Variables).
@@ -110,7 +114,16 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: crates/detectord
+          # Shared with the macOS jobs in desktop-release.yml and
+          # desktop-release-demo.yml: all three compile the same two crates for
+          # the same two Darwin targets, so without this they would each keep a
+          # separate cache (rust-cache folds the job name into the key by
+          # default) and a release build could never reuse the cache this
+          # per-push job keeps warm on main.
+          shared-key: macos-daemons
+          workspaces: |
+            crates/detectord
+            crates/stdiod
 
       - name: Build edison-detectord from source
         # Stages crates/detectord's daemon into bin/edison-detectord (arm64).
@@ -119,31 +132,20 @@ jobs:
         # daemon until 0.6.0.
         run: npm run build:detectord
 
-      - name: Pull latest edison-stdiod (universal) from stdiod releases
-        run: |
-          mkdir -p stdiod-dl bin
-          # Releases in this repo are mixed (desktop v*, stdiod stdiod-v*), so
-          # "latest" must be resolved per component, not taken from GitHub's
-          # repo-wide latest.
-          TAG=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 100 \
-            --json tagName --jq '[.[] | select(.tagName | startswith("stdiod-v"))][0].tagName')
-          [ -n "$TAG" ] || { echo "::error::no stdiod-v* release found in $GITHUB_REPOSITORY"; exit 1; }
-          echo "Bundling stdiod release: $TAG"
-          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
-            --pattern 'edison-stdiod-macos-universal' \
-            --pattern 'SHA256SUMS' \
-            --dir stdiod-dl --clobber
-          # Verify integrity against the published checksum before trusting it.
-          ( cd stdiod-dl && grep 'edison-stdiod-macos-universal' SHA256SUMS | shasum -a 256 -c - )
-          cp stdiod-dl/edison-stdiod-macos-universal bin/edison-stdiod
-          chmod +x bin/edison-stdiod
-          xattr -c bin/edison-stdiod || true
-          lipo -info bin/edison-stdiod
+      - name: Build edison-stdiod from source (universal)
+        # Built from the checkout, same as detectord - so this gate actually
+        # tests the stdiod source at this commit instead of the last published
+        # binary. The script builds both Darwin arches and lipo-merges them into
+        # bin/edison-stdiod for mac.extraResources.
+        run: npm run build:stdiod
+
+      - name: Report bundled stdiod architectures
+        run: lipo -info bin/edison-stdiod
 
       - name: Build renderer/main/preload bundles
         run: npm run build:demo
 
-      - name: Package (universal, no notarization, no publish)
+      - name: Package (arm64 + x64, no notarization, no publish)
         # A defined-but-empty CSC_LINK is treated as a certificate *path* by
         # electron-builder (>= 26.x) and resolved to the project dir -> "not a
         # file". Unset the signing vars entirely when there's nothing in them.
@@ -153,13 +155,27 @@ jobs:
 
       - name: Verify bundled daemons
         # electron-builder treats a missing extraResources source as a warning,
-        # so assert both daemons actually made it into the packaged .app.
+        # so assert both daemons made it into BOTH arch bundles - and that each
+        # is universal. One staged file is copied verbatim into both .app
+        # bundles, so a thin arm64 daemon would ship an unrunnable binary in the
+        # Intel app and nothing upstream of here would complain.
         run: |
           set -euo pipefail
-          for bin in edison-stdiod edison-detectord; do
-            found=$(find dist -path "*Contents/Resources/bin/$bin" | head -1)
-            [ -n "$found" ] || { echo "::error::$bin missing from packaged app"; exit 1; }
-            echo "bundled: $found"
+          shopt -s nullglob
+          apps=(dist/mac/*.app dist/mac-arm64/*.app)
+          [ ${#apps[@]} -eq 2 ] || {
+            echo "::error::expected 2 .app bundles (x64 + arm64), found ${#apps[@]}"; exit 1; }
+          for app in "${apps[@]}"; do
+            for bin in edison-stdiod edison-detectord; do
+              f="$app/Contents/Resources/bin/$bin"
+              test -f "$f" || { echo "::error::$bin missing from $app"; exit 1; }
+              info=$(lipo -info "$f")
+              case "$info" in
+                *x86_64*arm64*|*arm64*x86_64*) ;;
+                *) echo "::error::$f is not universal: $info"; exit 1 ;;
+              esac
+              echo "bundled: $f -> $info"
+            done
           done
 
       - name: Upload app artifact

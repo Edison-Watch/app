@@ -66,23 +66,33 @@ mac:
   icon: resources/icon.icns
   category: public.app-category.developer-tools
   # Bundle the edison-stdiod + edison-detectord daemons directly into
-  # Contents/Resources/bin/. The .app targets arm64 (Apple Silicon) only; a
-  # universal bundled binary still works (its arm64 slice is used), but arm64-only
-  # staging is enough. @electron/osx-sign signs nested executables in
-  # Contents/Resources automatically when hardenedRuntime: true, inheriting
-  # entitlements from entitlementsInherit, so no afterPack hook is needed here.
+  # Contents/Resources/bin/. BOTH daemons must be staged as UNIVERSAL Mach-O
+  # binaries (scripts/build-stdiod.sh, scripts/build-detectord.sh): the .app is
+  # built for arm64 AND x64, and these single `from:` paths are copied verbatim
+  # into both bundles - a thin arm64 daemon would leave the Intel build unable to
+  # exec it. @electron/osx-sign signs nested executables in Contents/Resources
+  # automatically when hardenedRuntime: true, inheriting entitlements from
+  # entitlementsInherit, so no afterPack hook is needed here.
   extraResources:
     - from: bin/edison-stdiod
       to: bin/edison-stdiod
     - from: bin/edison-detectord
       to: bin/edison-detectord
+  # Separate per-arch .app/.dmg/.zip rather than one merged `universal` target:
+  # each artifact name carries its arch, which is what electron-updater matches
+  # against process.arch when picking a download out of latest-mac.yml. Both
+  # arches are produced by a SINGLE electron-builder run, so they land in one
+  # shared latest-mac.yml listing both zips (macOS update manifests are not
+  # arch-suffixed - see the windows job note in .github/workflows/desktop-release.yml).
   target:
     - target: dmg
       arch:
         - arm64
+        - x64
     - target: zip
       arch:
         - arm64
+        - x64
   entitlements: resources/entitlements.mac.plist
   entitlementsInherit: resources/entitlements.mac.plist
   hardenedRuntime: true
@@ -112,7 +122,9 @@ mac:
     NSUserNotificationAlertStyle: alert
   notarize: false
 dmg:
-  artifactName: EdisonWatch-${version}-mac.${ext}
+  # MUST carry ${arch}: two arches are built in one run, and without it both
+  # .dmg files resolve to the same name and the second overwrites the first.
+  artifactName: EdisonWatch-${version}-mac-${arch}.${ext}
   title: Edison Watch ${version}
   contents:
     - x: 130
@@ -124,6 +136,15 @@ dmg:
 linux:
   icon: resources/icon.png
   category: Development
+  # REQUIRED. Without it electron-builder derives the executable name from the
+  # package name (@edison-watch/desktop) and AppImage packaging hard-fails:
+  # "executableName contains characters that cannot be safely used in file
+  # paths: @edison-watchdesktop". The win block sets its own executableName and
+  # mac uses productName, which is why only Linux tripped over this. Nothing
+  # depends on the value - the self-installed .desktop entry execs $APPIMAGE
+  # directly (see runtime/desktopIntegration.ts) - so it just has to be a sane
+  # path-safe name; matches ~/.local/share/edison-watch and edison-watch.desktop.
+  executableName: edison-watch
   # Bundle the edison-stdiod + edison-detectord daemons (static musl binaries,
   # staged per-arch by scripts/build-stdiod-linux.sh and build-detectord-linux.sh)
   # into resources/bin/. Mirrors the win rule. The bundled-path helpers
