@@ -46,7 +46,8 @@ WANT="${TARGET_ARCHES:-arm64 x64}"
 # Validate requested arches up front - see build-stdiod-win.sh for why an
 # unknown or whitespace-only TARGET_ARCHES must fail loudly instead of quietly
 # staging nothing.
-read -ra WANT_ARCHES <<< "$WANT"
+# Tabs/newlines folded to spaces first - see build-stdiod-win.sh for why.
+read -ra WANT_ARCHES <<< "${WANT//[$'\t\n']/ }"
 if [ ${#WANT_ARCHES[@]} -eq 0 ]; then
   echo "build-detectord-win.sh: TARGET_ARCHES requests no architectures" >&2; exit 1
 fi
@@ -59,10 +60,20 @@ for arch in "${WANT_ARCHES[@]}"; do
   esac
 done
 
+# Match the PARSED tokens, not a glob over the raw $WANT - see build-stdiod-win.sh
+# for why the two tokenizations disagreeing silently stages nothing.
+wants_arch() {
+  local want
+  for want in "${WANT_ARCHES[@]}"; do
+    if [[ "$want" == "$1" ]]; then return 0; fi
+  done
+  return 1
+}
+
 for spec in "${ALL_SPECS[@]}"; do
   arch="${spec%%:*}"
   target="${spec##*:}"
-  case " $WANT " in *" $arch "*) ;; *) continue ;; esac
+  wants_arch "$arch" || continue
 
   if ! rustup target list --installed | grep -q "^${target}\$"; then
     echo "Installing rustup target $target ..."

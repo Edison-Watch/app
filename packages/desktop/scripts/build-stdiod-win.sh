@@ -46,7 +46,11 @@ WANT="${TARGET_ARCHES:-arm64 x64}"
 # whitespace-only TARGET_ARCHES (which ${:-} does NOT default, since it is not
 # empty) collapses to zero tokens and is rejected here rather than silently
 # building nothing.
-read -ra WANT_ARCHES <<< "$WANT"
+# Tabs/newlines are folded to spaces before the split: `read -ra` splits on any
+# IFS whitespace but consumes only the FIRST line, so a multi-line TARGET_ARCHES
+# (a YAML block scalar, say) would otherwise have its later tokens silently
+# dropped - never validated, never built.
+read -ra WANT_ARCHES <<< "${WANT//[$'\t\n']/ }"
 if [ ${#WANT_ARCHES[@]} -eq 0 ]; then
   echo "build-stdiod-win.sh: TARGET_ARCHES requests no architectures" >&2; exit 1
 fi
@@ -59,10 +63,23 @@ for arch in "${WANT_ARCHES[@]}"; do
   esac
 done
 
+# Membership test against the PARSED tokens. A glob over the raw " $WANT " string
+# tokenizes differently from the `read -ra` above (spaces only vs any IFS
+# whitespace), and the two disagreeing is a silent no-op build: with
+# TARGET_ARCHES=$'arm64\tx64' validation accepted both arches while the glob
+# matched neither, so the loop below staged nothing and still exited 0.
+wants_arch() {
+  local want
+  for want in "${WANT_ARCHES[@]}"; do
+    if [[ "$want" == "$1" ]]; then return 0; fi
+  done
+  return 1
+}
+
 for spec in "${ALL_SPECS[@]}"; do
   arch="${spec%%:*}"
   target="${spec##*:}"
-  case " $WANT " in *" $arch "*) ;; *) continue ;; esac
+  wants_arch "$arch" || continue
 
   if ! rustup target list --installed | grep -q "^${target}\$"; then
     echo "Installing rustup target $target ..."
