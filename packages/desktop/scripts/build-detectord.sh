@@ -55,11 +55,17 @@ echo "Building $BIN_NAME for aarch64-apple-darwin ..."
 echo "Building $BIN_NAME for x86_64-apple-darwin ..."
 ( cd "$DETECTORD_DIR" && cargo build --release --bin "$BIN_NAME" --target x86_64-apple-darwin )
 
-# Unlink before writing. cargo ad-hoc (linker-)signs its output, and overwriting
-# an existing staged binary IN PLACE leaves the kernel's cached code-signing
-# state pointing at the old contents - every later mmap of that path then dies
-# with SIGKILL "Code Signature Invalid" (CODESIGNING / Invalid Page), including
-# the `lipo -info` below. A fresh inode sidesteps the stale cache.
+# Unlink before writing, so the staged path is never overwritten in place. cargo
+# ad-hoc (linker-)signs its output, and truncating a signed Mach-O in place keeps
+# the inode while replacing its pages - the kernel's cached code-signing state
+# for that vnode then rejects later mmaps with SIGKILL "Code Signature Invalid"
+# (CODESIGNING / Invalid Page), including a `lipo -info` read.
+#
+# That was the hazard in the `cp`-based staging this replaced (cp truncates,
+# inode unchanged). `lipo -create -output` does NOT truncate - it replaces the
+# destination, which gets a fresh inode - so this rm is now insurance (it also
+# clears a leftover read-only or symlinked path) rather than load-bearing.
+# build-stdiod.sh needs no equivalent for the same reason.
 rm -f "$OUT_BIN"
 
 echo "Creating universal binary at $OUT_BIN ..."
