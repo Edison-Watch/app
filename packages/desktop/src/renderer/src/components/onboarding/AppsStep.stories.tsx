@@ -35,7 +35,7 @@ const MOCK_CLIENTS = [
     manageable: true,
   },
   // The two states the "partially supported" section can hold, which are NOT
-  // the same thing. Claude Desktop is manageable: Edison writes its config, it
+  // the same thing. Claude Desktop is manageable: SealGate writes its config, it
   // just also supports Connectors it can't see. ChatGPT is only detectable, so
   // it renders with no checkbox and a "Not protected" tag.
   {

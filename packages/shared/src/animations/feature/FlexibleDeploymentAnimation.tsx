@@ -3,12 +3,12 @@
  *
  * Side-by-side comparison of Self-Hosted vs SaaS deployment models.
  *
- * Left (Self-Hosted): Edison lives inside customer infrastructure
+ * Left (Self-Hosted): SealGate lives inside customer infrastructure
  *   boundary. Internal MCP traffic stays in-boundary. Only 3rd-party
  *   MCP calls cross the boundary as controlled egress.
- * Right (SaaS): Agents in customer env → Edison Cloud → fans out to
+ * Right (SaaS): Agents in customer env → SealGate Cloud → fans out to
  *   3rd-party MCP servers AND internal MCP servers (everything proxied
- *   through Edison's cloud infrastructure).
+ *   through SealGate's cloud infrastructure).
  *
  * 12s loop. Pure SVG + CSS. Respects `prefers-reduced-motion`.
  *
@@ -18,7 +18,7 @@ import { AGENT_REGISTRY } from '../../agent-registry/index'
 import {
   AgentIcon,
   DANGER,
-  EdisonLogo,
+  SealGateLogo,
   McpIcon,
   McpPacket,
   ORANGE as O,
@@ -53,7 +53,7 @@ const DATABASE_PATH =
  *   0–8%    Fade in, both sides idle
  *   8–45%   Self-hosted side activates (left, packets inside boundary)
  *  45–50%   Crossfade emphasis
- *  50–88%   SaaS side activates (right, packets through Edison Cloud)
+ *  50–88%   SaaS side activates (right, packets through SealGate Cloud)
  *  88–95%   Both sides fully active
  *  95–100%  Reset
  * ────────────────────────────────────────────────────────────────────── */
@@ -77,7 +77,7 @@ const CSS = `
 .fd .fd-saas-glow   { animation: fd-saas-glow 12s ease-in-out infinite; }
 .fd .fd-saas-lines  { animation: fd-saas-lines 12s ease-in-out infinite; }
 
-/* Edison pulse rings */
+/* SealGate pulse rings */
 .fd .fd-pulse-sh   { transform-origin:170px 138px; animation: fd-pulse 1.4s cubic-bezier(.2,.8,.4,1) infinite; }
 .fd .fd-pulse-saas { transform-origin:555px 165px; animation: fd-pulse 1.4s cubic-bezier(.2,.8,.4,1) infinite; }
 
@@ -151,7 +151,7 @@ const CSS = `
   100%    { opacity:0; }
 }
 
-/* Self-hosted packets (left, first): laptops → Edison → internal MCP / egress */
+/* Self-hosted packets (left, first): laptops → SealGate → internal MCP / egress */
 @keyframes fd-pkt-h1 {
   0%,13%  { opacity:0; }
   14%     { transform:translate(79px,108px);  opacity:.8; color:var(--accent); }
@@ -182,7 +182,7 @@ const CSS = `
   48%     { opacity:0; }
   49%,100%{ opacity:0; }
 }
-/* Denied packet: laptop → Edison, stopped at egress and flashes red */
+/* Denied packet: laptop → SealGate, stopped at egress and flashes red */
 @keyframes fd-pkt-h4 {
   0%,38%  { opacity:0; }
   39%     { transform:translate(159px,108px); opacity:.8; color:${O}; }
@@ -192,7 +192,7 @@ const CSS = `
   48%,100%{ opacity:0; }
 }
 
-/* SaaS packets (right, second): laptops → Edison Cloud → 3rd-party MCP */
+/* SaaS packets (right, second): laptops → SealGate Cloud → 3rd-party MCP */
 @keyframes fd-pkt-s1 {
   0%,53%  { opacity:0; }
   54%     { transform:translate(484px,93px);  opacity:.8; color:${O}; }
@@ -437,7 +437,7 @@ export default function FlexibleDeploymentAnimation(): React.ReactNode {
           <McpIcon x={144} y={90} size={11} color="var(--text-muted)" opacity="0.4" />
         </g>
 
-        {/* ── Edison On-Prem inside boundary ── */}
+        {/* ── SealGate On-Prem inside boundary ── */}
         <g className="fd-sh-glow">
           <rect
             x={115}
@@ -451,7 +451,7 @@ export default function FlexibleDeploymentAnimation(): React.ReactNode {
             strokeOpacity="0.35"
             strokeWidth="1.2"
           />
-          <EdisonLogo x={145} y={120} w={44} h={43} />
+          <SealGateLogo x={145} y={120} w={44} h={43} />
           <circle
             className="fd-pulse-sh"
             cx="170"
@@ -472,7 +472,7 @@ export default function FlexibleDeploymentAnimation(): React.ReactNode {
             fontFamily="system-ui,sans-serif"
             fontWeight="bold"
           >
-            Edison On-Prem
+            SealGate On-Prem
           </text>
         </g>
 
@@ -519,7 +519,7 @@ export default function FlexibleDeploymentAnimation(): React.ReactNode {
 
         {/* ── Connection lines inside boundary ── */}
         <g className="fd-sh-lines">
-          {/* laptops → Edison */}
+          {/* laptops → SealGate */}
           <line
             className="fd-line"
             x1="79"
@@ -542,7 +542,7 @@ export default function FlexibleDeploymentAnimation(): React.ReactNode {
             strokeWidth="1.2"
             strokeDasharray="3 3"
           />
-          {/* Edison → internal MCP */}
+          {/* SealGate → internal MCP */}
           <line
             className="fd-line"
             x1="195"
@@ -584,7 +584,7 @@ export default function FlexibleDeploymentAnimation(): React.ReactNode {
           </text>
         </g>
 
-        {/* Self-hosted verdict badge - right of Edison box */}
+        {/* Self-hosted verdict badge - right of SealGate box */}
         <g className="fd-v-h1" style={{ transformOrigin: '233px 135px' }}>
           <circle
             cx="233"
@@ -632,7 +632,7 @@ export default function FlexibleDeploymentAnimation(): React.ReactNode {
           Data never leaves your infrastructure
         </text>
 
-        {/* Denied verdict badge (red X) below Edison on self-hosted side */}
+        {/* Denied verdict badge (red X) below SealGate on self-hosted side */}
         <g className="fd-v-deny" style={{ transformOrigin: '155px 185px' }}>
           <circle
             cx="155"
@@ -738,7 +738,7 @@ export default function FlexibleDeploymentAnimation(): React.ReactNode {
           <McpIcon x={566} y={74} size={12} color="var(--text-muted)" opacity="0.4" />
         </g>
 
-        {/* ── Edison Cloud box ── */}
+        {/* ── SealGate Cloud box ── */}
         <g className="fd-saas-glow">
           <rect
             x={490}
@@ -752,7 +752,7 @@ export default function FlexibleDeploymentAnimation(): React.ReactNode {
             strokeOpacity="0.35"
             strokeWidth="1.2"
           />
-          <EdisonLogo x={528} y={144} w={54} h={52.5} />
+          <SealGateLogo x={528} y={144} w={54} h={52.5} />
           <circle
             className="fd-pulse-saas"
             cx="555"
@@ -773,11 +773,11 @@ export default function FlexibleDeploymentAnimation(): React.ReactNode {
             fontFamily="system-ui,sans-serif"
             fontWeight="bold"
           >
-            Edison Cloud
+            SealGate Cloud
           </text>
         </g>
 
-        {/* ── Connection lines: laptops → Edison Cloud ── */}
+        {/* ── Connection lines: laptops → SealGate Cloud ── */}
         <g className="fd-saas-lines">
           <line
             className="fd-line"
@@ -803,7 +803,7 @@ export default function FlexibleDeploymentAnimation(): React.ReactNode {
           />
         </g>
 
-        {/* ── Connection lines: Edison Cloud → 3rd-party MCP ── */}
+        {/* ── Connection lines: SealGate Cloud → 3rd-party MCP ── */}
         <g className="fd-saas-lines">
           <line
             className="fd-line"

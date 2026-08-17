@@ -6,7 +6,7 @@
     }
   },
   "projects": {
-    "/Users/gatlingx/work/edison-watch": {
+    "/Users/gatlingx/work/sealgate": {
       "mcpServers": {
         "sameall": {
           "type": "sse",

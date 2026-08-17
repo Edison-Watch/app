@@ -1,4 +1,4 @@
-//! Edison Watch quarantine daemon.
+//! SealGate quarantine daemon.
 //!
 //! Runs the MCP discovery + quarantine pipeline. In this build it runs as the
 //! invoking user; the privileged system-agent version (design §4–§10) layers
@@ -38,7 +38,7 @@ use enrollment::Enrollment;
 use protocol::{Choice, ServerView, Status};
 
 #[derive(Parser)]
-#[command(version, about = "Edison Watch quarantine daemon")]
+#[command(version, about = "SealGate quarantine daemon")]
 struct Cli {
     #[command(subcommand)]
     cmd: Cmd,
@@ -79,7 +79,7 @@ enum SecretCmd {
 #[derive(Subcommand)]
 enum Cmd {
     /// Enroll against the backend (validates the key, caches policy + known
-    /// set) and install edison-watch into the selected agents.
+    /// set) and install sealgate into the selected agents.
     Enroll {
         /// API base URL, e.g. http://localhost:3001
         #[arg(long)]
@@ -87,17 +87,17 @@ enum Cmd {
         /// Bearer API key.
         #[arg(long)]
         key: String,
-        /// MCP gateway base URL for the edison-watch entry, e.g.
+        /// MCP gateway base URL for the sealgate entry, e.g.
         /// http://localhost:3000 (required to install into agents).
         #[arg(long)]
         mcp_url: Option<String>,
-        /// Agents to install edison-watch into (comma-separated), e.g.
+        /// Agents to install sealgate into (comma-separated), e.g.
         /// `cursor,vscode,codex`. Omit to keep the previous selection.
         /// Quarantine still covers all agents.
         #[arg(long, value_delimiter = ',')]
         agents: Option<Vec<String>>,
-        /// The user's edison secret key (composite `user:<base64>`) for the
-        /// X-Edison-Secret-Key header. Omit to keep the previous value.
+        /// The user's sealgate secret key (composite `user:<base64>`) for the
+        /// X-SealGate-Secret-Key header. Omit to keep the previous value.
         #[arg(long)]
         secret: Option<String>,
     },
@@ -127,7 +127,7 @@ enum Cmd {
         #[arg(long)]
         all: bool,
     },
-    /// Submit a discovered server to Edison Watch (register/request) and remove
+    /// Submit a discovered server to SealGate (register/request) and remove
     /// it from its local config.
     SendToEw {
         /// Server name to send.
@@ -136,10 +136,10 @@ enum Cmd {
         #[arg(long)]
         agent: Option<String>,
     },
-    /// Reverse every quarantine found on disk (sidecars + ew-disabled dirs),
+    /// Reverse every quarantine found on disk (sidecars + sg-disabled dirs),
     /// independent of tracked state. Idempotent.
     Recover,
-    /// Verify or reset the edison secret key.
+    /// Verify or reset the sealgate secret key.
     Secret {
         #[command(subcommand)]
         action: SecretCmd,
@@ -168,7 +168,7 @@ enum Cmd {
         #[arg(long)]
         socket: Option<PathBuf>,
         /// Don't run the hook pending-file consumer (detect-only mode, so we
-        /// don't fight a client's own hook monitor over ~/.edison-watch).
+        /// don't fight a client's own hook monitor over ~/.sealgate).
         #[arg(long)]
         no_hooks: bool,
     },
@@ -327,9 +327,9 @@ fn cmd_list(verbose: bool) -> anyhow::Result<()> {
     }
 
     println!(
-        "\n  state: edison=our own entry (skipped) · known=already at backend (silent removal)"
+        "\n  state: sealgate=our own entry (skipped) · known=already at backend (silent removal)"
     );
-    println!("         new=would be quarantined · opaque=removed locally, can't send to EW");
+    println!("         new=would be quarantined · opaque=removed locally, can't send to SG");
     println!("         report=untouchable, no access to remove");
 
     match Enrollment::load_for(&u)? {
@@ -411,7 +411,7 @@ async fn cmd_send_to_ew(name: String, agent: Option<String>) -> anyhow::Result<(
         None, // role decides register-vs-request from the CLI
     )
     .await?;
-    println!("Sent {name} to Edison Watch and removed it from the local config.");
+    println!("Sent {name} to SealGate and removed it from the local config.");
     Ok(())
 }
 

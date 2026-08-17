@@ -47,7 +47,7 @@ describe('submitOneViaDetectord', () => {
   })
 
   it('reports a taken name as a name clash, which a rename can fix', async () => {
-    dispositionError = new Error("conflict: 'sqlite' is already registered at Edison Watch")
+    dispositionError = new Error("conflict: 'sqlite' is already registered at SealGate")
     const result = await submitOneViaDetectord(server, 'registered')
     expect(result.alreadyExists).toBe(true)
     expect(result.alreadyPending).toBeUndefined()

@@ -6,12 +6,12 @@
  * allowing developers to toggle between demo and release backends
  * without rebuilding.
  *
- * Login goes through the Edison backend's device-authorization grant (see
+ * Login goes through the SealGate backend's device-authorization grant (see
  * packages/shared/src/auth/device-auth.ts), so the only auth origin the app
  * needs is API_BASE_URL - there is no Supabase configuration.
  */
 
-export const STORAGE_KEY = 'edison_debug_env'
+export const STORAGE_KEY = 'sealgate_debug_env'
 
 /**
  * localStorage key holding the custom (self-hosted) backend URLs as JSON:
@@ -19,7 +19,7 @@ export const STORAGE_KEY = 'edison_debug_env'
  * owns the canonical copy (in its debug-env override file); the renderer
  * mirrors it here so getEnv() can resolve the "custom" environment.
  */
-export const CUSTOM_BACKEND_STORAGE_KEY = 'edison_custom_backend'
+export const CUSTOM_BACKEND_STORAGE_KEY = 'sealgate_custom_backend'
 
 /** URLs of a custom (self-hosted) backend. */
 export interface CustomBackendUrls {
@@ -48,7 +48,7 @@ const DEMO_CONFIG: EnvConfig = {
   POSTHOG_FEEDBACK_SURVEY_ID: '019c5262-bd68-0000-2209-0e41b3563834',
   DEPLOY_ENV: 'demo',
   API_BASE_URL: 'https://demo-dashboard.edison.watch',
-  MCP_BASE_URL: 'https://edison-watch-demo.up.railway.app',
+  MCP_BASE_URL: 'https://sealgate-demo.up.railway.app',
   RELEASES_BASE_URL: 'https://demo-releases.edison.watch'
 }
 

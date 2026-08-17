@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react'
 
-import { Badge, Card } from '@edison-watch/shared/ui'
+import { Badge, Card } from '@sealgate/shared/ui'
 
 import type { StdiodErrorCode, StdiodStatus } from '../../../main/stdiod/types'
 
 interface StdiodEnableCardProps {
   apiBaseUrl: string
   apiKey: string
-  edisonSecretKey?: string
+  sealgateSecretKey?: string
 }
 
 // Pick a human-meaningful status line. We deliberately don't surface a
@@ -48,7 +48,7 @@ function describeStatus(status: StdiodStatus): string {
 const ERROR_HINTS: Record<StdiodErrorCode, string> = {
   binary_missing: 'The stdiod binary is not bundled with this build.',
   not_installed: 'The launchd unit is not registered yet.',
-  not_logged_in: 'Daemon needs an API key + edison_secret_key.',
+  not_logged_in: 'Daemon needs an API key + sealgate_secret_key.',
   permission_denied: 'macOS denied the install action.',
   spawn_failed: 'Could not start the daemon binary.',
   unknown: 'See the daemon log for details.'
@@ -57,7 +57,7 @@ const ERROR_HINTS: Record<StdiodErrorCode, string> = {
 export default function StdiodEnableCard({
   apiBaseUrl,
   apiKey,
-  edisonSecretKey
+  sealgateSecretKey
 }: StdiodEnableCardProps): React.ReactNode {
   const [status, setStatus] = useState<StdiodStatus | null>(null)
   const [busy, setBusy] = useState(false)
@@ -109,7 +109,7 @@ export default function StdiodEnableCard({
       const loginResult = await window.api.stdiod.login({
         backend: apiBaseUrl,
         apiKey,
-        edisonSecretKey
+        sealgateSecretKey
       })
       if (!loginResult.ok) {
         const code = loginResult.errorCode ?? 'unknown'
@@ -145,7 +145,7 @@ export default function StdiodEnableCard({
     setBusy(true)
     setError(null)
     try {
-      // purge=false keeps ~/.config/edison-stdiod/config.toml around so a
+      // purge=false keeps ~/.config/sealgate-stdiod/config.toml around so a
       // future Enable doesn't have to re-ask for credentials.
       const result = await window.api.stdiod.uninstall({ purge: false })
       if (!result.ok) {
@@ -175,7 +175,7 @@ export default function StdiodEnableCard({
       const result = await window.api.stdiod.reset({
         backend: apiBaseUrl,
         apiKey,
-        edisonSecretKey
+        sealgateSecretKey
       })
       if (!result.ok) {
         const code = result.errorCode ?? 'unknown'
@@ -230,7 +230,7 @@ export default function StdiodEnableCard({
               </Badge>
             </div>
             <p className="text-xs text-[var(--text-primary)]/80">
-              Run local stdio MCP servers (filesystem, git, sqlite, etc.) through Edison Watch.
+              Run local stdio MCP servers (filesystem, git, sqlite, etc.) through SealGate.
             </p>
           </div>
           <button

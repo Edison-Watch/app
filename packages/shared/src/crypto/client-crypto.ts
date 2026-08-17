@@ -1,10 +1,18 @@
 /**
- * Client-side encryption for Edison Watch zero-knowledge secrets.
+ * Client-side encryption for SealGate zero-knowledge secrets.
  *
  * Mirrors the server-side encryption in src/secrets_encryption.py:
- *   - Key derivation: HKDF-SHA256, salt = zero-filled (32 bytes), info = "edison-secret:{context}"
+ *   - Key derivation: HKDF-SHA256, salt = zero-filled (32 bytes), info = "sealgate-secret:{context}"
  *   - Cipher:         AES-256-GCM
  *   - Wire format:    MAGIC_PREFIX + base64( nonce[12] || ciphertext )
+ *
+ * STORAGE FORMAT - these literals are pinned by two other implementations (the
+ * backend's src/secrets_encryption.py and the dashboard's copy of this file) and
+ * must be changed in all three together, or nothing decrypts.
+ *
+ * The SealGate rebrand cut the format over from `$EDISON$1$` / `edison-secret:`
+ * to `$SEALGATE$1$` / `sealgate-secret:` with NO legacy read path: blobs written
+ * before the cutover derive a different key and no longer decrypt.
  *
  * Composite key format:
  *   user:{base64_key}.admin:{base64_key}[.role:NAME:{base64_key} ...]
@@ -19,9 +27,9 @@ const DECODER = new TextDecoder()
  * Deterministic prefix prepended to all encrypted blobs.
  * Must match the Python constant in src/secrets_encryption.py.
  */
-export const MAGIC_PREFIX = '$EDISON$1$'
+export const MAGIC_PREFIX = '$SEALGATE$1$'
 
-/** Return true if the value starts with the Edison encryption magic prefix. */
+/** Return true if the value starts with the SealGate encryption magic prefix. */
 export function hasMagicPrefix(value: string): boolean {
   return value.startsWith(MAGIC_PREFIX)
 }
@@ -95,7 +103,7 @@ async function deriveKey(
   const salt = new Uint8Array(32) // zero-filled per RFC 5869
 
   return crypto.subtle.deriveKey(
-    { name: 'HKDF', hash: 'SHA-256', salt, info: ENCODER.encode(`edison-secret:${context}`) },
+    { name: 'HKDF', hash: 'SHA-256', salt, info: ENCODER.encode(`sealgate-secret:${context}`) },
     ikm,
     { name: 'AES-GCM', length: 256 },
     false,
@@ -136,8 +144,6 @@ export async function decryptSecret(
     throw new Error(`Cannot decrypt sentinel or placeholder value for ${serverName}:${templateKey}`)
   }
 
-  const key = await deriveKey(secretKey, `${serverName}:${templateKey}`)
-
   // Strip magic prefix if present (backward compat for legacy values without it)
   const rawB64 = stripMagicPrefix(encryptedBase64)
 
@@ -147,6 +153,8 @@ export async function decryptSecret(
   } catch {
     throw new Error(`Invalid base64 input for ${serverName}:${templateKey}`)
   }
+
+  const key = await deriveKey(secretKey, `${serverName}:${templateKey}`)
 
   const plainBuf = await crypto.subtle.decrypt(
     { name: 'AES-GCM', iv: raw.slice(0, 12) },
@@ -223,7 +231,7 @@ async function deriveDomainKey(domainKey: string, context: string): Promise<Cryp
       name: 'HKDF',
       hash: 'SHA-256',
       salt: new Uint8Array(32),
-      info: ENCODER.encode(`edison-domain-secret:${context}`)
+      info: ENCODER.encode(`sealgate-domain-secret:${context}`)
     },
     ikm,
     { name: 'AES-GCM', length: 256 },
@@ -242,8 +250,6 @@ export async function decryptDomainSecret(
     throw new Error(`Cannot decrypt sentinel or placeholder value for ${serverName}:${templateKey}`)
   }
 
-  const key = await deriveDomainKey(domainKey, `${serverName}:${templateKey}`)
-
   // Strip magic prefix if present (backward compat for legacy values without it)
   const rawB64 = stripMagicPrefix(encryptedBase64)
 
@@ -253,6 +259,8 @@ export async function decryptDomainSecret(
   } catch {
     throw new Error(`Invalid base64 input for ${serverName}:${templateKey}`)
   }
+
+  const key = await deriveDomainKey(domainKey, `${serverName}:${templateKey}`)
 
   const plainBuf = await crypto.subtle.decrypt(
     { name: 'AES-GCM', iv: raw.slice(0, 12) },

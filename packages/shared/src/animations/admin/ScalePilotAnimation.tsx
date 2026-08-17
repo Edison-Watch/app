@@ -4,9 +4,9 @@
  * Phase 1 - "Stuck pilot": A single Engineering team experiments with AI;
  *           the rest of the org (Sales, Finance, Legal, HR) is dark. The
  *           admin has no visibility.
- * Transition: Edison Watch fades in as a unified control plane.
+ * Transition: SealGate fades in as a unified control plane.
  * Phase 2 - "Org-wide rollout": All departments activate together, routing
- *           AI traffic through Edison to enterprise tools. The admin gains
+ *           AI traffic through SealGate to enterprise tools. The admin gains
  *           full visibility with policy verdicts (accept/deny) at the gateway.
  *
  * 14s loop. Pure SVG + CSS. Respects `prefers-reduced-motion`.
@@ -19,7 +19,7 @@ import {
   ADMIN_PATH,
   AgentIcon,
   DANGER,
-  EdisonLogo,
+  SealGateLogo,
   EYE_PATH,
   EYE_SLASH_PATH,
   McpIcon,
@@ -50,9 +50,9 @@ const JIRA_SVG =
 /* ──────────────────────────────────────────────────────────────────────
  * Animation timing / cycle: 14s
  *   0–28%   Phase 1 stalled (only Engineering pilot active, sends 1 packet)
- *   28–36%  Edison fades in
+ *   28–36%  SealGate fades in
  *   36–95%  Phase 2 - all departments activate together, packets stagger
- *           through Edison with policy verdicts (accept/deny)
+ *           through SealGate with policy verdicts (accept/deny)
  *   95–100% Hold final state (full org lit, all verdicts visible)
  * ────────────────────────────────────────────────────────────────────── */
 
@@ -64,7 +64,7 @@ const CSS = `
 
 /* phase visibility */
 .spa .spa-stalled { animation: spa-sv 14s ease-in-out infinite; }
-.spa .spa-edison  { animation: spa-ev 14s ease-in-out infinite; transform-origin: 360px 150px; }
+.spa .spa-sealgate  { animation: spa-ev 14s ease-in-out infinite; transform-origin: 360px 150px; }
 .spa .spa-scaled  { animation: spa-rv 14s ease-in-out infinite; }
 .spa .spa-pulse   { transform-origin:360px 150px; animation: spa-pulse 1.4s cubic-bezier(.2,.8,.4,1) infinite; }
 
@@ -77,20 +77,20 @@ const CSS = `
 
 /* engineering is always on (the pilot) */
 @keyframes spa-eng    { 0%,100% { opacity:1; } }
-/* others are dark in phase 1, all activate together when Edison appears */
+/* others are dark in phase 1, all activate together when SealGate appears */
 @keyframes spa-sales  { 0%,28% { opacity:.18; } 36%,100% { opacity:1; } }
 @keyframes spa-fin    { 0%,28% { opacity:.18; } 36%,100% { opacity:1; } }
 @keyframes spa-legal  { 0%,28% { opacity:.18; } 36%,100% { opacity:1; } }
 @keyframes spa-hr     { 0%,28% { opacity:.18; } 36%,100% { opacity:1; } }
 
-/* packets - each is colored orange before Edison and accent after */
+/* packets - each is colored orange before SealGate and accent after */
 .spa .spa-pkt-eng    { color:${O}; animation: spa-pkt-eng    14s ease-in-out infinite; }
 .spa .spa-pkt-sales  { color:${O}; animation: spa-pkt-sales  14s ease-in-out infinite; }
 .spa .spa-pkt-fin    { color:${O}; animation: spa-pkt-fin    14s ease-in-out infinite; }
 .spa .spa-pkt-legal  { color:${O}; animation: spa-pkt-legal  14s ease-in-out infinite; }
 .spa .spa-pkt-hr     { color:${O}; animation: spa-pkt-hr     14s ease-in-out infinite; }
 
-/* policy verdict badges - synced to packet arrivals at Edison */
+/* policy verdict badges - synced to packet arrivals at SealGate */
 .spa .spa-v-eng   { animation: spa-v-eng   14s ease-in-out infinite; }
 .spa .spa-v-sales { animation: spa-v-sales 14s ease-in-out infinite; }
 .spa .spa-v-fin   { animation: spa-v-fin   14s ease-in-out infinite; }
@@ -128,7 +128,7 @@ const CSS = `
   3%      { transform:translate(220px,55px);  opacity:.8; color:${O}; }
   14%     { transform:translate(560px,40px);  opacity:1;  color:${O}; }
   18%     { transform:translate(560px,40px);  opacity:0;  color:${O}; }
-  /* phase 2: re-emerge through Edison to GitHub (allowed, accent) */
+  /* phase 2: re-emerge through SealGate to GitHub (allowed, accent) */
   36%     { opacity:0; }
   38%     { transform:translate(220px,55px);  opacity:.8; color:${O}; }
   43%     { transform:translate(330px,150px); opacity:1;  color:${O}; }
@@ -170,7 +170,7 @@ const CSS = `
   90%     { transform:translate(560px,250px); opacity:0; }
   91%,100%{ opacity:0; }
 }
-/* HR packet → DENIED at Edison (stops at gateway, flashes red) */
+/* HR packet → DENIED at SealGate (stops at gateway, flashes red) */
 @keyframes spa-pkt-hr {
   0%,84%  { opacity:0; }
   85%     { transform:translate(220px,235px); opacity:.8; color:${O}; }
@@ -195,7 +195,7 @@ const CSS = `
 
 @media (prefers-reduced-motion:reduce) {
   .spa .spa-line, .spa .spa-pulse,
-  .spa .spa-stalled, .spa .spa-edison, .spa .spa-scaled,
+  .spa .spa-stalled, .spa .spa-sealgate, .spa .spa-scaled,
   .spa .spa-pkt-eng, .spa .spa-pkt-sales, .spa .spa-pkt-fin,
   .spa .spa-pkt-legal, .spa .spa-pkt-hr,
   .spa .spa-dept-sales, .spa .spa-dept-fin, .spa .spa-dept-legal, .spa .spa-dept-hr,
@@ -204,7 +204,7 @@ const CSS = `
   .spa .spa-pkt-eng, .spa .spa-pkt-sales, .spa .spa-pkt-fin,
   .spa .spa-pkt-legal, .spa .spa-pkt-hr { opacity:0; }
   .spa .spa-progress { animation:none; transform:scaleX(1); }
-  .spa .spa-edison  { opacity:1; transform:scale(1); }
+  .spa .spa-sealgate  { opacity:1; transform:scale(1); }
   .spa .spa-stalled { opacity:0; }
   .spa .spa-scaled  { opacity:1; }
   .spa .spa-dept-sales, .spa .spa-dept-fin,
@@ -213,7 +213,7 @@ const CSS = `
   .spa .spa-v-legal, .spa .spa-v-hr { opacity:1; }
 }
 .spa.anim-static .spa-line, .spa.anim-static .spa-pulse,
-.spa.anim-static .spa-stalled, .spa.anim-static .spa-edison, .spa.anim-static .spa-scaled,
+.spa.anim-static .spa-stalled, .spa.anim-static .spa-sealgate, .spa.anim-static .spa-scaled,
 .spa.anim-static .spa-pkt-eng, .spa.anim-static .spa-pkt-sales, .spa.anim-static .spa-pkt-fin,
 .spa.anim-static .spa-pkt-legal, .spa.anim-static .spa-pkt-hr,
 .spa.anim-static .spa-dept-sales, .spa.anim-static .spa-dept-fin, .spa.anim-static .spa-dept-legal, .spa.anim-static .spa-dept-hr,
@@ -222,7 +222,7 @@ const CSS = `
 .spa.anim-static .spa-pkt-eng, .spa.anim-static .spa-pkt-sales, .spa.anim-static .spa-pkt-fin,
 .spa.anim-static .spa-pkt-legal, .spa.anim-static .spa-pkt-hr { opacity:0; }
 .spa.anim-static .spa-progress { animation:none; transform:scaleX(1); }
-.spa.anim-static .spa-edison  { opacity:1; transform:scale(1); }
+.spa.anim-static .spa-sealgate  { opacity:1; transform:scale(1); }
 .spa.anim-static .spa-stalled { opacity:0; }
 .spa.anim-static .spa-scaled  { opacity:1; }
 .spa.anim-static .spa-dept-sales, .spa.anim-static .spa-dept-fin,
@@ -498,8 +498,8 @@ export default function ScalePilotAnimation(): React.ReactNode {
           </text>
         </g>
 
-        {/* ══ Edison gateway (fades in for Phase 2) ══ */}
-        <g className="spa-edison">
+        {/* ══ SealGate gateway (fades in for Phase 2) ══ */}
+        <g className="spa-sealgate">
           <circle
             className="spa-pulse"
             cx="360"
@@ -510,7 +510,7 @@ export default function ScalePilotAnimation(): React.ReactNode {
             strokeOpacity="0.5"
             strokeWidth="1.5"
           />
-          <EdisonLogo x={333} y={124} w={54} h={52.5} />
+          <SealGateLogo x={333} y={124} w={54} h={52.5} />
           <text
             x="360"
             y="195"
@@ -520,7 +520,7 @@ export default function ScalePilotAnimation(): React.ReactNode {
             fontWeight="bold"
             fontFamily="system-ui,sans-serif"
           >
-            Edison Watch
+            SealGate
           </text>
           <text
             x="360"
@@ -540,7 +540,7 @@ export default function ScalePilotAnimation(): React.ReactNode {
 
         {/* ══ Phase 2: routed connection lines ══ */}
         <g className="spa-scaled">
-          {/* Departments → Edison (muted) */}
+          {/* Departments → SealGate (muted) */}
           {ROW_YS.map((ry) => (
             <line
               key={ry}
@@ -555,7 +555,7 @@ export default function ScalePilotAnimation(): React.ReactNode {
               strokeDasharray="3 3"
             />
           ))}
-          {/* Edison → tools (accent) */}
+          {/* SealGate → tools (accent) */}
           {[40, 110, 180, 250].map((ty) => (
             <line
               key={ty}
@@ -591,7 +591,7 @@ export default function ScalePilotAnimation(): React.ReactNode {
         <DepartmentRow y={ROW_YS[3]!} dept={DEPTS[3]!} className="spa-dept-legal" />
         <DepartmentRow y={ROW_YS[4]!} dept={DEPTS[4]!} className="spa-dept-hr" />
 
-        {/* ══ Policy verdicts near Edison (Phase 2, staggered with packets) ══ */}
+        {/* ══ Policy verdicts near SealGate (Phase 2, staggered with packets) ══ */}
         <VerdictBadge className="spa-v-eng" cx={310} cy={120} r={8} variant="allow" />
         <VerdictBadge className="spa-v-sales" cx={310} cy={135} r={8} variant="allow" />
         <VerdictBadge className="spa-v-fin" cx={310} cy={150} r={8} variant="allow" />

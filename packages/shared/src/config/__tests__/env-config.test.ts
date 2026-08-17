@@ -29,15 +29,15 @@ describe('custom backend env resolution', () => {
   })
 
   it('resolves API and MCP URLs from the stored mirror', () => {
-    storeCustomBackend({ apiBaseUrl: 'https://edison.example.com/' })
+    storeCustomBackend({ apiBaseUrl: 'https://sealgate.example.com/' })
     localStorage.setItem(STORAGE_KEY, 'custom')
 
     expect(getActiveEnvName()).toBe('custom')
     const env = getEnv()
     expect(env.DEPLOY_ENV).toBe('custom')
-    expect(env.API_BASE_URL).toBe('https://edison.example.com')
+    expect(env.API_BASE_URL).toBe('https://sealgate.example.com')
     // MCP defaults to the same origin (the backend serves /mcp/<key>/ there).
-    expect(env.MCP_BASE_URL).toBe('https://edison.example.com')
+    expect(env.MCP_BASE_URL).toBe('https://sealgate.example.com')
     // No telemetry or update feed for someone else's deployment.
     expect(env.SENTRY_DSN).toBe('')
     expect(env.POSTHOG_API_KEY).toBe('')
@@ -63,16 +63,16 @@ describe('custom backend env resolution', () => {
   it('drops a malformed mcpBaseUrl instead of crashing resolution', () => {
     localStorage.setItem(
       CUSTOM_BACKEND_STORAGE_KEY,
-      '{"apiBaseUrl": "https://edison.example.com", "mcpBaseUrl": 123}'
+      '{"apiBaseUrl": "https://sealgate.example.com", "mcpBaseUrl": 123}'
     )
     localStorage.setItem(STORAGE_KEY, 'custom')
-    expect(getStoredCustomBackend()).toEqual({ apiBaseUrl: 'https://edison.example.com' })
+    expect(getStoredCustomBackend()).toEqual({ apiBaseUrl: 'https://sealgate.example.com' })
     // MCP falls back to the API origin.
-    expect(getEnv().MCP_BASE_URL).toBe('https://edison.example.com')
+    expect(getEnv().MCP_BASE_URL).toBe('https://sealgate.example.com')
   })
 
   it('clears the mirror', () => {
-    storeCustomBackend({ apiBaseUrl: 'https://edison.example.com' })
+    storeCustomBackend({ apiBaseUrl: 'https://sealgate.example.com' })
     clearStoredCustomBackend()
     expect(getStoredCustomBackend()).toBeNull()
   })

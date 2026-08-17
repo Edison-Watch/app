@@ -10,14 +10,14 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use edison_detectord::{Agent, DiscoveredServer, ServerConfig, fingerprint};
 use mcp_backend::{BackendClient, KnownStatus};
 use mcp_quarantine::{
     Action as SeenAction, ConfigStore, FileConfigStore, Policy, QuarantineRecord, ReconcileAction,
-    SeenStore, is_edison_entry, plan,
+    SeenStore, is_sealgate_entry, plan,
 };
 use notify::RecursiveMode;
 use notify_debouncer_full::{DebounceEventResult, new_debouncer};
+use sealgate_detectord::{Agent, DiscoveredServer, ServerConfig, fingerprint};
 use tokio::sync::broadcast;
 
 use crate::agents;
@@ -92,7 +92,7 @@ pub async fn worker(user: String, enforce: bool, events: Option<EventTx>) -> any
         // enforcement AND fills in selected_agents / mcp_base_url / secret (the
         // login enroll started empty). Until armed the daemon is detect-only —
         // lists/reports but quarantines nothing — so onboarding can review +
-        // send-to-EW first. Policy (`quarantine`) is refreshed from the backend
+        // send-to-SG first. Policy (`quarantine`) is refreshed from the backend
         // separately and persisted, so reading it back from disk keeps
         // last-known-good.
         if let Ok(Some(fresh)) = Enrollment::load_for(&user) {
@@ -115,13 +115,13 @@ pub async fn worker(user: String, enforce: bool, events: Option<EventTx>) -> any
             events.as_ref(),
             &mut reported,
         );
-        // Self-heal: if a config was overwritten and dropped our edison-watch
+        // Self-heal: if a config was overwritten and dropped our sealgate
         // entry, put it back. Only while enforcing + armed (i.e. we own the
         // install); a no-op when the entry is already present, so no fs loop.
         if enforce && enrollment.armed {
-            let healed = crate::ops::heal_edison_install(&user, &enrollment);
+            let healed = crate::ops::heal_sealgate_install(&user, &enrollment);
             if healed > 0 {
-                tracing::info!(count = healed, "self-healed edison-watch install");
+                tracing::info!(count = healed, "self-healed sealgate install");
             }
         }
         if last_refresh.elapsed() >= REFRESH_INTERVAL {
@@ -286,13 +286,13 @@ fn reconcile_once(
 ) {
     let observed = agents::discover_all(agents);
 
-    // Notify the UI of report-only servers (edge-triggered, once each): non-edison
+    // Notify the UI of report-only servers (edge-triggered, once each): non-sealgate
     // servers we won't quarantine — everything when the policy is off, plus
     // untouchable-opaque servers when it's on. Actioned servers get their own
     // Quarantined event instead.
     if let Some(tx) = events {
         for s in &observed {
-            let report_only = !is_edison_entry(s)
+            let report_only = !is_sealgate_entry(s)
                 && (!quarantine
                     || matches!(
                         &s.config,
@@ -324,8 +324,8 @@ fn reconcile_once(
     let skips: Vec<Skip> = observed
         .iter()
         .filter_map(|s| {
-            let skip = if is_edison_entry(s) {
-                Skip::edison(s)
+            let skip = if is_sealgate_entry(s) {
+                Skip::sealgate(s)
             } else if matches!(
                 &s.config,
                 ServerConfig::Opaque {
@@ -374,21 +374,21 @@ fn reconcile_once(
         // Opaque removals: neutralise locally, no fingerprint / disposition.
         if let ReconcileAction::RemoveOpaque { server } = &action {
             if !enforce {
-                tracing::debug!(server = %server.name, agent = server.client, "[dry-run] would remove (opaque, cannot send to EW)");
+                tracing::debug!(server = %server.name, agent = server.client, "[dry-run] would remove (opaque, cannot send to SG)");
                 continue;
             }
             match store.quarantine(&server.location, &server.config) {
                 Ok(record) => {
                     chown_new_files(&record, user);
                     publish(events, user, server, "removed");
-                    tracing::info!(server = %server.name, agent = server.client, "removed (opaque, cannot send to EW)");
+                    tracing::info!(server = %server.name, agent = server.client, "removed (opaque, cannot send to SG)");
                     qstate.upsert(QuarantinedEntry {
                         name: server.name.clone(),
                         agent: server.client.to_string(),
                         // Path-keyed so each plugin dir is a distinct record
                         // (the dir name repeats across projects).
                         fingerprint: format!("opaque:{}", server.location.path.display()),
-                        config: None, // opaque: can't be submitted to EW
+                        config: None, // opaque: can't be submitted to SG
                         record,
                     });
                     let _ = qstate.save_for(user);
@@ -420,7 +420,7 @@ fn reconcile_once(
             Ok(record) => {
                 chown_new_files(&record, user);
                 // Known servers are neutralised silently; new (unknown) ones need
-                // the UI to prompt (send to EW / keep quarantined).
+                // the UI to prompt (send to SG / keep quarantined).
                 let state = if known {
                     "quarantined"
                 } else {
@@ -458,16 +458,16 @@ struct Skip {
 }
 
 impl Skip {
-    fn edison(s: &edison_detectord::DiscoveredServer) -> Self {
+    fn sealgate(s: &sealgate_detectord::DiscoveredServer) -> Self {
         Self {
             name: s.name.clone(),
             agent: s.client,
-            reason: "edison-watch (our own server)",
+            reason: "sealgate (our own server)",
             fingerprint: fingerprint(&s.name, &s.config).unwrap_or_else(|| "-".into()),
         }
     }
 
-    fn untouchable(s: &edison_detectord::DiscoveredServer) -> Self {
+    fn untouchable(s: &sealgate_detectord::DiscoveredServer) -> Self {
         Self {
             name: s.name.clone(),
             agent: s.client,

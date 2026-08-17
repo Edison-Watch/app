@@ -26,7 +26,7 @@ const status = (over: Record<string, unknown>) => ({
 });
 
 /**
- * A client Edison can see but not configure. Every setup field goes false
+ * A client SealGate can see but not configure. Every setup field goes false
  * together: there is no gateway entry to install and no hook surface, so a row
  * that reported "4/4 hooks" here would be describing work nobody did.
  */
@@ -50,11 +50,11 @@ const unmanaged = (client: string) =>
  * ChatGPT has nothing local at all: its servers are Connectors in the user's
  * account, so no manual step would help and the row does not offer one. The
  * Claude hosts do run local servers - `claude_desktop_config.json` simply takes
- * stdio entries only, leaving Edison nowhere to write a gateway URL. That one
+ * stdio entries only, leaving SealGate nowhere to write a gateway URL. That one
  * is actionable, so its row names the route that works.
  *
  * Claude Code, Cursor and VS Code sit alongside as the ordinary case: config
- * files that accept a URL, so Edison configures them itself.
+ * files that accept a URL, so SealGate configures them itself.
  */
 export const WithAnUnmanageableClient: Story = {
   decorators: [

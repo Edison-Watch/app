@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="960" height="508" viewBox="0 0 960 508" font-family="'Archivo', 'Helvetica Neue', Arial, sans-serif" role="img" aria-label="@edison/shared architecture diagram in the Edison Hackbox style">
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="508" viewBox="0 0 960 508" font-family="'Archivo', 'Helvetica Neue', Arial, sans-serif" role="img" aria-label="@sealgate/shared architecture diagram in the SealGate Hackbox style">
   <defs>
     <style>
       .title    { font-size: 26px; font-weight: 800; fill: #FFFFFF; letter-spacing: 0.5px; }
@@ -28,22 +28,22 @@
   </g>
 
   <!-- header -->
-  <text x="80" y="48" class="title">@edison/shared</text>
-  <text x="80" y="72" class="subtitle">One shared client foundation for the Edison Watch applications</text>
+  <text x="80" y="48" class="title">@sealgate/shared</text>
+  <text x="80" y="72" class="subtitle">One shared client foundation for the SealGate applications</text>
 
   <!-- ============ CONSUMERS (horizontal box) ============ -->
   <rect x="80" y="92" width="800" height="64" fill="none" stroke="#C3FFFD" stroke-width="2"/>
   <rect x="80" y="92" width="320" height="26" fill="#C3FFFD"/>
   <text x="240" y="110" text-anchor="middle" class="tag-text">CONSUMING APPLICATIONS</text>
-  <text x="480" y="142" text-anchor="middle" class="body">Edison Watch web and desktop clients, sharing one source of truth</text>
+  <text x="480" y="142" text-anchor="middle" class="body">SealGate web and desktop clients, sharing one source of truth</text>
 
   <!-- arrow down -->
   <line x1="480" y1="156" x2="480" y2="186" stroke="#C3FFFD" stroke-width="2" marker-end="url(#cy-arrow)"/>
 
-  <!-- ============ @edison/shared container ============ -->
+  <!-- ============ @sealgate/shared container ============ -->
   <rect x="80" y="190" width="800" height="276" fill="none" stroke="#C3FFFD" stroke-width="2"/>
   <rect x="80" y="190" width="320" height="26" fill="#C3FFFD"/>
-  <text x="240" y="208" text-anchor="middle" class="tag-text">@EDISON/SHARED</text>
+  <text x="240" y="208" text-anchor="middle" class="tag-text">@SEALGATE/SHARED</text>
 
   <!-- Design system box (tag top-left) -->
   <rect x="112" y="240" width="352" height="200" fill="none" stroke="#C3FFFD" stroke-width="2"/>
@@ -76,5 +76,5 @@
   </g>
 
   <!-- footer -->
-  <text x="80" y="494" class="foot">Built once from a single source, consumed by every Edison Watch client. Shipped as standard JS modules.</text>
+  <text x="80" y="494" class="foot">Built once from a single source, consumed by every SealGate client. Shipped as standard JS modules.</text>
 </svg>

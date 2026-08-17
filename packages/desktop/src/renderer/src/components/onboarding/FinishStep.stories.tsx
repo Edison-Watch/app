@@ -15,7 +15,7 @@ type Story = StoryObj<typeof meta>;
 const BASE_PROPS = {
   email: 'alice@example.com',
   userId: 'demo-user-1',
-  apiKey: 'edison_demo_apikey_abc123',
+  apiKey: 'sealgate_demo_apikey_abc123',
   mcpBaseUrl: 'https://mcp.demo.example.com',
   apiBaseUrl: 'https://api.demo.example.com',
   selectedApps: ['cursor', 'claude-code'],
@@ -40,7 +40,7 @@ export const WithModifiedConfigs: Story = {
         backupPath: '/Users/alice/.claude/mcp.json.bak',
       },
     ],
-    edisonSecretKey: 'edison_secret_demo',
+    sealgateSecretKey: 'sealgate_secret_demo',
   },
   decorators: [
     (Story) => (

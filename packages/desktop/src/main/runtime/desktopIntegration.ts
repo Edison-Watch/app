@@ -5,7 +5,7 @@ import path from 'node:path'
 import { app } from 'electron'
 
 // Self-install a freedesktop `.desktop` entry + icon for the AppImage so GNOME
-// (and other shells) show the Edison icon in the dock/taskbar and can pin the
+// (and other shells) show the SealGate icon in the dock/taskbar and can pin the
 // app. An AppImage is a single file with no installed metadata, so without this
 // the running window falls back to the generic icon and isn't pinnable.
 //
@@ -28,7 +28,7 @@ export function integrateDesktopEntry(iconSourcePath: string): void {
 
     // Stable icon location (absolute Icon= avoids depending on an icon-theme
     // cache refresh).
-    const dataDir = path.join(home, '.local', 'share', 'edison-watch')
+    const dataDir = path.join(home, '.local', 'share', 'sealgate')
     mkdirSync(dataDir, { recursive: true })
     const iconDest = path.join(dataDir, 'icon.png')
     copyFileSync(iconSourcePath, iconDest)
@@ -39,20 +39,20 @@ export function integrateDesktopEntry(iconSourcePath: string): void {
       [
         '[Desktop Entry]',
         'Type=Application',
-        'Name=Edison Watch',
+        'Name=SealGate',
         // Quote the AppImage path (it can contain spaces); %U lets the app
-        // receive edison-watch:// callback URLs via the desktop entry.
+        // receive sealgate:// callback URLs via the desktop entry.
         `Exec="${appImagePath}" %U`,
         `Icon=${iconDest}`,
         'Terminal=false',
         'Categories=Development;Utility;',
         `StartupWMClass=${app.getName()}`,
         // Register the custom protocol so the SSO callback can route here.
-        'MimeType=x-scheme-handler/edison-watch;',
+        'MimeType=x-scheme-handler/sealgate;',
         // Tell appimaged not to also auto-integrate (avoids a duplicate entry).
         'X-AppImage-Integrate=false'
       ].join('\n') + '\n'
-    writeFileSync(path.join(appsDir, 'edison-watch.desktop'), desktop, { mode: 0o644 })
+    writeFileSync(path.join(appsDir, 'sealgate.desktop'), desktop, { mode: 0o644 })
   } catch {
     // Cosmetic; never block startup on it.
   }

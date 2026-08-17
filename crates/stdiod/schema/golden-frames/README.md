@@ -4,7 +4,7 @@ One JSON file per wire example. Each file is a single JSON object exactly as it
 appears on the WebSocket, with no envelope and no metadata around it.
 
 They exist so every implementation of the tunnel protocol (the Rust daemon here,
-the backend in the edison-watch repo, a Kotlin/Android client later) can be
+the backend in the sealgate repo, a Kotlin/Android client later) can be
 tested against the same bytes instead of against each other's assumptions. The
 JSON Schema at `../tunnel-protocol.json` pins the shapes; these files pin the
 values that shapes alone leave ambiguous, such as explicit `null` versus an
@@ -35,8 +35,8 @@ Every implementation MUST:
 ## Coverage
 
 At least one fixture per variant of the `TunnelFrame` enum in
-`../../crates/edison-tunnel-protocol/src/lib.rs`. The Rust test
-`../../crates/edison-tunnel-protocol/tests/golden_frames.rs` (repo path: `crates/stdiod/crates/edison-tunnel-protocol/tests/golden_frames.rs`) enforces both directions:
+`../../crates/sealgate-tunnel-protocol/src/lib.rs`. The Rust test
+`../../crates/sealgate-tunnel-protocol/tests/golden_frames.rs` (repo path: `crates/stdiod/crates/sealgate-tunnel-protocol/tests/golden_frames.rs`) enforces both directions:
 a fixture for an unknown variant fails to parse, and a variant with no fixture
 fails the coverage assertion.
 
@@ -70,5 +70,5 @@ it has no fixture. Add one when it ships.
    as an explicit null, keep the null.
 3. Add a row to the table above.
 4. When the fixture covers a **new** variant, add the tag to `EXPECTED_VARIANTS`
-   in `../../crates/edison-tunnel-protocol/tests/golden_frames.rs` (repo path: `crates/stdiod/crates/edison-tunnel-protocol/tests/golden_frames.rs`).
+   in `../../crates/sealgate-tunnel-protocol/tests/golden_frames.rs` (repo path: `crates/stdiod/crates/sealgate-tunnel-protocol/tests/golden_frames.rs`).
 5. Run `cargo test --workspace` from `crates/stdiod`.

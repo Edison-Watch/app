@@ -8,7 +8,7 @@ import { tmpdir } from "os";
  * the ElectronApplication and first window Page.
  *
  * Expects the app to be built first via `npm run build` (electron-vite build).
- * In CI, set EDISON_TEST_MODE=1 to skip real auth and backend calls.
+ * In CI, set SEALGATE_TEST_MODE=1 to skip real auth and backend calls.
  */
 export const test = base.extend<{
   electronApp: ElectronApplication;
@@ -19,7 +19,7 @@ export const test = base.extend<{
     const mainPath = join(__dirname, "../out/main/index.js");
     // Fresh profile per test so a machine where setup already completed still
     // exercises the wizard.
-    const userDataDir = mkdtempSync(join(tmpdir(), "edison-e2e-"));
+    const userDataDir = mkdtempSync(join(tmpdir(), "sealgate-e2e-"));
 
     const app = await electron.launch({
       args: [
@@ -37,7 +37,7 @@ export const test = base.extend<{
       env: {
         ...process.env,
         NODE_ENV: "test",
-        EDISON_TEST_MODE: "1",
+        SEALGATE_TEST_MODE: "1",
       },
     });
 

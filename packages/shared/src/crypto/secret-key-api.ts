@@ -1,11 +1,11 @@
 /**
- * Secret key management API client for Edison Watch.
+ * Secret key management API client for SealGate.
  *
  * Provides functions for generating, registering, rolling, resetting,
- * verifying, and caching the user's edison_secret_key.
+ * verifying, and caching the user's sealgate_secret_key.
  */
 
-const EDISON_SECRET_KEY_STORAGE = 'edison_secret_key'
+const SEALGATE_SECRET_KEY_STORAGE = 'sealgate_secret_key'
 
 /**
  * Create authorization headers for API requests.
@@ -144,7 +144,7 @@ export async function verifySecretKey(
 /** Get cached secret key from localStorage. */
 export function getCachedSecretKey(): string | null {
   try {
-    return localStorage.getItem(EDISON_SECRET_KEY_STORAGE)
+    return localStorage.getItem(SEALGATE_SECRET_KEY_STORAGE)
   } catch {
     return null
   }
@@ -153,7 +153,7 @@ export function getCachedSecretKey(): string | null {
 /** Cache secret key in localStorage. */
 export function cacheSecretKey(key: string): void {
   try {
-    localStorage.setItem(EDISON_SECRET_KEY_STORAGE, key)
+    localStorage.setItem(SEALGATE_SECRET_KEY_STORAGE, key)
   } catch {
     /* ignore */
   }
@@ -162,7 +162,7 @@ export function cacheSecretKey(key: string): void {
 /** Clear cached secret key from localStorage. */
 export function clearCachedSecretKey(): void {
   try {
-    localStorage.removeItem(EDISON_SECRET_KEY_STORAGE)
+    localStorage.removeItem(SEALGATE_SECRET_KEY_STORAGE)
   } catch {
     /* ignore */
   }

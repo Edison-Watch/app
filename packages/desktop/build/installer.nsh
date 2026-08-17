@@ -38,14 +38,14 @@
   ; Remove detectord's scheduled task + stop it. Empty/absent $INSTDIR on a
   ; first install simply makes this fail harmlessly; the taskkill below is the
   ; backstop that actually guarantees the lock is released.
-  nsExec::Exec '"$INSTDIR\resources\bin\edison-detectord.exe" service uninstall'
+  nsExec::Exec '"$INSTDIR\resources\bin\sealgate-detectord.exe" service uninstall'
   Pop $0
 
   ; Backstop for both: releases the file lock even if the task removal above
   ; failed, the task name was unexpected, or the process outlived its task.
-  nsExec::Exec 'taskkill /f /im edison-detectord.exe'
+  nsExec::Exec 'taskkill /f /im sealgate-detectord.exe'
   Pop $0
-  nsExec::Exec 'taskkill /f /im edison-stdiod.exe'
+  nsExec::Exec 'taskkill /f /im sealgate-stdiod.exe'
   Pop $0
 
   Pop $0
@@ -58,39 +58,39 @@
   Sleep 1500
 !macroend
 
-; Edison Watch uninstall hook. Two independent opt-in prompts (default No = keep).
+; SealGate uninstall hook. Two independent opt-in prompts (default No = keep).
 ; No-op on silent runs so auto-update keeps everything. Runs before the app files
 ; are removed, so the daemon binary is still present for `uninstall --purge`.
 !macro customUnInstall
-  IfSilent ew_skip
+  IfSilent sg_skip
 
   ; Transient startup log - always removed on a real uninstall.
-  Delete "$TEMP\ew-startup.log"
+  Delete "$TEMP\sg-startup.log"
 
   ; Stop + remove the stdiod daemon (scheduled task + its credentials/logs).
   ; `uninstall --purge` handles the SID-named task (and the legacy name).
-  MessageBox MB_YESNO|MB_ICONQUESTION "Stop and remove the Edison stdiod daemon (background tunnel + its saved credentials)?" /SD IDNO IDNO ew_skipDaemon
-    nsExec::ExecToLog '"$INSTDIR\resources\bin\edison-stdiod.exe" uninstall --purge'
-    RMDir /r "$PROFILE\.config\edison-stdiod"
-    RMDir /r "$PROFILE\.local\state\edison-stdiod"
-  ew_skipDaemon:
+  MessageBox MB_YESNO|MB_ICONQUESTION "Stop and remove the SealGate stdiod daemon (background tunnel + its saved credentials)?" /SD IDNO IDNO sg_skipDaemon
+    nsExec::ExecToLog '"$INSTDIR\resources\bin\sealgate-stdiod.exe" uninstall --purge'
+    RMDir /r "$PROFILE\.config\sealgate-stdiod"
+    RMDir /r "$PROFILE\.local\state\sealgate-stdiod"
+  sg_skipDaemon:
 
   ; Stop + remove the detector daemon (scheduled task + its enrollment,
   ; seen-store, quarantine records, logs). `service uninstall --purge` handles
   ; the SID-named task (and the legacy name) and wipes its data dir.
-  MessageBox MB_YESNO|MB_ICONQUESTION "Stop and remove the Edison detector daemon (background MCP monitor + its quarantine records)?" /SD IDNO IDNO ew_skipDetectord
-    nsExec::ExecToLog '"$INSTDIR\resources\bin\edison-detectord.exe" service uninstall --purge'
-    RMDir /r "$APPDATA\edison-watch-detectord"
-  ew_skipDetectord:
+  MessageBox MB_YESNO|MB_ICONQUESTION "Stop and remove the SealGate detector daemon (background MCP monitor + its quarantine records)?" /SD IDNO IDNO sg_skipDetectord
+    nsExec::ExecToLog '"$INSTDIR\resources\bin\sealgate-detectord.exe" service uninstall --purge'
+    RMDir /r "$APPDATA\sealgate-detectord"
+  sg_skipDetectord:
 
   ; Remove all app data (userData under both name variants + the per-user dir).
-  MessageBox MB_YESNO|MB_ICONQUESTION "Remove all Edison Watch data (settings and logs)?" /SD IDNO IDNO ew_skipData
-    RMDir /r "$APPDATA\edison-watch-client-2"
-    RMDir /r "$LOCALAPPDATA\edison-watch-client-2"
-    RMDir /r "$APPDATA\Edison Watch"
-    RMDir /r "$LOCALAPPDATA\Edison Watch"
-    RMDir /r "$PROFILE\.edison-watch"
-  ew_skipData:
+  MessageBox MB_YESNO|MB_ICONQUESTION "Remove all SealGate data (settings and logs)?" /SD IDNO IDNO sg_skipData
+    RMDir /r "$APPDATA\sealgate-client-2"
+    RMDir /r "$LOCALAPPDATA\sealgate-client-2"
+    RMDir /r "$APPDATA\SealGate"
+    RMDir /r "$LOCALAPPDATA\SealGate"
+    RMDir /r "$PROFILE\.sealgate"
+  sg_skipData:
 
-  ew_skip:
+  sg_skip:
 !macroend

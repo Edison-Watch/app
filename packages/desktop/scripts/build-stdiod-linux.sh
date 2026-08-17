@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build edison-stdiod for Linux (x64 + arm64) and stage it into
+# Build sealgate-stdiod for Linux (x64 + arm64) and stage it into
 # client_2/bin/stdiod/<arch>/ so a (future) linux.extraResources rule can copy
 # the matching-arch binary into the packaged app - and so the binary can be
 # shipped standalone (the CLI-first Linux story).
@@ -84,12 +84,12 @@ for spec in "${ALL_SPECS[@]}"; do
     echo "Installing rustup target $target ..."
     rustup target add "$target"
   fi
-  echo "Building edison-stdiod for $target ..."
-  ( cd "$STDIOD_DIR" && cargo zigbuild --release --target "$target" --bin edison-stdiod )
+  echo "Building sealgate-stdiod for $target ..."
+  ( cd "$STDIOD_DIR" && cargo zigbuild --release --target "$target" --bin sealgate-stdiod )
   mkdir -p "$OUT_ROOT/$arch"
-  cp "$STDIOD_DIR/target/$target/release/edison-stdiod" "$OUT_ROOT/$arch/edison-stdiod"
-  chmod +x "$OUT_ROOT/$arch/edison-stdiod"
-  echo "Staged -> $OUT_ROOT/$arch/edison-stdiod"
+  cp "$STDIOD_DIR/target/$target/release/sealgate-stdiod" "$OUT_ROOT/$arch/sealgate-stdiod"
+  chmod +x "$OUT_ROOT/$arch/sealgate-stdiod"
+  echo "Staged -> $OUT_ROOT/$arch/sealgate-stdiod"
 done
 
 echo "Done. Linux daemon binaries staged under $OUT_ROOT/<arch>/"

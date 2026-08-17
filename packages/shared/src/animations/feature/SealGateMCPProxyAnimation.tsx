@@ -1,0 +1,407 @@
+/**
+ * SealGate MCP proxy model animation.
+ *
+ * Phase 1: Laptop (Claude + 3 MCPs) connects directly to 3 MCP servers.
+ * Transition: SealGate fades in as a gateway.
+ * Phase 2: All connections now route through SealGate (packets change
+ *          from orange to accent as they pass through).
+ *
+ * 10s loop. Pure SVG + CSS. Respects `prefers-reduced-motion`.
+ *
+ * Requires CSS custom properties: --text-primary, --accent, --text-muted.
+ */
+import { AGENT_REGISTRY } from '../../agent-registry/index'
+import { SealGateLogo, McpIcon, McpPacket, ORANGE as O, ProgressBar } from '../_shared'
+
+const CLAUDE_SPRITE = AGENT_REGISTRY['claude-code']
+const CURSOR_SPRITE = AGENT_REGISTRY['cursor']
+const VSCODE_SPRITE = AGENT_REGISTRY['vscode']
+
+const CSS = `
+.sg-anim { color: var(--text-primary); }
+
+/* dashed-line flow */
+.sg-anim .sg-line { stroke-dashoffset:0; animation: sg-lf 2s linear infinite; }
+
+/* packet fill inherits currentColor */
+.sg-anim .sg-pkt path, .sg-anim .sg-pkt circle { fill: currentColor; }
+
+/* -- phase visibility (10s cycle) -- */
+.sg-anim .sg-direct { animation: sg-dv 10s ease-in-out infinite; }
+.sg-anim .sg-brand { animation: sg-ev 10s ease-in-out infinite; transform-origin: 257px 93px; }
+.sg-anim .sg-routed { animation: sg-rv 10s ease-in-out infinite; }
+.sg-anim .sg-local-wrap { animation: sg-rv 10s ease-in-out infinite; }
+
+/* -- 3 packets (each has direct + routed phases) -- */
+.sg-anim .sg-pkt-main { color:${O}; animation: sg-pkt-main 10s ease-in-out infinite; }
+
+/* -- SealGate pulse -- */
+.sg-anim .sg-pulse { transform-origin:257px 93px; animation: sg-pulse 1.33s cubic-bezier(.2,.8,.4,1) infinite; }
+
+/* ----- keyframes ----- */
+@keyframes sg-lf { to { stroke-dashoffset: -12; } }
+
+/* Phase visibility */
+@keyframes sg-dv {
+  0%,26%  { opacity:1; }
+  34%     { opacity:0; }
+  100%    { opacity:0; }
+}
+@keyframes sg-ev {
+  0%,28%  { opacity:0; transform:scale(.85); }
+  36%     { opacity:1; transform:scale(1); }
+  100%    { opacity:1; transform:scale(1); }
+}
+@keyframes sg-rv {
+  0%,28%  { opacity:0; }
+  36%     { opacity:1; }
+  100%    { opacity:1; }
+}
+
+/* Single packet: request-response, one server at a time */
+@keyframes sg-pkt-main {
+  /* -- Phase 1: direct request to middle server -- */
+  0%,1%  { opacity:0; }
+  2%     { transform:translate(176px,93px); opacity:0;  color:${O}; }
+  3%     { transform:translate(176px,93px); opacity:.8; color:${O}; }
+  12%    { transform:translate(426px,93px); opacity:1;  color:${O}; }
+  13%    { transform:translate(426px,93px); opacity:.6; color:${O}; }
+  /* -- Phase 1: direct response from middle server -- */
+  14%    { transform:translate(426px,93px); opacity:.8; color:${O}; }
+  23%    { transform:translate(176px,93px); opacity:1;  color:${O}; }
+  24%    { transform:translate(176px,93px); opacity:0; }
+  25%,37%{ opacity:0; }
+  /* -- Phase 2: routed request through SealGate to middle server -- */
+  38%    { transform:translate(100px,93px); opacity:0;  color:${O}; }
+  39%    { transform:translate(100px,93px); opacity:.8; color:${O}; }
+  45%    { transform:translate(251px,93px); opacity:1;  color:${O}; }
+  47%    { transform:translate(257px,93px); opacity:.3; color:var(--accent); }
+  49%    { transform:translate(263px,93px); opacity:1;  color:var(--accent); }
+  57%    { transform:translate(426px,93px); opacity:1;  color:var(--accent); }
+  58%    { transform:translate(426px,93px); opacity:.6; color:var(--accent); }
+  /* -- Phase 2: routed response back through SealGate -- */
+  59%    { transform:translate(426px,93px); opacity:.8; color:var(--accent); }
+  67%    { transform:translate(263px,93px); opacity:1;  color:var(--accent); }
+  69%    { transform:translate(257px,93px); opacity:.3; color:var(--accent); }
+  71%    { transform:translate(251px,93px); opacity:1;  color:var(--accent); }
+  78%    { transform:translate(100px,93px); opacity:1;  color:var(--accent); }
+  79%    { transform:translate(100px,93px); opacity:0; }
+  80%,100%{ opacity:0; }
+}
+
+@keyframes sg-pulse {
+  0%  { transform:scale(1);   opacity:0; }
+  10% { transform:scale(1);   opacity:.4; }
+  60% { transform:scale(1.6); opacity:0; }
+  100%{ transform:scale(1.6); opacity:0; }
+}
+
+/* progress bar */
+.sg-anim .sg-progress { transform-origin:20px 188px; animation: sg-prog 10s linear infinite; }
+@keyframes sg-prog {
+  0%   { transform:scaleX(0); }
+  100% { transform:scaleX(1); }
+}
+
+@media (prefers-reduced-motion:reduce) {
+  .sg-anim .sg-line, .sg-anim .sg-pkt-main,
+  .sg-anim .sg-pulse, .sg-anim .sg-direct, .sg-anim .sg-brand,
+  .sg-anim .sg-routed { animation:none; }
+  .sg-anim .sg-pkt-main { opacity:0; }
+  .sg-anim .sg-progress { animation:none; transform:scaleX(1); }
+  .sg-anim .sg-brand { opacity:1; transform:scale(1); }
+  .sg-anim .sg-direct { opacity:0; }
+  .sg-anim .sg-routed { opacity:1; }
+  .sg-anim .sg-local-wrap { animation:none; opacity:1; }
+}
+.sg-anim.anim-static .sg-line, .sg-anim.anim-static .sg-pkt-main,
+.sg-anim.anim-static .sg-pulse, .sg-anim.anim-static .sg-direct, .sg-anim.anim-static .sg-brand,
+.sg-anim.anim-static .sg-routed { animation:none; }
+.sg-anim.anim-static .sg-pkt-main { opacity:0; }
+.sg-anim.anim-static .sg-progress { animation:none; transform:scaleX(1); }
+.sg-anim.anim-static .sg-brand { opacity:1; transform:scale(1); }
+.sg-anim.anim-static .sg-direct { opacity:0; }
+.sg-anim.anim-static .sg-routed { opacity:1; }
+.sg-anim.anim-static .sg-local-wrap { animation:none; opacity:1; }
+`
+
+function McpServer({ x, y }: { x: number; y: number }): React.ReactNode {
+  return (
+    <g>
+      <rect
+        x={x}
+        y={y}
+        width="56"
+        height="48"
+        rx="6"
+        fill="var(--text-primary)"
+        fillOpacity="0.03"
+        stroke="var(--text-muted)"
+        strokeOpacity="0.35"
+        strokeWidth="1"
+      />
+      <McpIcon x={x + 16} y={y + 6} size={24} color="var(--text-muted)" opacity="0.6" />
+      <circle cx={x + 28} cy={y + 38} r="1.5" fill="var(--text-muted)" fillOpacity="0.35" />
+      <line
+        x1={x + 34}
+        y1={y + 38}
+        x2={x + 48}
+        y2={y + 38}
+        stroke="var(--text-muted)"
+        strokeOpacity="0.15"
+        strokeWidth="1"
+        strokeDasharray="2 2"
+      />
+    </g>
+  )
+}
+
+export default function SealGateMCPProxyAnimation(): React.ReactNode {
+  return (
+    <div className="flex justify-center">
+      <style>{CSS}</style>
+      <svg
+        className="sg-anim"
+        width={500}
+        height={190}
+        viewBox="0 0 500 190"
+        xmlns="http://www.w3.org/2000/svg"
+        role="presentation"
+        aria-hidden="true"
+      >
+        {/* Phase 1: direct connector lines (laptop -> servers) */}
+        <g className="sg-direct">
+          <line
+            className="sg-line"
+            x1="176"
+            y1="93"
+            x2="394"
+            y2="38"
+            stroke="var(--text-muted)"
+            strokeOpacity="0.5"
+            strokeWidth="1.5"
+            strokeDasharray="3 3"
+          />
+          <line
+            className="sg-line"
+            x1="176"
+            y1="93"
+            x2="394"
+            y2="93"
+            stroke="var(--text-muted)"
+            strokeOpacity="0.5"
+            strokeWidth="1.5"
+            strokeDasharray="3 3"
+          />
+          <line
+            className="sg-line"
+            x1="176"
+            y1="93"
+            x2="394"
+            y2="148"
+            stroke="var(--text-muted)"
+            strokeOpacity="0.5"
+            strokeWidth="1.5"
+            strokeDasharray="3 3"
+          />
+        </g>
+
+        {/* SealGate gateway (fades in for phase 2) */}
+        <g className="sg-brand">
+          <circle
+            className="sg-pulse"
+            cx="257"
+            cy="93"
+            r="30"
+            fill="none"
+            stroke="var(--accent)"
+            strokeOpacity="0.5"
+            strokeWidth="1.5"
+          />
+          <SealGateLogo x={230} y={67} w={54} h={52.5} />
+        </g>
+
+        {/* Phase 2: routed connector lines (laptop -> SealGate -> servers) */}
+        <g className="sg-routed">
+          <line
+            className="sg-line"
+            x1="176"
+            y1="93"
+            x2="226"
+            y2="93"
+            stroke="var(--text-muted)"
+            strokeOpacity="0.5"
+            strokeWidth="1.5"
+            strokeDasharray="3 3"
+          />
+          <line
+            className="sg-line"
+            x1="288"
+            y1="93"
+            x2="394"
+            y2="38"
+            stroke="var(--accent)"
+            strokeOpacity="0.5"
+            strokeWidth="1.5"
+            strokeDasharray="3 3"
+          />
+          <line
+            className="sg-line"
+            x1="288"
+            y1="93"
+            x2="394"
+            y2="93"
+            stroke="var(--accent)"
+            strokeOpacity="0.5"
+            strokeWidth="1.5"
+            strokeDasharray="3 3"
+          />
+          <line
+            className="sg-line"
+            x1="288"
+            y1="93"
+            x2="394"
+            y2="148"
+            stroke="var(--accent)"
+            strokeOpacity="0.5"
+            strokeWidth="1.5"
+            strokeDasharray="3 3"
+          />
+        </g>
+
+        {/* Laptop (always visible) */}
+        <rect
+          x="4"
+          y="23"
+          width="168"
+          height="96"
+          rx="7"
+          fill="var(--text-primary)"
+          fillOpacity="0.03"
+          stroke="var(--text-muted)"
+          strokeOpacity="0.35"
+          strokeWidth="1.5"
+        />
+        <rect
+          x="0"
+          y="121"
+          width="176"
+          height="8"
+          rx="4"
+          fill="var(--text-primary)"
+          fillOpacity="0.04"
+          stroke="var(--text-muted)"
+          strokeOpacity="0.35"
+          strokeWidth="1"
+        />
+
+        {/* AI agent icons (row inside laptop) */}
+        <rect x="41" y="35" width="30" height="30" rx="7" fill={CURSOR_SPRITE.brandColor} />
+        <svg x="45" y="39" width="22" height="22" viewBox="0 0 24 24">
+          <path d={CURSOR_SPRITE.svgPath} fill="#fff" />
+        </svg>
+        <rect x="73" y="35" width="30" height="30" rx="7" fill={CLAUDE_SPRITE.brandColor} />
+        <svg
+          x="77"
+          y="39"
+          width="22"
+          height="22"
+          viewBox="0 -20 90 90"
+          shapeRendering="crispEdges"
+          dangerouslySetInnerHTML={{ __html: CLAUDE_SPRITE.customSvg ?? '' }}
+        />
+        <rect x="105" y="35" width="30" height="30" rx="7" fill={VSCODE_SPRITE.brandColor} />
+        <svg x="109" y="39" width="22" height="22" viewBox="0 0 24 24">
+          <path d={VSCODE_SPRITE.svgPath} fill="#fff" />
+        </svg>
+
+        {/* 3 MCP icons (row below Claude inside laptop) */}
+        {[38, 74, 110].map((mx) => (
+          <g key={mx}>
+            <rect
+              x={mx}
+              y="79"
+              width="28"
+              height="28"
+              rx="6"
+              fill="var(--text-primary)"
+              fillOpacity="0.04"
+              stroke="var(--text-muted)"
+              strokeOpacity="0.3"
+              strokeWidth="1"
+            />
+            <McpIcon x={mx + 2} y={81} size={24} color="var(--text-primary)" />
+          </g>
+        ))}
+
+        {/* Local SealGate wrapper around MCPs (fades in with SealGate) */}
+        <g className="sg-local-wrap">
+          <rect
+            x="30"
+            y="73"
+            width="118"
+            height="40"
+            rx="6"
+            fill="var(--accent)"
+            fillOpacity="0.03"
+            stroke="var(--accent)"
+            strokeOpacity="0.5"
+            strokeWidth="1.5"
+          />
+          {/* SealGate logo badge at top-left */}
+          <SealGateLogo x={14} y={62} w={20} h={19.5} />
+        </g>
+
+        {/* 3 MCP servers (always visible) */}
+        <McpServer x={398} y={14} />
+        <McpServer x={398} y={69} />
+        <McpServer x={398} y={124} />
+
+        {/* Labels */}
+        <text
+          x="88"
+          y="145"
+          textAnchor="middle"
+          fill="var(--text-primary)"
+          fontSize="9"
+          fontWeight="bold"
+          fontFamily="system-ui,sans-serif"
+        >
+          Local
+        </text>
+        <g className="sg-brand">
+          <text
+            x="257"
+            y="135"
+            textAnchor="middle"
+            fill="var(--text-primary)"
+            fontSize="9"
+            fontWeight="bold"
+            fontFamily="system-ui,sans-serif"
+          >
+            SealGate Gateway
+          </text>
+        </g>
+        <text
+          x="426"
+          y="184"
+          textAnchor="middle"
+          fill="var(--text-primary)"
+          fontSize="9"
+          fontWeight="bold"
+          fontFamily="system-ui,sans-serif"
+        >
+          MCP Servers
+        </text>
+
+        {/* 3 Packets (each animates direct -> hidden -> routed) */}
+        <g className="sg-pkt sg-pkt-main">
+          <McpPacket />
+        </g>
+
+        {/* Progress bar */}
+        <ProgressBar y={188} width={460} className="sg-progress" />
+      </svg>
+    </div>
+  )
+}

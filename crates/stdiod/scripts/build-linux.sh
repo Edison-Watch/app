@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build the edison-stdiod daemon as a fully STATIC Linux binary (x64 + arm64)
+# Build the sealgate-stdiod daemon as a fully STATIC Linux binary (x64 + arm64)
 # and stage it under dist/. Static musl means zero glibc dependency - the same
 # file runs on any distro (Debian, Fedora, Arch, Alpine, containers).
 #
@@ -21,7 +21,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 OUT_DIR="$REPO_ROOT/dist"
-BIN_NAME="edison-stdiod"
+BIN_NAME="sealgate-stdiod"
 
 command -v zig >/dev/null 2>&1 || {
   echo "build-linux.sh: zig required (brew install zig / see ziglang.org)" >&2; exit 1; }
@@ -42,10 +42,10 @@ for spec in "x64:x86_64-unknown-linux-musl" "arm64:aarch64-unknown-linux-musl"; 
   fi
   echo "Building $BIN_NAME for $target ..."
   ( cd "$REPO_ROOT" && cargo zigbuild --release --bin "$BIN_NAME" --target "$target" )
-  cp "$REPO_ROOT/target/$target/release/$BIN_NAME" "$OUT_DIR/edison-stdiod-linux-$arch"
-  chmod +x "$OUT_DIR/edison-stdiod-linux-$arch"
-  echo "Staged -> $OUT_DIR/edison-stdiod-linux-$arch"
+  cp "$REPO_ROOT/target/$target/release/$BIN_NAME" "$OUT_DIR/sealgate-stdiod-linux-$arch"
+  chmod +x "$OUT_DIR/sealgate-stdiod-linux-$arch"
+  echo "Staged -> $OUT_DIR/sealgate-stdiod-linux-$arch"
 done
 
 echo "Done. Static Linux binaries under $OUT_DIR/"
-file "$OUT_DIR"/edison-stdiod-linux-* 2>/dev/null || true
+file "$OUT_DIR"/sealgate-stdiod-linux-* 2>/dev/null || true

@@ -1,4 +1,4 @@
-// Main-process controller for the bundled edison-stdiod daemon.
+// Main-process controller for the bundled sealgate-stdiod daemon.
 //
 // Responsibilities:
 //   - spawn the daemon binary for one-shot operations (install, login,
@@ -8,33 +8,32 @@
 //
 // The daemon binary is bundled by packages/desktop/scripts/build-stdiod.sh and
 // resolved by getStdiodBinaryPath(). The launchd unit (registered by
-// `edison-stdiod install`) is what actually keeps the daemon running -
+// `sealgate-stdiod install`) is what actually keeps the daemon running -
 // this controller only orchestrates the one-shot CLI subcommands.
 
 import { execFileSync, spawn } from 'node:child_process'
 import { promises as fs, readdirSync } from 'node:fs'
-import { homedir } from 'node:os'
 import { join } from 'node:path'
 
 import { getStdiodBinaryPath, stdiodBinaryExists } from '../runtime/stdiodBinary'
 
 import { writeInstallStamp } from './installStamp'
 import { configFileExists, readStateFile } from './state'
-import { stdiodLog } from './stdiodLog'
+import { getStdiodLogDir, stdiodLog } from './stdiodLog'
 import type { StdiodErrorCode, StdiodLoginInput, StdiodResult, StdiodStatus } from './types'
 
-// LaunchAgent label matches stdiod/crates/edison-stdiod/src/platform/macos.rs.
+// LaunchAgent label matches stdiod/crates/sealgate-stdiod/src/platform/macos.rs.
 // Hardcoded so we can ask launchctl directly without spawning the daemon
 // binary just to read a string.
-const LAUNCHD_LABEL = 'watch.edison.stdiod'
-// systemd user unit name matches stdiod/crates/edison-stdiod/src/platform/linux.rs
+const LAUNCHD_LABEL = 'com.sealgate.stdiod'
+// systemd user unit name matches stdiod/crates/sealgate-stdiod/src/platform/linux.rs
 // (UNIT_NAME). Used to query `systemctl --user is-active` directly.
-const SYSTEMD_UNIT = 'edison-stdiod.service'
+const SYSTEMD_UNIT = 'sealgate-stdiod.service'
 // Scheduled Task name matches platform/windows.rs task_name(): the base name
 // plus the current user's SID, so accounts on a shared machine don't collide.
 // Derived once (the user is fixed for the process) and cached; falls back to the
 // bare base name if the SID can't be resolved - matching the daemon's fallback.
-const WIN_TASK_BASENAME = 'Edison Watch stdiod'
+const WIN_TASK_BASENAME = 'SealGate stdiod'
 let cachedWinTaskName: string | null = null
 
 function winTaskName(): string {
@@ -57,12 +56,12 @@ function winTaskName(): string {
 let cachedInstalled: { value: boolean; at: number } | null = null
 const INSTALLED_CACHE_TTL_MS = 5_000
 
-// EDISON_DRY_RUN is set by Playwright/Storybook/etc. - short-circuit
+// SEALGATE_DRY_RUN is set by Playwright/Storybook/etc. - short-circuit
 // every subprocess call so test runs don't actually touch launchctl or
 // write config.toml on the host. Status reads still go through (they
 // return null gracefully if no state.json exists).
 function dryRun(): boolean {
-  return process.env.EDISON_DRY_RUN === '1'
+  return process.env.SEALGATE_DRY_RUN === '1'
 }
 
 interface SpawnResult {
@@ -195,7 +194,7 @@ async function ensureBinary(): Promise<StdiodResult | null> {
     return {
       ok: false,
       errorCode: 'binary_missing',
-      errorMessage: `edison-stdiod binary not found at ${path}`
+      errorMessage: `sealgate-stdiod binary not found at ${path}`
     }
   }
   return null
@@ -259,10 +258,10 @@ export async function login(input: StdiodLoginInput): Promise<StdiodResult> {
   // (stdin) requires a daemon-side change and the window is short-lived.
   // A future hardening item is to teach the daemon to read from stdin.
   const args = ['login', '--backend', input.backend, '--api-key', input.apiKey]
-  if (input.edisonSecretKey) args.push('--edison-secret-key', input.edisonSecretKey)
+  if (input.sealgateSecretKey) args.push('--sealgate-secret-key', input.sealgateSecretKey)
   if (input.deviceId) args.push('--device-id', input.deviceId)
   if (input.deviceLabel) args.push('--device-label', input.deviceLabel)
-  // Never log args: they carry the api key + edison_secret_key. Log only
+  // Never log args: they carry the api key + sealgate_secret_key. Log only
   // the non-secret shape so client.log stays safe to share.
   stdiodLog(`login: backend=${input.backend} deviceId=${input.deviceId ?? '(default)'}`)
   try {
@@ -355,18 +354,13 @@ export async function resetStdiod(input: StdiodLoginInput): Promise<StdiodResult
   return { ok: true }
 }
 
-// Tail of the daemon log, surfaced in the tray "View logs" action. We
-// resolve the path through the binary's own `logs --path` rather than
-// reimplementing the per-platform layout in TS so the source of truth
-// stays in one place. Returns null if no log exists yet.
+// Tail of the daemon log, surfaced in the tray "View logs" action. The daemon's
+// `logs` subcommand only tails (no --path flag to ask it where the file is), so
+// the layout is mirrored in TS - in ONE place, getStdiodLogDir(), which matches
+// paths::daemon_log_file() in the daemon. Returns null if no log exists yet.
 export async function getLogPath(): Promise<string | null> {
   if (dryRun()) return null
-  // Matches paths::daemon_log_file() in the daemon: macOS uses ~/Library/Logs;
-  // Windows has no XDG state dir so it falls back to ~/.local/state.
-  const logPath =
-    process.platform === 'win32'
-      ? join(homedir(), '.local', 'state', 'edison-stdiod', 'daemon.log')
-      : `${process.env.HOME}/Library/Logs/edison-stdiod/daemon.log`
+  const logPath = join(getStdiodLogDir(), 'daemon.log')
   try {
     await fs.access(logPath)
     return logPath

@@ -11,7 +11,7 @@ name: Release desktop (demo prerelease)
 # windows job). The windows-manifest job then rewrites beta.yml to list BOTH
 # Windows installers, because that is the manifest every Windows install polls.
 #
-# Both daemons (edison-stdiod, edison-detectord) are built FROM SOURCE out of
+# Both daemons (sealgate-stdiod, sealgate-detectord) are built FROM SOURCE out of
 # crates/ in every job, so a prerelease always matches the checked-out commit.
 #
 # Versioned as a prerelease of the NEXT stable:
@@ -133,9 +133,9 @@ jobs:
         run: npm ci
         working-directory: .
 
-      # The app consumes the workspace-linked @edison-watch/shared, whose
+      # The app consumes the workspace-linked @sealgate/shared, whose
       # package entry points live in dist/ - build it first.
-      - name: Build @edison-watch/shared
+      - name: Build @sealgate/shared
         run: npm run build -w packages/shared
         working-directory: .
 
@@ -150,18 +150,18 @@ jobs:
             crates/detectord
             crates/stdiod
 
-      - name: Build edison-detectord from source
-        # Stages crates/detectord's daemon into bin/edison-detectord (arm64).
+      - name: Build sealgate-detectord from source
+        # Stages crates/detectord's daemon into bin/sealgate-detectord (arm64).
         # mac.extraResources expects it; electron-builder only WARNS when the
         # file is missing, which is how releases shipped without the detector
         # daemon until 0.6.0.
         run: npm run build:detectord
 
-      - name: Build edison-stdiod from source (universal)
+      - name: Build sealgate-stdiod from source (universal)
         # Built from the checkout, same as detectord - no downloading a pinned
         # published binary, so the prerelease always matches crates/stdiod at
         # this commit. The script builds both Darwin arches and lipo-merges them
-        # into bin/edison-stdiod for mac.extraResources.
+        # into bin/sealgate-stdiod for mac.extraResources.
         run: npm run build:stdiod
 
       - name: Build renderer/main/preload bundles (demo mode)
@@ -194,7 +194,7 @@ jobs:
           [ ${#apps[@]} -eq 2 ] || {
             echo "::error::expected 2 .app bundles (x64 + arm64), found ${#apps[@]}"; exit 1; }
           for app in "${apps[@]}"; do
-            for bin in edison-stdiod edison-detectord; do
+            for bin in sealgate-stdiod sealgate-detectord; do
               f="$app/Contents/Resources/bin/$bin"
               test -f "$f" || { echo "::error::$bin missing from $app"; exit 1; }
               info=$(lipo -info "$f")
@@ -232,7 +232,7 @@ jobs:
     name: Build & upload Windows ${{ matrix.arch }} (unsigned)
     needs: draft
     runs-on: windows-latest
-    # One job per arch: each leg natively builds edison-stdiod + edison-detectord
+    # One job per arch: each leg natively builds sealgate-stdiod + sealgate-detectord
     # for its own arch only (release `ring` C-crypto compile), stages the
     # matching Python + npx/uvx runtimes, and packages a single-arch installer.
     # Mirrors desktop-build-windows.yml, which stays the per-push CI gate.
@@ -290,7 +290,7 @@ jobs:
         run: npm ci
         working-directory: .
 
-      - name: Build @edison-watch/shared
+      - name: Build @sealgate/shared
         run: npm run build -w packages/shared
         working-directory: .
 
@@ -308,22 +308,22 @@ jobs:
             crates/detectord
             crates/stdiod
 
-      - name: Build edison-stdiod (${{ matrix.arch }})
+      - name: Build sealgate-stdiod (${{ matrix.arch }})
         # Native cargo build from the checked-out crates/stdiod source, this
         # leg's arch only. Staged into bin/stdiod/<arch>/ for win.extraResources.
         working-directory: crates/stdiod
         run: |
           set -euo pipefail
           rustup target add ${{ matrix.target }}
-          echo "Building edison-stdiod for ${{ matrix.target }} ..."
-          cargo build --release --target "${{ matrix.target }}" --bin edison-stdiod
+          echo "Building sealgate-stdiod for ${{ matrix.target }} ..."
+          cargo build --release --target "${{ matrix.target }}" --bin sealgate-stdiod
           mkdir -p "../../packages/desktop/bin/stdiod/${{ matrix.arch }}"
-          cp "target/${{ matrix.target }}/release/edison-stdiod.exe" \
-            "../../packages/desktop/bin/stdiod/${{ matrix.arch }}/edison-stdiod.exe"
+          cp "target/${{ matrix.target }}/release/sealgate-stdiod.exe" \
+            "../../packages/desktop/bin/stdiod/${{ matrix.arch }}/sealgate-stdiod.exe"
 
-      - name: Build edison-detectord (${{ matrix.arch }})
+      - name: Build sealgate-detectord (${{ matrix.arch }})
         # The cargo binary is mcp_detector_daemon; win.extraResources expects
-        # it staged as bin/detectord/<arch>/edison-detectord.exe.
+        # it staged as bin/detectord/<arch>/sealgate-detectord.exe.
         working-directory: crates/detectord
         run: |
           set -euo pipefail
@@ -332,7 +332,7 @@ jobs:
           cargo build --release --target "${{ matrix.target }}" --bin mcp_detector_daemon
           mkdir -p "../../packages/desktop/bin/detectord/${{ matrix.arch }}"
           cp "target/${{ matrix.target }}/release/mcp_detector_daemon.exe" \
-            "../../packages/desktop/bin/detectord/${{ matrix.arch }}/edison-detectord.exe"
+            "../../packages/desktop/bin/detectord/${{ matrix.arch }}/sealgate-detectord.exe"
 
       - name: Stage bundled runtimes (npx/uvx, ${{ matrix.arch }})
         run: npm run stage:runtimes -- -Arch ${{ matrix.arch }}
@@ -356,7 +356,7 @@ jobs:
         # so assert both daemons actually made it into the packaged app.
         run: |
           set -euo pipefail
-          for bin in edison-stdiod.exe edison-detectord.exe; do
+          for bin in sealgate-stdiod.exe sealgate-detectord.exe; do
             found="dist/${{ matrix.unpacked }}/resources/bin/$bin"
             test -f "$found" || { echo "::error::$bin missing from $found"; exit 1; }
             echo "bundled: $found"
@@ -471,7 +471,7 @@ jobs:
         run: npm ci
         working-directory: .
 
-      - name: Build @edison-watch/shared
+      - name: Build @sealgate/shared
         run: npm run build -w packages/shared
         working-directory: .
 
@@ -496,18 +496,18 @@ jobs:
         with:
           tool: cargo-zigbuild
 
-      - name: Build edison-detectord (static musl, ${{ matrix.arch }})
+      - name: Build sealgate-detectord (static musl, ${{ matrix.arch }})
         # No Linux detectord binaries are published, so build from the checkout.
         # TARGET_ARCHES restricts the script to this leg's arch; it stages into
-        # bin/detectord/<arch>/edison-detectord for linux.extraResources.
+        # bin/detectord/<arch>/sealgate-detectord for linux.extraResources.
         run: npm run build:detectord:linux
         env:
           TARGET_ARCHES: ${{ matrix.arch }}
 
-      - name: Build edison-stdiod (static musl, ${{ matrix.arch }})
+      - name: Build sealgate-stdiod (static musl, ${{ matrix.arch }})
         # Built from the checkout, same as detectord - no downloading a pinned
         # published binary, so the prerelease always matches crates/stdiod at
-        # this commit. Stages into bin/stdiod/<arch>/edison-stdiod for
+        # this commit. Stages into bin/stdiod/<arch>/sealgate-stdiod for
         # linux.extraResources.
         run: npm run build:stdiod:linux
         env:
@@ -532,7 +532,7 @@ jobs:
         run: |
           set -euo pipefail
           dir="dist/${{ matrix.unpacked }}"
-          for bin in edison-stdiod edison-detectord; do
+          for bin in sealgate-stdiod sealgate-detectord; do
             test -f "$dir/resources/bin/$bin" || { echo "::error::$bin missing from $dir"; exit 1; }
             echo "bundled: $dir/resources/bin/$bin"
           done

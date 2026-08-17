@@ -34,7 +34,7 @@ let serverActionWindow: BrowserWindow | null = null
 /**
  * Show a dialog for quarantined MCP servers.
  * User can either request access or dismiss (leave quarantined).
- * When isAdminOrOwner is true, buttons say "Add to Edison" and the server
+ * When isAdminOrOwner is true, buttons say "Add to SealGate" and the server
  * will be both requested and auto-approved by the IPC handler.
  */
 export function showQuarantinedServersDialog(
@@ -129,7 +129,7 @@ export function showQuarantinedServersDialog(
               Needs Approval
             </div>
             <div class="server-actions">
-              <button class="button button-request" data-action="${isAdminOrOwner ? 'registered' : 'requested'}" title="${isAdminOrOwner ? 'Add this server to Edison directly' : 'Submit request for IT admin approval'}">${isAdminOrOwner ? 'Add to Edison' : 'Request Approval'}</button>
+              <button class="button button-request" data-action="${isAdminOrOwner ? 'registered' : 'requested'}" title="${isAdminOrOwner ? 'Add this server to SealGate directly' : 'Submit request for IT admin approval'}">${isAdminOrOwner ? 'Add to SealGate' : 'Request Approval'}</button>
               <button class="button button-dismiss" data-action="dismissed" title="Skip for now without requesting">Skip for Now</button>
             </div>
           </div>
@@ -137,7 +137,7 @@ export function showQuarantinedServersDialog(
       })
       .join('')
 
-    // Edison Watch branded HTML
+    // SealGate branded HTML
     const html = `
       <!DOCTYPE html>
       <html>
@@ -163,8 +163,8 @@ export function showQuarantinedServersDialog(
         </div>
         <div class="description">
           ${isAdminOrOwner
-            ? 'We noticed you\'ve added new extensions to your AI tools. As an admin, you can add them to Edison directly. <span style="color: var(--danger)">If you choose <strong>Skip for Now</strong> or <strong>Skip All</strong>, these extensions will be removed from your AI tool, since auto-quarantine is enabled.</span>'
-            : 'We noticed you\'ve added new extensions to your AI tools. Your IT team needs to approve them before they can be used through Edison Watch. <span style="color: var(--danger)">If you choose <strong>Skip for Now</strong> or <strong>Skip All</strong>, these extensions will be removed from your AI tool, since your admin has enabled auto-quarantine.</span> Would you like to request approval?'}
+            ? 'We noticed you\'ve added new extensions to your AI tools. As an admin, you can add them to SealGate directly. <span style="color: var(--danger)">If you choose <strong>Skip for Now</strong> or <strong>Skip All</strong>, these extensions will be removed from your AI tool, since auto-quarantine is enabled.</span>'
+            : 'We noticed you\'ve added new extensions to your AI tools. Your IT team needs to approve them before they can be used through SealGate. <span style="color: var(--danger)">If you choose <strong>Skip for Now</strong> or <strong>Skip All</strong>, these extensions will be removed from your AI tool, since your admin has enabled auto-quarantine.</span> Would you like to request approval?'}
         </div>
         <div id="servers">${serversHtml}</div>
         <script>

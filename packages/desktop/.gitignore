@@ -25,7 +25,7 @@ blob-report/
 .eslintcache
 
 # Local runtime / staged binaries are handled by bin/.gitignore
-# (Python, edison-stdiod, and node/uv runtimes are staged into bin/ at build time)
+# (Python, sealgate-stdiod, and node/uv runtimes are staged into bin/ at build time)
 
 # Environment & secrets
 .env

@@ -35,7 +35,7 @@ const ENV = getActiveEnv()
 
 describe('markSetupComplete credential persistence', () => {
   beforeEach(() => {
-    userDataDir = mkdtempSync(join(tmpdir(), 'ew-setup-'))
+    userDataDir = mkdtempSync(join(tmpdir(), 'sg-setup-'))
   })
   afterEach(() => {
     rmSync(userDataDir, { recursive: true, force: true })
@@ -48,17 +48,17 @@ describe('markSetupComplete credential persistence', () => {
       SETUP(),
       JSON.stringify({
         completed: true,
-        envCredentials: { [ENV]: { apiKey: 'ew_key', edisonSecretKey: 'user:OLD' } }
+        envCredentials: { [ENV]: { apiKey: 'sg_key', sealgateSecretKey: 'user:OLD' } }
       }),
       'utf-8'
     )
 
-    markSetupComplete({ edisonSecretKey: 'user:NEW' })
+    markSetupComplete({ sealgateSecretKey: 'user:NEW' })
 
     // The env entry is what getCredentialsForEnv prefers, so it must carry the
     // new key - otherwise enrollment re-stamps every agent with 'user:OLD'.
-    expect(getCredentialsForEnv(ENV)?.edisonSecretKey).toBe('user:NEW')
-    expect(getCredentialsForEnv(ENV)?.apiKey).toBe('ew_key')
+    expect(getCredentialsForEnv(ENV)?.sealgateSecretKey).toBe('user:NEW')
+    expect(getCredentialsForEnv(ENV)?.apiKey).toBe('sg_key')
   })
 
   it('still records the key top-level', () => {
@@ -66,23 +66,23 @@ describe('markSetupComplete credential persistence', () => {
       SETUP(),
       JSON.stringify({
         completed: true,
-        envCredentials: { [ENV]: { apiKey: 'ew_key', edisonSecretKey: 'user:OLD' } }
+        envCredentials: { [ENV]: { apiKey: 'sg_key', sealgateSecretKey: 'user:OLD' } }
       }),
       'utf-8'
     )
-    markSetupComplete({ edisonSecretKey: 'user:NEW' })
-    expect(getSetupData().edisonSecretKey).toBe('user:NEW')
+    markSetupComplete({ sealgateSecretKey: 'user:NEW' })
+    expect(getSetupData().sealgateSecretKey).toBe('user:NEW')
   })
 
   it('keeps working when the apiKey is top-level (the fresh-signup shape)', () => {
-    writeFileSync(SETUP(), JSON.stringify({ completed: true, apiKey: 'ew_key' }), 'utf-8')
-    markSetupComplete({ edisonSecretKey: 'user:NEW' })
-    expect(getCredentialsForEnv(ENV)).toEqual({ apiKey: 'ew_key', edisonSecretKey: 'user:NEW' })
+    writeFileSync(SETUP(), JSON.stringify({ completed: true, apiKey: 'sg_key' }), 'utf-8')
+    markSetupComplete({ sealgateSecretKey: 'user:NEW' })
+    expect(getCredentialsForEnv(ENV)).toEqual({ apiKey: 'sg_key', sealgateSecretKey: 'user:NEW' })
   })
 
   it('does not invent a credential entry when there is no apiKey anywhere', () => {
     writeFileSync(SETUP(), JSON.stringify({ completed: true }), 'utf-8')
-    markSetupComplete({ edisonSecretKey: 'user:NEW' })
+    markSetupComplete({ sealgateSecretKey: 'user:NEW' })
     // No key to pair it with: a half-populated entry would make
     // getCredentialsForEnv return something unusable instead of null.
     expect(getCredentialsForEnv(ENV)).toBeNull()
@@ -94,13 +94,13 @@ describe('markSetupComplete credential persistence', () => {
       JSON.stringify({
         completed: true,
         envCredentials: {
-          [ENV]: { apiKey: 'ew_demo', edisonSecretKey: 'user:OLD' },
-          prod: { apiKey: 'ew_prod', edisonSecretKey: 'user:PROD' }
+          [ENV]: { apiKey: 'sg_demo', sealgateSecretKey: 'user:OLD' },
+          prod: { apiKey: 'sg_prod', sealgateSecretKey: 'user:PROD' }
         }
       }),
       'utf-8'
     )
-    markSetupComplete({ edisonSecretKey: 'user:NEW' })
-    expect(getCredentialsForEnv('prod')?.edisonSecretKey).toBe('user:PROD')
+    markSetupComplete({ sealgateSecretKey: 'user:NEW' })
+    expect(getCredentialsForEnv('prod')?.sealgateSecretKey).toBe('user:PROD')
   })
 })

@@ -10,8 +10,8 @@ import { tmpdir } from "os";
  *
  * Opt-in, same stack as device-login.spec.ts:
  *
- *   EDISON_E2E_BACKEND=http://127.0.0.1:3001 \
- *   EDISON_E2E_ADMIN_KEY=edison_local_admin_key \
+ *   SEALGATE_E2E_BACKEND=http://127.0.0.1:3001 \
+ *   SEALGATE_E2E_ADMIN_KEY=sealgate_local_admin_key \
  *   npx playwright test e2e/custom-backend-login.spec.ts
  *
  * Unlike device-login.spec.ts - which relies on the dev build's localhost
@@ -20,19 +20,19 @@ import { tmpdir } from "os";
  * possible if the custom-URL machinery actually repoints every call.
  */
 
-const BACKEND = process.env.EDISON_E2E_BACKEND ?? "";
-const ADMIN_KEY = process.env.EDISON_E2E_ADMIN_KEY ?? "edison_local_admin_key";
+const BACKEND = process.env.SEALGATE_E2E_BACKEND ?? "";
+const ADMIN_KEY = process.env.SEALGATE_E2E_ADMIN_KEY ?? "sealgate_local_admin_key";
 
 const test = base.extend<{ electronApp: ElectronApplication; userDataDir: string }>({
   // eslint-disable-next-line no-empty-pattern
   userDataDir: async ({}, use) => {
-    await use(mkdtempSync(join(tmpdir(), "edison-e2e-custom-")));
+    await use(mkdtempSync(join(tmpdir(), "sealgate-e2e-custom-")));
   },
   electronApp: async ({ userDataDir }, use) => {
     // Start on the demo env, NOT the unpackaged default ("dev" = localhost):
     // if the custom URL were ignored, the app would talk to the demo backend
     // and every assertion below would fail rather than silently pass.
-    writeFileSync(join(userDataDir, "edison_debug_env.json"), JSON.stringify({ env: "demo" }));
+    writeFileSync(join(userDataDir, "sealgate_debug_env.json"), JSON.stringify({ env: "demo" }));
     const app = await electron.launch({
       args: [
         "--no-sandbox",
@@ -43,7 +43,7 @@ const test = base.extend<{ electronApp: ElectronApplication; userDataDir: string
         `--user-data-dir=${userDataDir}`,
         join(__dirname, "../out/main/index.js"),
       ],
-      env: { ...process.env, NODE_ENV: "test", EDISON_TEST_MODE: "1" },
+      env: { ...process.env, NODE_ENV: "test", SEALGATE_TEST_MODE: "1" },
     });
     await use(app);
     await app.close();
@@ -51,7 +51,7 @@ const test = base.extend<{ electronApp: ElectronApplication; userDataDir: string
 });
 
 test.describe("Custom backend (self-hosted) login", () => {
-  test.skip(!BACKEND, "EDISON_E2E_BACKEND not set - skipping live custom-backend test");
+  test.skip(!BACKEND, "SEALGATE_E2E_BACKEND not set - skipping live custom-backend test");
 
   test("connect by URL from the welcome screen, then sign in", async ({ electronApp }) => {
     const window = await electronApp.firstWindow();
@@ -59,7 +59,7 @@ test.describe("Custom backend (self-hosted) login", () => {
 
     // Open the self-hosted connect form and point the app at the backend.
     const connectLink = window.getByRole("button", {
-      name: "Using a self-hosted Edison server? Connect by URL",
+      name: "Using a self-hosted SealGate server? Connect by URL",
     });
     await expect(connectLink).toBeVisible({ timeout: 30000 });
     await connectLink.click();
@@ -93,7 +93,7 @@ test.describe("Custom backend (self-hosted) login", () => {
     // The stored session lives under the "custom" env key and its API key
     // must authenticate against the custom backend.
     const stored = await window.evaluate(() =>
-      JSON.parse(localStorage.getItem("edison_device_session:custom") ?? "null"),
+      JSON.parse(localStorage.getItem("sealgate_device_session:custom") ?? "null"),
     );
     expect(stored?.apiKey).toBeTruthy();
     const profile = await fetch(`${BACKEND}/api/v1/user/profile`, {

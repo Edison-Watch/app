@@ -1,10 +1,10 @@
 /**
- * Edison backend device-authorization login (OAuth 2.0 Device Grant + PKCE).
+ * SealGate backend device-authorization login (OAuth 2.0 Device Grant + PKCE).
  *
  * Replaces the former Supabase login: the app requests a device code from the
- * Edison backend, opens the dashboard's /device approval page in the system
+ * SealGate backend, opens the dashboard's /device approval page in the system
  * browser, and polls the token endpoint until the signed-in human approves.
- * Redemption returns the user's long-lived Edison API key (same credential the
+ * Redemption returns the user's long-lived SealGate API key (same credential the
  * dashboard login yields) plus a revocable ewc_ client credential used only to
  * revoke this installation on sign-out.
  */
@@ -12,7 +12,7 @@
 export const DEVICE_CLIENT_ID = 'desktop'
 export const DEVICE_SCOPES = ['api:full']
 
-const SESSION_STORAGE_PREFIX = 'edison_device_session:'
+const SESSION_STORAGE_PREFIX = 'sealgate_device_session:'
 
 export interface DeviceCodeGrant {
   device_code: string
@@ -31,7 +31,7 @@ export interface DeviceTokenResponse {
   scope: string[]
   user_id: string
   org_id: string
-  /** The user's Edison API key - present for the desktop client. */
+  /** The user's SealGate API key - present for the desktop client. */
   api_key: string | null
 }
 
@@ -90,7 +90,7 @@ function trimBase(url: string): string {
   return url.replace(/\/$/, '')
 }
 
-/** Request a device code grant from the Edison backend. */
+/** Request a device code grant from the SealGate backend. */
 export async function requestDeviceCode(
   apiBaseUrl: string,
   info: { deviceLabel?: string; platform?: string; clientVersion?: string },
@@ -116,7 +116,7 @@ export async function requestDeviceCode(
       signal: AbortSignal.timeout(15_000)
     })
   } catch {
-    throw new DeviceAuthError('network', 'Could not reach the Edison server.')
+    throw new DeviceAuthError('network', 'Could not reach the SealGate server.')
   }
   const body = await res.json().catch(() => null)
   if (!res.ok) {
@@ -263,7 +263,7 @@ export async function pollDeviceToken(
 }
 
 /**
- * Fetch the user profile with an Edison API key (also validates the key).
+ * Fetch the user profile with an SealGate API key (also validates the key).
  * Rethrows an abort of the caller's `signal` (a cancelled flow must be
  * distinguishable from an invalid key); every other failure returns null.
  */

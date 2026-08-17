@@ -1,5 +1,5 @@
 //! The hook pending-file consumer (phase 2b — the `hookHealthMonitor`
-//! equivalent). Drains `~/.edison-watch/pending/` and `errors/` so the hook
+//! equivalent). Drains `~/.sealgate/pending/` and `errors/` so the hook
 //! scripts' output doesn't accumulate, and sweeps stale/orphaned files.
 //!
 //! Purely local file lifecycle: session-end files are logged then removed,
@@ -18,11 +18,11 @@ const SWEEP_INTERVAL: Duration = Duration::from_secs(6 * 60 * 60);
 /// Pending files older than this are swept (matches the app's 7 days).
 const PENDING_MAX_AGE: Duration = Duration::from_secs(7 * 24 * 60 * 60);
 
-/// Run the consumer for `edison_dir` (`~/.edison-watch`) until the task is
+/// Run the consumer for `sealgate_dir` (`~/.sealgate`) until the task is
 /// dropped.
-pub async fn run(edison_dir: PathBuf) {
-    let pending = edison_dir.join("pending");
-    let errors = edison_dir.join("errors");
+pub async fn run(sealgate_dir: PathBuf) {
+    let pending = sealgate_dir.join("pending");
+    let errors = sealgate_dir.join("errors");
     let _ = std::fs::create_dir_all(&pending);
     let _ = std::fs::create_dir_all(&errors);
 
@@ -31,8 +31,8 @@ pub async fn run(edison_dir: PathBuf) {
     drain_errors(&errors);
 
     let (tx, mut rx) = mpsc::unbounded_channel();
-    let _debouncer = start_watcher(&edison_dir, tx);
-    tracing::info!(dir = %edison_dir.display(), watching = _debouncer.is_some(), "hook consumer started");
+    let _debouncer = start_watcher(&sealgate_dir, tx);
+    tracing::info!(dir = %sealgate_dir.display(), watching = _debouncer.is_some(), "hook consumer started");
 
     let mut sweep = tokio::time::interval(SWEEP_INTERVAL);
     sweep.tick().await; // the first tick fires immediately; skip it
@@ -48,7 +48,7 @@ pub async fn run(edison_dir: PathBuf) {
                 drain_pending(&pending);
                 drain_errors(&errors);
                 sweep_stale(&pending);
-                sweep_orphaned(&edison_dir);
+                sweep_orphaned(&sealgate_dir);
             }
         }
     }
@@ -145,8 +145,8 @@ fn sweep_stale(dir: &Path) {
 }
 
 /// Delete `active_session_<pid>.json` files whose process is gone.
-fn sweep_orphaned(edison_dir: &Path) {
-    let Ok(entries) = std::fs::read_dir(edison_dir) else {
+fn sweep_orphaned(sealgate_dir: &Path) {
+    let Ok(entries) = std::fs::read_dir(sealgate_dir) else {
         return;
     };
     for entry in entries.flatten() {

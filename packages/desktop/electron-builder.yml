@@ -1,8 +1,8 @@
-appId: com.edisonwatch.desktop
-productName: Edison Watch
+appId: com.sealgate.desktop
+productName: SealGate
 protocols:
-  - name: Edison Watch
-    schemes: [edison-watch]
+  - name: SealGate
+    schemes: [sealgate]
 directories:
   buildResources: build
   output: dist
@@ -29,7 +29,7 @@ files:
 asarUnpack:
   - resources/**
 win:
-  executableName: Edison Watch
+  executableName: SealGate
   icon: resources/icon.ico
   # Bundled Python for the session hooks, staged by scripts/stage-python.ps1.
   # e.g. bin/python/x64 -> resources/python/python.exe
@@ -37,11 +37,11 @@ win:
     - from: bin/python/${arch}
       to: python
     # stdiod daemon (staged by scripts/build-stdiod-win.sh) -> resources/bin/.
-    - from: bin/stdiod/${arch}/edison-stdiod.exe
-      to: bin/edison-stdiod.exe
+    - from: bin/stdiod/${arch}/sealgate-stdiod.exe
+      to: bin/sealgate-stdiod.exe
     # detector daemon (staged by scripts/build-detectord-win.sh) -> resources/bin/.
-    - from: bin/detectord/${arch}/edison-detectord.exe
-      to: bin/edison-detectord.exe
+    - from: bin/detectord/${arch}/sealgate-detectord.exe
+      to: bin/sealgate-detectord.exe
     # Node (npx) + uv (uvx) for the daemon's child MCP servers, staged by
     # scripts/stage-runtimes.ps1 -> resources/runtimes/{node,uv}.
     - from: bin/runtimes/${arch}
@@ -56,16 +56,16 @@ nsis:
   perMachine: false
   allowElevation: false
   allowToChangeInstallationDirectory: true
-  artifactName: EdisonWatch-${version}-${arch}-setup.${ext}
-  shortcutName: Edison Watch
-  uninstallDisplayName: Edison Watch
+  artifactName: SealGate-${version}-${arch}-setup.${ext}
+  shortcutName: SealGate
+  uninstallDisplayName: SealGate
   createDesktopShortcut: always
   createStartMenuShortcut: true
   menuCategory: true
 mac:
   icon: resources/icon.icns
   category: public.app-category.developer-tools
-  # Bundle the edison-stdiod + edison-detectord daemons directly into
+  # Bundle the sealgate-stdiod + sealgate-detectord daemons directly into
   # Contents/Resources/bin/. BOTH daemons must be staged as UNIVERSAL Mach-O
   # binaries (scripts/build-stdiod.sh, scripts/build-detectord.sh): the .app is
   # built for arm64 AND x64, and these single `from:` paths are copied verbatim
@@ -74,10 +74,10 @@ mac:
   # automatically when hardenedRuntime: true, inheriting entitlements from
   # entitlementsInherit, so no afterPack hook is needed here.
   extraResources:
-    - from: bin/edison-stdiod
-      to: bin/edison-stdiod
-    - from: bin/edison-detectord
-      to: bin/edison-detectord
+    - from: bin/sealgate-stdiod
+      to: bin/sealgate-stdiod
+    - from: bin/sealgate-detectord
+      to: bin/sealgate-detectord
   # Separate per-arch .app/.dmg/.zip rather than one merged `universal` target:
   # each artifact name carries its arch, which is what electron-updater matches
   # against process.arch when picking a download out of latest-mac.yml. Both
@@ -124,8 +124,8 @@ mac:
 dmg:
   # MUST carry ${arch}: two arches are built in one run, and without it both
   # .dmg files resolve to the same name and the second overwrites the first.
-  artifactName: EdisonWatch-${version}-mac-${arch}.${ext}
-  title: Edison Watch ${version}
+  artifactName: SealGate-${version}-mac-${arch}.${ext}
+  title: SealGate ${version}
   contents:
     - x: 130
       y: 220
@@ -137,37 +137,37 @@ linux:
   icon: resources/icon.png
   category: Development
   # REQUIRED. Without it electron-builder derives the executable name from the
-  # package name (@edison-watch/desktop) and AppImage packaging hard-fails:
+  # package name (@sealgate/desktop) and AppImage packaging hard-fails:
   # "executableName contains characters that cannot be safely used in file
-  # paths: @edison-watchdesktop". The win block sets its own executableName and
+  # paths: @sealgatedesktop". The win block sets its own executableName and
   # mac uses productName, which is why only Linux tripped over this. Nothing
   # depends on the value - the self-installed .desktop entry execs $APPIMAGE
   # directly (see runtime/desktopIntegration.ts) - so it just has to be a sane
-  # path-safe name; matches ~/.local/share/edison-watch and edison-watch.desktop.
-  executableName: edison-watch
-  # Bundle the edison-stdiod + edison-detectord daemons (static musl binaries,
+  # path-safe name; matches ~/.local/share/sealgate and sealgate.desktop.
+  executableName: sealgate
+  # Bundle the sealgate-stdiod + sealgate-detectord daemons (static musl binaries,
   # staged per-arch by scripts/build-stdiod-linux.sh and build-detectord-linux.sh)
   # into resources/bin/. Mirrors the win rule. The bundled-path helpers
   # (getBundled{Stdiod,Detectord}BinaryPath) resolve here via process.resourcesPath,
   # but on Linux they are the *source* for staging, not the run path: the public
   # get{Stdiod,Detectord}BinaryPath() getters return a stable per-user copy under
-  # ~/.local/share/edison-watch/bin, since the AppImage mount (and thus
+  # ~/.local/share/sealgate/bin, since the AppImage mount (and thus
   # resourcesPath) is ephemeral and changes every launch. See runtime/stdiodBinary.ts
   # and detectord/binary.ts.
   # Unlike Windows we do NOT bundle Node/uv runtimes - Linux users get npx/uvx
   # from PATH (the systemd unit seeds a sensible PATH), matching the macOS app.
   extraResources:
-    - from: bin/stdiod/${arch}/edison-stdiod
-      to: bin/edison-stdiod
-    - from: bin/detectord/${arch}/edison-detectord
-      to: bin/edison-detectord
+    - from: bin/stdiod/${arch}/sealgate-stdiod
+      to: bin/sealgate-stdiod
+    - from: bin/detectord/${arch}/sealgate-detectord
+      to: bin/sealgate-detectord
   target:
     - target: AppImage
       arch:
         - x64
         - arm64
 appImage:
-  artifactName: EdisonWatch-${version}-${arch}.${ext}
+  artifactName: SealGate-${version}-${arch}.${ext}
 # Use the modern STATIC AppImage runtime instead of the legacy one. The legacy
 # runtime dynamically loads libfuse2 + libz.so from the host, which a base
 # Ubuntu lacks (the recurring "libz.so / FUSE" launch failures). The static
@@ -180,9 +180,9 @@ toolsets:
 electronVersion: 40.8.0
 npmRebuild: false
 # Default artifact names: stable and space-free. Spaces (from productName
-# "Edison Watch") become %20 and break electron-updater URLs and GitHub asset
+# "SealGate") become %20 and break electron-updater URLs and GitHub asset
 # links. The dmg/nsis blocks above keep their own explicit names.
-artifactName: EdisonWatch-${version}-${arch}.${ext}
+artifactName: SealGate-${version}-${arch}.${ext}
 # Publish to GitHub Releases (public repo -> no runtime token needed). The
 # provider/owner/repo are baked into app-update.yml at build time, so the
 # installed app resolves updates from GitHub with no feed URL set at runtime
