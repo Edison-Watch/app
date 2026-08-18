@@ -75,10 +75,14 @@ if lipo -info "$OUT_BIN" | grep -q 'x86_64'; then
   exit 1
 fi
 
+# `#?` is load-bearing: codesign comments out a SYNTHESISED requirement (ad-hoc)
+# and prints a stored one bare (Developer ID). See the longer note in
+# build-detectord.sh - matching only `^# ` fails every signed CI build.
+DESIGNATED_RE='^#?[[:space:]]*designated[[:space:]]*=>'
 echo "Verifying code signature ..."
 codesign --verify --strict "$OUT_BIN"
-if ! codesign -d -r- "$OUT_BIN" 2>&1 | grep -q '^# designated'; then
+if ! codesign -d -r- "$OUT_BIN" 2>&1 | grep -qE "$DESIGNATED_RE"; then
   echo "build-stdiod.sh: $OUT_BIN has no designated requirement after signing" >&2
   exit 1
 fi
-codesign -d -r- "$OUT_BIN" 2>&1 | grep '^# designated'
+codesign -d -r- "$OUT_BIN" 2>&1 | grep -E "$DESIGNATED_RE"

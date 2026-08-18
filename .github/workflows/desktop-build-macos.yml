@@ -182,7 +182,11 @@ jobs:
                 *arm64*) ;;
                 *) echo "::error::$f is not arm64: $info"; exit 1 ;;
               esac
-              codesign -d -r- "$f" 2>&1 | grep -q '^# designated' || {
+              # `#?` is load-bearing: codesign comments out a synthesised
+              # requirement (ad-hoc) and prints a stored one bare (Developer ID).
+              # This job signs on push/dispatch and not on PRs, so it sees BOTH
+              # forms. See the longer note in scripts/build-detectord.sh.
+              codesign -d -r- "$f" 2>&1 | grep -qE '^#?[[:space:]]*designated[[:space:]]*=>' || {
                 echo "::error::$f has no designated requirement; TCC grants will not stick"
                 exit 1; }
               echo "bundled: $f -> $info"

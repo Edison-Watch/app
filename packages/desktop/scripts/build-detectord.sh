@@ -101,10 +101,20 @@ fi
 
 # A designated requirement is what the universal build was missing; fail here
 # rather than ship another binary whose TCC grants cannot stick.
+#
+# The `#?` in the pattern is load-bearing - do NOT tighten it to `^# `. codesign
+# comments out a requirement it had to SYNTHESISE, and prints a stored one bare:
+#
+#   ad-hoc        # designated => cdhash H"e180b8c5..."
+#   Developer ID  designated => anchor apple generic and identifier "..."
+#
+# Matching only the commented form passes on a dev build and fails every signed
+# CI build - i.e. it breaks exactly the path this check exists to protect.
+DESIGNATED_RE='^#?[[:space:]]*designated[[:space:]]*=>'
 echo "Verifying code signature ..."
 codesign --verify --strict "$OUT_BIN"
-if ! codesign -d -r- "$OUT_BIN" 2>&1 | grep -q '^# designated'; then
+if ! codesign -d -r- "$OUT_BIN" 2>&1 | grep -qE "$DESIGNATED_RE"; then
   echo "build-detectord.sh: $OUT_BIN has no designated requirement after signing" >&2
   exit 1
 fi
-codesign -d -r- "$OUT_BIN" 2>&1 | grep '^# designated'
+codesign -d -r- "$OUT_BIN" 2>&1 | grep -E "$DESIGNATED_RE"

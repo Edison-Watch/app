@@ -214,7 +214,11 @@ jobs:
                 *arm64*) ;;
                 *) echo "::error::$f is not arm64: $info"; exit 1 ;;
               esac
-              codesign -d -r- "$f" 2>&1 | grep -q '^# designated' || {
+              # `#?` is load-bearing: codesign comments out a requirement it had
+              # to SYNTHESISE (ad-hoc) and prints a stored one bare (Developer
+              # ID). Matching only `^# ` passes locally and fails every signed
+              # build - see the longer note in scripts/build-detectord.sh.
+              codesign -d -r- "$f" 2>&1 | grep -qE '^#?[[:space:]]*designated[[:space:]]*=>' || {
                 echo "::error::$f has no designated requirement; TCC grants will not stick"
                 exit 1; }
               echo "bundled: $f -> $info"
@@ -224,10 +228,14 @@ jobs:
       - name: Verify update artifacts (auto-update sanity)
         # Same gate as the Windows/Linux jobs: latest-mac.yml must exist and
         # carry the release version, or electron-updater silently breaks on
-        # macOS once the publish job flips the draft public. macOS manifests are
-        # NOT arch-suffixed - both arches share latest-mac.yml and
-        # electron-updater picks the zip whose URL matches process.arch, so the
-        # manifest has to list BOTH or one arch silently updates to the other.
+        # macOS once the publish job flips the draft public.
+        #
+        # arm64 is the only mac arch shipped (see mac.target in
+        # electron-builder.yml), so it is the only one asserted here. Keep this
+        # list in step with mac.target: macOS manifests are NOT arch-suffixed -
+        # every arch shares latest-mac.yml and electron-updater picks the zip
+        # whose URL matches process.arch - so an arch that is built but missing
+        # from the manifest silently updates users to the other one.
         run: |
           set -euo pipefail
           VERSION="${{ needs.draft.outputs.version }}"
@@ -235,7 +243,7 @@ jobs:
           test -f "$YML" || { echo "::error::dist/latest-mac.yml missing"; exit 1; }
           MVER=$(grep -m1 '^version:' "$YML" | awk '{print $2}' | tr -d '\r')
           [ "$MVER" = "$VERSION" ] || { echo "::error::manifest version '$MVER' != release version '$VERSION'"; exit 1; }
-          for a in arm64 x64; do
+          for a in arm64; do
             ls dist/*-mac-$a.dmg >/dev/null 2>&1 || { echo "::error::no $a .dmg produced"; exit 1; }
             ls dist/*-$a.zip >/dev/null 2>&1 || { echo "::error::no $a .zip produced"; exit 1; }
             grep -q -- "-$a.zip" "$YML" || {

@@ -7,6 +7,7 @@
 //! adds fs-event triggering, per-user workers, and IPC on top of this shape.
 
 use std::collections::HashSet;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -37,6 +38,16 @@ const RESCAN_INTERVAL: Duration = Duration::from_secs(20);
 const REFRESH_INTERVAL: Duration = Duration::from_secs(300);
 /// Debounce window coalescing rapid fs events into one reconcile.
 const DEBOUNCE: Duration = Duration::from_millis(500);
+
+/// The concrete fs-watcher type `start_watcher` hands back.
+type FsDebouncer = notify_debouncer_full::Debouncer<
+    notify::RecommendedWatcher,
+    notify_debouncer_full::RecommendedCache,
+>;
+
+/// Directories held back for want of Full Disk Access, paired with the mode
+/// they should be watched in once it is granted.
+type DeferredWatches = Vec<(PathBuf, RecursiveMode)>;
 
 /// Run the reconcile loop for the current OS user until Ctrl-C. `enforce=false`
 /// is a dry run.
@@ -71,8 +82,17 @@ pub async fn worker(user: String, enforce: bool, events: Option<EventTx>) -> any
     // fs-event triggering. `tx` (held for the loop) keeps the channel open so
     // `rx.recv()` pends forever even if the watcher fails to start.
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<()>();
-    let _debouncer = start_watcher(&agents, tx.clone());
-    let watching = _debouncer.is_some();
+    let started = start_watcher(&agents, tx.clone());
+    let watching = started.is_some();
+    // Held for the lifetime of the loop: dropping the debouncer stops watching.
+    let (mut _debouncer, mut deferred) = match started {
+        Some((deb, deferred)) => (Some(deb), deferred),
+        None => (None, Vec::new()),
+    };
+    let deferred_watches = deferred.len();
+    // Directories already reported as unwatchable; keeps `retry_deferred` from
+    // warning on every tick about a failure that is not going to change.
+    let mut watch_failures: HashSet<PathBuf> = HashSet::new();
 
     tracing::info!(
         user = %user,
@@ -81,6 +101,7 @@ pub async fn worker(user: String, enforce: bool, events: Option<EventTx>) -> any
         enforce,
         agents = agents.len(),
         watching,
+        deferred_watches,
         "reconcile worker starting (Ctrl-C to stop)"
     );
 
@@ -128,6 +149,11 @@ pub async fn worker(user: String, enforce: bool, events: Option<EventTx>) -> any
             refresh(&client, &mut enrollment, &mut seen, &user).await;
             last_refresh = Instant::now();
         }
+        // Cheap (one open() of a file that is either readable or not), and this
+        // tick is at most every RESCAN_INTERVAL, so no need to pace it further.
+        if let Some(deb) = _debouncer.as_mut() {
+            retry_deferred(deb, &mut deferred, &mut watch_failures);
+        }
         // Stops when the task is dropped (Ctrl-C in `run`, or the supervisor
         // aborting the worker).
         tokio::select! {
@@ -141,16 +167,19 @@ pub async fn worker(user: String, enforce: bool, events: Option<EventTx>) -> any
 }
 
 /// Watch every agent's targets and signal `tx` (debounced) on any change.
-/// Returns the debouncer, which must be held alive to keep watching.
+/// Returns the debouncer, which must be held alive to keep watching, plus any
+/// directories deferred for want of Full Disk Access (see [`retry_deferred`]).
+///
+/// This is the daemon's own watcher, deliberately separate from
+/// [`sealgate_detectord::Watcher`]: it splits file-parent vs recursive dirs and
+/// signals a channel rather than diffing snapshots itself, because the reconcile
+/// loop already re-discovers everything. The TCC gating therefore has to be
+/// applied HERE as well - the library `Watcher` is used only by its own tests
+/// and example, so gating it alone left the daemon prompting exactly as before.
 fn start_watcher(
     agents: &[Arc<dyn Agent>],
     tx: tokio::sync::mpsc::UnboundedSender<()>,
-) -> Option<
-    notify_debouncer_full::Debouncer<
-        notify::RecommendedWatcher,
-        notify_debouncer_full::RecommendedCache,
-    >,
-> {
+) -> Option<(FsDebouncer, DeferredWatches)> {
     // Files → watch their parent dir non-recursively (editors write via atomic
     // rename); dirs (workspace storage, plugin caches) → recursively.
     let mut file_dirs = HashSet::new();
@@ -175,17 +204,78 @@ fn start_watcher(
     .map_err(|e| tracing::warn!(error = %e, "fs watcher setup failed; periodic rescan only"))
     .ok()?;
 
-    for dir in &file_dirs {
-        if dir.exists() {
-            let _ = deb.watch(dir, RecursiveMode::NonRecursive);
+    // Watching a TCC-protected directory raises a permission dialog per folder
+    // service. $HOME is the parent of ~/.claude.json, so every Claude Code user
+    // hits it, and an FSEvents watch there prompts for Desktop, Documents AND
+    // Downloads. Defer those until Full Disk Access is granted; the reconcile
+    // loop's periodic rescan still sees changes under them, so detection
+    // degrades to polling rather than stopping.
+    let mut deferred: Vec<(PathBuf, RecursiveMode)> = Vec::new();
+    let fda = sealgate_detectord::tcc::has_full_disk_access();
+    for (dirs, mode) in [
+        (&file_dirs, RecursiveMode::NonRecursive),
+        (&rec_dirs, RecursiveMode::Recursive),
+    ] {
+        for dir in dirs {
+            if !dir.exists() {
+                continue;
+            }
+            if sealgate_detectord::tcc::watch_needs_full_disk_access(dir) && fda != Some(true) {
+                tracing::warn!(
+                    dir = %dir.display(),
+                    "deferring watch: needs Full Disk Access. Watching it would prompt \
+                     separately for Desktop, Documents and Downloads. Grant Full Disk \
+                     Access to this binary in System Settings -> Privacy & Security; \
+                     until then changes here are found by the periodic rescan instead \
+                     of live events."
+                );
+                deferred.push((dir.clone(), mode));
+                continue;
+            }
+            let _ = deb.watch(dir, mode);
         }
     }
-    for dir in &rec_dirs {
-        if dir.exists() {
-            let _ = deb.watch(dir, RecursiveMode::Recursive);
-        }
+    Some((deb, deferred))
+}
+
+/// Pick up watches deferred for want of Full Disk Access, once it is granted.
+///
+/// Called from the reconcile loop's periodic tick, so a grant made in System
+/// Settings takes effect without restarting the daemon. Retains whatever it
+/// could not watch, and only ever ADDS: a grant revoked later leaves existing
+/// watches alone, since that prompt has already been answered.
+/// `warned` carries the directories whose failure has already been reported, so
+/// a durable failure (an exhausted inotify limit, an unreadable directory) is
+/// warned about once instead of on every reconcile tick for the life of the
+/// daemon. Retrying continues regardless - those causes are often transient, and
+/// the periodic rescan still covers the directory meanwhile.
+fn retry_deferred(
+    deb: &mut FsDebouncer,
+    deferred: &mut DeferredWatches,
+    warned: &mut HashSet<PathBuf>,
+) {
+    if deferred.is_empty() || sealgate_detectord::tcc::has_full_disk_access() != Some(true) {
+        return;
     }
-    Some(deb)
+    deferred.retain(|(dir, mode)| match deb.watch(dir, *mode) {
+        Ok(()) => {
+            tracing::info!(dir = %dir.display(), "watching (Full Disk Access granted)");
+            warned.remove(dir);
+            false
+        }
+        Err(e) => {
+            if warned.insert(dir.clone()) {
+                tracing::warn!(
+                    dir = %dir.display(),
+                    error = %e,
+                    "deferred watch failed; retrying quietly from here"
+                );
+            } else {
+                tracing::debug!(dir = %dir.display(), error = %e, "deferred watch still failing");
+            }
+            true
+        }
+    });
 }
 
 /// Publish a `Quarantined` event for `user` (no-op when there's no channel).

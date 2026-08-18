@@ -48,7 +48,7 @@ export type FullDiskAccessState = 'granted' | 'denied' | 'unknown'
  *
  * Off macOS the question does not apply, so nothing is ever missing: `granted`.
  */
-export function fullDiskAccessState(status: Status | null): FullDiskAccessState {
+function fullDiskAccessState(status: Status | null): FullDiskAccessState {
   if (process.platform !== 'darwin') return 'granted'
   if (!status) return 'unknown'
   const fda = status.full_disk_access
@@ -58,22 +58,13 @@ export function fullDiskAccessState(status: Status | null): FullDiskAccessState 
 }
 
 /**
- * Whether to prompt the user to grant Full Disk Access.
- *
- * Only on a definite `denied` - see the tri-state note above.
- */
-export function shouldRequestFullDiskAccess(status: Status | null): boolean {
-  return fullDiskAccessState(status) === 'denied'
-}
-
-/**
  * Open System Settings at the Full Disk Access pane.
  *
  * The user still has to add the daemon by hand: the pane's `+` opens a file
  * picker, and the binary lives inside the .app bundle, which the picker hides
- * by default (Cmd-Shift-G and paste the path, or drag it in). Show
- * `fullDiskAccessBinaryPath()` alongside whatever calls this so there is a path
- * to copy.
+ * by default (Cmd-Shift-G and paste the path, or drag it in). The path to show
+ * alongside it is `binaryPath` on the [`FullDiskAccessInfo`] the renderer
+ * already holds.
  */
 export async function openFullDiskAccessSettings(): Promise<void> {
   if (process.platform !== 'darwin') return
@@ -81,7 +72,7 @@ export async function openFullDiskAccessSettings(): Promise<void> {
 }
 
 /** The path the user must add to the Full Disk Access list. */
-export function fullDiskAccessBinaryPath(): string {
+function fullDiskAccessBinaryPath(): string {
   return getDetectordBinaryPath()
 }
 
