@@ -1,0 +1,206 @@
+name: Build Linux (desktop, unsigned demo)
+
+# Linux demo build - the per-push CI gate for the Linux packaging path, mirroring
+# desktop-build-windows.yml. One job per arch: builds sealgate-stdiod +
+# sealgate-detectord as static musl binaries from crates/, packages an unsigned
+# single-arch AppImage versioned <base>-demo.<run>, sanity-checks the auto-update
+# manifest, and uploads the AppImage as a per-arch workflow artifact.
+#
+# Why this exists: macOS and Windows each had a per-push build gate, Linux did
+# not - so the Linux-only parts of packaging (AppImage target, static-musl daemon
+# staging, linux.extraResources, the `sealgate` executableName Linux needs
+# because electron-builder rejects the scoped package name in a file path) were
+# only exercised when someone manually dispatched a release. Breakage surfaced
+# mid-release instead of on the PR that caused it.
+#
+# No publish step: this is the gate + test-artifact builder only. Published Linux
+# releases come from the linux jobs in desktop-release.yml (stable) and
+# desktop-release-demo.yml (demo), which mirror these build steps and upload into
+# the shared GitHub Release that auto-update rides.
+#
+# Unsigned on purpose: AppImages carry no OS-level signature; auto-update
+# verifies the payload via the sha512 in latest-linux*.yml.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/desktop/**'
+      - 'packages/shared/**'
+      - 'crates/stdiod/**'
+      - 'crates/detectord/**'
+      - '.github/workflows/desktop-build-linux.yml'
+
+concurrency:
+  group: build-linux-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-linux-demo:
+    name: Build Linux ${{ matrix.arch }} (Unsigned, demo)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      # Both arches are independent; don't cancel a healthy leg on the other's
+      # failure - one rerun then shows both results.
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            # appimageArch: what ${arch} expands to in appImage.artifactName.
+            # electron-builder rewrites x64 -> x86_64 for AppImage (builder-util
+            # getArtifactArchName); arm64 is left alone.
+            appimageArch: x86_64
+            manifest: latest-linux.yml
+            unpacked: linux-unpacked
+          - arch: arm64
+            appimageArch: arm64
+            manifest: latest-linux-arm64.yml
+            unpacked: linux-arm64-unpacked
+    defaults:
+      run:
+        working-directory: packages/desktop
+    env:
+      # Demo backend config (DEMO_VITE_* repository variables), same as the
+      # Windows gate.
+      VITE_DEPLOY_ENV: ${{ vars.DEMO_VITE_DEPLOY_ENV }}
+      VITE_API_BASE_URL: ${{ vars.DEMO_VITE_API_BASE_URL }}
+      VITE_MCP_BASE_URL: ${{ vars.DEMO_VITE_MCP_BASE_URL }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Cache electron-builder downloads
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cache/electron
+            ~/.cache/electron-builder
+          key: ${{ runner.os }}-electron-${{ hashFiles('package-lock.json') }}
+          restore-keys: ${{ runner.os }}-electron-
+
+      - name: Install dependencies (workspace root)
+        run: npm ci
+        working-directory: .
+
+      - name: Build @sealgate/shared
+        run: npm run build -w packages/shared
+        working-directory: .
+
+      # Static musl so one binary runs on any distro. zig + cargo-zigbuild supply
+      # the C cross-toolchain `ring` needs when this leg's arch differs from the
+      # runner's - the exact setup the release workflows' linux legs use.
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl, aarch64-unknown-linux-musl
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          # Same per-arch cache as the linux legs in desktop-release.yml and
+          # desktop-release-demo.yml - see the note there for why the arch must
+          # stay in the key. This per-push job is the one that keeps it warm on
+          # main for the release workflows.
+          shared-key: linux-daemons-${{ matrix.arch }}
+          workspaces: |
+            crates/detectord
+            crates/stdiod
+
+      - uses: mlugg/setup-zig@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-zigbuild
+
+      - name: Build sealgate-detectord (static musl, ${{ matrix.arch }})
+        # TARGET_ARCHES restricts the script to this leg's arch; it stages into
+        # bin/detectord/<arch>/sealgate-detectord for linux.extraResources.
+        run: npm run build:detectord:linux
+        env:
+          TARGET_ARCHES: ${{ matrix.arch }}
+
+      - name: Build sealgate-stdiod (static musl, ${{ matrix.arch }})
+        # Stages into bin/stdiod/<arch>/sealgate-stdiod for linux.extraResources.
+        run: npm run build:stdiod:linux
+        env:
+          TARGET_ARCHES: ${{ matrix.arch }}
+
+      - name: Build Electron app (unsigned, demo)
+        # Version is <base>-demo.<run> so the demo feed advances per run, same
+        # scheme as the Windows gate.
+        #
+        # `-c.linux.target=AppImage` is LOAD-BEARING: electron-builder.yml's
+        # linux.target carries its own arch list, and when a target entry does
+        # that the CLI --x64/--arm64 flag does NOT restrict it - the leg would
+        # build both AppImages, with the other arch's daemons unstaged.
+        run: |
+          set -euo pipefail
+          BASE=$(node -p "require('./package.json').version")
+          VERSION="${BASE}-demo.${GITHUB_RUN_NUMBER}"
+          echo "Building demo version $VERSION (${{ matrix.arch }})"
+          npm run build:demo
+          npx electron-builder --linux --${{ matrix.arch }} --publish never \
+            -c.linux.target=AppImage \
+            -c.extraMetadata.version="$VERSION"
+
+      - name: Verify packaged app
+        # electron-builder treats a missing extraResources source as a warning,
+        # so assert both daemons actually made it in - and that they are the
+        # static musl binaries this leg built (the "runs on any distro" claim).
+        # `file` reports either "statically linked" or "static-pie linked"
+        # depending on how the target links; both are static.
+        run: |
+          set -euo pipefail
+          app="dist/${{ matrix.unpacked }}"
+          # linux.executableName in electron-builder.yml. Linux needs an explicit
+          # one because the scoped package name is not path-safe, so a rename
+          # that misses it produces a bundle whose launcher is wrong.
+          test -x "$app/sealgate" || { echo "::error::launcher $app/sealgate missing or not executable"; exit 1; }
+          echo "launcher: $app/sealgate"
+          for bin in sealgate-stdiod sealgate-detectord; do
+            found="$app/resources/bin/$bin"
+            test -f "$found" || { echo "::error::$bin missing from $found"; exit 1; }
+            test -x "$found" || { echo "::error::$found is not executable"; exit 1; }
+            file "$found" | grep -qE "statically linked|static-pie linked" || {
+              echo "::error::$bin is not statically linked: $(file "$found")"; exit 1; }
+            echo "bundled: $found ($(file -b "$found" | cut -d, -f1-2))"
+          done
+
+      - name: Verify update artifacts (auto-update sanity)
+        # Fail here rather than mid-release: a wrong version in the manifest or a
+        # missing AppImage silently breaks electron-updater on Linux.
+        run: |
+          set -euo pipefail
+          BASE=$(node -p "require('./package.json').version")
+          VERSION="${BASE}-demo.${GITHUB_RUN_NUMBER}"
+          YML="dist/${{ matrix.manifest }}"
+          test -f "$YML" || { echo "::error::$YML missing"; exit 1; }
+          MVER=$(grep -m1 '^version:' "$YML" | awk '{print $2}' | tr -d '\r')
+          [ "$MVER" = "$VERSION" ] || { echo "::error::manifest version '$MVER' != build version '$VERSION'"; exit 1; }
+          ls dist/*-${{ matrix.appimageArch }}.AppImage >/dev/null 2>&1 || {
+            echo "::error::no ${{ matrix.arch }} AppImage produced"; exit 1; }
+          echo "manifest version: $MVER"
+          for f in dist/*-${{ matrix.appimageArch }}.AppImage; do
+            SIZE_MB=$(( $(wc -c < "$f") / 1024 / 1024 )); echo "AppImage: $(basename "$f") (${SIZE_MB} MB)"
+          done
+
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v7
+        with:
+          # Per-arch name: two legs uploading the same artifact name would
+          # collide (upload-artifact v4+ rejects duplicates).
+          name: sealgate-linux-demo-${{ matrix.arch }}
+          path: |
+            packages/desktop/dist/*-${{ matrix.appimageArch }}.AppImage
+            packages/desktop/dist/${{ matrix.manifest }}
+          if-no-files-found: error
+          retention-days: 14
