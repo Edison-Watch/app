@@ -6,9 +6,9 @@
  * WHY: electron-builder never arch-suffixes the Windows update manifest
  * (getArchPrefixForUpdateFile is Linux-only), so the two single-arch Windows
  * release legs both want to publish `latest.yml`. They dodge the collision by
- * building on separate channels (`latest` / `latest-arm64`), which produces two
- * manifests - but at runtime electron-updater does NOT reliably ask for the
- * arch-suffixed one:
+ * building on separate channels (`latest-x64` / `latest-arm64` on stable,
+ * `beta` / `beta-arm64` on demo), which produces two manifests - but at runtime
+ * electron-updater does NOT reliably ask for the arch-suffixed one:
  *   - updateManager.ts pins autoUpdater.channel to the build's environment
  *     ('latest' / 'beta'), and GitHubProvider prefers updater.channel over the
  *     channel baked into app-update.yml.
@@ -75,9 +75,22 @@ for (const file of [...x64.files, ...arm64.files]) {
 }
 
 // electron-updater matches process.arch against the url, so exactly one entry
-// per arch has to be present - and no entry may match two arches.
+// per arch has to be present - and no entry may match two arches. Bucket each
+// file by its (single) arch rather than counting matches per arch: a url
+// carrying BOTH tokens would otherwise satisfy the per-arch count twice and
+// publish a manifest where one installer is served to both arches while the
+// other is unreachable.
+const byArch = new Map(ARCHES.map((arch) => [arch, []]))
+for (const file of files) {
+  const matched = ARCHES.filter((arch) => file.url.includes(arch))
+  if (matched.length !== 1) {
+    fail(`file entry '${file.url}' matches ${matched.length} arches (${matched.join(', ') || 'none'}), ` +
+      `expected exactly 1 of: ${ARCHES.join(', ')}`)
+  }
+  byArch.get(matched[0]).push(file)
+}
 for (const arch of ARCHES) {
-  const matches = files.filter((f) => f.url.includes(arch))
+  const matches = byArch.get(arch)
   if (matches.length !== 1) {
     fail(`expected exactly 1 ${arch} installer in the merged manifest, found ${matches.length}: ` +
       files.map((f) => f.url).join(', '))
