@@ -129,7 +129,7 @@ describe('MainMenu', () => {
 
     render(<MainMenu />)
 
-    await waitFor(() => expect(screen.getByText('Edison Watch')).toBeTruthy())
+    await waitFor(() => expect(screen.getByText('SealGate')).toBeTruthy())
     expectNoRenderErrors()
   })
 
@@ -186,13 +186,13 @@ describe('ClientsView', () => {
     render(<ClientsView />)
 
     expect(await screen.findByText(/Connectors are managed in your account/)).toBeTruthy()
-    expect(screen.getByText(/^Edison Watch can't configure this app$/)).toBeTruthy()
+    expect(screen.getByText(/^SealGate can't configure this app$/)).toBeTruthy()
     expectNoRenderErrors()
   })
 
   it('points a Claude host at Connectors rather than calling it unconfigurable', async () => {
     // Claude Desktop is unmanageable for a different reason than ChatGPT: it
-    // does run local MCP servers, Edison just has nowhere to install itself in
+    // does run local MCP servers, SealGate just has nowhere to install itself in
     // a config file that takes stdio entries only. So the copy names the manual
     // route that does work rather than borrowing ChatGPT's "it all lives in
     // your account" - and never the generic fallback, which offers nothing.
@@ -211,16 +211,16 @@ describe('ClientsView', () => {
 
     render(<ClientsView />)
 
-    expect(await screen.findByText(/Add Edison Watch as a connector/)).toBeTruthy()
+    expect(await screen.findByText(/Add SealGate as a connector/)).toBeTruthy()
     expect(screen.queryByText('Connected')).toBeNull()
-    expect(screen.queryByText(/^Edison Watch can't configure this app$/)).toBeNull()
+    expect(screen.queryByText(/^SealGate can't configure this app$/)).toBeNull()
     expectNoRenderErrors()
   })
 
   it('still refuses to say Connected for a connector-backed client it can configure', async () => {
     // Connector-backed and unmanageable are different questions, and today
     // every connector-backed client happens to be both. This pins the half
-    // that does not depend on that coincidence: a member Edison configures
+    // that does not depend on that coincidence: a member SealGate configures
     // perfectly well is still not "Connected", because the account-side
     // Connectors it also has are unproxied either way.
     const api = installMockApi()
@@ -231,7 +231,7 @@ describe('ClientsView', () => {
 
     render(<ClientsView />)
 
-    expect(await screen.findByText(/Add Edison Watch as a connector/)).toBeTruthy()
+    expect(await screen.findByText(/Add SealGate as a connector/)).toBeTruthy()
     expect(screen.queryByText('Connected')).toBeNull()
     expectNoRenderErrors()
   })
@@ -251,7 +251,7 @@ describe('ClientsView', () => {
     render(<ClientsView />)
 
     expect(await screen.findByText(/MCP gateway unreachable/)).toBeTruthy()
-    expect(screen.queryByText(/Add Edison Watch as a connector/)).toBeNull()
+    expect(screen.queryByText(/Add SealGate as a connector/)).toBeNull()
     expectNoRenderErrors()
   })
 })
@@ -260,7 +260,7 @@ describe('EncryptionStep', () => {
   const props = {
     mcpBaseUrl: 'https://mcp.example',
     apiBaseUrl: 'https://api.example',
-    apiKey: 'ew_key',
+    apiKey: 'sg_key',
     userId: 'u1',
     selectedApps: ['cursor'],
     discoveredServers: [],
@@ -283,7 +283,7 @@ describe('EncryptionStep', () => {
       expect(screen.getByText(/couldn't reach the detector daemon/i)).toBeTruthy()
     })
     // Finish reports the setup as done; getting there on a failed apply tells
-    // the user their apps route through Edison Watch when none of them do.
+    // the user their apps route through SealGate when none of them do.
     expect(onNext).not.toHaveBeenCalled()
     expectNoRenderErrors()
   })

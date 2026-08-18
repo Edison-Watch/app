@@ -1,8 +1,8 @@
 //! macOS LaunchAgent install for the detector daemon: a per-user agent (no
-//! sudo, no root LaunchDaemon), mirroring `edison-stdiod` so the desktop client
+//! sudo, no root LaunchDaemon), mirroring `sealgate-stdiod` so the desktop client
 //! installs and launches us exactly the way it installs stdiod:
 //!
-//! - plist at `~/Library/LaunchAgents/watch.edison.detectord.plist`
+//! - plist at `~/Library/LaunchAgents/com.sealgate.detectord.plist`
 //! - loaded via `launchctl bootstrap gui/$uid ...` (modern flow, not `load`)
 //! - `RunAtLoad` + `KeepAlive` so launchd starts it now/at login and restarts
 //!   it on crash. The daemon serves its socket for the client to connect to.
@@ -20,8 +20,8 @@ use anyhow::{Context, Result, anyhow, bail};
 
 use crate::{ipc, paths};
 
-const LABEL: &str = "watch.edison.detectord";
-const PLIST_FILENAME: &str = "watch.edison.detectord.plist";
+const LABEL: &str = "com.sealgate.detectord";
+const PLIST_FILENAME: &str = "com.sealgate.detectord.plist";
 /// launchd's per-user default PATH omits Homebrew and /usr/local/bin; without
 /// this every child spawn (`claude`, `npx`, ...) fails to resolve.
 const CHILD_PATH: &str = "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/local/sbin:/usr/bin:/bin:/usr/sbin:/sbin";
@@ -56,7 +56,7 @@ fn render_plist(binary: &Path, log: &Path, enforce: bool) -> String {
         prog.push("--enforce".to_string());
     } else {
         // Report-only / shadow: no hook consumer, so we don't fight a client's
-        // own hook monitor over ~/.edison-watch.
+        // own hook monitor over ~/.sealgate.
         prog.push("--no-hooks".to_string());
     }
     let args = prog
@@ -200,12 +200,12 @@ mod tests {
     #[test]
     fn plist_has_label_program_and_path() {
         let body = render_plist(
-            Path::new("/opt/edison/detectord"),
+            Path::new("/opt/sealgate/detectord"),
             Path::new("/tmp/l.log"),
             true,
         );
-        assert!(body.contains("<string>watch.edison.detectord</string>"));
-        assert!(body.contains("<string>/opt/edison/detectord</string>"));
+        assert!(body.contains("<string>com.sealgate.detectord</string>"));
+        assert!(body.contains("<string>/opt/sealgate/detectord</string>"));
         assert!(body.contains("<string>daemon</string>"));
         assert!(body.contains("<string>--enforce</string>"));
         assert!(body.contains("<key>RunAtLoad</key>"));

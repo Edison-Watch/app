@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Cross-build edison-stdiod for Windows (arm64 + x64) from macOS/Linux and stage
+# Cross-build sealgate-stdiod for Windows (arm64 + x64) from macOS/Linux and stage
 # it into client_2/bin/stdiod/<arch>/ so an electron-builder win.extraResources
 # rule can copy the matching-arch binary into the packaged app.
 #
@@ -85,11 +85,11 @@ for spec in "${ALL_SPECS[@]}"; do
     echo "Installing rustup target $target ..."
     rustup target add "$target"
   fi
-  echo "Building edison-stdiod for $target ..."
-  ( cd "$STDIOD_DIR" && cargo zigbuild --release --target "$target" --bin edison-stdiod )
+  echo "Building sealgate-stdiod for $target ..."
+  ( cd "$STDIOD_DIR" && cargo zigbuild --release --target "$target" --bin sealgate-stdiod )
   mkdir -p "$OUT_ROOT/$arch"
-  cp "$STDIOD_DIR/target/$target/release/edison-stdiod.exe" "$OUT_ROOT/$arch/edison-stdiod.exe"
-  echo "Staged -> $OUT_ROOT/$arch/edison-stdiod.exe"
+  cp "$STDIOD_DIR/target/$target/release/sealgate-stdiod.exe" "$OUT_ROOT/$arch/sealgate-stdiod.exe"
+  echo "Staged -> $OUT_ROOT/$arch/sealgate-stdiod.exe"
 done
 
 echo "Done. Windows daemon binaries staged under $OUT_ROOT/<arch>/"

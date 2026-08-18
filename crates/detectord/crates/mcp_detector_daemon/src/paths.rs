@@ -16,7 +16,7 @@
 use std::io;
 use std::path::PathBuf;
 
-const DIR_NAME: &str = "edison-watch-detectord";
+const DIR_NAME: &str = "sealgate-detectord";
 
 /// True when running as the privileged system daemon (euid 0). Always false on
 /// non-Unix targets, which have no root/euid model.
@@ -84,10 +84,10 @@ pub fn current_username() -> String {
         .unwrap_or_else(|_| "unknown".to_string())
 }
 
-/// `~/.edison-watch` — where hook scripts and the pending/errors dirs live
+/// `~/.sealgate` — where hook scripts and the pending/errors dirs live
 /// (shared, app-compatible location). Dev build: the current user's home.
-pub fn edison_watch_dir() -> Option<PathBuf> {
-    dirs::home_dir().map(|h| h.join(".edison-watch"))
+pub fn sealgate_dir() -> Option<PathBuf> {
+    dirs::home_dir().map(|h| h.join(".sealgate"))
 }
 
 #[cfg(unix)]

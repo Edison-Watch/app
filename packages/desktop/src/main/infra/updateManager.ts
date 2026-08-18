@@ -1,5 +1,5 @@
 /**
- * Auto-updater for the Edison Watch desktop client, built on electron-updater.
+ * Auto-updater for the SealGate desktop client, built on electron-updater.
  *
  * Replaces the old notify-only updateChecker. Behaviour:
  *   - Updates come from GitHub Releases (provider/owner/repo baked into
@@ -13,7 +13,7 @@
  *     (via the 'update:status' channel) so the in-window banner + tray item can
  *     show "available" / progress / "restart to update".
  *
- * Local testing without publishing: set EW_UPDATE_TEST=1 and EW_UPDATE_FEED to
+ * Local testing without publishing: set SG_UPDATE_TEST=1 and SG_UPDATE_FEED to
  * a local static server serving latest-mac.yml + the zip (see
  * scripts/test-autoupdate.sh). forceDevUpdateConfig lets checks run unpackaged.
  *
@@ -73,7 +73,7 @@ let intervalTimer: NodeJS.Timeout | null = null
 
 /** Auto-update only runs in a packaged app, or when explicitly testing locally. */
 function isEnabled(): boolean {
-  return app.isPackaged || Boolean(process.env.EW_UPDATE_TEST)
+  return app.isPackaged || Boolean(process.env.SG_UPDATE_TEST)
 }
 
 export function getUpdateState(): UpdateState {
@@ -99,22 +99,23 @@ function emit(): void {
  * packaged, so the updater never runs there.
  *
  * NOT arch-aware, deliberately. The Windows release legs BUILD on split channels
- * ('latest-x64'/'latest-arm64', 'beta'/'beta-arm64') so their manifests don't
- * collide on the release, but installs still poll the unsuffixed manifest: this
- * channel wins over the one baked into app-update.yml, and on the beta channel
- * GitHubProvider overrides both with the resolved tag's prerelease id ('beta'),
- * so '<channel>-arm64' is unreachable there no matter what is set here. The
- * release workflows therefore merge both Windows installers into the shared
- * latest.yml / beta.yml (windows-manifest job + scripts/merge-win-update-manifest.cjs)
- * and electron-updater matches process.arch against the file url to pick one.
+ * ('latest-x64'/'latest-arm64', 'beta-x64'/'beta-arm64') so their manifests
+ * don't collide on the release, but installs still poll the unsuffixed
+ * manifest: this channel wins over the one baked into app-update.yml, and on the
+ * beta channel GitHubProvider overrides both with the resolved tag's prerelease
+ * id ('beta'), so '<channel>-arm64' is unreachable there no matter what is set
+ * here. The release workflows therefore merge both Windows installers into the
+ * shared latest.yml / beta.yml (windows-manifest job +
+ * scripts/merge-win-update-manifest.cjs) and electron-updater matches
+ * process.arch against the file url to pick one.
  */
 function updateChannel(): 'latest' | 'beta' {
   return getBuildDefaultEnv() === 'release' ? 'latest' : 'beta'
 }
 
 function applyFeed(): void {
-  const testFeed = process.env.EW_UPDATE_FEED
-  if (process.env.EW_UPDATE_TEST && testFeed) {
+  const testFeed = process.env.SG_UPDATE_FEED
+  if (process.env.SG_UPDATE_TEST && testFeed) {
     autoUpdater.forceDevUpdateConfig = true
     autoUpdater.setFeedURL({ provider: 'generic', url: testFeed, channel: 'latest' })
     console.log(`[update] using local test feed: ${testFeed}`)

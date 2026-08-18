@@ -111,15 +111,15 @@ jobs:
         run: npm ci
         working-directory: .
 
-      - name: Build @edison-watch/shared from source
+      - name: Build @sealgate/shared from source
         run: npm run build -w packages/shared
         working-directory: .
 
       # --- daemons: build from source via the layout-aware scripts ------------
-      - name: Build edison-stdiod from source
+      - name: Build sealgate-stdiod from source
         run: npm run build:stdiod
 
-      - name: Build edison-detectord from source
+      - name: Build sealgate-detectord from source
         run: npm run build:detectord
 
       # --- version, bundle, package ------------------------------------------

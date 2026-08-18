@@ -13,7 +13,7 @@ export function getAuthLoopbackUrl(): string | null {
 /**
  * Start a tiny loopback (127.0.0.1) HTTP server that receives OAuth/SSO
  * callbacks. Used in dev AND packaged builds: Chrome blocks gesture-less
- * redirects to custom protocols (edison-watch://), but a plain http://127.0.0.1
+ * redirects to custom protocols (sealgate://), but a plain http://127.0.0.1
  * navigation has no such gate. Forwards `auth:callback` IPC to the main window.
  */
 export function startAuthLoopbackServer(
@@ -47,7 +47,7 @@ export function startAuthLoopbackServer(
 <body style="font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#1C1C1C;color:#C3FFFD">
   <div style="text-align:center">
     <h2>Authentication successful</h2>
-    <p>You can close this tab and return to Edison Watch.</p>
+    <p>You can close this tab and return to SealGate.</p>
   </div>
   <script>
     (async () => {

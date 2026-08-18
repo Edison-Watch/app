@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { Button } from "@edison-watch/shared/ui";
-import { getActiveEnvName, getEnv } from "@edison-watch/shared/config";
+import { Button } from "@sealgate/shared/ui";
+import { getActiveEnvName, getEnv } from "@sealgate/shared/config";
 
 /**
  * Pre-login entry point for self-hosted deployments: lets the user point the
- * app at any Edison backend by URL (a docker-compose stack, a Railway
+ * app at any SealGate backend by URL (a docker-compose stack, a Railway
  * instance, ...). Shown under the sign-in card on the welcome step.
  *
  * The URL is verified against the backend's /api/v1/health endpoint before it
@@ -49,7 +49,7 @@ export default function CustomServerConnect(): React.ReactNode {
     const healthy = await checkBackendHealth(origin);
     if (!healthy) {
       setBusy(false);
-      setError("Could not reach an Edison server at that URL. Check the address and try again.");
+      setError("Could not reach an SealGate server at that URL. Check the address and try again.");
       return;
     }
     const result = await window.api.config.setCustomBackend(origin);
@@ -81,7 +81,7 @@ export default function CustomServerConnect(): React.ReactNode {
           disabled={busy}
           className="text-xs text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors underline underline-offset-2 disabled:opacity-50"
         >
-          Use the default Edison server instead
+          Use the default SealGate server instead
         </button>
       </div>
     );
@@ -94,7 +94,7 @@ export default function CustomServerConnect(): React.ReactNode {
         onClick={() => setOpen(true)}
         className="text-center text-xs text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors underline underline-offset-2"
       >
-        Using a self-hosted Edison server? Connect by URL
+        Using a self-hosted SealGate server? Connect by URL
       </button>
     );
   }
@@ -112,14 +112,14 @@ export default function CustomServerConnect(): React.ReactNode {
         onKeyDown={(e) => {
           if (e.key === "Enter" && !busy) void handleConnect();
         }}
-        placeholder="https://edison.your-company.com"
+        placeholder="https://sealgate.your-company.com"
         autoFocus
         spellCheck={false}
         data-testid="custom-server-url-input"
         className="w-full rounded-md border border-[var(--border)] bg-[var(--bg-input)] px-2.5 py-1.5 text-xs font-mono text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
       />
       <p className="text-[11px] text-[var(--text-muted)]">
-        The address you open the Edison dashboard on - sign-in and the MCP gateway run on the same
+        The address you open the SealGate dashboard on - sign-in and the MCP gateway run on the same
         origin.
       </p>
       {error && (

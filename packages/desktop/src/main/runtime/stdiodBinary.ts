@@ -7,10 +7,10 @@ import { app } from 'electron'
 
 import { STDIOD, devDaemonCandidates, shippedExeName } from './daemonPaths'
 
-// Resolve the absolute path to the edison-stdiod binary as it ships inside the
+// Resolve the absolute path to the sealgate-stdiod binary as it ships inside the
 // app.
 //
-// In a packaged build the binary lives at <resources>/bin/edison-stdiod
+// In a packaged build the binary lives at <resources>/bin/sealgate-stdiod
 // (staged by the build-stdiod* scripts and copied via the extraResources rule
 // in electron-builder.yml). In dev we point at the cargo target directory
 // inside the repo so `npm run dev` works without a full package build - the dev
@@ -35,7 +35,7 @@ function getBundledStdiodBinaryPath(): string {
 // daemon out to this fixed path and run/install from there. mac/win bundle paths
 // are already stable inside the .app / install dir, so they don't need this.
 function getStableLinuxBinaryPath(): string {
-  return path.join(os.homedir(), '.local', 'share', 'edison-watch', 'bin', 'edison-stdiod')
+  return path.join(os.homedir(), '.local', 'share', 'sealgate', 'bin', 'sealgate-stdiod')
 }
 
 // Whether this platform needs the copy-to-stable-location dance (packaged Linux

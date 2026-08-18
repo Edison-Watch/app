@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button, Card, Badge } from "@edison-watch/shared/ui";
+import { Button, Card, Badge } from "@sealgate/shared/ui";
 
 import StdiodEnableCard from "../StdiodEnableCard";
 
@@ -22,7 +22,7 @@ interface FinishStepProps {
   apiBaseUrl: string;
   serverStatus: "checking" | "online" | "offline";
   modifiedConfigs: Array<{ appId: string; configPath: string; backupPath: string }>;
-  edisonSecretKey?: string;
+  sealgateSecretKey?: string;
   selectedApps: string[];
   onComplete: () => void;
   onRestart: () => void;
@@ -36,7 +36,7 @@ export default function FinishStep({
   apiBaseUrl,
   serverStatus,
   modifiedConfigs,
-  edisonSecretKey,
+  sealgateSecretKey,
   selectedApps,
   onComplete,
   onRestart,
@@ -70,7 +70,7 @@ export default function FinishStep({
         apiKey,
         mcpBaseUrl,
         apiBaseUrl,
-        edisonSecretKey: edisonSecretKey || undefined,
+        sealgateSecretKey: sealgateSecretKey || undefined,
         configuredApps: selectedApps,
       });
       onComplete();
@@ -113,7 +113,7 @@ export default function FinishStep({
         serverAddress: mcpBaseUrl,
         mcpBaseUrl,
         apiKey,
-        edisonSecretKey: edisonSecretKey || undefined,
+        sealgateSecretKey: sealgateSecretKey || undefined,
         apps: [appId],
       });
       if (result.success && result.modifiedConfigs.length > 0) {
@@ -182,7 +182,7 @@ export default function FinishStep({
           Setup Complete
         </h2>
         <p className="mt-1 text-sm text-[var(--text-secondary)]">
-          Edison Watch is ready to protect your MCP connections.
+          SealGate is ready to protect your MCP connections.
         </p>
       </div>
 
@@ -344,7 +344,7 @@ export default function FinishStep({
       <StdiodEnableCard
         apiBaseUrl={apiBaseUrl}
         apiKey={apiKey}
-        edisonSecretKey={edisonSecretKey}
+        sealgateSecretKey={sealgateSecretKey}
       />
 
       <div className="flex flex-col gap-2">

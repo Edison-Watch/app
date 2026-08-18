@@ -7,8 +7,8 @@
  * (getArchPrefixForUpdateFile is Linux-only), so the two single-arch Windows
  * release legs both want to publish `latest.yml`. They dodge the collision by
  * building on separate channels (`latest-x64` / `latest-arm64` on stable,
- * `beta` / `beta-arm64` on demo), which produces two manifests - but at runtime
- * electron-updater does NOT reliably ask for the arch-suffixed one:
+ * `beta-x64` / `beta-arm64` on demo), which produces two manifests - but at
+ * runtime electron-updater does NOT reliably ask for the arch-suffixed one:
  *   - updateManager.ts pins autoUpdater.channel to the build's environment
  *     ('latest' / 'beta'), and GitHubProvider prefers updater.channel over the
  *     channel baked into app-update.yml.
@@ -18,7 +18,7 @@
  * So the shared manifest has to describe both arches. That is safe because
  * electron-updater picks the download by matching process.arch against the file
  * URL (Provider.findFile), and nsis.artifactName carries the arch:
- * EdisonWatch-<version>-x64-setup.exe / -arm64-setup.exe.
+ * SealGate-<version>-x64-setup.exe / -arm64-setup.exe.
  *
  * The per-arch manifests are left on the release untouched - they are correct
  * for their own arch, so whichever one an installed build ends up polling hands

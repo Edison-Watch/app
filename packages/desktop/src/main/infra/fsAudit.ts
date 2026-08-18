@@ -7,23 +7,23 @@
  * patches `fs` itself and reports every path outside the app's own territory,
  * so you can exercise the real UI and read the verdict.
  *
- * Off unless `EDISON_FS_AUDIT=1`, and it only ever logs - it never blocks a
+ * Off unless `SEALGATE_FS_AUDIT=1`, and it only ever logs - it never blocks a
  * call, because a false positive that bricks the app would be worse than the
  * noise. Enable it in dev or on a packaged build:
  *
- *     EDISON_FS_AUDIT=1 npm run dev -w packages/desktop
- *     EDISON_FS_AUDIT=1 "/Applications/Edison Watch.app/Contents/MacOS/Edison Watch"
+ *     SEALGATE_FS_AUDIT=1 npm run dev -w packages/desktop
+ *     SEALGATE_FS_AUDIT=1 "/Applications/SealGate.app/Contents/MacOS/SealGate"
  *
- * Violations are appended to `/tmp/ew-fs-audit.log` (and echoed to the
+ * Violations are appended to `/tmp/sg-fs-audit.log` (and echoed to the
  * console) as `FOREIGN <op> <path>` with the stack that got there - a file
  * rather than stdout because a redirected Electron stdout is block-buffered
  * and would strand the last lines. Electron's own reads (the asar, locales,
  * GPU caches) sit inside the allowed roots, so an empty log is a clean run:
  *
- *     rm -f /tmp/ew-fs-audit.log
- *     EDISON_FS_AUDIT=1 "/Applications/Edison Watch.app/Contents/MacOS/Edison Watch"
+ *     rm -f /tmp/sg-fs-audit.log
+ *     SEALGATE_FS_AUDIT=1 "/Applications/SealGate.app/Contents/MacOS/SealGate"
  *     # …exercise onboarding, the clients view, the tray…
- *     grep FOREIGN /tmp/ew-fs-audit.log   # nothing = the boundary held
+ *     grep FOREIGN /tmp/sg-fs-audit.log   # nothing = the boundary held
  */
 
 import { appendFileSync, realpathSync, writeFileSync } from 'node:fs'
@@ -34,8 +34,8 @@ import { fileURLToPath } from 'node:url'
 
 import { app } from 'electron'
 
-const AUDIT_LOG = '/tmp/ew-fs-audit.log'
-const INVENTORY_LOG = '/tmp/ew-fs-audit-roots.log'
+const AUDIT_LOG = '/tmp/sg-fs-audit.log'
+const INVENTORY_LOG = '/tmp/sg-fs-audit-roots.log'
 
 // The audit writes its own log through the very functions it patched, so
 // without this guard the first report recurses forever.
@@ -99,18 +99,18 @@ function buildAllowedRoots(): string[] {
     // Shared temp: this log lives here, as does the app's own monitor log.
     // macOS `tmpdir()` is the per-user /var/folders dir, so /tmp needs saying.
     '/tmp',
-    // Edison's own daemon territory. `~/.config/edison-stdiod` holds stdiod's
+    // SealGate's own daemon territory. `~/.config/sealgate-stdiod` holds stdiod's
     // config + state file: stdiod writes it, the app polls it for tray/status
     // (see stdiod/state.ts), and that file IS the interface between them -
     // stdiod is a tunnel daemon with no control socket of its own.
-    resolve(homedir(), '.edison-watch'),
-    resolve(homedir(), '.config', 'edison-stdiod'),
-    resolve(homedir(), '.local', 'share', 'edison-watch'),
-    resolve(homedir(), 'Library', 'Application Support', 'edison-watch-detectord'),
+    resolve(homedir(), '.sealgate'),
+    resolve(homedir(), '.config', 'sealgate-stdiod'),
+    resolve(homedir(), '.local', 'share', 'sealgate'),
+    resolve(homedir(), 'Library', 'Application Support', 'sealgate-detectord'),
     resolve(homedir(), 'Library', 'LaunchAgents'),
-    resolve(homedir(), 'Library', 'Logs', 'Edison Watch'),
-    resolve(homedir(), 'Library', 'Logs', 'edison-stdiod'),
-    resolve(homedir(), '.local', 'state', 'edison-stdiod'),
+    resolve(homedir(), 'Library', 'Logs', 'SealGate'),
+    resolve(homedir(), 'Library', 'Logs', 'sealgate-stdiod'),
+    resolve(homedir(), '.local', 'state', 'sealgate-stdiod'),
     // /dev/fd: stdiod/controller.ts counts open descriptors there.
     '/dev',
     // The dev tree only exists when running unpackaged (electron-vite serves
@@ -212,7 +212,7 @@ function classify(target: unknown): { path: string; root: string | null } | null
  * module that might read something.
  */
 export function installFsAudit(): void {
-  const mode = process.env.EDISON_FS_AUDIT
+  const mode = process.env.SEALGATE_FS_AUDIT
   if (mode !== '1' && mode !== 'all') return
   // `all` also tallies the *allowed* reads per root, so the allowlist can be
   // checked against reality instead of taken on faith.

@@ -1,5 +1,5 @@
 //! Read + write a single `ItemTable(key, value)` row of a `state.vscdb` SQLite
-//! DB. Unlike the read-only reader in `edison_detectord`, this opens read-write
+//! DB. Unlike the read-only reader in `sealgate_detectord`, this opens read-write
 //! so quarantine can rewrite the row's JSON value.
 //!
 //! Note on the live-DB race: Cursor/VSCode may hold the DB open and rewrite the

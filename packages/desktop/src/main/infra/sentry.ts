@@ -29,11 +29,11 @@ export function initSentry(): void {
   // Skip during the local auto-update test: the native crash handler (crashpad)
   // can race with Squirrel's quitAndInstall teardown, and we don't want test
   // crashes in Sentry anyway. See scripts/test-autoupdate.sh.
-  if (process.env.EW_UPDATE_TEST) {
+  if (process.env.SG_UPDATE_TEST) {
     console.log('[Sentry] Disabled for auto-update test')
     return
   }
-  // Custom (self-hosted) backend: no telemetry to Edison's Sentry project.
+  // Custom (self-hosted) backend: no telemetry to SealGate's Sentry project.
   // Checked once at startup - switching envs takes effect on the next launch.
   if (getActiveEnv() === 'custom') {
     console.log('[Sentry] Disabled for custom (self-hosted) backend')
@@ -84,7 +84,7 @@ export function submitUserFeedback(comments: string, email?: string): void {
   }
   getSentry()?.captureFeedback({
     message: comments,
-    name: email ?? 'Edison Watch User',
-    email: email ?? 'unknown@edisonwatch.app'
+    name: email ?? 'SealGate User',
+    email: email ?? 'unknown@sealgate.app'
   })
 }

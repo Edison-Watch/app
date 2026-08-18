@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# install-beeper.sh - wire Beeper into the Edison Watch MCP gateway on macOS.
+# install-beeper.sh - wire Beeper into the SealGate MCP gateway on macOS.
 #
 # Reality check (2026-07): `@beeper/desktop-mcp` is itself the MCP server; it
 # bridges Beeper's local Client API (127.0.0.1:23373-23378) to MCP. That API is
@@ -11,22 +11,22 @@
 # the human-gated steps below (device approval, server approval, Beeper login).
 #
 # What it automates:
-#   1. Install prerequisites (node/npx, Deno, `edison-stdiod`).
-#   2. Authorize this device to Edison Watch via the stdiod browser/device flow
-#      (`edison-stdiod login`; no API key paste, no step-up dance).
-#   3. Supervise the tunnel daemon (`edison-stdiod install`).
+#   1. Install prerequisites (node/npx, Deno, `sealgate-stdiod`).
+#   2. Authorize this device to SealGate via the stdiod browser/device flow
+#      (`sealgate-stdiod login`; no API key paste, no step-up dance).
+#   3. Supervise the tunnel daemon (`sealgate-stdiod install`).
 #   4. Submit Beeper's stdio MCP proxy (`npx @beeper/desktop-mcp`) as a tunnel
-#      server (`edison-stdiod server add`, which requests admin approval).
+#      server (`sealgate-stdiod server add`, which requests admin approval).
 #
 # What still needs a human (each one printed with the exact action):
 #   A. Enable MCP in Beeper Desktop (Settings > Developers > MCP) so :23373
 #      answers, and link WhatsApp / Telegram / etc. in the Beeper app.
-#   B. Approve the submitted `beeper` server once in the Edison dashboard.
+#   B. Approve the submitted `beeper` server once in the SealGate dashboard.
 #   C. Set BEEPER_ACCESS_TOKEN on that server in the dashboard so the child can
 #      authenticate. The script discovers a reusable token for you to paste.
 #
 # End-to-end topology once those are done:
-#   AI client --MCP--> Edison Gateway --WS tunnel--> edison-stdiod
+#   AI client --MCP--> SealGate Gateway --WS tunnel--> sealgate-stdiod
 #     --stdio--> npx @beeper/desktop-mcp --HTTP :23373--> Beeper Desktop
 #     --> WhatsApp / Telegram / LinkedIn / ...
 #
@@ -36,7 +36,7 @@
 
 set -euo pipefail
 
-# Keep edison-stdiod (anyhow) from spilling a Rust backtrace on expected
+# Keep sealgate-stdiod (anyhow) from spilling a Rust backtrace on expected
 # failures; we translate its exit codes into actionable messages ourselves.
 export RUST_BACKTRACE="${RUST_BACKTRACE:-0}"
 export RUST_LIB_BACKTRACE="${RUST_LIB_BACKTRACE:-0}"
@@ -49,16 +49,16 @@ export HOMEBREW_NO_ENV_HINTS="${HOMEBREW_NO_ENV_HINTS:-1}"
 # ---------------------------------------------------------------------------
 # Defaults (every one overridable by flag or environment variable)
 # ---------------------------------------------------------------------------
-# An EW_BACKEND supplied through the environment is an explicit choice, exactly
-# like passing --ew-backend, so resolve_backend must not override it with the
+# An SG_BACKEND supplied through the environment is an explicit choice, exactly
+# like passing --sg-backend, so resolve_backend must not override it with the
 # device's saved session. Capture that before applying the release default.
-if [ -n "${EW_BACKEND:-}" ]; then EW_BACKEND_SET=1; else EW_BACKEND_SET=0; fi
-EW_BACKEND="${EW_BACKEND:-https://dashboard.edison.watch}"  # --ew-backend/--demo/--release also set EW_BACKEND_SET
-EW_API_KEY="${EW_API_KEY:-}"                       # only for the mcp-url client snippet
+if [ -n "${SG_BACKEND:-}" ]; then SG_BACKEND_SET=1; else SG_BACKEND_SET=0; fi
+SG_BACKEND="${SG_BACKEND:-https://dashboard.edison.watch}"  # --sg-backend/--demo/--release also set SG_BACKEND_SET
+SG_API_KEY="${SG_API_KEY:-}"                       # only for the mcp-url client snippet
 BEEPER_ACCESS_TOKEN="${BEEPER_ACCESS_TOKEN:-}"     # skip token discovery if set
 SERVER_NAME="${SERVER_NAME:-beeper}"               # tunnel server name / gateway prefix
 # Display label for this script's own output only. It does NOT set the stdiod
-# device record: `edison-stdiod login` issues the device identity server-side.
+# device record: `sealgate-stdiod login` issues the device identity server-side.
 DEVICE_LABEL="${DEVICE_LABEL:-$(hostname -s 2>/dev/null || echo my-mac)}"
 MCP_PKG="${MCP_PKG:-@beeper/desktop-mcp}"          # the stdio proxy npx package
 
@@ -69,8 +69,8 @@ JSON=0
 INSTALL_DEPS=0
 VERBOSE=0
 NO_COLOR_FLAG=0
-NO_OPEN=0            # pass through to `edison-stdiod login --no-open` for headless auth
-RELOGIN=0           # force a fresh `edison-stdiod login` even if already authorized
+NO_OPEN=0            # pass through to `sealgate-stdiod login --no-open` for headless auth
+RELOGIN=0           # force a fresh `sealgate-stdiod login` even if already authorized
 REVEAL=0            # `token --reveal` prints the full token to stdout (default: masked)
 
 PROG="$(basename "$0")"
@@ -127,7 +127,7 @@ confirm() {
 
 # macOS is the supported target because Beeper's MCP endpoint lives in the macOS
 # Desktop app. stdiod also carries a Linux (systemd --user) supervisor path, so
-# we allow Linux with a warning and let `edison-stdiod install` report any gap.
+# we allow Linux with a warning and let `sealgate-stdiod install` report any gap.
 require_supported_platform() {
   case "$(uname -s)" in
     Darwin) ;;
@@ -142,9 +142,9 @@ require_supported_platform() {
 # Guard a value-taking flag before dereferencing its value. Args: remaining
 # count ($#), the flag, and the candidate value. Routes through die() (our error
 # contract) instead of `set -u`'s raw "unbound variable" when the value is
-# missing (`install --ew-backend`), and rejects a flag-looking value so a
+# missing (`install --sg-backend`), and rejects a flag-looking value so a
 # forgotten argument does not silently swallow the next flag
-# (`install --ew-backend --no-open`).
+# (`install --sg-backend --no-open`).
 needval() {
   local n="$1" flag="$2" val="${3:-}"
   { [ "$n" -ge 2 ] && [ "${val#-}" = "$val" ]; } \
@@ -154,10 +154,10 @@ needval() {
 parse_flags() {
   while [ $# -gt 0 ]; do
     case "$1" in
-      --ew-backend)   needval $# "$1" "${2:-}"; EW_BACKEND="$2"; EW_BACKEND_SET=1; shift 2;;
-      --demo)         EW_BACKEND="https://demo-dashboard.edison.watch"; EW_BACKEND_SET=1; shift;;
-      --release)      EW_BACKEND="https://dashboard.edison.watch"; EW_BACKEND_SET=1; shift;;
-      --ew-api-key)   needval $# "$1" "${2:-}"; EW_API_KEY="$2"; shift 2;;
+      --sg-backend)   needval $# "$1" "${2:-}"; SG_BACKEND="$2"; SG_BACKEND_SET=1; shift 2;;
+      --demo)         SG_BACKEND="https://demo-dashboard.edison.watch"; SG_BACKEND_SET=1; shift;;
+      --release)      SG_BACKEND="https://dashboard.edison.watch"; SG_BACKEND_SET=1; shift;;
+      --sg-api-key)   needval $# "$1" "${2:-}"; SG_API_KEY="$2"; shift 2;;
       --beeper-token) needval $# "$1" "${2:-}"; BEEPER_ACCESS_TOKEN="$2"; shift 2;;
       --server-name)  needval $# "$1" "${2:-}"; SERVER_NAME="$2"; shift 2;;
       --device-label) needval $# "$1" "${2:-}"; DEVICE_LABEL="$2"; shift 2;;
@@ -213,7 +213,7 @@ ensure_tool() {
 ensure_deps() {
   step "Checking prerequisites"
   require_supported_platform
-  local stdiod_src; stdiod_src="$(dirname "$0")/../crates/edison-stdiod"
+  local stdiod_src; stdiod_src="$(dirname "$0")/../crates/sealgate-stdiod"
   ensure_tool npx \
     "install Node (brew install node) or re-run with --install-deps" \
     brew install --quiet node
@@ -222,13 +222,13 @@ ensure_deps() {
   ensure_tool deno \
     "install Deno (brew install deno); @beeper/desktop-mcp runs its execute tool in a Deno sandbox" \
     brew install deno
-  ensure_tool edison-stdiod \
-    "run: cargo install --path crates/edison-stdiod   (or re-run with --install-deps)" \
+  ensure_tool sealgate-stdiod \
+    "run: cargo install --path crates/sealgate-stdiod   (or re-run with --install-deps)" \
     cargo install --path "$stdiod_src"
   if [ "$DRY_RUN" -eq 1 ]; then
     info "deps: preview only (nothing was installed)"
   else
-    ok "npx, deno, and edison-stdiod present"
+    ok "npx, deno, and sealgate-stdiod present"
   fi
 }
 
@@ -273,7 +273,7 @@ beeper_api_base() {
 }
 
 # Non-fatal: if Beeper Desktop is not answering we still wire the automatable
-# Edison side and print the exact action, so `install` makes progress instead of
+# SealGate side and print the exact action, so `install` makes progress instead of
 # stopping the operator at the first prerequisite.
 ensure_beeper_desktop() {
   step "Beeper Desktop MCP endpoint"
@@ -290,7 +290,7 @@ ensure_beeper_desktop() {
   todo "start Beeper: the Desktop app, or a headless server via 'beeper setup --server --install'"
   todo "link the chats you want (WhatsApp / Telegram / ...) in Beeper"
   info "@beeper/desktop-mcp bridges this local Client API to MCP, so either the Desktop app or a headless server works"
-  warn "continuing to wire the Edison side; the Beeper child stays idle until Beeper is reachable"
+  warn "continuing to wire the SealGate side; the Beeper child stays idle until Beeper is reachable"
 }
 
 # ---------------------------------------------------------------------------
@@ -415,8 +415,8 @@ EOF
 # doctor. Prefers a precise jq match on the server name; falls back to a raw
 # substring grep when jq is absent.
 server_registered() {
-  command -v edison-stdiod >/dev/null 2>&1 || return 1
-  local json; json="$(edison-stdiod server list --json 2>/dev/null || true)"
+  command -v sealgate-stdiod >/dev/null 2>&1 || return 1
+  local json; json="$(sealgate-stdiod server list --json 2>/dev/null || true)"
   [ -n "$json" ] || return 1
   if command -v jq >/dev/null 2>&1; then
     printf '%s' "$json" | jq -e --arg n "$SERVER_NAME" 'any(.. | objects; .name? == $n)' >/dev/null 2>&1
@@ -428,7 +428,7 @@ server_registered() {
 # ---------------------------------------------------------------------------
 # Step 2 + 3: authorize this device and supervise the daemon
 # ---------------------------------------------------------------------------
-stdiod_config() { printf '%s' "${EDISON_STDIOD_CONFIG:-$HOME/.config/edison-stdiod/config.toml}"; }
+stdiod_config() { printf '%s' "${SEALGATE_STDIOD_CONFIG:-$HOME/.config/sealgate-stdiod/config.toml}"; }
 
 # True when config already holds a client credential from a prior browser login.
 stdiod_logged_in() {
@@ -448,52 +448,52 @@ stdiod_saved_backend() {
 # authorized to (from stdiod config) instead of the release default. Stops
 # commands like bind-token from silently targeting the wrong environment.
 resolve_backend() {
-  [ "$EW_BACKEND_SET" -eq 1 ] && return 0
+  [ "$SG_BACKEND_SET" -eq 1 ] && return 0
   local saved; saved="$(stdiod_saved_backend)"
-  if [ -n "$saved" ] && [ "$saved" != "${EW_BACKEND%/}" ]; then
-    EW_BACKEND="$saved"
-    info "using the backend this device is authorized to: ${EW_BACKEND} (override with --ew-backend / --demo / --release)"
+  if [ -n "$saved" ] && [ "$saved" != "${SG_BACKEND%/}" ]; then
+    SG_BACKEND="$saved"
+    info "using the backend this device is authorized to: ${SG_BACKEND} (override with --sg-backend / --demo / --release)"
   fi
 }
 
 ensure_stdiod_auth() {
-  step "Edison device authorization (browser)"
+  step "SealGate device authorization (browser)"
   if [ "$DRY_RUN" -eq 1 ]; then
-    run edison-stdiod login --backend "$EW_BACKEND"
+    run sealgate-stdiod login --backend "$SG_BACKEND"
     return 0
   fi
   if [ "$RELOGIN" -eq 0 ] && stdiod_logged_in; then
     local saved; saved="$(stdiod_saved_backend)"
-    if [ -n "$saved" ] && [ "$saved" != "${EW_BACKEND%/}" ]; then
-      # An explicit --ew-backend that disagrees with the saved session is
+    if [ -n "$saved" ] && [ "$saved" != "${SG_BACKEND%/}" ]; then
+      # An explicit --sg-backend that disagrees with the saved session is
       # ambiguous, so stop rather than silently target the wrong backend. With
       # no explicit flag, prefer the authorized session.
-      if [ "$EW_BACKEND_SET" -eq 1 ]; then
-        die "this device is authorized to ${saved}, but --ew-backend asked for ${EW_BACKEND}" \
-          "pass --relogin to switch to ${EW_BACKEND}, or drop --ew-backend to keep ${saved}"
+      if [ "$SG_BACKEND_SET" -eq 1 ]; then
+        die "this device is authorized to ${saved}, but --sg-backend asked for ${SG_BACKEND}" \
+          "pass --relogin to switch to ${SG_BACKEND}, or drop --sg-backend to keep ${saved}"
       fi
-      warn "using the authorized backend ${saved} (pass --ew-backend <url> --relogin to switch)"
-      EW_BACKEND="$saved"
+      warn "using the authorized backend ${saved} (pass --sg-backend <url> --relogin to switch)"
+      SG_BACKEND="$saved"
     fi
     ok "already authorized on this device (client credential in $(stdiod_config))"
     return 0
   fi
-  # `edison-stdiod login` runs the OAuth device flow: it prints a URL to approve
+  # `sealgate-stdiod login` runs the OAuth device flow: it prints a URL to approve
   # (and opens a browser unless --no-open), then stores a scoped client
   # credential. No API key, no step-up token.
-  local args=(login --backend "$EW_BACKEND")
+  local args=(login --backend "$SG_BACKEND")
   [ "$NO_OPEN" -eq 1 ] && args+=(--no-open)
   info "a browser opens to approve this device; on a headless box pass --no-open and open the printed URL elsewhere"
-  if ! run edison-stdiod "${args[@]}"; then
-    die "edison-stdiod login failed" "check --ew-backend (${EW_BACKEND}) and complete the browser approval, then re-run: $PROG install"
+  if ! run sealgate-stdiod "${args[@]}"; then
+    die "sealgate-stdiod login failed" "check --sg-backend (${SG_BACKEND}) and complete the browser approval, then re-run: $PROG install"
   fi
-  ok "device authorized to ${EW_BACKEND}"
+  ok "device authorized to ${SG_BACKEND}"
 }
 
 ensure_stdiod_supervised() {
-  step "Edison tunnel daemon (supervisor)"
-  if ! run edison-stdiod install; then
-    die "edison-stdiod install could not register the supervisor unit" \
+  step "SealGate tunnel daemon (supervisor)"
+  if ! run sealgate-stdiod install; then
+    die "sealgate-stdiod install could not register the supervisor unit" \
       "macOS needs no privileges; Linux needs a logged-in systemd --user session. Fix that, then re-run: $PROG install"
   fi
   ok "daemon installed and supervised"
@@ -509,7 +509,7 @@ ensure_stdiod_supervised() {
 submit_beeper_server() {
   step "Submitting the Beeper server"
   if [ "$DRY_RUN" -eq 1 ]; then
-    run edison-stdiod server add "$SERVER_NAME" --display-name "Beeper" \
+    run sealgate-stdiod server add "$SERVER_NAME" --display-name "Beeper" \
       --command npx --arg=-y --arg="$MCP_PKG"
     return 0
   fi
@@ -520,7 +520,7 @@ submit_beeper_server() {
   # Capture with '&& rc=0 || rc=$?' so a non-zero add does not trip set -e.
   # Use --arg=VALUE: clap rejects a hyphen-leading value in the space form.
   local out rc
-  out="$(edison-stdiod server add "$SERVER_NAME" --display-name "Beeper" \
+  out="$(sealgate-stdiod server add "$SERVER_NAME" --display-name "Beeper" \
         --command npx --arg=-y --arg="$MCP_PKG" 2>&1)" && rc=0 || rc=$?
   printf '%s\n' "$out" | grep -viE '^[[:space:]]*$' >&2 || true
   if [ "$rc" -ne 0 ]; then
@@ -528,11 +528,11 @@ submit_beeper_server() {
       ok "a request for '$SERVER_NAME' is already pending; approve it in the dashboard"
       return 0
     fi
-    die "edison-stdiod server add failed for '$SERVER_NAME'" \
-      "check 'edison-stdiod status' shows the daemon connected, then re-run: $PROG install"
+    die "sealgate-stdiod server add failed for '$SERVER_NAME'" \
+      "check 'sealgate-stdiod status' shows the daemon connected, then re-run: $PROG install"
   fi
   ok "submitted '$SERVER_NAME' (npx $MCP_PKG) for approval"
-  todo "approve '$SERVER_NAME' as an admin: ${EW_BACKEND%/}  ->  Servers page (pending requests), or Overview"
+  todo "approve '$SERVER_NAME' as an admin: ${SG_BACKEND%/}  ->  Servers page (pending requests), or Overview"
   info "a 'not verified' badge before the token is set is expected and does not block approval"
 }
 
@@ -560,7 +560,7 @@ report_beeper_token() {
     todo "in Beeper Desktop: Settings > Developers > Beeper Desktop API > create/copy a token"
     tok=""
   fi
-  todo "after approving '$SERVER_NAME', set the token: $PROG bind-token --ew-api-key <admin-key>"
+  todo "after approving '$SERVER_NAME', set the token: $PROG bind-token --sg-api-key <admin-key>"
   info "the device-scoped add declares no env, so the dashboard shows no field for it; bind-token pushes it via the admin /env route"
   # Keep the token off stdout so it is not captured by accident; print_result
   # only reports whether one was found.
@@ -571,7 +571,7 @@ report_beeper_token() {
 # Result
 # ---------------------------------------------------------------------------
 print_result() {
-  local mcp_url="${EW_BACKEND%/}/mcp"
+  local mcp_url="${SG_BACKEND%/}/mcp"
   if [ "$JSON" -eq 1 ]; then
     printf '{"mcp_url":"%s","server":"%s","device_label":"%s","beeper_token_present":%s}\n' \
       "$(json_escape "$mcp_url")" "$(json_escape "$SERVER_NAME")" "$(json_escape "$DEVICE_LABEL")" \
@@ -583,12 +583,12 @@ print_result() {
   printf '%smcp_url:%s %s%s%s\n' "$b" "$r" "$g" "$mcp_url" "$r"
   printf '%sserver:%s  %s (gateway prefix: %s_*)\n' "$b" "$r" "$SERVER_NAME" "$SERVER_NAME"
   printf '%sdevice:%s  %s (display label)\n' "$b" "$r" "$DEVICE_LABEL"
-  if [ -n "$EW_API_KEY" ]; then
-    printf '\n%s# add to Claude Code (gateway auth uses your Edison API key):%s\n' "$d" "$r"
-    printf 'claude mcp add edison %s -t http -H "Authorization: Bearer %s" -s user\n' "$mcp_url" "$EW_API_KEY"
+  if [ -n "$SG_API_KEY" ]; then
+    printf '\n%s# add to Claude Code (gateway auth uses your SealGate API key):%s\n' "$d" "$r"
+    printf 'claude mcp add sealgate %s -t http -H "Authorization: Bearer %s" -s user\n' "$mcp_url" "$SG_API_KEY"
   else
-    printf '\n%s# the AI client authenticates to the gateway with your Edison API key or OAuth;%s\n' "$d" "$r"
-    printf '%s# pass --ew-api-key to print a ready-to-run claude-mcp-add snippet.%s\n' "$d" "$r"
+    printf '\n%s# the AI client authenticates to the gateway with your SealGate API key or OAuth;%s\n' "$d" "$r"
+    printf '%s# pass --sg-api-key to print a ready-to-run claude-mcp-add snippet.%s\n' "$d" "$r"
   fi
 }
 
@@ -602,7 +602,7 @@ cmd_install() {
   ensure_stdiod_supervised
   submit_beeper_server
   report_beeper_token
-  printf '\n%s%s== Edison side wired ==%s\n' "$C_BOLD" "$C_GREEN" "$C_RESET" >&2
+  printf '\n%s%s== SealGate side wired ==%s\n' "$C_BOLD" "$C_GREEN" "$C_RESET" >&2
   log "remaining human steps are printed above as 'action:' lines (approve the server, set the token)."
   print_result
 }
@@ -610,12 +610,12 @@ cmd_install() {
 cmd_doctor() {
   step "Doctor"
   local allgood=1
-  for c in npx deno edison-stdiod; do
+  for c in npx deno sealgate-stdiod; do
     if command -v "$c" >/dev/null 2>&1; then ok "$c"; else warn "$c missing"; allgood=0; fi
   done
   if beeper_api_base >/dev/null 2>&1; then ok "Beeper Client API reachable"; else warn "Beeper Client API not reachable (start Beeper Desktop with MCP enabled, or a headless 'beeper' server)"; allgood=0; fi
-  if stdiod_logged_in; then ok "device authorized to Edison"; else warn "not authorized (run: $PROG install)"; allgood=0; fi
-  if command -v edison-stdiod >/dev/null 2>&1 && edison-stdiod status >/dev/null 2>&1; then
+  if stdiod_logged_in; then ok "device authorized to SealGate"; else warn "not authorized (run: $PROG install)"; allgood=0; fi
+  if command -v sealgate-stdiod >/dev/null 2>&1 && sealgate-stdiod status >/dev/null 2>&1; then
     ok "stdiod daemon connected"; else warn "stdiod daemon not running (run: $PROG install)"; allgood=0; fi
   if server_registered; then
     ok "server '$SERVER_NAME' approved on this device"; else warn "server '$SERVER_NAME' not approved yet (submit + approve in dashboard)"; fi
@@ -623,8 +623,8 @@ cmd_doctor() {
 }
 
 cmd_status() {
-  need_cmd edison-stdiod
-  run edison-stdiod status
+  need_cmd sealgate-stdiod
+  run sealgate-stdiod status
   local base; base="$(beeper_api_base 2>/dev/null || true)"
   if [ -n "$base" ]; then ok "Beeper Client API: $base"; else warn "Beeper Client API not reachable (Beeper Desktop with MCP enabled, or a headless 'beeper' server)"; fi
 }
@@ -644,7 +644,7 @@ cmd_token() {
     return 0
   fi
   ok "found a working token [$(mask_token "$tok")]"
-  info "run '$PROG bind-token --ew-api-key <admin-key>' to push it (no copy needed); add --reveal to print the full value"
+  info "run '$PROG bind-token --sg-api-key <admin-key>' to push it (no copy needed); add --reveal to print the full value"
 }
 
 # bind-token: push BEEPER_ACCESS_TOKEN onto the (already approved) server via the
@@ -657,8 +657,8 @@ cmd_bind_token() {
   # The admin key is only needed for the real POST. Requiring it before the
   # dry-run branch would block a credential-free preview, so gate it on DRY_RUN.
   if [ "$DRY_RUN" -eq 0 ]; then
-    [ -n "$EW_API_KEY" ] || die "an admin Edison API key is required to push env" \
-      "pass --ew-api-key edison_... (must belong to an org admin on ${EW_BACKEND})"
+    [ -n "$SG_API_KEY" ] || die "an admin SealGate API key is required to push env" \
+      "pass --sg-api-key sealgate_... (must belong to an org admin on ${SG_BACKEND})"
   fi
   local tok="$BEEPER_ACCESS_TOKEN"
   if [ -z "$tok" ] && [ "$DRY_RUN" -eq 0 ]; then
@@ -666,14 +666,14 @@ cmd_bind_token() {
       die "no Beeper token to bind" "pass --beeper-token <TOKEN>, or run '$PROG token' to find one"
     fi
   fi
-  local url="${EW_BACKEND%/}/api/v1/servers/${SERVER_NAME}/env"
+  local url="${SG_BACKEND%/}/api/v1/servers/${SERVER_NAME}/env"
   if [ "$DRY_RUN" -eq 1 ]; then
     run curl -X POST "$url" '(env: BEEPER_ACCESS_TOKEN=<discovered>)'
     return 0
   fi
   local code
   code="$(curl -s -o /dev/null -w '%{http_code}' -m 60 --connect-timeout 5 -X POST "$url" \
-    -H "Authorization: Bearer ${EW_API_KEY}" -H "Content-Type: application/json" \
+    -H "Authorization: Bearer ${SG_API_KEY}" -H "Content-Type: application/json" \
     --data "$(printf '{"env":{"BEEPER_ACCESS_TOKEN":"%s"}}' "$(json_escape "$tok")")" 2>/dev/null || true)"
   [ -z "$code" ] && code="000"
   case "$code" in
@@ -681,7 +681,7 @@ cmd_bind_token() {
     400)     die "the server rejected the env or the spawn did not verify (http 400)" \
                "confirm the '$SERVER_NAME' request is approved and Beeper Desktop is reachable, then re-run: $PROG bind-token";;
     401|403) die "not authorized to push env (http ${code})" \
-               "the /env route is admin-only; --ew-api-key must be an org admin on ${EW_BACKEND}";;
+               "the /env route is admin-only; --sg-api-key must be an org admin on ${SG_BACKEND}";;
     404)     die "server '$SERVER_NAME' not found (http 404)" \
                "approve the '$SERVER_NAME' request in the dashboard first, then re-run: $PROG bind-token";;
     000)     die "could not reach ${url}" "check the network and that the daemon is connected, then re-run: $PROG bind-token";;
@@ -693,9 +693,9 @@ cmd_mcp_url() { print_result; }
 
 cmd_uninstall() {
   confirm "withdraw the '$SERVER_NAME' request/server and remove the stdiod supervisor unit?" || die "aborted" ""
-  command -v edison-stdiod >/dev/null 2>&1 && {
-    run edison-stdiod server remove "$SERVER_NAME" || true
-    run edison-stdiod uninstall
+  command -v sealgate-stdiod >/dev/null 2>&1 && {
+    run sealgate-stdiod server remove "$SERVER_NAME" || true
+    run sealgate-stdiod uninstall
   }
   log "uninstall complete. Approved-server removal may need a dashboard/admin action; Beeper Desktop was left untouched."
 }
@@ -705,9 +705,9 @@ cmd_uninstall() {
 # ===========================================================================
 usage() {
   cat >&2 <<EOF
-$PROG - wire Beeper into the Edison Watch MCP gateway (macOS)
+$PROG - wire Beeper into the SealGate MCP gateway (macOS)
 
-Beeper only serves MCP from the Desktop app, so this automates the Edison side
+Beeper only serves MCP from the Desktop app, so this automates the SealGate side
 and prints the exact human steps Beeper and the dashboard still require.
 
 Usage:
@@ -718,21 +718,21 @@ Commands:
   doctor      Check prerequisites and current state (read-only)
   status      Show stdiod daemon + Beeper Desktop API status
   token       Discover a reusable Beeper token to paste into the dashboard
-  bind-token  Push BEEPER_ACCESS_TOKEN onto the approved server (needs --ew-api-key admin)
-  mcp-url     Print the Edison MCP URL and client snippet
+  bind-token  Push BEEPER_ACCESS_TOKEN onto the approved server (needs --sg-api-key admin)
+  mcp-url     Print the SealGate MCP URL and client snippet
   uninstall   Withdraw the server and remove the supervisor unit
 
 Common flags (also settable as UPPER_SNAKE env vars):
-  --ew-backend URL     Edison backend        (EW_BACKEND, default $EW_BACKEND)
-  --demo               Shortcut for --ew-backend https://demo-dashboard.edison.watch (main deploy)
-  --release            Shortcut for --ew-backend https://dashboard.edison.watch
+  --sg-backend URL     SealGate backend        (SG_BACKEND, default $SG_BACKEND)
+  --demo               Shortcut for --sg-backend https://demo-dashboard.edison.watch (main deploy)
+  --release            Shortcut for --sg-backend https://dashboard.edison.watch
                        With none of these set, commands follow the backend this device
                        is already authorized to (from stdiod config).
-  --ew-api-key KEY     Edison API key; admin key required for bind-token (EW_API_KEY)
+  --sg-api-key KEY     SealGate API key; admin key required for bind-token (SG_API_KEY)
   --beeper-token TOK   Beeper access token   (BEEPER_ACCESS_TOKEN) skips discovery
   --no-open            Headless device auth: print the approval URL, do not open a browser
   --relogin            Force a fresh device authorization even if already authorized
-  --install-deps       Consent to auto-install missing deps (npx/edison-stdiod).
+  --install-deps       Consent to auto-install missing deps (npx/sealgate-stdiod).
                        Confirms first unless --yes; validates each landed on PATH.
   --dry-run            Print what would run; change nothing
   --yes                Skip confirmations (agents pass this)
@@ -743,8 +743,8 @@ Common flags (also settable as UPPER_SNAKE env vars):
   -h, --help           This help
 
 Examples:
-  # Agent-friendly: install deps and wire the Edison side, headless device auth
-  $PROG install --install-deps --yes --no-open --ew-backend https://demo-dashboard.edison.watch
+  # Agent-friendly: install deps and wire the SealGate side, headless device auth
+  $PROG install --install-deps --yes --no-open --sg-backend https://demo-dashboard.edison.watch
 
   # Preview without changing anything
   $PROG install --dry-run
@@ -758,12 +758,12 @@ EOF
 
 subcmd_help() {
   case "$1" in
-    install)  log "install - wire the Edison side and print remaining human steps. Idempotent; safe to re-run."
-              log "  optional: --ew-backend, --no-open, --install-deps, --yes, --dry-run.";;
+    install)  log "install - wire the SealGate side and print remaining human steps. Idempotent; safe to re-run."
+              log "  optional: --sg-backend, --no-open, --install-deps, --yes, --dry-run.";;
     token)    log "token - discover a reusable Beeper token to paste into the dashboard.";;
     bind-token) log "bind-token - push BEEPER_ACCESS_TOKEN onto the approved server via the admin /env route."
-              log "  needs --ew-api-key <admin-key>. Run after approving the '$SERVER_NAME' request.";;
-    mcp-url)  log "mcp-url - print the gateway URL + client snippet. pass --ew-api-key for a ready-to-run snippet. supports --json.";;
+              log "  needs --sg-api-key <admin-key>. Run after approving the '$SERVER_NAME' request.";;
+    mcp-url)  log "mcp-url - print the gateway URL + client snippet. pass --sg-api-key for a ready-to-run snippet. supports --json.";;
     status)   log "status - show stdiod daemon + Beeper Desktop API status.";;
     doctor)   log "doctor - verify prerequisites and current state (read-only).";;
     uninstall)log "uninstall - withdraw the server and remove the supervisor unit. pass --yes to skip the prompt.";;

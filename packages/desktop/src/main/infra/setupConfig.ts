@@ -9,7 +9,7 @@ import { existsSync, readFileSync, writeFileSync, unlinkSync } from "fs";
 import { join } from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
-import { getEnvByName } from "@edison-watch/shared/config";
+import { getEnvByName } from "@sealgate/shared/config";
 import { logClaudeCmd } from "../runtime/monitorLog";
 
 const execFileAsync = promisify(execFile);
@@ -17,12 +17,12 @@ const execFileAsync = promisify(execFile);
 // ── Dry-run mode ────────────────────────────────────────────────────
 
 /** When true, onboarding runs normally but config files are not written. */
-export const DRY_RUN = process.env.EDISON_DRY_RUN === "1";
+export const DRY_RUN = process.env.SEALGATE_DRY_RUN === "1";
 if (DRY_RUN) console.log("[dry-run] Dry-run mode enabled - config files will not be modified");
 
 // ── Debug environment switcher ───────────────────────────────────────
 
-// "custom" = a self-hosted Edison deployment the user points the app at by
+// "custom" = a self-hosted SealGate deployment the user points the app at by
 // URL (docker-compose stack, Railway instance, ...). Its URLs live alongside
 // the env name in the override file - see getCustomBackend().
 export const DEBUG_ENV_NAMES = ["demo", "release", "dev", "custom"] as const;
@@ -64,7 +64,7 @@ function getEnvUrls(env: string): { api: string; mcp: string } | null {
 }
 
 export function getDebugEnvOverridePath(): string {
-  return join(app.getPath("userData"), "edison_debug_env.json");
+  return join(app.getPath("userData"), "sealgate_debug_env.json");
 }
 
 interface DebugEnvOverrideFile {
@@ -177,9 +177,9 @@ export function setCustomBackend(apiBaseUrl: string, mcpBaseUrl?: string): Custo
 // ── Setup data persistence ──────────────────────────────────────────
 
 /**
- * Apps Edison configures itself, used as the fallback when a caller names none.
+ * Apps SealGate configures itself, used as the fallback when a caller names none.
  *
- * Excludes every host whose servers Edison cannot install into: ChatGPT, and
+ * Excludes every host whose servers SealGate cannot install into: ChatGPT, and
  * the two Claude hosts whose config file takes stdio entries only. The daemon
  * drops them anyway, but a list here that disagrees with the daemon is a second
  * answer to the same question waiting to be believed.
@@ -191,7 +191,7 @@ export const ALL_SUPPORTED_APPS = [
 
 export interface EnvCredentials {
   apiKey: string;
-  edisonSecretKey?: string;
+  sealgateSecretKey?: string;
 }
 
 export interface SetupData {
@@ -202,7 +202,7 @@ export interface SetupData {
   mcpBaseUrl?: string;
   apiBaseUrl?: string;
   apiKey?: string;
-  edisonSecretKey?: string;
+  sealgateSecretKey?: string;
   configuredApps?: string[];
   /** Per-environment credentials so switching envs also switches API keys. */
   envCredentials?: Record<string, EnvCredentials>;
@@ -242,7 +242,7 @@ export function markSetupComplete(data?: Partial<SetupData>): void {
   // The apiKey may exist ONLY in this map: a returning login keeps it in the
   // renderer's auth state and never writes it top-level. Gating this block on
   // the top-level key therefore skipped the update for exactly those setups, so
-  // saving a new org key left `envCredentials[env].edisonSecretKey` stale - and
+  // saving a new org key left `envCredentials[env].sealgateSecretKey` stale - and
   // getCredentialsForEnv() prefers that entry, so every later reader (daemon
   // enrollment included) kept handing out the OLD secret.
   const env = getActiveEnv();
@@ -250,11 +250,11 @@ export function markSetupComplete(data?: Partial<SetupData>): void {
   const existingEnvEntry = envCreds[env];
   const resolvedApiKey = data?.apiKey ?? existingEnvEntry?.apiKey ?? merged.apiKey;
   const resolvedSecret =
-    data?.edisonSecretKey ?? existingEnvEntry?.edisonSecretKey ?? merged.edisonSecretKey;
+    data?.sealgateSecretKey ?? existingEnvEntry?.sealgateSecretKey ?? merged.sealgateSecretKey;
   if (resolvedApiKey) {
     envCreds[env] = {
       apiKey: resolvedApiKey,
-      ...(resolvedSecret && { edisonSecretKey: resolvedSecret }),
+      ...(resolvedSecret && { sealgateSecretKey: resolvedSecret }),
     };
     merged.envCredentials = envCreds;
   }
@@ -293,7 +293,7 @@ export interface SavedAccount {
   mcpBaseUrl?: string;
   apiBaseUrl?: string;
   apiKey?: string;
-  edisonSecretKey?: string;
+  sealgateSecretKey?: string;
   configuredApps?: string[];
   envCredentials?: Record<string, EnvCredentials>;
   savedAt: string;
@@ -327,7 +327,7 @@ export function saveAccount(data: SetupData): void {
     mcpBaseUrl: data.mcpBaseUrl,
     apiBaseUrl: data.apiBaseUrl,
     apiKey: data.apiKey,
-    edisonSecretKey: data.edisonSecretKey,
+    sealgateSecretKey: data.sealgateSecretKey,
     configuredApps: data.configuredApps,
     envCredentials: data.envCredentials,
     savedAt: new Date().toISOString(),
@@ -365,7 +365,7 @@ export function switchToAccount(userId: string): SetupData | null {
     mcpBaseUrl: account.mcpBaseUrl,
     apiBaseUrl: account.apiBaseUrl,
     apiKey: account.apiKey,
-    edisonSecretKey: account.edisonSecretKey,
+    sealgateSecretKey: account.sealgateSecretKey,
     configuredApps: account.configuredApps,
     envCredentials: account.envCredentials,
   };
@@ -390,7 +390,7 @@ export function getCredentialsForEnv(env?: string): EnvCredentials | null {
   // entry means the user hasn't registered for that env yet - return null
   // so callers can warn instead of silently using the wrong key.
   if (!setupData.envCredentials && setupData.apiKey) {
-    return { apiKey: setupData.apiKey, edisonSecretKey: setupData.edisonSecretKey };
+    return { apiKey: setupData.apiKey, sealgateSecretKey: setupData.sealgateSecretKey };
   }
   return null;
 }
@@ -489,11 +489,11 @@ export function getMcpConfig(): string | null {
   const creds = getCredentialsForEnv();
   const config = {
     servers: {
-      edisonwatch: {
+      sealgate: {
         type: "http",
         url,
-        ...(creds?.edisonSecretKey
-          ? { headers: { "X-Edison-Secret-Key": creds.edisonSecretKey } }
+        ...(creds?.sealgateSecretKey
+          ? { headers: { "X-SealGate-Secret-Key": creds.sealgateSecretKey } }
           : {}),
       },
     },
@@ -565,11 +565,11 @@ export type ClaudeCodeMcpStatus = "connected" | "failed" | "needs-auth" | "not-f
 
 /**
  * Check whether Claude Code has actually loaded and connected to the
- * edison-watch MCP server by running `claude mcp get edison-watch` and
+ * sealgate MCP server by running `claude mcp get sealgate` and
  * parsing the human-readable status line.
  */
 export async function checkClaudeCodeMcpConnection(): Promise<ClaudeCodeMcpStatus> {
-  const getArgs = ["mcp", "get", "edison-watch"];
+  const getArgs = ["mcp", "get", "sealgate"];
   logClaudeCmd(getArgs);
   try {
     const { stdout } = await execFileAsync("claude", getArgs, {

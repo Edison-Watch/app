@@ -1,13 +1,13 @@
 /**
  * Security-into-Business-Value animation.
  *
- * Single AI agent (generic robot) sends traffic through Edison gateway.
- * Edison runs a radar-scan risk assessment, then routes the request to
+ * Single AI agent (generic robot) sends traffic through SealGate gateway.
+ * SealGate runs a radar-scan risk assessment, then routes the request to
  * one of four destinations - each represented by a distinct icon:
  *
  *   1. Approved (risk 0.1) → MCP connector (top-right) - tool call proceeds
  *   2. Ask user (risk 0.5) → Person icon (above agent) - user decides
- *   3. IT ticket (risk 0.7) → Admin icon (below Edison) - escalated
+ *   3. IT ticket (risk 0.7) → Admin icon (below SealGate) - escalated
  *   4. Blocked  (risk 0.9) → Denied (bottom-center) - stopped at gateway
  *
  * 16s loop. Pure SVG + CSS. Respects `prefers-reduced-motion`.
@@ -17,7 +17,7 @@
 import {
   ADMIN_PATH,
   DANGER,
-  EdisonLogo,
+  SealGateLogo,
   McpIcon,
   McpPacket,
   ORANGE as O,
@@ -36,8 +36,8 @@ const COLORS = ['var(--accent)', AMBER, TICKET, DANGER] as const
 const DEST = [
   { x: 580, y: 80 }, // MCP server (top-right)
   { x: 134, y: 78 }, // Person/user (above laptop)
-  { x: 360, y: 200 }, // Admin (below Edison)
-  { x: 360, y: 210 } // Blocked (below Edison, never arrives)
+  { x: 360, y: 200 }, // Admin (below SealGate)
+  { x: 360, y: 210 } // Blocked (below SealGate, never arrives)
 ] as const
 
 const CSS = `
@@ -53,7 +53,7 @@ const CSS = `
 .sbv .sbv-pulse { transform-origin:360px 130px; animation: sbv-pulse 1.4s cubic-bezier(.2,.8,.4,1) infinite; }
 .sbv .sbv-pkt path, .sbv .sbv-pkt circle { fill: currentColor; }
 
-/* Inbound packets: robot → Edison */
+/* Inbound packets: robot → SealGate */
 .sbv .sbv-pk1 { color:${O}; animation: sbv-pk1 16s ease-in-out infinite; }
 .sbv .sbv-pk2 { color:${O}; animation: sbv-pk2 16s ease-in-out infinite; }
 .sbv .sbv-pk3 { color:${O}; animation: sbv-pk3 16s ease-in-out infinite; }
@@ -77,7 +77,7 @@ const CSS = `
 .sbv .sbv-score3 { animation: sbv-score3 16s ease-in-out infinite; }
 .sbv .sbv-score4 { animation: sbv-score4 16s ease-in-out infinite; }
 
-/* Outbound packets: Edison → destinations */
+/* Outbound packets: SealGate → destinations */
 .sbv .sbv-out1 { color:var(--accent); animation: sbv-out1 16s ease-in-out infinite; }
 .sbv .sbv-out2 { color:${AMBER}; animation: sbv-out2 16s ease-in-out infinite; }
 .sbv .sbv-out3 { color:${TICKET}; animation: sbv-out3 16s ease-in-out infinite; }
@@ -103,7 +103,7 @@ const CSS = `
 .sbv .sbv-checklist { animation: sbv-checklist 16s ease-in-out infinite; }
 /* Individual checklist rows revealed sequentially */
 .sbv .sbv-chk1 { animation: sbv-chk1 16s ease-in-out infinite; }
-/* Big red X between Edison and Slack */
+/* Big red X between SealGate and Slack */
 .sbv .sbv-block-x { animation: sbv-block-x 16s ease-in-out infinite; }
 .sbv .sbv-chk2 { animation: sbv-chk2 16s ease-in-out infinite; }
 .sbv .sbv-chk3 { animation: sbv-chk3 16s ease-in-out infinite; }
@@ -123,12 +123,12 @@ const CSS = `
 /*
  * Timeline (16s = 100%):
  *   Phase 1:  0–18%   Direct approve → Slack
- *   Phase 2: 18–50%   Ask user → approve → back through Edison → Slack
- *   Phase 3: 50–82%   Ask IT admin → approve → back through Edison → Slack
+ *   Phase 2: 18–50%   Ask user → approve → back through SealGate → Slack
+ *   Phase 3: 50–82%   Ask IT admin → approve → back through SealGate → Slack
  *   Phase 4: 82–100%  Blocked at gateway
  */
 
-/* Inbound packets: laptop → Edison */
+/* Inbound packets: laptop → SealGate */
 @keyframes sbv-pk1 {
   0%,1%   { opacity:0; }
   2%      { transform:translate(180px,130px); opacity:.8; }
@@ -176,7 +176,7 @@ const CSS = `
 @keyframes sbv-score3 { 0%,62% { opacity:0; } 63%,65% { opacity:1; } 66%,100% { opacity:0; } }
 @keyframes sbv-score4 { 0%,93% { opacity:0; } 94%,99% { opacity:1; } 100% { opacity:0; } }
 
-/* Outbound packets: Edison → destination */
+/* Outbound packets: SealGate → destination */
 @keyframes sbv-out1 {
   0%,14%  { opacity:0; }
   15%     { transform:translate(382px,130px); opacity:.8; }
@@ -215,7 +215,7 @@ const CSS = `
 @keyframes sbv-approve2 { 0%,38% { opacity:0; transform:scale(0.5); } 39%,43% { opacity:1; transform:scale(1); } 44%,100% { opacity:0; transform:scale(1); } }
 @keyframes sbv-approve3 { 0%,70% { opacity:0; transform:scale(0.5); } 71%,75% { opacity:1; transform:scale(1); } 76%,100% { opacity:0; transform:scale(1); } }
 
-/* Forwarded packets: intermediary → Edison → Slack after approval */
+/* Forwarded packets: intermediary → SealGate → Slack after approval */
 @keyframes sbv-fwd2 {
   0%,43%  { opacity:0; }
   44%     { transform:translate(${DEST[1].x}px,${DEST[1].y}px); opacity:.8; color:${AMBER}; }
@@ -382,7 +382,7 @@ export default function SecurityBusinessValueAnimation(): React.ReactNode {
         </text>
 
         {/* ══ Connector lines (always visible, faint) ══ */}
-        {/* Laptop → Edison */}
+        {/* Laptop → SealGate */}
         <line
           className="sbv-line"
           x1="176"
@@ -394,7 +394,7 @@ export default function SecurityBusinessValueAnimation(): React.ReactNode {
           strokeWidth="1.5"
           strokeDasharray="3 3"
         />
-        {/* Edison → MCP server (top-right) */}
+        {/* SealGate → MCP server (top-right) */}
         <line
           className="sbv-line"
           x1="382"
@@ -406,7 +406,7 @@ export default function SecurityBusinessValueAnimation(): React.ReactNode {
           strokeWidth="1"
           strokeDasharray="3 3"
         />
-        {/* Edison → User (back up to person above laptop) */}
+        {/* SealGate → User (back up to person above laptop) */}
         <line
           className="sbv-line"
           x1="338"
@@ -418,7 +418,7 @@ export default function SecurityBusinessValueAnimation(): React.ReactNode {
           strokeWidth="1"
           strokeDasharray="3 3"
         />
-        {/* Edison → Admin (below Edison) */}
+        {/* SealGate → Admin (below SealGate) */}
         <line
           className="sbv-line"
           x1="360"
@@ -430,7 +430,7 @@ export default function SecurityBusinessValueAnimation(): React.ReactNode {
           strokeWidth="1"
           strokeDasharray="3 3"
         />
-        {/* User → Edison (return path after approval) */}
+        {/* User → SealGate (return path after approval) */}
         <line
           className="sbv-line"
           x1="155"
@@ -442,7 +442,7 @@ export default function SecurityBusinessValueAnimation(): React.ReactNode {
           strokeWidth="1"
           strokeDasharray="3 3"
         />
-        {/* Admin → Edison (return path after approval) */}
+        {/* Admin → SealGate (return path after approval) */}
         <line
           className="sbv-line"
           x1="364"
@@ -546,7 +546,7 @@ export default function SecurityBusinessValueAnimation(): React.ReactNode {
           />
         </g>
 
-        {/* ── 3. IT Admin + Ticket card (below Edison) ── */}
+        {/* ── 3. IT Admin + Ticket card (below SealGate) ── */}
         <g>
           <rect
             x={310}
@@ -686,7 +686,7 @@ export default function SecurityBusinessValueAnimation(): React.ReactNode {
         </text>
 
         {/* ═══════════════════════════════════════════════
-            EDISON GATEWAY (center)
+            SEALGATE GATEWAY (center)
             ═══════════════════════════════════════════════ */}
         <circle
           className="sbv-pulse"
@@ -698,7 +698,7 @@ export default function SecurityBusinessValueAnimation(): React.ReactNode {
           strokeOpacity="0.5"
           strokeWidth="1.5"
         />
-        <EdisonLogo x={338} y={110} w={44} h={42} />
+        <SealGateLogo x={338} y={110} w={44} h={42} />
         <text
           x="360"
           y="166"
@@ -708,11 +708,11 @@ export default function SecurityBusinessValueAnimation(): React.ReactNode {
           fontWeight="bold"
           fontFamily="system-ui,sans-serif"
         >
-          Edison
+          SealGate
         </text>
 
         {/* ═══════════════════════════════════════════════
-            RADAR SCANNER (above Edison, per phase)
+            RADAR SCANNER (above SealGate, per phase)
             ═══════════════════════════════════════════════ */}
         {COLORS.map((color, i) => (
           <g key={i} className={`sbv-radar${i + 1}`}>
@@ -960,7 +960,7 @@ export default function SecurityBusinessValueAnimation(): React.ReactNode {
         {/* ═══════════════════════════════════════════════
             PACKETS
             ═══════════════════════════════════════════════ */}
-        {/* Inbound: robot → Edison */}
+        {/* Inbound: robot → SealGate */}
         <g className="sbv-pkt sbv-pk1">
           <McpPacket />
         </g>
@@ -974,7 +974,7 @@ export default function SecurityBusinessValueAnimation(): React.ReactNode {
           <McpPacket />
         </g>
 
-        {/* Outbound: Edison → destinations */}
+        {/* Outbound: SealGate → destinations */}
         <g className="sbv-pkt sbv-out1">
           <McpPacket />
         </g>

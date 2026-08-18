@@ -1,11 +1,11 @@
 //! Disk-based recovery: reverse quarantines by scanning the on-disk artifacts
-//! (`disabled_<config>.json` sidecars and `ew-disabled-*` dirs) rather than the
+//! (`disabled_<config>.json` sidecars and `sg-disabled-*` dirs) rather than the
 //! tracked state. Idempotent; useful after any interrupted/untracked run.
 
 use std::path::{Path, PathBuf};
 
-use edison_detectord::{LocationExtra, SourceKind};
 use mcp_quarantine::{ConfigStore, FileConfigStore, QuarantineRecord};
+use sealgate_detectord::{LocationExtra, SourceKind};
 
 use crate::agents;
 
@@ -46,7 +46,7 @@ pub fn recover() -> (usize, usize) {
     (servers, dirs)
 }
 
-/// Recursively collect `disabled_*.json` files and `ew-disabled-*` dirs.
+/// Recursively collect `disabled_*.json` files and `sg-disabled-*` dirs.
 fn collect(
     dir: &Path,
     depth: usize,
@@ -64,7 +64,7 @@ fn collect(
         let path = e.path();
         let name = e.file_name().to_string_lossy().into_owned();
         if path.is_dir() {
-            if name.starts_with("ew-disabled-") {
+            if name.starts_with("sg-disabled-") {
                 dirs.push(path.clone());
             }
             collect(&path, depth + 1, max, sidecars, dirs);
@@ -72,7 +72,7 @@ fn collect(
             && name.ends_with(".json")
         {
             // Both our current prefix and the legacy `disabled_`; the
-            // `_edisonOriginalFile` metadata filter in restore_sidecar keeps us
+            // `_sealgateOriginalFile` metadata filter in restore_sidecar keeps us
             // from touching the Electron app's own entries.
             sidecars.push(path);
         }
@@ -80,7 +80,7 @@ fn collect(
 }
 
 /// Restore every server recorded in one `disabled_<config>.json` sidecar, using
-/// the `_edisonOriginalFile` / `_edisonKeyPath` metadata each entry carries.
+/// the `_sealgateOriginalFile` / `_sealgateKeyPath` metadata each entry carries.
 fn restore_sidecar(store: &FileConfigStore, sidecar: &Path) -> usize {
     let Ok(text) = std::fs::read_to_string(sidecar) else {
         return 0;
@@ -96,9 +96,9 @@ fn restore_sidecar(store: &FileConfigStore, sidecar: &Path) -> usize {
     let targets: Vec<(String, PathBuf, Vec<String>)> = servers
         .iter()
         .filter_map(|(key, entry)| {
-            let orig = entry.get("_edisonOriginalFile")?.as_str()?;
+            let orig = entry.get("_sealgateOriginalFile")?.as_str()?;
             let key_path = entry
-                .get("_edisonKeyPath")?
+                .get("_sealgateKeyPath")?
                 .as_array()?
                 .iter()
                 .filter_map(|x| x.as_str().map(String::from))
@@ -124,7 +124,7 @@ fn restore_sidecar(store: &FileConfigStore, sidecar: &Path) -> usize {
         .count()
 }
 
-/// Restore one `ew-disabled-<name>` plugin dir (rename back, or drop if the live
+/// Restore one `sg-disabled-<name>` plugin dir (rename back, or drop if the live
 /// dir already exists).
 fn restore_dir(store: &FileConfigStore, disabled: &Path) -> bool {
     let Some(name) = disabled
@@ -133,7 +133,7 @@ fn restore_dir(store: &FileConfigStore, disabled: &Path) -> bool {
     else {
         return false;
     };
-    let orig = name.strip_prefix("ew-disabled-").unwrap_or(&name);
+    let orig = name.strip_prefix("sg-disabled-").unwrap_or(&name);
     let rec = QuarantineRecord {
         kind: SourceKind::CursorPluginDir,
         source_path: disabled.with_file_name(orig),

@@ -1,6 +1,6 @@
 # stdiod - Architecture
 
-`edison-stdiod` is a small, long-lived daemon that runs on a user's machine. It
+`sealgate-stdiod` is a small, long-lived daemon that runs on a user's machine. It
 maintains a single authenticated outbound connection to a backend, supervises a
 set of local **stdio** MCP subprocesses on that machine, and bridges MCP traffic
 between those subprocesses and the backend over that one connection.
@@ -25,7 +25,7 @@ protocol_version 2 actually implements and lists the deltas.
 
 ## Components
 
-`edison-stdiod` is a single binary that is both the long-lived service and the
+`sealgate-stdiod` is a single binary that is both the long-lived service and the
 control CLI. Its responsibilities - described here by role, independent of how
 the source happens to be arranged on disk - are:
 
@@ -44,7 +44,7 @@ the source happens to be arranged on disk - are:
                                   └───────┬───────┘   └────────┬───────┘
                             outbound WS   │                    │ stdio
                                           ▼                    ▼
-                                   Edison backend       local MCP servers
+                                   SealGate backend       local MCP servers
 ```
 
 - **Control surface** - the CLI subcommands a user runs to authenticate,
@@ -75,8 +75,8 @@ The daemon opens **one** outbound WebSocket to the backend:
 ```
 GET <backend>/api/v1/stdio-tunnel/ws
 Authorization: Bearer <api_key>
-X-Edison-Secret-Key: <secret>
-X-Edison-Device-Id: <device_id>
+X-SealGate-Secret-Key: <secret>
+X-SealGate-Device-Id: <device_id>
 ```
 
 A single long-lived WebSocket is used rather than a local HTTP wrapper plus a
@@ -194,14 +194,14 @@ opaque" alone - it is a deliberate active signal the daemon must produce.
 
 ### OS-level supervision
 
-`edison-stdiod install` writes a platform-appropriate service unit;
+`sealgate-stdiod install` writes a platform-appropriate service unit;
 `uninstall` removes it.
 
 - **macOS**: LaunchAgent plist at
-  `~/Library/LaunchAgents/watch.edison.stdiod.plist` with `KeepAlive=true`,
+  `~/Library/LaunchAgents/com.sealgate.stdiod.plist` with `KeepAlive=true`,
   `RunAtLoad=true`. No admin privileges needed.
 - **Linux**: user systemd unit at
-  `~/.config/systemd/user/edison-stdiod.service` with `Restart=always`,
+  `~/.config/systemd/user/sealgate-stdiod.service` with `Restart=always`,
   `RestartSec=5s`, `WantedBy=default.target`, started via
   `systemctl --user enable --now`. `loginctl enable-linger` is opt-in.
 - **Windows**: a Scheduled Task with an "at log on" trigger and a
@@ -212,10 +212,10 @@ opaque" alone - it is a deliberate active signal the daemon must produce.
 The daemon keeps almost nothing durable; the backend is the source of truth.
 
 ```
-~/.config/edison-stdiod/
+~/.config/sealgate-stdiod/
   config.toml      backend URL, device_id, api_key, secret
   state.json       atomic writes; consumed by the desktop tray UI
-~/Library/Logs/edison-stdiod/      (macOS - platform-equivalent paths elsewhere)
+~/Library/Logs/sealgate-stdiod/      (macOS - platform-equivalent paths elsewhere)
   daemon.log       rotated daily
   child-<name>.log per-child stdout/stderr capture
 ```
@@ -285,9 +285,9 @@ retries - the calling agent decides whether to retry.
 
 The same binary is the daemon and the control CLI:
 
-- `edison-stdiod login --backend <url> --api-key <key>` - store credentials.
-- `edison-stdiod install` / `uninstall` - manage the OS service unit.
-- `edison-stdiod run` - run the daemon (normally invoked by the service unit).
-- `edison-stdiod server …` - add / list / remove locally-defined servers.
-- `edison-stdiod status` - show connection and per-child state.
-- `edison-stdiod logs` - tail daemon / child logs.
+- `sealgate-stdiod login --backend <url> --api-key <key>` - store credentials.
+- `sealgate-stdiod install` / `uninstall` - manage the OS service unit.
+- `sealgate-stdiod run` - run the daemon (normally invoked by the service unit).
+- `sealgate-stdiod server …` - add / list / remove locally-defined servers.
+- `sealgate-stdiod status` - show connection and per-child state.
+- `sealgate-stdiod logs` - tail daemon / child logs.

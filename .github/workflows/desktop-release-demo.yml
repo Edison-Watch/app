@@ -6,12 +6,13 @@ name: Release desktop (demo prerelease)
 # see desktop-release.yml for the signing rationale) - and a final gate job
 # flips it public only after ALL of them uploaded their installers + update
 # manifests. Every manifest filename is distinct on the tag: beta-mac.yml,
-# beta-linux.yml, beta-linux-arm64.yml, beta.yml (Windows x64) and
-# beta-arm64.yml (Windows arm64 - see the PER-ARCH UPDATE CHANNELS note on the
-# windows job). The windows-manifest job then rewrites beta.yml to list BOTH
-# Windows installers, because that is the manifest every Windows install polls.
+# beta-linux.yml, beta-linux-arm64.yml, beta-x64.yml and beta-arm64.yml (the two
+# Windows legs - see the PER-ARCH UPDATE CHANNELS note on the windows job).
+# `beta.yml` - the manifest every Windows demo install actually polls - is
+# written by NO build job: the windows-manifest job assembles it from the two
+# Windows manifests, so it only ever exists listing BOTH installers.
 #
-# Both daemons (edison-stdiod, edison-detectord) are built FROM SOURCE out of
+# Both daemons (sealgate-stdiod, sealgate-detectord) are built FROM SOURCE out of
 # crates/ in every job, so a prerelease always matches the checked-out commit.
 #
 # Versioned as a prerelease of the NEXT stable:
@@ -133,9 +134,9 @@ jobs:
         run: npm ci
         working-directory: .
 
-      # The app consumes the workspace-linked @edison-watch/shared, whose
+      # The app consumes the workspace-linked @sealgate/shared, whose
       # package entry points live in dist/ - build it first.
-      - name: Build @edison-watch/shared
+      - name: Build @sealgate/shared
         run: npm run build -w packages/shared
         working-directory: .
 
@@ -150,18 +151,18 @@ jobs:
             crates/detectord
             crates/stdiod
 
-      - name: Build edison-detectord from source
-        # Stages crates/detectord's daemon into bin/edison-detectord (arm64).
+      - name: Build sealgate-detectord from source
+        # Stages crates/detectord's daemon into bin/sealgate-detectord (arm64).
         # mac.extraResources expects it; electron-builder only WARNS when the
         # file is missing, which is how releases shipped without the detector
         # daemon until 0.6.0.
         run: npm run build:detectord
 
-      - name: Build edison-stdiod from source (universal)
+      - name: Build sealgate-stdiod from source (universal)
         # Built from the checkout, same as detectord - no downloading a pinned
         # published binary, so the prerelease always matches crates/stdiod at
         # this commit. The script builds both Darwin arches and lipo-merges them
-        # into bin/edison-stdiod for mac.extraResources.
+        # into bin/sealgate-stdiod for mac.extraResources.
         run: npm run build:stdiod
 
       - name: Build renderer/main/preload bundles (demo mode)
@@ -194,7 +195,7 @@ jobs:
           [ ${#apps[@]} -eq 2 ] || {
             echo "::error::expected 2 .app bundles (x64 + arm64), found ${#apps[@]}"; exit 1; }
           for app in "${apps[@]}"; do
-            for bin in edison-stdiod edison-detectord; do
+            for bin in sealgate-stdiod sealgate-detectord; do
               f="$app/Contents/Resources/bin/$bin"
               test -f "$f" || { echo "::error::$bin missing from $app"; exit 1; }
               info=$(lipo -info "$f")
@@ -232,24 +233,35 @@ jobs:
     name: Build & upload Windows ${{ matrix.arch }} (unsigned)
     needs: draft
     runs-on: windows-latest
-    # One job per arch: each leg natively builds edison-stdiod + edison-detectord
+    # One job per arch: each leg natively builds sealgate-stdiod + sealgate-detectord
     # for its own arch only (release `ring` C-crypto compile), stages the
     # matching Python + npx/uvx runtimes, and packages a single-arch installer.
     # Mirrors desktop-build-windows.yml, which stays the per-push CI gate.
     #
     # PER-ARCH UPDATE CHANNELS: electron-builder never arch-suffixes the Windows
     # update manifest (getArchPrefixForUpdateFile is LINUX-only), so both legs
-    # would emit `beta.yml` and the second upload would clobber the first. The
-    # arm64 leg therefore rides its own channel - `beta-arm64` writes
-    # beta-arm64.yml, so both legs upload non-colliding assets. Same scheme as
-    # desktop-release.yml's latest / latest-arm64.
+    # would emit `beta.yml` and the second upload would clobber the first. Giving
+    # each leg its own CHANNEL sidesteps that: `beta-x64` / `beta-arm64` write
+    # beta-x64.yml / beta-arm64.yml, so both legs upload non-colliding assets.
+    # Same scheme as desktop-release.yml's latest-x64 / latest-arm64.
     #
-    # That split is a BUILD-TIME convenience only - beta-arm64.yml is unreachable
-    # at runtime. On a prerelease channel GitHubProvider derives the channel from
-    # the resolved tag's prerelease id (0.6.5-beta.7 -> `beta`), overriding both
+    # NEITHER leg builds on plain `beta`, on purpose: no build job may ever put a
+    # single-arch beta.yml on the draft. That is the file every Windows demo
+    # install polls, and the draft is publishable from the GitHub UI at any
+    # moment - so the instant an x64-only beta.yml exists on it, publishing by
+    # hand strands arm64 on the x64 installer. The publish job below cannot cause
+    # that (it `needs` windows-manifest); the exposure is a human publishing the
+    # draft early, or a windows-manifest failure leaving a half-correct draft
+    # sitting there. beta.yml is instead created only by windows-manifest, from
+    # both legs' manifests; publishing early just leaves the prerelease with no
+    # Windows manifest, which makes the update check a quiet no-op
+    # (updateManager.ts) rather than an offer of the wrong installer.
+    #
+    # Splitting the BUILD channels does NOT split what installed builds poll. On
+    # a prerelease channel GitHubProvider derives the channel from the resolved
+    # tag's prerelease id (0.6.5-beta.7 -> `beta`), overriding both
     # autoUpdater.channel and the channel baked into app-update.yml, so EVERY
-    # Windows demo install polls beta.yml. The windows-manifest job below merges
-    # the arm64 entry into beta.yml; without it arm64 users get the x64 installer.
+    # Windows demo install asks for beta.yml.
     timeout-minutes: 45
     strategy:
       fail-fast: false
@@ -257,8 +269,8 @@ jobs:
         include:
           - arch: x64
             target: x86_64-pc-windows-msvc
-            channel: beta
-            manifest: beta.yml
+            channel: beta-x64
+            manifest: beta-x64.yml
             unpacked: win-unpacked
           - arch: arm64
             target: aarch64-pc-windows-msvc
@@ -290,7 +302,7 @@ jobs:
         run: npm ci
         working-directory: .
 
-      - name: Build @edison-watch/shared
+      - name: Build @sealgate/shared
         run: npm run build -w packages/shared
         working-directory: .
 
@@ -308,22 +320,22 @@ jobs:
             crates/detectord
             crates/stdiod
 
-      - name: Build edison-stdiod (${{ matrix.arch }})
+      - name: Build sealgate-stdiod (${{ matrix.arch }})
         # Native cargo build from the checked-out crates/stdiod source, this
         # leg's arch only. Staged into bin/stdiod/<arch>/ for win.extraResources.
         working-directory: crates/stdiod
         run: |
           set -euo pipefail
           rustup target add ${{ matrix.target }}
-          echo "Building edison-stdiod for ${{ matrix.target }} ..."
-          cargo build --release --target "${{ matrix.target }}" --bin edison-stdiod
+          echo "Building sealgate-stdiod for ${{ matrix.target }} ..."
+          cargo build --release --target "${{ matrix.target }}" --bin sealgate-stdiod
           mkdir -p "../../packages/desktop/bin/stdiod/${{ matrix.arch }}"
-          cp "target/${{ matrix.target }}/release/edison-stdiod.exe" \
-            "../../packages/desktop/bin/stdiod/${{ matrix.arch }}/edison-stdiod.exe"
+          cp "target/${{ matrix.target }}/release/sealgate-stdiod.exe" \
+            "../../packages/desktop/bin/stdiod/${{ matrix.arch }}/sealgate-stdiod.exe"
 
-      - name: Build edison-detectord (${{ matrix.arch }})
+      - name: Build sealgate-detectord (${{ matrix.arch }})
         # The cargo binary is mcp_detector_daemon; win.extraResources expects
-        # it staged as bin/detectord/<arch>/edison-detectord.exe.
+        # it staged as bin/detectord/<arch>/sealgate-detectord.exe.
         working-directory: crates/detectord
         run: |
           set -euo pipefail
@@ -332,7 +344,7 @@ jobs:
           cargo build --release --target "${{ matrix.target }}" --bin mcp_detector_daemon
           mkdir -p "../../packages/desktop/bin/detectord/${{ matrix.arch }}"
           cp "target/${{ matrix.target }}/release/mcp_detector_daemon.exe" \
-            "../../packages/desktop/bin/detectord/${{ matrix.arch }}/edison-detectord.exe"
+            "../../packages/desktop/bin/detectord/${{ matrix.arch }}/sealgate-detectord.exe"
 
       - name: Stage bundled runtimes (npx/uvx, ${{ matrix.arch }})
         run: npm run stage:runtimes -- -Arch ${{ matrix.arch }}
@@ -356,7 +368,7 @@ jobs:
         # so assert both daemons actually made it into the packaged app.
         run: |
           set -euo pipefail
-          for bin in edison-stdiod.exe edison-detectord.exe; do
+          for bin in sealgate-stdiod.exe sealgate-detectord.exe; do
             found="dist/${{ matrix.unpacked }}/resources/bin/$bin"
             test -f "$found" || { echo "::error::$bin missing from $found"; exit 1; }
             echo "bundled: $found"
@@ -379,11 +391,11 @@ jobs:
 
   windows-manifest:
     name: Merge Windows update manifests
-    # Both Windows legs are done, so beta.yml (x64) and beta-arm64.yml are on the
-    # draft. Rewrite beta.yml to list BOTH installers: it is the only Windows
-    # manifest demo installs ever fetch (see the PER-ARCH UPDATE CHANNELS note
-    # above), and electron-updater picks the download by matching process.arch
-    # against the file url, which nsis.artifactName carries.
+    # Both Windows legs are done, so beta-x64.yml and beta-arm64.yml are on the
+    # draft. This job is the ONLY writer of beta.yml - the only Windows manifest
+    # demo installs ever fetch (see the PER-ARCH UPDATE CHANNELS note above) - and
+    # it writes it listing BOTH installers; electron-updater picks the download by
+    # matching process.arch against the file url, which nsis.artifactName carries.
     needs: [draft, windows]
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -396,7 +408,7 @@ jobs:
         with:
           node-version: 22
 
-      - name: Merge beta-arm64.yml into beta.yml
+      - name: Build beta.yml from beta-x64.yml + beta-arm64.yml
         # js-yaml goes into a temp dir (no workspace install needed - this job
         # builds nothing) and the script is copied next to it so `require`
         # resolves. The script validates versions + one installer per arch and
@@ -408,10 +420,10 @@ jobs:
           cp packages/desktop/scripts/merge-win-update-manifest.cjs "$WORK/"
           cd "$WORK"
           gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
-            --pattern beta.yml --pattern beta-arm64.yml
+            --pattern beta-x64.yml --pattern beta-arm64.yml
           npm install --silent --no-save --no-package-lock --no-audit --no-fund js-yaml@4.1.0
           node merge-win-update-manifest.cjs \
-            beta.yml beta-arm64.yml merged/beta.yml "${{ needs.draft.outputs.version }}"
+            beta-x64.yml beta-arm64.yml merged/beta.yml "${{ needs.draft.outputs.version }}"
           gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber merged/beta.yml
           echo "--- published beta.yml ---"
           cat merged/beta.yml
@@ -471,7 +483,7 @@ jobs:
         run: npm ci
         working-directory: .
 
-      - name: Build @edison-watch/shared
+      - name: Build @sealgate/shared
         run: npm run build -w packages/shared
         working-directory: .
 
@@ -496,18 +508,18 @@ jobs:
         with:
           tool: cargo-zigbuild
 
-      - name: Build edison-detectord (static musl, ${{ matrix.arch }})
+      - name: Build sealgate-detectord (static musl, ${{ matrix.arch }})
         # No Linux detectord binaries are published, so build from the checkout.
         # TARGET_ARCHES restricts the script to this leg's arch; it stages into
-        # bin/detectord/<arch>/edison-detectord for linux.extraResources.
+        # bin/detectord/<arch>/sealgate-detectord for linux.extraResources.
         run: npm run build:detectord:linux
         env:
           TARGET_ARCHES: ${{ matrix.arch }}
 
-      - name: Build edison-stdiod (static musl, ${{ matrix.arch }})
+      - name: Build sealgate-stdiod (static musl, ${{ matrix.arch }})
         # Built from the checkout, same as detectord - no downloading a pinned
         # published binary, so the prerelease always matches crates/stdiod at
-        # this commit. Stages into bin/stdiod/<arch>/edison-stdiod for
+        # this commit. Stages into bin/stdiod/<arch>/sealgate-stdiod for
         # linux.extraResources.
         run: npm run build:stdiod:linux
         env:
@@ -532,7 +544,7 @@ jobs:
         run: |
           set -euo pipefail
           dir="dist/${{ matrix.unpacked }}"
-          for bin in edison-stdiod edison-detectord; do
+          for bin in sealgate-stdiod sealgate-detectord; do
             test -f "$dir/resources/bin/$bin" || { echo "::error::$bin missing from $dir"; exit 1; }
             echo "bundled: $dir/resources/bin/$bin"
           done
@@ -555,8 +567,10 @@ jobs:
   publish:
     name: Publish prerelease
     # All assets + per-platform beta manifests are uploaded across the build
-    # jobs (macOS, plus both arch legs of Windows and Linux) and beta.yml carries
-    # both Windows installers (windows-manifest) - make the prerelease visible.
+    # jobs (macOS, plus both arch legs of Windows and Linux) and beta.yml is
+    # assembled by windows-manifest listing both Windows installers - make the
+    # prerelease visible. windows-manifest is in `needs` for exactly that reason:
+    # without it the prerelease would go public with no Windows beta.yml at all.
     needs: [draft, macos, windows, windows-manifest, linux]
     runs-on: ubuntu-latest
     env:

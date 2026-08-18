@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/edison-detectord",
+    "crates/sealgate-detectord",
     "crates/mcp_quarantine",
     "crates/mcp_backend",
     "crates/mcp_detector_daemon",

@@ -429,9 +429,9 @@ export function showUpdateKeysWindow(
     apiBaseUrl?: string
     mcpBaseUrl?: string
     apiKey?: string
-    edisonSecretKey?: string
+    sealgateSecretKey?: string
   },
-  saveEdisonSecretKey: (key: string) => void,
+  saveSealGateSecretKey: (key: string) => void,
   runApplyAppIntegrations: (compositeKey: string) => Promise<void>,
 ): void {
   if (updateKeysWindow && !updateKeysWindow.isDestroyed()) {
@@ -440,7 +440,7 @@ export function showUpdateKeysWindow(
   }
 
   const setupData = getSetupData()
-  const currentSecretKey = setupData.edisonSecretKey ?? ''
+  const currentSecretKey = setupData.sealgateSecretKey ?? ''
   // Roll is possible only if we have the old key and backend credentials to authenticate
   const canRoll = !!(currentSecretKey && setupData.apiBaseUrl && setupData.apiKey)
 
@@ -469,10 +469,10 @@ export function showUpdateKeysWindow(
     },
   ): Promise<void> => {
     const setup = getSetupData()
-    const oldCompositeKey = setup.edisonSecretKey
+    const oldCompositeKey = setup.sealgateSecretKey
 
     // Save locally and apply configs immediately - never blocked by backend
-    saveEdisonSecretKey(compositeKey)
+    saveSealGateSecretKey(compositeKey)
     await runApplyAppIntegrations(compositeKey)
 
     // Best-effort backend key roll when overwriting:

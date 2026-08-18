@@ -1,5 +1,5 @@
 export { default as KeyEncryptionAnimation } from './feature/KeyEncryptionAnimation'
-export { default as EdisonMCPProxyAnimation } from './feature/EdisonMCPProxyAnimation'
+export { default as SealGateMCPProxyAnimation } from './feature/SealGateMCPProxyAnimation'
 export { default as PromptInjectionAnimation } from './threat/PromptInjectionAnimation'
 export { default as RBACViolationAnimation } from './threat/RBACViolationAnimation'
 export { default as DesktopClientAnimation } from './feature/DesktopClientAnimation'
@@ -31,9 +31,9 @@ export { AnimationThumbnail } from './thumbnails'
 export type { AnimationThumbnailProps } from './thumbnails'
 export { MCP_ICON_PATHS, MCP_ICON_VIEWBOX } from '../svg/mcp-svg'
 export {
-  EDISON_E_PATH,
-  EDISON_FRAME_PATH,
-  EDISON_LOGO_VIEWBOX,
-  EDISON_WATCH_FILL_PATH,
-  EDISON_WATCH_STROKE_PATH
-} from '../svg/edison-logo-svg'
+  SEALGATE_E_PATH,
+  SEALGATE_FRAME_PATH,
+  SEALGATE_LOGO_VIEWBOX,
+  SEALGATE_FILL_PATH,
+  SEALGATE_STROKE_PATH
+} from '../svg/sealgate-logo-svg'

@@ -1,6 +1,6 @@
 import { appendFileSync } from 'fs'
 
-const MONITOR_LOG = '/tmp/ew-monitor.log'
+const MONITOR_LOG = '/tmp/sg-monitor.log'
 
 const RELEVANT_PREFIXES = [
   '[Monitor]',
@@ -37,7 +37,7 @@ let installed = false
 /**
  * Patch console.log/warn/error/info so that any call whose first string arg
  * contains one of the relevant log prefixes is also appended to
- * /tmp/ew-monitor.log. Original console output is preserved.
+ * /tmp/sg-monitor.log. Original console output is preserved.
  *
  * Idempotent - calling more than once is a no-op.
  */
@@ -73,7 +73,7 @@ export function formatClaudeCmd(args: readonly string[]): string {
 
 /**
  * Log a `claude` CLI invocation with full args (and cwd if provided) under the
- * `[claude-cli]` prefix so it lands in /tmp/ew-monitor.log via the console tee.
+ * `[claude-cli]` prefix so it lands in /tmp/sg-monitor.log via the console tee.
  */
 export function logClaudeCmd(args: readonly string[], opts?: { cwd?: string }): void {
   const cwdSuffix = opts?.cwd ? ` (cwd=${opts.cwd})` : ''

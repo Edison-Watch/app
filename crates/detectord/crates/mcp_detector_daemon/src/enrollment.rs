@@ -28,23 +28,23 @@ pub struct Enrollment {
     /// Last-known-good policy. Kept enforcing through backend outages
     /// (fail-closed): a failed refresh never flips this off.
     pub quarantine: bool,
-    /// MCP gateway base URL (e.g. `http://localhost:3000`) — the `edison-watch`
+    /// MCP gateway base URL (e.g. `http://localhost:3000`) — the `sealgate`
     /// proxy entry points here (distinct from `api_base_url`). Needed to install.
     #[serde(default)]
     pub mcp_base_url: Option<String>,
-    /// Agents the UI selected for `edison-watch` install. Governs install only;
+    /// Agents the UI selected for `sealgate` install. Governs install only;
     /// quarantine still acts on all agents.
     #[serde(default)]
     pub selected_agents: Vec<String>,
-    /// The user's edison secret key (composite `user:<base64>`), provided by the
-    /// UI/CLI. Carried in the `X-Edison-Secret-Key` header of the installed
+    /// The user's sealgate secret key (composite `user:<base64>`), provided by the
+    /// UI/CLI. Carried in the `X-SealGate-Secret-Key` header of the installed
     /// entry. `None` installs without the header.
     #[serde(default)]
-    pub edison_secret_key: Option<String>,
+    pub sealgate_secret_key: Option<String>,
     /// Whether automatic quarantine enforcement is armed for this user. The UI
     /// arms it only once onboarding is complete, so the daemon stays detect-only
     /// (list/report, no removal) while the user is still reviewing their servers
-    /// during setup. Explicit dispositions (send-to-EW) act regardless.
+    /// during setup. Explicit dispositions (send-to-SG) act regardless.
     #[serde(default)]
     pub armed: bool,
 }
@@ -131,7 +131,7 @@ mod tests {
             quarantine: true,
             mcp_base_url: None,
             selected_agents: Vec::new(),
-            edison_secret_key: None,
+            sealgate_secret_key: None,
             armed: false,
         }
     }

@@ -15,7 +15,7 @@ vi.mock('electron', () => ({
 
 vi.mock('../detectord/binary', () => ({
   detectordBinaryExists: () => binaryExists,
-  getDetectordBinaryPath: () => '/Applications/Edison Watch.app/Contents/Resources/bin/edison-detectord'
+  getDetectordBinaryPath: () => '/Applications/SealGate.app/Contents/Resources/bin/sealgate-detectord'
 }))
 
 import {
@@ -58,7 +58,7 @@ describe('detectord health', () => {
     // Quit is the default: an app that can't protect anything shouldn't imply
     // it is by sitting there.
     expect(options.buttons[0]).toBe('Quit')
-    expect(options.detail).toContain('edison-detectord')
+    expect(options.detail).toContain('sealgate-detectord')
   })
 
   it('does NOT pop a dialog for a merely unreachable daemon - that one is often transient', () => {

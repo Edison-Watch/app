@@ -1,6 +1,6 @@
 // Main-process client for the detector daemon's Unix socket.
 //
-// The daemon is launchd-managed (see `edison-detectord service install`); this
+// The daemon is launchd-managed (see `sealgate-detectord service install`); this
 // connects to its socket and speaks newline-delimited JSON: one Reply per
 // Request (FIFO, since the daemon serialises requests per connection), plus
 // unsolicited Event pushes. Events are re-emitted via the 'event' EventEmitter
@@ -148,7 +148,7 @@ export class DetectordClient extends EventEmitter {
     mcpUrl?: string
     agents?: string[]
     secret?: string
-    /** false = detect-only (no edison-watch install / hooks). */
+    /** false = detect-only (no sealgate install / hooks). */
     install?: boolean
     /** Arm auto-quarantine. Set true only once onboarding is complete. */
     armed?: boolean
@@ -187,7 +187,7 @@ export class DetectordClient extends EventEmitter {
   }
 
   /**
-   * Install the edison-watch entry + session hooks for these agents, and only
+   * Install the sealgate entry + session hooks for these agents, and only
    * these - no other agent's config is touched. The machine-wide hook sweep is
    * enrollment's job.
    */
@@ -197,7 +197,7 @@ export class DetectordClient extends EventEmitter {
     return r.changes
   }
 
-  /** Remove the edison-watch entry for these agents. */
+  /** Remove the sealgate entry for these agents. */
   async revertIntegrations(agents: string[]): Promise<IntegrationChange[]> {
     const r = await this.expect({ op: 'revert_integrations', agents })
     if (r.reply !== 'integrations') throw new DetectordError(`unexpected reply ${r.reply}`)

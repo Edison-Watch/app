@@ -5,10 +5,10 @@ publish = false        # internal crate; not published to crates.io
 edition = "2024"
 rust-version = "1.88"
 license = "AGPL-3.0-only"
-description = "Edison Watch backend REST client (policy, known fingerprints, server submit)."
+description = "SealGate backend REST client (policy, known fingerprints, server submit)."
 
 [dependencies]
-edison-detectord = { path = "../edison-detectord", default-features = false }
+sealgate-detectord = { path = "../sealgate-detectord", default-features = false }
 reqwest = { version = "0.12.16", default-features = false, features = ["json", "rustls-tls"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"

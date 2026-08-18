@@ -11,7 +11,7 @@
 #     WHOLE flow works, install included. One build; the served "update" is the
 #     same bits re-advertised as a higher version, so it installs and relaunches
 #     but the version number stays the same.
-#   - EW_TEST_REAL=1: two signed builds at consecutive versions, so the relaunch
+#   - SG_TEST_REAL=1: two signed builds at consecutive versions, so the relaunch
 #     shows a genuinely higher version (slower - signs the bundle twice).
 #   - No cert: an ad-hoc build is made so you can see check/download/banner, but
 #     DO NOT click "Restart to update" - it will crash. Get a cert to test it.
@@ -19,18 +19,18 @@
 # Build time is ~60-120s (electron-builder copies Electron + asar + signs the
 # bundle); that is the floor in this monorepo, it is not stuck.
 #
-# Knobs:  PORT=8420   EW_TEST_USERDATA=/path (isolate config in a dir)
+# Knobs:  PORT=8420   SG_TEST_USERDATA=/path (isolate config in a dir)
 #
 set -euo pipefail
 cd "$(dirname "$0")/.." # -> client_2
 
 PORT="${PORT:-8420}"
-WORK="/tmp/ew-autoupdate"
+WORK="/tmp/sg-autoupdate"
 FEED="$WORK/feed"
-APP="$WORK/base/Edison Watch.app"
+APP="$WORK/base/SealGate.app"
 BASE_VER="99.9.9-test.1"
 NEXT_VER="99.9.9-test.2"
-REAL_TWO="${EW_TEST_REAL:-0}"
+REAL_TWO="${SG_TEST_REAL:-0}"
 
 rm -rf "$WORK" dist-test-base dist-test-next
 mkdir -p "$FEED" "$WORK/base"
@@ -41,7 +41,7 @@ if security find-identity -v -p codesigning 2>/dev/null | grep -q "Developer ID 
   # trims the bundle (fewer files to copy + sign). Both safe for a test build.
   BUILD_ARGS=(-c.mac.notarize=false -c.mac.timestamp=none -c.electronLanguages=en)
   echo "==> Signed (Developer ID). Full flow works, install + relaunch included."
-  [ "$REAL_TWO" = "1" ] && echo "    EW_TEST_REAL=1: two builds, relaunch shows a higher version."
+  [ "$REAL_TWO" = "1" ] && echo "    SG_TEST_REAL=1: two builds, relaunch shows a higher version."
 else
   REAL_TWO=0
   BUILD_ENV=(CSC_IDENTITY_AUTO_DISCOVERY=false)
@@ -79,7 +79,7 @@ package() { # $1 = version, $2 = output dir
 }
 
 package "$BASE_VER" dist-test-base
-cp -R "dist-test-base/mac-arm64/Edison Watch.app" "$APP"
+cp -R "dist-test-base/mac-arm64/SealGate.app" "$APP"
 
 if [ "$REAL_TWO" = "1" ]; then
   # Real second build so the relaunched app genuinely shows the new version.
@@ -100,7 +100,7 @@ fi
 
 echo "==> Serving http://localhost:$PORT:"
 ls -1 "$FEED"
-(cd "$FEED" && python3 -m http.server "$PORT") >/tmp/ew-autoupdate-server.log 2>&1 &
+(cd "$FEED" && python3 -m http.server "$PORT") >/tmp/sg-autoupdate-server.log 2>&1 &
 SERVER_PID=$!
 
 # Launch via LaunchServices (`open`), NOT the raw binary. A raw-launched process
@@ -109,20 +109,20 @@ SERVER_PID=$!
 # production-like. Env vars can't be passed through `open`, so we hand them to
 # launchd via `launchctl setenv` (test-only, cleared on exit) - this avoids a
 # file-based feed override, which would be a feed-hijack risk in a security app.
-launchctl setenv EW_UPDATE_TEST 1
-launchctl setenv EW_UPDATE_FEED "http://localhost:$PORT"
-trap 'restore_pkg; launchctl unsetenv EW_UPDATE_TEST; launchctl unsetenv EW_UPDATE_FEED; kill $SERVER_PID 2>/dev/null || true' EXIT
+launchctl setenv SG_UPDATE_TEST 1
+launchctl setenv SG_UPDATE_FEED "http://localhost:$PORT"
+trap 'restore_pkg; launchctl unsetenv SG_UPDATE_TEST; launchctl unsetenv SG_UPDATE_FEED; kill $SERVER_PID 2>/dev/null || true' EXIT
 restore_pkg # builds are done; make sure the working tree is clean now
 sleep 1
 
 echo "==> Launching v$BASE_VER via LaunchServices. Use the tray or in-window banner"
-echo "    to check, download, and restart-to-update. Quit any running Edison Watch first."
+echo "    to check, download, and restart-to-update. Quit any running SealGate first."
 echo "    (App logs go to Console.app / 'log stream', not this terminal.)"
 echo "------------------------------------------------------------------"
 # open -W blocks until the (original) app exits, so cleanup runs at the right time.
-if [ -n "${EW_TEST_USERDATA:-}" ]; then
-  mkdir -p "$EW_TEST_USERDATA"
-  open -W "$APP" --args --user-data-dir="$EW_TEST_USERDATA"
+if [ -n "${SG_TEST_USERDATA:-}" ]; then
+  mkdir -p "$SG_TEST_USERDATA"
+  open -W "$APP" --args --user-data-dir="$SG_TEST_USERDATA"
 else
   open -W "$APP"
 fi

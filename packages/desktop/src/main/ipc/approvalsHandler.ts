@@ -27,7 +27,7 @@ let reconnectAttempts = 0
 const MAX_RECONNECT_ATTEMPTS = 10
 let desktopLoginRegistered = false
 const RECONNECT_DELAY_MS = 1000
-// Backend auto-denies a pending approval after EDISON_APPROVAL_TIMEOUT_S (default
+// Backend auto-denies a pending approval after SEALGATE_APPROVAL_TIMEOUT_S (default
 // 30s); a later click would act on an already-denied request, so expire locally to
 // match. Keep in sync with APPROVAL_TIMEOUT_MS in dialogs/approvalDialogView.ts.
 const APPROVAL_EXPIRY_MS = 30_000
@@ -305,7 +305,7 @@ function handleTrifectaEvent(data: TrifectaEventData): void {
       .join(' ')
 
     const notificationOptions: Electron.NotificationConstructorOptions = {
-      title: risk?.title ?? 'Edison Watch - Security Block',
+      title: risk?.title ?? 'SealGate - Security Block',
       body: risk
         ? `${risk.headline} Approve only if you trust this.`
         : `${readableName} has been blocked.\nThis action requires your approval to proceed.`,
@@ -484,7 +484,7 @@ export async function handleApproval(
       if (Notification.isSupported()) {
         const actionLabel = command === 'approve' ? 'approved' : 'denied'
         const n = new Notification({
-          title: 'Edison Watch',
+          title: 'SealGate',
           body: `Successfully ${actionLabel} ${pending.kind} '${pending.name}'`,
           ...(process.platform !== 'darwin' && { icon: trayIconPath })
         })

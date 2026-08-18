@@ -21,7 +21,7 @@ export default function WizardLayout({ currentStep, maxVisitedStep, locked, onSt
 
       {/* Header with branding */}
       <header className="flex w-full flex-col items-center gap-3 px-6 pt-8 pb-4">
-        <img src={logoDark} alt="Edison Watch" className="h-7 w-auto" />
+        <img src={logoDark} alt="SealGate" className="h-7 w-auto" />
         <StepIndicator currentStep={currentStep} maxVisitedStep={maxVisitedStep} locked={locked} onStepClick={onStepClick} />
       </header>
 

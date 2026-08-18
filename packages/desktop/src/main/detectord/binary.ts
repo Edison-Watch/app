@@ -7,10 +7,10 @@ import { app } from 'electron'
 
 import { DETECTORD, devDaemonCandidates, shippedExeName } from '../runtime/daemonPaths'
 
-// Resolve the absolute path to the mcp_detector_daemon (edison-detectord) binary
+// Resolve the absolute path to the mcp_detector_daemon (sealgate-detectord) binary
 // as it ships inside the app.
 //
-// Packaged: <resources>/bin/edison-detectord (staged by the build-detectord*
+// Packaged: <resources>/bin/sealgate-detectord (staged by the build-detectord*
 // scripts, copied via the extraResources rule in electron-builder.yml). Dev: the
 // candidates in runtime/daemonPaths.ts; run `cargo build --release` in
 // crates/detectord (or a build-detectord script) once.
@@ -31,10 +31,10 @@ function getBundledDetectordBinaryPath(): string {
 // changes every launch, so a systemd unit whose ExecStart points into the mount
 // breaks the moment the app closes (status=203/EXEC -> crash-loop). We copy the
 // daemon out to this fixed path and run/install from there. Same base dir as
-// stdiod (~/.local/share/edison-watch/bin). mac/win bundle paths are already
+// stdiod (~/.local/share/sealgate/bin). mac/win bundle paths are already
 // stable inside the .app / install dir, so they don't need this.
 function getStableLinuxBinaryPath(): string {
-  return path.join(os.homedir(), '.local', 'share', 'edison-watch', 'bin', 'edison-detectord')
+  return path.join(os.homedir(), '.local', 'share', 'sealgate', 'bin', 'sealgate-detectord')
 }
 
 // Whether this platform needs the copy-to-stable-location dance (packaged Linux
@@ -90,8 +90,8 @@ export function detectordBinaryExists(): boolean {
 
 // The IPC endpoint the daemon serves. Must match the daemon's
 // ipc::default_socket_path():
-//   - Unix: base_dir/daemon.sock (base_dir = appData/edison-watch-detectord).
-//   - Windows: a per-user named pipe `\\.\pipe\edison-detectord.<user>`, where
+//   - Unix: base_dir/daemon.sock (base_dir = appData/sealgate-detectord).
+//   - Windows: a per-user named pipe `\\.\pipe\sealgate-detectord.<user>`, where
 //     <user> uses the same USER||LOGNAME||USERNAME chain as the daemon's
 //     paths::current_username(). Node's net.createConnection(string) connects to
 //     a named pipe when the string is a `\\.\pipe\...` path.
@@ -99,7 +99,7 @@ export function detectordSocketPath(): string {
   if (process.platform === 'win32') {
     const user =
       process.env.USER || process.env.LOGNAME || process.env.USERNAME || 'unknown'
-    return `\\\\.\\pipe\\edison-detectord.${user}`
+    return `\\\\.\\pipe\\sealgate-detectord.${user}`
   }
-  return path.join(app.getPath('appData'), 'edison-watch-detectord', 'daemon.sock')
+  return path.join(app.getPath('appData'), 'sealgate-detectord', 'daemon.sock')
 }

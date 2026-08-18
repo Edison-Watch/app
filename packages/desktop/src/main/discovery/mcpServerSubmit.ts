@@ -2,7 +2,7 @@
  * What's left of the app's own submit path: the credential-review override
  * shape, and a role lookup.
  *
- * Submitting a server to Edison Watch is the daemon's job now - it templatizes,
+ * Submitting a server to SealGate is the daemon's job now - it templatizes,
  * posts, records the outcome in its seen-store and removes the local config
  * entry in one step (see detectord/submit.ts). The HTTP client that used to do
  * that here is gone, along with its own notion of "already pending" / "already

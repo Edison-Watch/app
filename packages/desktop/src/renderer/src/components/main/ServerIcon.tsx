@@ -4,7 +4,7 @@ import marketplaceIndex from '../../assets/marketplace/index.json'
 import atlassianLogo from '../../assets/logos/atlassian.png'
 import claudeLogo from '../../assets/logos/claude.png'
 import cursorLogo from '../../assets/logos/cursor.png'
-import edisonLogo from '../../assets/logos/edison.png'
+import sealgateLogo from '../../assets/logos/sealgate.png'
 import githubLogo from '../../assets/logos/github.png'
 import mcpLogo from '../../assets/logos/mcp.png'
 import playwrightLogo from '../../assets/logos/playwright.png'
@@ -33,8 +33,8 @@ const SERVER_LOGOS: Record<string, string> = {
   atlassian: atlassianLogo,
   claude: claudeLogo,
   cursor: cursorLogo,
-  edison: edisonLogo,
-  trifecta: edisonLogo,
+  sealgate: sealgateLogo,
+  trifecta: sealgateLogo,
   windsurf: windsurfLogo,
   postgres: mcpLogo
 }
@@ -97,7 +97,7 @@ export default function ServerIcon({
   const [imgError, setImgError] = useState(false)
 
   const hardcodedLogo = isBuiltin
-    ? edisonLogo
+    ? sealgateLogo
     : Object.entries(SERVER_LOGOS).find(([key]) => segments.includes(key))?.[1]
 
   const marketplaceEntry = !hardcodedLogo

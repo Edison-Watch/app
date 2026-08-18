@@ -20,7 +20,13 @@ for e in "${SOURCE_EXTS[@]}"; do _EXT_SET[".$e"]=1; done
 # Trim to your stack: node_modules|dist|.next (TS), __pycache__|.venv (Py), target (Rust)
 EXCLUDE_PATH_RE='(^|/)(node_modules|vendor|dist|build|\.next|coverage|storybook-static|visual-tests|e2e|tests|test|__tests__|\.git)(/|$)'
 GENERATED_RE='(^|/)(alembic[^/]*/versions|migrations)(/|$)'
-EXCLUDE_NAME_RE='(.+\.test\..+|.+\.spec\..+|.+\.d\.ts)$'
+# `*Animation.tsx` is exempt: each is ONE self-contained SVG scene - inline
+# @keyframes CSS plus long path data - so its length is inherent, not structural
+# debt. Every file in this package that trips the limit is one of these, and
+# splitting a scene across files would make it harder to follow, not easier.
+# Scoped to the component naming convention, so the helpers they share
+# (animations/_shared/*.tsx) and everything else stay under the limit.
+EXCLUDE_NAME_RE='(.+\.test\..+|.+\.spec\..+|.+\.d\.ts|.+Animation\.tsx)$'
 
 is_source_file() { local ext=".${1##*.}"; [ -n "${_EXT_SET[$ext]:-}" ]; }
 

@@ -1,1 +1,1 @@
-export { KeyEncryptionAnimation as default } from "@edison-watch/shared/animations";
+export { KeyEncryptionAnimation as default } from "@sealgate/shared/animations";

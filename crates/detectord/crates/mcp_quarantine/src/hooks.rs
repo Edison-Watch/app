@@ -1,15 +1,15 @@
-//! Edison Watch **hook injection** (phase-2 mirror of the edison-watch install).
+//! SealGate **hook injection** (phase-2 mirror of the sealgate install).
 //!
-//! Materialises four self-contained scripts into `~/.edison-watch/` and injects
+//! Materialises four self-contained scripts into `~/.sealgate/` and injects
 //! per-agent hook config that runs them. The scripts only write files into
-//! `~/.edison-watch/pending/` (and `errors/`) — no network, no secrets, no
+//! `~/.sealgate/pending/` (and `errors/`) — no network, no secrets, no
 //! running server required. The bodies are copied verbatim from the app so the
 //! runtime behaviour (session-id tagging, pending-file format) is identical.
 
 use std::path::{Path, PathBuf};
 
-use edison_detectord::{HookBinding, HookInstall, HookScriptKind, HookStyle};
 use regex::Regex;
+use sealgate_detectord::{HookBinding, HookInstall, HookScriptKind, HookStyle};
 use serde_json::{Map, Value, json};
 
 use crate::configstore::{backup_path, parse, read, serialize, write};
@@ -17,15 +17,15 @@ use crate::error::{Error, Result};
 
 /// A command belongs to us if it runs one of our scripts — matched by the
 /// distinctive script-filename stems (robust regardless of the install dir).
-fn cmd_str_is_edison(cmd: &str) -> bool {
-    cmd.contains("edison-hook.") || cmd.contains("edison-session-")
+fn cmd_str_is_sealgate(cmd: &str) -> bool {
+    cmd.contains("sealgate-hook.") || cmd.contains("sealgate-session-")
 }
 
 // ── materialised scripts (verbatim from client_2 hookInjectionCore.ts) ───────
 
 const REGISTRATION_SH_TEMPLATE: &str = r#"#!/bin/bash
-# Edison Watch - Project Registration Hook
-# Writes a registration file for Edison Watch to process
+# SealGate - Project Registration Hook
+# Writes a registration file for SealGate to process
 
 # Get the client that called this hook (passed as first argument)
 CLIENT="${1:-unknown}"
@@ -65,14 +65,14 @@ try:
     # Skip on Windows: .cmd wrapper means PPID is ephemeral cmd.exe, not Claude Code.
     # PreToolUse falls back to hook payload session_id on Windows.
     if session_id and sys.platform != "win32":
-        edison_dir = os.path.expanduser("~/.edison-watch")
-        os.makedirs(edison_dir, exist_ok=True)
+        sealgate_dir = os.path.expanduser("~/.sealgate")
+        os.makedirs(sealgate_dir, exist_ok=True)
         # PPID = Claude Code process ID. Relies on Claude Code spawning hooks as
         # direct children (execFile/spawn, not sh -c). Falls back gracefully if not.
         ppid = os.getppid()
         fname = f"active_session_{ppid}.json"
-        tmp = os.path.join(edison_dir, f".{fname}.tmp")
-        final = os.path.join(edison_dir, fname)
+        tmp = os.path.join(sealgate_dir, f".{fname}.tmp")
+        final = os.path.join(sealgate_dir, fname)
         with open(tmp, "w") as f:
             json.dump({"session_id": session_id}, f)
         os.rename(tmp, final)
@@ -88,7 +88,7 @@ try:
     conv_id = data.get("session_id") or data.get("conversation_id") or data.get("sessionId")
     reason = data.get("reason", "unknown")
     if conv_id:
-        pending_dir = os.path.expanduser("~/.edison-watch/pending")
+        pending_dir = os.path.expanduser("~/.sealgate/pending")
         os.makedirs(pending_dir, exist_ok=True)
         ts = time.strftime("%Y%m%d-%H%M%S")
         fname = f"{ts}-{random.randint(0,99999)}-session-end.json"
@@ -105,7 +105,7 @@ except Exception:
 try:
     if sys.platform != "win32":
         ppid = os.getppid()
-        active_file = os.path.expanduser(f"~/.edison-watch/active_session_{ppid}.json")
+        active_file = os.path.expanduser(f"~/.sealgate/active_session_{ppid}.json")
         if os.path.exists(active_file):
             os.remove(active_file)
 except Exception:
@@ -134,7 +134,7 @@ try:
         try:
             if sys.platform != "win32":
                 ppid = os.getppid()
-                active_file = os.path.expanduser(f"~/.edison-watch/active_session_{ppid}.json")
+                active_file = os.path.expanduser(f"~/.sealgate/active_session_{ppid}.json")
                 if os.path.exists(active_file):
                     with open(active_file, "r") as f:
                         active_data = json.load(f)
@@ -149,7 +149,7 @@ try:
     # Extract tool input (VSCode uses camelCase toolInput)
     tool_input = data.get("toolInput", data.get("tool_input", {})) if is_vscode else data.get("tool_input", {})
     if conv_id and isinstance(tool_input, dict):
-        tool_input["_edison_conversation_id"] = conv_id
+        tool_input["_sealgate_conversation_id"] = conv_id
         if uses_hook_output:
             hook_event = data.get("hookEventName") or data.get("hook_event_name") or "PreToolUse"
             print(json.dumps({"hookSpecificOutput": {
@@ -193,26 +193,26 @@ impl HookScripts {
 
 fn script_filename(kind: HookScriptKind) -> &'static str {
     match kind {
-        HookScriptKind::Registration => "edison-hook.sh",
-        HookScriptKind::SessionStart => "edison-session-start.py",
-        HookScriptKind::SessionHook => "edison-session-hook.py",
-        HookScriptKind::SessionEnd => "edison-session-end.py",
+        HookScriptKind::Registration => "sealgate-hook.sh",
+        HookScriptKind::SessionStart => "sealgate-session-start.py",
+        HookScriptKind::SessionHook => "sealgate-session-hook.py",
+        HookScriptKind::SessionEnd => "sealgate-session-end.py",
     }
 }
 
-/// Materialise the four scripts (and `pending/` + `errors/`) into `edison_dir`
-/// (`~/.edison-watch`). Idempotent: rewrites a script only when its content
+/// Materialise the four scripts (and `pending/` + `errors/`) into `sealgate_dir`
+/// (`~/.sealgate`). Idempotent: rewrites a script only when its content
 /// differs, and always ensures the executable bit.
-pub fn ensure_scripts(edison_dir: &Path) -> Result<HookScripts> {
-    let pending = edison_dir.join("pending");
-    let errors = edison_dir.join("errors");
+pub fn ensure_scripts(sealgate_dir: &Path) -> Result<HookScripts> {
+    let pending = sealgate_dir.join("pending");
+    let errors = sealgate_dir.join("errors");
     mkdirs(&pending)?;
     mkdirs(&errors)?;
 
-    let registration = edison_dir.join("edison-hook.sh");
-    let session_start = edison_dir.join("edison-session-start.py");
-    let session_hook = edison_dir.join("edison-session-hook.py");
-    let session_end = edison_dir.join("edison-session-end.py");
+    let registration = sealgate_dir.join("sealgate-hook.sh");
+    let session_start = sealgate_dir.join("sealgate-session-start.py");
+    let session_hook = sealgate_dir.join("sealgate-session-hook.py");
+    let session_end = sealgate_dir.join("sealgate-session-end.py");
 
     let sh = REGISTRATION_SH_TEMPLATE
         .replace("__PENDING_DIR__", &pending.display().to_string())
@@ -408,9 +408,9 @@ fn group_runs_script(group: &Value, kind: HookScriptKind) -> bool {
 /// for ordinary tools too, which is why a `mcp__*` group does not cover it.
 fn scope_samples(binding: &HookBinding) -> &'static [&'static str] {
     match binding.matcher.as_deref() {
-        Some(m) if m.starts_with("mcp__") => &["mcp__edison_watch__list", "mcp__github__search"],
+        Some(m) if m.starts_with("mcp__") => &["mcp__sealgate__list", "mcp__github__search"],
         // No matcher, `*`, or anything else: the binding wants every tool.
-        _ => &["mcp__edison_watch__list", "Bash", "Edit", "Read"],
+        _ => &["mcp__sealgate__list", "Bash", "Edit", "Read"],
     }
 }
 
@@ -594,7 +594,7 @@ fn inject_cursor(install: &HookInstall, scripts: &HookScripts) -> Result<bool> {
 }
 
 fn inject_copilot(install: &HookInstall, scripts: &HookScripts) -> Result<bool> {
-    // The whole file is Edison-owned: build the desired doc and overwrite iff
+    // The whole file is SealGate-owned: build the desired doc and overwrite iff
     // it differs.
     let mut hooks = Map::new();
     for b in &install.events {
@@ -653,7 +653,7 @@ fn inject_codex(install: &HookInstall, scripts: &HookScripts) -> Result<bool> {
 
 // ── remove ───────────────────────────────────────────────────────────────────
 
-/// Remove `install`'s hooks (any command referencing `~/.edison-watch`). Returns
+/// Remove `install`'s hooks (any command referencing `~/.sealgate`). Returns
 /// whether anything changed. Best-effort/idempotent.
 pub fn remove_hooks(install: &HookInstall) -> Result<bool> {
     match install.style {
@@ -664,11 +664,11 @@ pub fn remove_hooks(install: &HookInstall) -> Result<bool> {
     }
 }
 
-fn command_is_edison(entry: &Value) -> bool {
+fn command_is_sealgate(entry: &Value) -> bool {
     entry
         .get("command")
         .and_then(Value::as_str)
-        .is_some_and(cmd_str_is_edison)
+        .is_some_and(cmd_str_is_sealgate)
 }
 
 fn remove_claude(install: &HookInstall) -> Result<bool> {
@@ -693,7 +693,7 @@ fn remove_claude(install: &HookInstall) -> Result<bool> {
                 !group
                     .get("hooks")
                     .and_then(Value::as_array)
-                    .is_some_and(|hs| hs.iter().any(command_is_edison))
+                    .is_some_and(|hs| hs.iter().any(command_is_sealgate))
             });
             changed |= groups.len() != before;
         }
@@ -729,7 +729,7 @@ fn remove_cursor(install: &HookInstall) -> Result<bool> {
     for arr in hooks.values_mut() {
         if let Some(entries) = arr.as_array_mut() {
             let before = entries.len();
-            entries.retain(|e| !command_is_edison(e));
+            entries.retain(|e| !command_is_sealgate(e));
             changed |= entries.len() != before;
         }
     }
@@ -742,7 +742,7 @@ fn remove_cursor(install: &HookInstall) -> Result<bool> {
 }
 
 fn remove_copilot(install: &HookInstall) -> Result<bool> {
-    // Edison owns the whole file — just delete it.
+    // SealGate owns the whole file — just delete it.
     if install.path.exists() {
         std::fs::remove_file(&install.path).map_err(|source| Error::Io {
             path: install.path.clone(),
@@ -759,7 +759,7 @@ fn remove_codex(install: &HookInstall) -> Result<bool> {
         return Ok(false);
     }
     let text = read(&install.path)?;
-    // Drop any `[[hooks.X]]` block whose command line references ~/.edison-watch.
+    // Drop any `[[hooks.X]]` block whose command line references ~/.sealgate.
     let mut out: Vec<&str> = Vec::new();
     let lines: Vec<&str> = text.lines().collect();
     let mut i = 0;
@@ -767,10 +767,10 @@ fn remove_codex(install: &HookInstall) -> Result<bool> {
     while i < lines.len() {
         let line = lines[i];
         let is_hook_header = line.trim_start().starts_with("[[hooks.");
-        let next_is_edison = lines
+        let next_is_sealgate = lines
             .get(i + 1)
-            .is_some_and(|n| n.contains("command") && cmd_str_is_edison(n));
-        if is_hook_header && next_is_edison {
+            .is_some_and(|n| n.contains("command") && cmd_str_is_sealgate(n));
+        if is_hook_header && next_is_sealgate {
             // Skip the header + its command line (and a trailing blank line).
             i += 2;
             if lines.get(i).is_some_and(|l| l.trim().is_empty()) {
@@ -794,7 +794,7 @@ fn remove_codex(install: &HookInstall) -> Result<bool> {
 
 // ── VSCode per-workspace registration task (.vscode/tasks.json) ──────────────
 
-const VSCODE_TASK_LABEL: &str = "Edison Watch Registration";
+const VSCODE_TASK_LABEL: &str = "SealGate Registration";
 
 /// Whether a `tasks.json` entry is one of ours.
 ///
@@ -807,12 +807,12 @@ const VSCODE_TASK_LABEL: &str = "Edison Watch Registration";
 ///
 /// The label is still accepted so a stale or hand-copied entry gets replaced
 /// rather than left beside a second, working one.
-fn is_edison_workspace_task(task: &Value) -> bool {
+fn is_sealgate_workspace_task(task: &Value) -> bool {
     command_has_script(task, HookScriptKind::Registration)
         || task.get("label").and_then(Value::as_str) == Some(VSCODE_TASK_LABEL)
 }
 
-/// Add the "Edison Watch Registration" folder-open task to a workspace's
+/// Add the "SealGate Registration" folder-open task to a workspace's
 /// `tasks.json` (idempotent, alongside existing tasks). Returns whether changed.
 pub fn inject_workspace_task(tasks_json: &Path, registration_script: &Path) -> Result<bool> {
     ensure_parent(tasks_json)?;
@@ -837,7 +837,7 @@ pub fn inject_workspace_task(tasks_json: &Path, registration_script: &Path) -> R
         "presentation": { "reveal": "never", "panel": "shared" }
     });
 
-    match tasks.iter().position(is_edison_workspace_task) {
+    match tasks.iter().position(is_sealgate_workspace_task) {
         // Already pointing at this script: leave it alone, including any
         // presentation tweaks the user made.
         Some(i) if tasks[i].get("command").and_then(Value::as_str) == Some(command.as_str()) => {
@@ -855,7 +855,7 @@ pub fn inject_workspace_task(tasks_json: &Path, registration_script: &Path) -> R
     Ok(true)
 }
 
-/// Whether a workspace `tasks.json` already carries the Edison Watch
+/// Whether a workspace `tasks.json` already carries the SealGate
 /// registration task. Read-only counterpart to [`inject_workspace_task`]: the
 /// desktop app reports hook coverage from the daemon's answer instead of
 /// opening workspace files itself (those live in the user's project
@@ -876,7 +876,7 @@ pub fn workspace_task_installed(tasks_json: &Path) -> bool {
         })
 }
 
-/// Strip the Edison Watch registration task from a workspace `tasks.json`
+/// Strip the SealGate registration task from a workspace `tasks.json`
 /// (leaving the user's own tasks). Returns whether changed.
 pub fn remove_workspace_task(tasks_json: &Path) -> Result<bool> {
     if !tasks_json.exists() {
@@ -892,7 +892,7 @@ pub fn remove_workspace_task(tasks_json: &Path) -> Result<bool> {
         return Ok(false);
     };
     let before = tasks.len();
-    tasks.retain(|t| !is_edison_workspace_task(t));
+    tasks.retain(|t| !is_sealgate_workspace_task(t));
     let changed = tasks.len() != before;
     if changed {
         write(tasks_json, &serialize(&root))?;
@@ -937,17 +937,17 @@ mod tests {
 
     fn fake_scripts(dir: &Path) -> HookScripts {
         HookScripts {
-            registration: dir.join("edison-hook.sh"),
-            session_start: dir.join("edison-session-start.py"),
-            session_hook: dir.join("edison-session-hook.py"),
-            session_end: dir.join("edison-session-end.py"),
+            registration: dir.join("sealgate-hook.sh"),
+            session_start: dir.join("sealgate-session-start.py"),
+            session_hook: dir.join("sealgate-session-hook.py"),
+            session_end: dir.join("sealgate-session-end.py"),
         }
     }
 
     #[test]
     fn ensure_scripts_materialises_executable_and_interpolated() {
         let d = tempdir().unwrap();
-        let ed = d.path().join(".edison-watch");
+        let ed = d.path().join(".sealgate");
         let s = ensure_scripts(&ed).unwrap();
         assert!(s.registration.exists() && s.session_hook.exists());
         assert!(ed.join("pending").is_dir() && ed.join("errors").is_dir());
@@ -999,7 +999,7 @@ mod tests {
         let cmd = v["hooks"]["UserPromptSubmit"][0]["hooks"][0]["command"]
             .as_str()
             .unwrap();
-        assert!(cmd.contains("edison-hook.sh") && cmd.ends_with("claude-code"));
+        assert!(cmd.contains("sealgate-hook.sh") && cmd.ends_with("claude-code"));
         assert_eq!(v["hooks"]["PreToolUse"][0]["matcher"], "mcp__*");
 
         assert!(remove_hooks(&install).unwrap());
@@ -1029,7 +1029,7 @@ mod tests {
             )],
         };
         assert!(inject_hooks(&install, &sc).unwrap());
-        assert!(cfg.with_file_name("settings.json.ew-backup").exists());
+        assert!(cfg.with_file_name("settings.json.sg-backup").exists());
         let v: Value = serde_json::from_str(&std::fs::read_to_string(&cfg).unwrap()).unwrap();
         let arr = v["hooks"]["UserPromptSubmit"].as_array().unwrap();
         assert_eq!(arr.len(), 2, "foreign hook kept, ours appended");
@@ -1070,7 +1070,7 @@ mod tests {
             v["hooks"]["beforeMCPExecution"][0]["command"]
                 .as_str()
                 .unwrap()
-                .contains("edison-session-hook.py")
+                .contains("sealgate-session-hook.py")
         );
         assert!(remove_hooks(&install).unwrap());
         let v: Value = serde_json::from_str(&std::fs::read_to_string(&cfg).unwrap()).unwrap();
@@ -1100,7 +1100,7 @@ mod tests {
             "existing config kept"
         );
         let cmd = t["hooks"]["SessionStart"][0]["command"].as_str().unwrap();
-        assert!(cmd.contains("edison-hook.sh") && cmd.ends_with("codex"));
+        assert!(cmd.contains("sealgate-hook.sh") && cmd.ends_with("codex"));
         assert!(remove_hooks(&install).unwrap());
         let text = std::fs::read_to_string(&cfg).unwrap();
         assert!(!text.contains("[[hooks."), "hook blocks removed");
@@ -1117,7 +1117,7 @@ mod tests {
             r#"{"version":"2.0.0","tasks":[{"label":"build","type":"shell","command":"make"}]}"#,
         )
         .unwrap();
-        let script = d.path().join("edison-hook.sh");
+        let script = d.path().join("sealgate-hook.sh");
 
         assert!(inject_workspace_task(&tasks, &script).unwrap());
         assert!(
@@ -1141,7 +1141,7 @@ mod tests {
     #[test]
     fn copilot_owns_whole_file() {
         let d = tempdir().unwrap();
-        let cfg = d.path().join("edison-watch.json");
+        let cfg = d.path().join("sealgate.json");
         let sc = fake_scripts(d.path());
         let install = HookInstall {
             path: cfg.clone(),
@@ -1165,7 +1165,7 @@ mod tests {
                 .ends_with("vscode")
         );
         assert!(remove_hooks(&install).unwrap());
-        assert!(!cfg.exists(), "Edison-owned file is deleted on removal");
+        assert!(!cfg.exists(), "SealGate-owned file is deleted on removal");
     }
 
     /// The failure this guards: an entry left by an older install keeps the
@@ -1180,13 +1180,13 @@ mod tests {
         std::fs::write(
             &tasks,
             format!(
-                r#"{{"version":"2.0.0","tasks":[{{"label":"{VSCODE_TASK_LABEL}","type":"shell","command":"/tmp/.mount_gone123/edison-hook.sh","args":["vscode"]}}]}}"#
+                r#"{{"version":"2.0.0","tasks":[{{"label":"{VSCODE_TASK_LABEL}","type":"shell","command":"/tmp/.mount_gone123/sealgate-hook.sh","args":["vscode"]}}]}}"#
             ),
         )
         .unwrap();
-        let script = d.path().join("edison-hook.sh");
+        let script = d.path().join("sealgate-hook.sh");
 
-        // It runs *an* edison-hook.sh, so it counts as installed - what matters
+        // It runs *an* sealgate-hook.sh, so it counts as installed - what matters
         // is that injection still repoints it at the current script.
         assert!(inject_workspace_task(&tasks, &script).unwrap(), "repaired");
         let v: Value = serde_json::from_str(&std::fs::read_to_string(&tasks).unwrap()).unwrap();
@@ -1218,7 +1218,7 @@ mod tests {
             "the label is display text, not proof registration runs"
         );
 
-        let script = d.path().join("edison-hook.sh");
+        let script = d.path().join("sealgate-hook.sh");
         assert!(inject_workspace_task(&tasks, &script).unwrap(), "replaced");
         assert!(workspace_task_installed(&tasks), "now genuinely covered");
         let v: Value = serde_json::from_str(&std::fs::read_to_string(&tasks).unwrap()).unwrap();
@@ -1238,7 +1238,7 @@ mod tests {
         std::fs::create_dir_all(tasks.parent().unwrap()).unwrap();
         std::fs::write(
             &tasks,
-            r#"{"version":"2.0.0","tasks":[{"label":"renamed by user","type":"shell","command":"/home/u/.edison-watch/edison-hook.sh","args":["vscode"]},{"label":"build","command":"make"}]}"#,
+            r#"{"version":"2.0.0","tasks":[{"label":"renamed by user","type":"shell","command":"/home/u/.sealgate/sealgate-hook.sh","args":["vscode"]},{"label":"build","command":"make"}]}"#,
         )
         .unwrap();
         assert!(remove_workspace_task(&tasks).unwrap());
@@ -1253,7 +1253,7 @@ mod tests {
         let d = tempdir().unwrap();
         let tasks = d.path().join(".vscode/tasks.json");
         std::fs::create_dir_all(tasks.parent().unwrap()).unwrap();
-        let script = d.path().join("edison-hook.sh");
+        let script = d.path().join("sealgate-hook.sh");
         std::fs::write(
             &tasks,
             format!(
@@ -1280,7 +1280,7 @@ mod tests {
         let settings = d.path().join("settings.json");
         std::fs::write(
             &settings,
-            r#"{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"/home/u/.edison-watch/edison-session-hook.py"}]}]}}"#,
+            r#"{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"/home/u/.sealgate/sealgate-session-hook.py"}]}]}}"#,
         )
         .unwrap();
         let install = claude_install(&settings);
@@ -1299,7 +1299,7 @@ mod tests {
         let settings = d.path().join("settings.json");
         std::fs::write(
             &settings,
-            r#"{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"/old/edison-session-hook.py"}]}]}}"#,
+            r#"{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"/old/sealgate-session-hook.py"}]}]}}"#,
         )
         .unwrap();
         let install = claude_install(&settings);
@@ -1324,7 +1324,7 @@ mod tests {
         let settings = d.path().join("settings.json");
         std::fs::write(
             &settings,
-            r#"{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"/gone/edison-session-hook.py"}]}]}}"#,
+            r#"{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"/gone/sealgate-session-hook.py"}]}]}}"#,
         )
         .unwrap();
         let install = claude_install(&settings);
@@ -1354,7 +1354,7 @@ mod tests {
         let settings = d.path().join("settings.json");
         std::fs::write(
             &settings,
-            r#"{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"/gone/edison-session-hook.py"}]}]}}"#,
+            r#"{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"/gone/sealgate-session-hook.py"}]}]}}"#,
         )
         .unwrap();
         let install = claude_install(&settings);
@@ -1374,7 +1374,7 @@ mod tests {
         let settings = d.path().join("settings.json");
         std::fs::write(
             &settings,
-            r#"{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"/old/edison-session-hook.py"},{"type":"command","command":"/usr/local/bin/user-audit.sh"}]}]}}"#,
+            r#"{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"/old/sealgate-session-hook.py"},{"type":"command","command":"/usr/local/bin/user-audit.sh"}]}]}}"#,
         )
         .unwrap();
         let install = claude_install(&settings);
@@ -1405,7 +1405,7 @@ mod tests {
             std::fs::write(
                 &settings,
                 format!(
-                    r#"{{"hooks":{{"PreToolUse":[{{"matcher":"{matcher}","hooks":[{{"type":"command","command":"/x/edison-session-hook.py"}}]}}]}}}}"#
+                    r#"{{"hooks":{{"PreToolUse":[{{"matcher":"{matcher}","hooks":[{{"type":"command","command":"/x/sealgate-session-hook.py"}}]}}]}}}}"#
                 ),
             )
             .unwrap();
@@ -1421,7 +1421,7 @@ mod tests {
         let settings = d.path().join("settings.json");
         std::fs::write(
             &settings,
-            r#"{"hooks":{"PreToolUse":[{"matcher":"mcp__.*","hooks":[{"type":"command","command":"/x/edison-session-hook.py"}]}]}}"#,
+            r#"{"hooks":{"PreToolUse":[{"matcher":"mcp__.*","hooks":[{"type":"command","command":"/x/sealgate-session-hook.py"}]}]}}"#,
         )
         .unwrap();
         let install = claude_install(&settings);
@@ -1446,7 +1446,7 @@ mod tests {
         let settings = d.path().join("settings.json");
         std::fs::write(
             &settings,
-            r#"{"hooks":{"PreToolUse":[{"matcher":"mcp__[","hooks":[{"type":"command","command":"/old/edison-session-hook.py"}]}]}}"#,
+            r#"{"hooks":{"PreToolUse":[{"matcher":"mcp__[","hooks":[{"type":"command","command":"/old/sealgate-session-hook.py"}]}]}}"#,
         )
         .unwrap();
         let install = claude_install(&settings);
@@ -1471,7 +1471,7 @@ mod tests {
         let settings = d.path().join("settings.json");
         std::fs::write(
             &settings,
-            r#"{"hooks":{"UserPromptSubmit":[{"matcher":"mcp__.*","hooks":[{"type":"command","command":"/x/edison-hook.sh"}]}]}}"#,
+            r#"{"hooks":{"UserPromptSubmit":[{"matcher":"mcp__.*","hooks":[{"type":"command","command":"/x/sealgate-hook.sh"}]}]}}"#,
         )
         .unwrap();
         let install = claude_install(&settings);
@@ -1490,7 +1490,7 @@ mod tests {
             std::fs::write(
                 &settings,
                 format!(
-                    r#"{{"hooks":{{"PreToolUse":[{{{matcher}"hooks":[{{"type":"command","command":"/x/edison-session-hook.py"}}]}}]}}}}"#
+                    r#"{{"hooks":{{"PreToolUse":[{{{matcher}"hooks":[{{"type":"command","command":"/x/sealgate-session-hook.py"}}]}}]}}}}"#
                 ),
             )
             .unwrap();

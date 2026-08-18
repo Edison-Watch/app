@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Cross-build mcp_detector_daemon (edison-detectord) for Linux (x64 + arm64) and
+# Cross-build mcp_detector_daemon (sealgate-detectord) for Linux (x64 + arm64) and
 # stage it into desktop/bin/detectord/<arch>/ so the linux.extraResources rule
 # copies the matching-arch binary into the packaged app - and so the binary can
 # be shipped standalone (the CLI-first Linux story). Mirrors build-stdiod-linux.sh.
@@ -92,9 +92,9 @@ for spec in "${ALL_SPECS[@]}"; do
   echo "Building $BIN_NAME for $target ..."
   ( cd "$DETECTORD_DIR" && cargo zigbuild --release --target "$target" --bin "$BIN_NAME" )
   mkdir -p "$OUT_ROOT/$arch"
-  cp "$DETECTORD_DIR/target/$target/release/$BIN_NAME" "$OUT_ROOT/$arch/edison-detectord"
-  chmod +x "$OUT_ROOT/$arch/edison-detectord"
-  echo "Staged -> $OUT_ROOT/$arch/edison-detectord"
+  cp "$DETECTORD_DIR/target/$target/release/$BIN_NAME" "$OUT_ROOT/$arch/sealgate-detectord"
+  chmod +x "$OUT_ROOT/$arch/sealgate-detectord"
+  echo "Staged -> $OUT_ROOT/$arch/sealgate-detectord"
 done
 
 echo "Done. Linux daemon binaries staged under $OUT_ROOT/<arch>/"

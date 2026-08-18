@@ -19,7 +19,7 @@ import { applyIntegrations, revertIntegrations, integrationErrors } from "../det
 import { CLIENT_DISPLAY } from "../clients/displayMeta";
 import { detectSecrets } from "../discovery/secretDetection";
 import type { TemplatizedConfig } from "../discovery/secretDetection";
-import { filterOutEdisonWatchServers } from "../runtime/mcpConfigMonitor";
+import { filterOutSealGateServers } from "../runtime/mcpConfigMonitor";
 import { deduplicateServers, findDuplicateGroups } from "../discovery/serverDeduplication";
 import { DRY_RUN, getApiBaseUrl, getSetupData, getCredentialsForEnv } from "../infra/setupConfig";
 
@@ -30,8 +30,8 @@ let discoveryCache: { servers: DiscoveredMcpServer[]; raw: DiscoveredMcpServer[]
 /** Run discovery, populate cache, return filtered+deduped servers. */
 async function runDiscovery() {
   const { servers, raw, unsupported } = await discoverMcpServers({ includeRaw: true });
-  const filtered = filterOutEdisonWatchServers(servers);
-  const rawFiltered = filterOutEdisonWatchServers(raw);
+  const filtered = filterOutSealGateServers(servers);
+  const rawFiltered = filterOutSealGateServers(raw);
   discoveryCache = { servers: filtered, raw: rawFiltered, unsupported };
   return discoveryCache;
 }
@@ -126,7 +126,7 @@ export function registerMcpSubmitHandlers(): void {
     removed: string[];
     errors: string[];
   }> => {
-    // The daemon owns removal. Servers the user didn't send to EW are
+    // The daemon owns removal. Servers the user didn't send to SG are
     // auto-quarantined once enforcement arms at setup:complete, so there's
     // nothing for the client to remove here.
     const names = targets.map((t) => (typeof t === "string" ? t : t.name));
@@ -152,7 +152,7 @@ export function registerMcpSubmitHandlers(): void {
       //
       // BOTH conditions, because either alone names a different set:
       //
-      //   unmanageable, has a config   Claude Desktop / Cowork - Edison cannot
+      //   unmanageable, has a config   Claude Desktop / Cowork - SealGate cannot
       //                                write a URL into a stdio-only file, but
       //                                reads that file on every scan. Gating on
       //                                `manageable` alone told those users the
@@ -178,7 +178,7 @@ export function registerMcpSubmitHandlers(): void {
         return {
           content:
             `${name} keeps its MCP servers as Connectors in your account, not in a ` +
-            `local config file. There is nothing here for Edison Watch to read or protect.`,
+            `local config file. There is nothing here for SealGate to read or protect.`,
         };
       }
 
@@ -191,10 +191,10 @@ export function registerMcpSubmitHandlers(): void {
     serverAddress?: string;
     mcpBaseUrl?: string;
     apiKey?: string;
-    edisonSecretKey?: string;
+    sealgateSecretKey?: string;
     apps: string[];
   }): Promise<{ success: boolean; modifiedConfigs: ModifiedConfig[]; errors?: string[] }> => {
-    // The daemon installs the edison-watch entry and the hooks: it holds the
+    // The daemon installs the sealgate entry and the hooks: it holds the
     // credentials in its enrollment and it is the only writer of agent configs.
     // The URL/key arguments are vestigial - they came from the app's own writer
     // and are ignored rather than second-guessing the enrollment.
@@ -214,7 +214,7 @@ export function registerMcpSubmitHandlers(): void {
     }
   });
 
-  // Revert app integrations: the daemon removes the edison-watch entry it
+  // Revert app integrations: the daemon removes the sealgate entry it
   // installed (and drops the agent from the enrolled selection so its
   // self-heal doesn't put it straight back).
   ipcMain.handle("mcp:revertAppIntegrations", async (_event, args: {

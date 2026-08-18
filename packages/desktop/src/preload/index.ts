@@ -104,18 +104,18 @@ const api = {
       serverAddress: string
       mcpBaseUrl: string
       apiKey: string
-      edisonSecretKey?: string
+      sealgateSecretKey?: string
       apps: string[]
     }): Promise<{
       success: boolean
       modifiedConfigs: Array<{ appId: string; configPath: string; backupPath: string }>
     }> => ipcRenderer.invoke('mcp:applyAppIntegrations', args),
     applyForSecretKey: (
-      edisonSecretKey: string
+      sealgateSecretKey: string
     ): Promise<{
       success: boolean
       modifiedConfigs: Array<{ appId: string; configPath: string; backupPath: string }>
-    }> => ipcRenderer.invoke('mcp:applyForSecretKey', { edisonSecretKey }),
+    }> => ipcRenderer.invoke('mcp:applyForSecretKey', { sealgateSecretKey }),
     revertAppIntegrations: (args: {
       configs: Array<{ configPath: string; backupPath: string; appId?: string }>
     }): Promise<{ reverted: number; errors: string[] }> =>
@@ -257,14 +257,14 @@ const api = {
     clearDataAndRestart: (): Promise<void> => ipcRenderer.invoke('app:clearDataAndRestart')
   },
 
-  /** Bundled edison-detectord daemon (MCP discovery/quarantine). */
+  /** Bundled sealgate-detectord daemon (MCP discovery/quarantine). */
   detectord: {
     /** Push credentials after sign-in so the daemon enrolls on login. */
     enroll: (input: {
       apiUrl?: string
       mcpUrl?: string
       apiKey?: string
-      edisonSecretKey?: string
+      sealgateSecretKey?: string
     }): Promise<{ ok: boolean }> => ipcRenderer.invoke('detectord:enroll', input),
     /** Register/adopt the org secret key when the user enters or changes it. */
     setSecret: (
@@ -283,7 +283,7 @@ const api = {
     }
   },
 
-  /** Bundled edison-stdiod daemon (stdio MCP tunnel) */
+  /** Bundled sealgate-stdiod daemon (stdio MCP tunnel) */
   stdiod: {
     status: (): Promise<StdiodStatus> => ipcRenderer.invoke('stdiod:status'),
     install: (): Promise<StdiodResult> => ipcRenderer.invoke('stdiod:install'),
@@ -315,7 +315,7 @@ const api = {
   getVersion: (): string => electronAPI.process.versions.electron ?? ''
 } as const
 
-export type EdisonAPI = typeof api
+export type SealGateAPI = typeof api
 
 if (process.contextIsolated) {
   try {

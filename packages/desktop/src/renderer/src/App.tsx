@@ -23,7 +23,7 @@ export default function App(): React.ReactNode {
   const [skipServers, setSkipServers] = useState<string[]>([]);
   const [duplicateSelections, setDuplicateSelections] = useState<DuplicateSelections | null>(null);
   const [modifiedConfigs, setModifiedConfigs] = useState<ModifiedConfig[]>([]);
-  const [edisonSecretKey, setEdisonSecretKey] = useState("");
+  const [sealgateSecretKey, setSealGateSecretKey] = useState("");
   const auth = useAuth();
 
   // Check if setup was already completed on mount
@@ -54,10 +54,10 @@ export default function App(): React.ReactNode {
         apiUrl: auth.apiBaseUrl,
         mcpUrl: auth.mcpBaseUrl,
         apiKey: auth.apiKey,
-        edisonSecretKey: edisonSecretKey || undefined,
+        sealgateSecretKey: sealgateSecretKey || undefined,
       })
       .catch((err) => console.error("[App] detectord enroll push failed:", err));
-  }, [auth.signedIn, auth.apiKey, auth.apiBaseUrl, auth.mcpBaseUrl, edisonSecretKey]);
+  }, [auth.signedIn, auth.apiKey, auth.apiBaseUrl, auth.mcpBaseUrl, sealgateSecretKey]);
 
   // Windows: right-click in the app body opens the app menu (skip editable
   // fields/selections); the title bar keeps the OS system menu.
@@ -88,7 +88,7 @@ export default function App(): React.ReactNode {
   };
 
   const handleEncryptionNext = (compositeKey: string, configs: ModifiedConfig[]) => {
-    setEdisonSecretKey(compositeKey);
+    setSealGateSecretKey(compositeKey);
     setModifiedConfigs(configs);
     window.api.setup.reachedFinal();
     goToStep(3);
@@ -96,7 +96,7 @@ export default function App(): React.ReactNode {
 
   const handleRestart = () => {
     setModifiedConfigs([]);
-    setEdisonSecretKey("");
+    setSealGateSecretKey("");
     setSelectedApps(null);
     setServersToRemove([]);
     goToStep(1);
@@ -158,7 +158,7 @@ export default function App(): React.ReactNode {
           apiBaseUrl={auth.apiBaseUrl}
           serverStatus={auth.serverStatus}
           modifiedConfigs={modifiedConfigs}
-          edisonSecretKey={edisonSecretKey}
+          sealgateSecretKey={sealgateSecretKey}
           selectedApps={selectedApps ?? []}
           onComplete={handleComplete}
           onRestart={handleRestart}

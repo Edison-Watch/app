@@ -14,16 +14,16 @@ export default defineConfig(({ mode }) => {
 
   return {
     main: {
-      plugins: [externalizeDepsPlugin({ exclude: ["@edison-watch/shared"] })],
+      plugins: [externalizeDepsPlugin({ exclude: ["@sealgate/shared"] })],
       // Expose env vars to the main process at build time.
       define: {
         "import.meta.env.VITE_DEPLOY_ENV": JSON.stringify(env["VITE_DEPLOY_ENV"] ?? ""),
         "import.meta.env.VITE_API_BASE_URL": JSON.stringify(env["VITE_API_BASE_URL"] ?? ""),
         "import.meta.env.VITE_MCP_BASE_URL": JSON.stringify(env["VITE_MCP_BASE_URL"] ?? ""),
         // Compact (trimmed) Linux tray menu. Baked at build time so we can ship
-        // two Linux variants: default = compact; set EDISON_TRAY_COMPACT=0 for
+        // two Linux variants: default = compact; set SEALGATE_TRAY_COMPACT=0 for
         // the full menu. Only affects Linux (the menu code gates on platform).
-        __TRAY_COMPACT__: JSON.stringify((process.env.EDISON_TRAY_COMPACT ?? "1") !== "0"),
+        __TRAY_COMPACT__: JSON.stringify((process.env.SEALGATE_TRAY_COMPACT ?? "1") !== "0"),
       },
     },
     preload: {

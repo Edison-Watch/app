@@ -7,7 +7,7 @@ import type { UpdateState } from '../main/infra/updateManager'
 import type { UpdateSettings } from '../main/infra/updateSettings'
 
 /** Typed IPC API matching the api object in preload/index.ts */
-interface EdisonAPI {
+interface SealGateAPI {
   platform: NodeJS.Platform
   setup: {
     getData: () => Promise<{ completed?: boolean; [key: string]: unknown }>
@@ -62,7 +62,7 @@ interface EdisonAPI {
       serverAddress: string
       mcpBaseUrl: string
       apiKey: string
-      edisonSecretKey?: string
+      sealgateSecretKey?: string
       apps: string[]
     }) => Promise<{
       success: boolean
@@ -70,7 +70,7 @@ interface EdisonAPI {
       /** Per-agent reasons when `success` is false. */
       errors?: string[]
     }>
-    applyForSecretKey: (edisonSecretKey: string) => Promise<{
+    applyForSecretKey: (sealgateSecretKey: string) => Promise<{
       success: boolean
       modifiedConfigs: Array<{ appId: string; configPath: string; backupPath: string }>
     }>
@@ -209,7 +209,7 @@ interface EdisonAPI {
       apiUrl?: string
       mcpUrl?: string
       apiKey?: string
-      edisonSecretKey?: string
+      sealgateSecretKey?: string
     }) => Promise<{ ok: boolean }>
     setSecret: (key: string) => Promise<{ ok: boolean; outcome?: SecretOutcome; reason?: string }>
     uninstall: (opts?: { purge?: boolean }) => Promise<{ ok: boolean; stdout: string; stderr: string }>
@@ -232,6 +232,6 @@ interface EdisonAPI {
 declare global {
   interface Window {
     electron: ElectronAPI
-    api: EdisonAPI
+    api: SealGateAPI
   }
 }
