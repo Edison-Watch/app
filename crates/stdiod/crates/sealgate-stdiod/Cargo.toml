@@ -33,3 +33,7 @@ tracing-subscriber = { workspace = true }
 sealgate-tunnel-protocol = { workspace = true }
 url = "2"
 webbrowser = { workspace = true }
+
+[build-dependencies]
+# build.rs parses packages/desktop/package.json to stamp the daemon version.
+serde_json = { workspace = true }

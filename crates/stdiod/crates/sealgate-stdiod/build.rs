@@ -48,8 +48,18 @@ fn resolve_version() -> String {
         }
     }
 
-    // 3. Fallback: the crate version (the historical behaviour).
-    env!("CARGO_PKG_VERSION").to_string()
+    // 3. Fallback: the crate version - the pinned workspace `0.0.1`, i.e. the
+    //    exact value this stamping exists to avoid shipping. A release build
+    //    should have hit one of the paths above (the build scripts export the
+    //    override, and any in-tree build finds the package.json), so make the
+    //    fallback loud rather than silently reintroducing the bug.
+    let fallback = env!("CARGO_PKG_VERSION");
+    println!(
+        "cargo:warning=sealgate-stdiod: SEALGATE_DAEMON_VERSION unset and \
+         packages/desktop/package.json not found; daemon will report crate \
+         version {fallback}"
+    );
+    fallback.to_string()
 }
 
 /// Walk up the ancestor directories of `start` looking for
@@ -64,15 +74,11 @@ fn find_desktop_package_json(start: &Path) -> Option<PathBuf> {
     None
 }
 
-/// Extract the first top-level `"version": "x.y.z"` string from a package.json
-/// without pulling a JSON parser into the build dependencies. package.json
-/// conventionally declares `version` near the top and never before it.
+/// Read the top-level `version` string from a package.json. Parses the whole
+/// document so a nested `version` key (a tool pin, a dependency block) can't be
+/// mistaken for the package's own.
 fn read_json_version(path: &Path) -> Option<String> {
     let text = std::fs::read_to_string(path).ok()?;
-    let key = "\"version\"";
-    let after_key = &text[text.find(key)? + key.len()..];
-    let after_colon = &after_key[after_key.find(':')? + 1..];
-    let start = after_colon.find('"')? + 1;
-    let end = after_colon[start..].find('"')? + start;
-    Some(after_colon[start..end].to_string())
+    let json: serde_json::Value = serde_json::from_str(&text).ok()?;
+    json.get("version")?.as_str().map(str::to_owned)
 }

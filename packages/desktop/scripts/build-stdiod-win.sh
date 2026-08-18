@@ -30,6 +30,13 @@ else
 fi
 OUT_ROOT="$CLIENT_DIR/bin/stdiod"
 
+# Stamp the daemon's reported version from this app's package.json - the single
+# source of truth for the shipped release. build.rs reads this env var; without
+# it the daemon would fall back to the pinned 0.0.1 Rust workspace version.
+SEALGATE_DAEMON_VERSION="$(node -p "require('$CLIENT_DIR/package.json').version")"
+export SEALGATE_DAEMON_VERSION
+echo "Stamping daemon version $SEALGATE_DAEMON_VERSION"
+
 command -v zig >/dev/null 2>&1 || {
   echo "build-stdiod-win.sh: zig required (brew install zig)" >&2; exit 1; }
 command -v cargo-zigbuild >/dev/null 2>&1 || {
