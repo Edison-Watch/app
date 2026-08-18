@@ -28,7 +28,7 @@ mod tunnel;
 
 /// SealGate stdiod daemon and CLI.
 #[derive(Debug, Parser)]
-#[command(version, about, long_about = None)]
+#[command(version = config::DAEMON_VERSION, about, long_about = None)]
 struct Cli {
     #[command(subcommand)]
     command: Command,
