@@ -66,11 +66,13 @@ mac:
   icon: resources/icon.icns
   category: public.app-category.developer-tools
   # Bundle the sealgate-stdiod + sealgate-detectord daemons directly into
-  # Contents/Resources/bin/. BOTH daemons must be staged as UNIVERSAL Mach-O
-  # binaries (scripts/build-stdiod.sh, scripts/build-detectord.sh): the .app is
-  # built for arm64 AND x64, and these single `from:` paths are copied verbatim
-  # into both bundles - a thin arm64 daemon would leave the Intel build unable to
-  # exec it. @electron/osx-sign signs nested executables in Contents/Resources
+  # Contents/Resources/bin/. Both are staged as THIN arm64 Mach-O binaries
+  # (scripts/build-stdiod.sh, scripts/build-detectord.sh) to match the arm64-only
+  # target below. They must never go back to being `lipo`-merged universal
+  # binaries: the cross-compiled x86_64 slice carries no signature, which leaves
+  # the merged file with no designated requirement, and TCC then re-prompts for
+  # every protected folder the daemon touches instead of remembering the grant.
+  # @electron/osx-sign signs nested executables in Contents/Resources
   # automatically when hardenedRuntime: true, inheriting entitlements from
   # entitlementsInherit, so no afterPack hook is needed here.
   extraResources:
@@ -78,21 +80,17 @@ mac:
       to: bin/sealgate-stdiod
     - from: bin/sealgate-detectord
       to: bin/sealgate-detectord
-  # Separate per-arch .app/.dmg/.zip rather than one merged `universal` target:
-  # each artifact name carries its arch, which is what electron-updater matches
-  # against process.arch when picking a download out of latest-mac.yml. Both
-  # arches are produced by a SINGLE electron-builder run, so they land in one
-  # shared latest-mac.yml listing both zips (macOS update manifests are not
-  # arch-suffixed - see the windows job note in .github/workflows/desktop-release.yml).
+  # arm64 only - Intel Macs are not supported. Artifact names still carry
+  # ${arch}, which is what electron-updater matches against process.arch when
+  # picking a download out of latest-mac.yml; keeping it means the manifest
+  # shape is unchanged if another arch is ever added back.
   target:
     - target: dmg
       arch:
         - arm64
-        - x64
     - target: zip
       arch:
         - arm64
-        - x64
   entitlements: resources/entitlements.mac.plist
   entitlementsInherit: resources/entitlements.mac.plist
   hardenedRuntime: true
@@ -105,25 +103,35 @@ mac:
     #
     # Camera / microphone / audio capture: never used, pure boilerplate.
     #
-    # Documents / Downloads: the app used to enumerate the user's project
-    # directories (Claude Code's projects map, Cursor + VSCode workspaces) to
-    # find project-scoped MCP configs, and a project under ~/Documents or
-    # ~/Downloads made macOS prompt. That work now lives entirely in the
-    # detector daemon, which reaches those paths under its OWN code signature -
-    # a usage string here cannot speak for it. Nothing in this bundle opens a
-    # path inside a user project directory any more, so the app can no longer
-    # trigger those prompts. If that ever changes, restore these keys WITH
-    # copy that explains the access, and add NSDesktopFolderUsageDescription.
+    # Desktop / Documents / Downloads: deliberately ABSENT, not merely unused.
+    # The filesystem work lives entirely in the detector daemon, which watches
+    # the parent directory of every MCP config it knows about - including $HOME,
+    # since Claude Code lists $HOME itself in its projects map. An FSEvents
+    # stream on $HOME reaches into all three of those folders, which is three
+    # separate TCC services and three near-identical dialogs.
+    #
+    # The daemon holds Full Disk Access instead (see
+    # src/main/detectord/fullDiskAccess.ts): one grant, no per-folder prompts,
+    # and it keeps working as the watch set grows. Per-folder usage strings here
+    # could not help anyway - the daemon is a separate binary reaching those
+    # paths under its OWN code signature, and this bundle's Info.plist cannot
+    # speak for it. Adding them back would only mislabel the app as the thing
+    # asking. Nothing in this bundle opens a path inside a user project
+    # directory; if that ever changes, prefer widening the daemon's role over
+    # restoring these keys.
     NSCameraUsageDescription: null
     NSMicrophoneUsageDescription: null
     NSAudioCaptureUsageDescription: null
+    NSDesktopFolderUsageDescription: null
     NSDocumentsFolderUsageDescription: null
     NSDownloadsFolderUsageDescription: null
     NSUserNotificationAlertStyle: alert
   notarize: false
 dmg:
-  # MUST carry ${arch}: two arches are built in one run, and without it both
-  # .dmg files resolve to the same name and the second overwrites the first.
+  # ${arch} is kept even though mac builds arm64 only: electron-updater matches
+  # the arch in latest-mac.yml against process.arch, and a name change would
+  # strand installs mid-upgrade. It is also what kept the two .dmg files from
+  # colliding back when a single run produced both arches.
   artifactName: SealGate-${version}-mac-${arch}.${ext}
   title: SealGate ${version}
   contents:

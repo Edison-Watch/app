@@ -7,7 +7,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::thread::{self, JoinHandle};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use notify::RecursiveMode;
 use notify_debouncer_full::{DebounceEventResult, new_debouncer};
@@ -19,6 +19,10 @@ use crate::types::ChangeEvent;
 
 /// How often the event loop wakes up to check the stop flag.
 const STOP_CHECK_INTERVAL: Duration = Duration::from_millis(250);
+
+/// How often to re-test Full Disk Access while any watch is deferred, so a
+/// grant made in System Settings takes effect without restarting the daemon.
+const FDA_RETRY_INTERVAL: Duration = Duration::from_secs(10);
 
 /// Driver that observes a fixed set of [`Agent`]s and emits [`ChangeEvent`]s
 /// as their configs change.
@@ -114,19 +118,68 @@ impl Watcher {
             let _ = tx.send(res);
         })?;
 
+        // Directories held back because watching them would raise a TCC prompt
+        // (see crate::tcc). Retried while the daemon runs, so granting Full Disk
+        // Access takes effect without a restart.
+        let mut deferred: Vec<PathBuf> = Vec::new();
         for dir in &dirs {
             if !dir.exists() {
                 tracing::debug!(dir = %dir.display(), "skipping non-existent watch dir");
+                continue;
+            }
+            if crate::tcc::watch_needs_full_disk_access(dir)
+                && crate::tcc::has_full_disk_access() != Some(true)
+            {
+                tracing::warn!(
+                    dir = %dir.display(),
+                    "deferring watch: needs Full Disk Access. Watching it would \
+                     prompt separately for Desktop, Documents and Downloads. \
+                     Grant Full Disk Access to this binary in System Settings -> \
+                     Privacy & Security; until then changes here are picked up by \
+                     the periodic rescan instead of live events."
+                );
+                deferred.push(dir.clone());
                 continue;
             }
             debouncer.watch(dir, RecursiveMode::NonRecursive)?;
             tracing::info!(dir = %dir.display(), "watching");
         }
 
+        let mut last_fda_retry = Instant::now();
         loop {
             if stop.load(Ordering::Relaxed) {
                 tracing::debug!("stop requested; exiting event loop");
                 break;
+            }
+
+            // Cheap (one open() of a file that is either readable or not) but
+            // pointless to run on every 250ms stop-check tick, so it is paced.
+            // Only ever ADDS watches: a grant revoked later leaves the existing
+            // ones in place, which is harmless - that prompt has already been
+            // answered.
+            if !deferred.is_empty() && last_fda_retry.elapsed() >= FDA_RETRY_INTERVAL {
+                last_fda_retry = Instant::now();
+                if crate::tcc::has_full_disk_access() == Some(true) {
+                    deferred.retain(|dir| {
+                        match debouncer.watch(dir, RecursiveMode::NonRecursive) {
+                            Ok(()) => {
+                                tracing::info!(
+                                    dir = %dir.display(),
+                                    "watching (Full Disk Access granted)"
+                                );
+                                false
+                            }
+                            Err(e) => {
+                                tracing::warn!(
+                                    dir = %dir.display(),
+                                    error = %e,
+                                    "deferred watch failed"
+                                );
+                                true
+                            }
+                        }
+                    });
+                }
             }
             match rx.recv_timeout(STOP_CHECK_INTERVAL) {
                 Ok(Ok(events)) => {

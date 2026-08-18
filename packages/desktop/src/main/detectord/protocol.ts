@@ -56,6 +56,16 @@ export interface Status {
   quarantine: boolean
   quarantined_count: number
   armed?: boolean
+  /**
+   * Whether the DAEMON holds macOS Full Disk Access. `null` off macOS,
+   * `undefined` from a daemon predating the field.
+   *
+   * The app cannot work this out for itself: TCC grants are per-binary, and the
+   * daemon is a separate binary with its own signature. Without Full Disk
+   * Access its watch of `$HOME` prompts separately for Documents, Desktop and
+   * Downloads - see src/main/detectord/fullDiskAccess.ts.
+   */
+  full_disk_access?: boolean | null
 }
 
 export interface AgentInfo {

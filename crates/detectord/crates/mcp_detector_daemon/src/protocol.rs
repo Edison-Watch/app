@@ -188,6 +188,16 @@ pub struct Status {
     /// Whether automatic quarantine enforcement is armed (onboarding complete).
     #[serde(default)]
     pub armed: bool,
+    /// Whether the daemon holds macOS Full Disk Access; `None` off macOS (and
+    /// on an older daemon that predates the field, hence `serde(default)`).
+    ///
+    /// Reported here rather than probed by the app because TCC grants are
+    /// per-binary: the app is a different binary with a different signature, so
+    /// its own permissions say nothing about the daemon's. Without this the
+    /// daemon's watch of `$HOME` prompts separately for Documents, Desktop and
+    /// Downloads. See [`crate::platform::has_full_disk_access`].
+    #[serde(default)]
+    pub full_disk_access: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

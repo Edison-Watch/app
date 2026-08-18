@@ -150,6 +150,40 @@ describe('MainMenu', () => {
     })
     expectNoRenderErrors()
   })
+
+  it('asks for Full Disk Access when the daemon reports it denied', async () => {
+    const api = installMockApi()
+    ;(api.setup as Record<string, unknown>).getData = async () => ({ completed: true })
+    ;(api.detectord as Record<string, unknown>).fullDiskAccess = async () => ({
+      state: 'denied',
+      binaryPath: '/Applications/SealGate.app/Contents/Resources/bin/sealgate-detectord'
+    })
+
+    render(<MainMenu />)
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert').textContent).toMatch(/Full Disk Access/i)
+    })
+    expectNoRenderErrors()
+  })
+
+  // 'unknown' is what a down or pre-field daemon reports. Showing a permissions
+  // banner then would nag during any routine daemon restart, so it must stay
+  // silent - this is the case the tri-state exists for.
+  it('stays silent when Full Disk Access is unknown', async () => {
+    const api = installMockApi()
+    ;(api.setup as Record<string, unknown>).getData = async () => ({ completed: true })
+    ;(api.detectord as Record<string, unknown>).fullDiskAccess = async () => ({
+      state: 'unknown',
+      binaryPath: '/tmp/sealgate-detectord'
+    })
+
+    render(<MainMenu />)
+
+    await waitFor(() => expect(screen.getByText('SealGate')).toBeTruthy())
+    expect(screen.queryByRole('alert')).toBeNull()
+    expectNoRenderErrors()
+  })
 })
 
 describe('ClientsView', () => {

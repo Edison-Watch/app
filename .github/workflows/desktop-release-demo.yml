@@ -157,11 +157,11 @@ jobs:
         # daemon until 0.6.0.
         run: npm run build:detectord
 
-      - name: Build sealgate-stdiod from source (universal)
+      - name: Build sealgate-stdiod from source (arm64)
         # Built from the checkout, same as detectord - no downloading a pinned
         # published binary, so the prerelease always matches crates/stdiod at
-        # this commit. The script builds both Darwin arches and lipo-merges them
-        # into bin/sealgate-stdiod for mac.extraResources.
+        # this commit. The script stages a thin arm64 binary at
+        # bin/sealgate-stdiod for mac.extraResources.
         run: npm run build:stdiod
 
       - name: Build renderer/main/preload bundles (demo mode)
@@ -183,25 +183,32 @@ jobs:
 
       - name: Verify bundled daemons
         # electron-builder treats a missing extraResources source as a warning,
-        # so assert both daemons made it into BOTH arch bundles - and that each
-        # is universal. One staged file is copied verbatim into both .app
-        # bundles, so a thin arm64 daemon would ship an unrunnable binary in the
-        # Intel app and nothing upstream of here would complain.
+        # so assert both daemons made it into the bundle.
+        #
+        # The arch check is inverted from what it used to be: these MUST be thin
+        # arm64, never `lipo`-merged. A merged Mach-O carries an unsigned x86_64
+        # slice, which leaves the whole file with no designated requirement -
+        # tccd then writes permission grants it can never re-verify, and the user
+        # gets the same folder-access dialog forever.
         run: |
           set -euo pipefail
           shopt -s nullglob
-          apps=(dist/mac/*.app dist/mac-arm64/*.app)
-          [ ${#apps[@]} -eq 2 ] || {
-            echo "::error::expected 2 .app bundles (x64 + arm64), found ${#apps[@]}"; exit 1; }
+          apps=(dist/mac-arm64/*.app)
+          [ ${#apps[@]} -eq 1 ] || {
+            echo "::error::expected 1 arm64 .app bundle, found ${#apps[@]}"; exit 1; }
           for app in "${apps[@]}"; do
             for bin in sealgate-stdiod sealgate-detectord; do
               f="$app/Contents/Resources/bin/$bin"
               test -f "$f" || { echo "::error::$bin missing from $app"; exit 1; }
               info=$(lipo -info "$f")
               case "$info" in
-                *x86_64*arm64*|*arm64*x86_64*) ;;
-                *) echo "::error::$f is not universal: $info"; exit 1 ;;
+                *x86_64*) echo "::error::$f must be thin arm64, got: $info"; exit 1 ;;
+                *arm64*) ;;
+                *) echo "::error::$f is not arm64: $info"; exit 1 ;;
               esac
+              codesign -d -r- "$f" 2>&1 | grep -q '^# designated' || {
+                echo "::error::$f has no designated requirement; TCC grants will not stick"
+                exit 1; }
               echo "bundled: $f -> $info"
             done
           done

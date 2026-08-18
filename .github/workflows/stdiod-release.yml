@@ -1,6 +1,6 @@
 name: Release (stdiod)
 
-# Build the sealgate-stdiod daemon as a universal macOS binary and publish it.
+# Build the sealgate-stdiod daemon for arm64 macOS and publish it.
 #
 # Two ways to trigger:
 #   * Push a tag matching stdiod-v* -> builds + attaches assets to a GitHub Release.
@@ -29,11 +29,14 @@ permissions:
 env:
   CARGO_TERM_COLOR: always
   BIN_NAME: sealgate-stdiod
-  ASSET_NAME: sealgate-stdiod-macos-universal
+  # Renamed from -macos-universal when Intel support was dropped. Anything
+  # downloading the old asset name by hand needs updating; the desktop build
+  # compiles stdiod from source and is unaffected.
+  ASSET_NAME: sealgate-stdiod-macos-arm64
 
 jobs:
   macos:
-    name: macOS universal
+    name: macOS arm64
     runs-on: macos-latest
     defaults:
       run:
@@ -41,11 +44,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # crates/stdiod/rust-toolchain.toml pins the stable channel; add both Apple
-      # targets so we can lipo them into a single universal Mach-O.
+      # crates/stdiod/rust-toolchain.toml pins the stable channel. arm64 ONLY:
+      # Intel Macs are not supported, and `lipo`-merging a cross-compiled x86_64
+      # slice (which carries no signature of its own) produced a Mach-O with no
+      # designated requirement at all, so TCC could never remember a grant made
+      # against it.
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-apple-darwin, x86_64-apple-darwin
+          targets: aarch64-apple-darwin
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -54,21 +60,19 @@ jobs:
       - name: Build aarch64-apple-darwin
         run: cargo build --release --bin "$BIN_NAME" --target aarch64-apple-darwin
 
-      - name: Build x86_64-apple-darwin
-        run: cargo build --release --bin "$BIN_NAME" --target x86_64-apple-darwin
-
-      - name: Create universal binary
+      - name: Stage binary
         run: |
           mkdir -p dist
-          lipo -create \
-            "target/aarch64-apple-darwin/release/$BIN_NAME" \
-            "target/x86_64-apple-darwin/release/$BIN_NAME" \
-            -output "dist/$ASSET_NAME"
+          cp "target/aarch64-apple-darwin/release/$BIN_NAME" "dist/$ASSET_NAME"
           chmod +x "dist/$ASSET_NAME"
 
-      - name: Verify architectures
+      - name: Verify architecture
         run: |
           lipo -info "dist/$ASSET_NAME"
+          if lipo -info "dist/$ASSET_NAME" | grep -q 'x86_64'; then
+            echo "::error::$ASSET_NAME contains an x86_64 slice; expected arm64 only"
+            exit 1
+          fi
           file "dist/$ASSET_NAME"
           "dist/$ASSET_NAME" --version || true
 

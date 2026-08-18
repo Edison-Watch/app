@@ -349,6 +349,10 @@ pub fn status(user: &str) -> anyhow::Result<Status> {
     let quarantined_count = QuarantinedState::load_for(user)
         .map(|q| q.entries.len())
         .unwrap_or(0);
+    // Probed in-process on every status call: the answer flips the moment the
+    // user toggles the daemon in System Settings, and it is a single open() of a
+    // file that is either readable or not - no prompt, nothing to cache.
+    let full_disk_access = crate::platform::has_full_disk_access();
     Ok(match Enrollment::load_for(user)? {
         None => Status {
             user: user.to_string(),
@@ -360,6 +364,7 @@ pub fn status(user: &str) -> anyhow::Result<Status> {
             quarantine: false,
             quarantined_count,
             armed: false,
+            full_disk_access,
         },
         Some(e) => Status {
             user: user.to_string(),
@@ -371,6 +376,7 @@ pub fn status(user: &str) -> anyhow::Result<Status> {
             quarantine: e.quarantine,
             quarantined_count,
             armed: e.armed,
+            full_disk_access,
         },
     })
 }

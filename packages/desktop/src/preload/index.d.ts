@@ -2,6 +2,7 @@ import type { ElectronAPI } from '@electron-toolkit/preload'
 
 import type { SecretOutcome } from '../main/detectord/protocol'
 import type { DetectordHealth } from '../main/detectord/health'
+import type { FullDiskAccessInfo } from '../main/detectord/fullDiskAccess'
 import type { StdiodLoginInput, StdiodResult, StdiodStatus } from '../main/stdiod/types'
 import type { UpdateState } from '../main/infra/updateManager'
 import type { UpdateSettings } from '../main/infra/updateSettings'
@@ -215,6 +216,8 @@ interface SealGateAPI {
     uninstall: (opts?: { purge?: boolean }) => Promise<{ ok: boolean; stdout: string; stderr: string }>
     health: () => Promise<DetectordHealth>
     onHealth: (callback: (h: DetectordHealth) => void) => () => void
+    fullDiskAccess: () => Promise<FullDiskAccessInfo>
+    openFullDiskAccessSettings: () => Promise<void>
   }
   stdiod: {
     status: () => Promise<StdiodStatus>
