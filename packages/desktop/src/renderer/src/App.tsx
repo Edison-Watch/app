@@ -126,6 +126,7 @@ export default function App(): React.ReactNode {
       maxVisitedStep={maxVisitedStep}
       locked={currentStep === 3}
       onStepClick={goToStep}
+      signedIn={auth.signedIn}
     >
       {currentStep === 0 && <WelcomeStep auth={auth} onNext={handleWelcomeNext} />}
       {currentStep === 1 && (

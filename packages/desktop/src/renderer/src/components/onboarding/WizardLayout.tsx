@@ -8,19 +8,22 @@ interface WizardLayoutProps {
   maxVisitedStep?: number;
   locked?: boolean;
   onStepClick?: (step: number) => void;
+  /** Drives the Full Disk Access prompt, which must stay quiet before sign-in. */
+  signedIn: boolean;
   children: React.ReactNode;
 }
 
-export default function WizardLayout({ currentStep, maxVisitedStep, locked, onStepClick, children }: WizardLayoutProps): React.ReactNode {
+export default function WizardLayout({ currentStep, maxVisitedStep, locked, onStepClick, signedIn, children }: WizardLayoutProps): React.ReactNode {
   return (
     <div className="flex h-screen flex-col items-center overflow-y-auto bg-[var(--bg-base)]">
       {/* Onboarding depends on the daemon for every step that touches an agent,
           so the warning belongs here too, not only in the main window. */}
       <div className="w-full">
         <DaemonWarningBanner />
-        {/* Onboarding is also the first chance to ask for Full Disk Access, and
-            the point where the daemon starts watching agent configs. */}
-        <FullDiskAccessBanner />
+        {/* Onboarding is also the first chance to ask for Full Disk Access, but
+            only once the user has signed in - step 0 is the sign-in screen, and
+            asking for a system-wide grant before that is premature. */}
+        <FullDiskAccessBanner signedIn={signedIn} />
       </div>
 
       {/* Header with branding */}

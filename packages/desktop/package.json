@@ -1,5 +1,6 @@
 {
   "name": "@sealgate/desktop",
+  "productName": "SealGate",
   "version": "0.6.4",
   "private": true,
   "description": "SealGate Desktop Client v2 - Electron + React 19",
