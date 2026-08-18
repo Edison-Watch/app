@@ -28,7 +28,11 @@
 //! never re-verify - so the dialogs repeat forever no matter how often the user
 //! clicks Allow.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
+// Only `protected_roots` builds owned paths, and that is macOS-only - an
+// unconditional import fails the `-D warnings` clippy gate on Linux CI.
+#[cfg(target_os = "macos")]
+use std::path::PathBuf;
 
 /// Whether this process holds macOS Full Disk Access; `None` off macOS.
 ///
@@ -45,7 +49,6 @@ pub fn has_full_disk_access() -> Option<bool> {
     }
     #[cfg(not(target_os = "macos"))]
     {
-        let _ = dirs::home_dir();
         None
     }
 }
