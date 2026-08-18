@@ -70,7 +70,7 @@ New to MCP? See the [Model Context Protocol docs](https://modelcontextprotocol.i
 
 | Platform | Format |
 | --- | --- |
-| <img src="resources/icons/macos.svg" width="14" height="14" align="center" alt=""> macOS | `.dmg` (arm64 — Apple Silicon only, no Intel build) |
+| <img src="resources/icons/macos.svg" width="14" height="14" align="center" alt=""> macOS | `.dmg` (arm64 for Apple Silicon; no Intel build) |
 | <img src="resources/icons/windows.svg" width="14" height="14" align="center" alt=""> Windows | `.exe` installer (x64, arm64) |
 | <img src="resources/icons/linux.svg" width="14" height="14" align="center" alt=""> Linux | `.AppImage` (x64, arm64) |
 
