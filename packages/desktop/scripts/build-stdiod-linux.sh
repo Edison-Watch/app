@@ -37,8 +37,9 @@ OUT_ROOT="$CLIENT_DIR/bin/stdiod"
 
 # Stamp the daemon's reported version from this app's package.json - the single
 # source of truth for the shipped release. build.rs reads this env var; without
-# it the daemon would fall back to the pinned 0.0.1 Rust workspace version.
-SEALGATE_DAEMON_VERSION="$(node -p "require('$CLIENT_DIR/package.json').version")"
+# it the daemon would fall back to the pinned 0.0.1 Rust workspace version. A
+# value already set in the environment wins, matching build.rs's precedence.
+SEALGATE_DAEMON_VERSION="${SEALGATE_DAEMON_VERSION:-$(node -p "require('$CLIENT_DIR/package.json').version")}"
 export SEALGATE_DAEMON_VERSION
 echo "Stamping daemon version $SEALGATE_DAEMON_VERSION"
 
