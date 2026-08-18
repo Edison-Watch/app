@@ -26,9 +26,18 @@ mod state;
 mod supervisor;
 mod tunnel;
 
+/// The daemon's reported release version.
+///
+/// Stamped by `build.rs` from the desktop app's `packages/desktop/package.json`
+/// (or the `SEALGATE_DAEMON_VERSION` override), falling back to the crate
+/// version. Announced as `client_version` in the tunnel handshake and
+/// device-authorization request, and shown on the dashboard's Devices page - so
+/// it tracks the shipped release rather than the pinned `0.0.1` workspace version.
+pub const DAEMON_VERSION: &str = env!("SEALGATE_DAEMON_VERSION");
+
 /// SealGate stdiod daemon and CLI.
 #[derive(Debug, Parser)]
-#[command(version, about, long_about = None)]
+#[command(version = DAEMON_VERSION, about, long_about = None)]
 struct Cli {
     #[command(subcommand)]
     command: Command,

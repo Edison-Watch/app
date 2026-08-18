@@ -178,7 +178,7 @@ impl AuthClient {
                 device_label,
                 client_installation_id,
                 platform: std::env::consts::OS,
-                client_version: env!("CARGO_PKG_VERSION"),
+                client_version: crate::DAEMON_VERSION,
             })
             .send()
             .await
@@ -453,7 +453,7 @@ mod tests {
         assert_eq!(request["device_label"], "Laptop");
         assert_eq!(request["client_installation_id"], "install-existing");
         assert_eq!(request["platform"], std::env::consts::OS);
-        assert_eq!(request["client_version"], env!("CARGO_PKG_VERSION"));
+        assert_eq!(request["client_version"], crate::DAEMON_VERSION);
         assert_eq!(
             request["scope"],
             serde_json::json!([

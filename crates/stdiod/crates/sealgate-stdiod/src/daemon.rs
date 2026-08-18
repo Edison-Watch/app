@@ -334,7 +334,7 @@ async fn run_one_session(
             hostname: config::hostname(),
             label: args.label.clone(),
             os: config::current_os(),
-            client_version: env!("CARGO_PKG_VERSION").to_string(),
+            client_version: crate::DAEMON_VERSION.to_string(),
             currently_running,
         }))
         .await;
