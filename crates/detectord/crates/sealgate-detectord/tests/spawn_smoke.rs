@@ -127,3 +127,54 @@ fn dropping_the_handle_stops_the_worker() {
     }
     panic!("worker did not stop within 5s after handle was dropped");
 }
+
+/// A directory the watcher could not subscribe to must still have its changes
+/// reported, via the periodic rescan.
+///
+/// Regression test for a real gap: when a watch is deferred there is no event
+/// source for that directory at all, and the event loop did nothing on timeout -
+/// so changes stayed invisible until some *other* watched directory happened to
+/// fire and incidentally re-parsed every client. On macOS the deferral is
+/// triggered by Full Disk Access being absent; that is not reproducible in a
+/// test, so this uses the other deferral cause with identical consequences - a
+/// config directory that does not exist when the watcher starts.
+#[test]
+fn rescan_reports_changes_in_a_directory_that_could_not_be_watched() {
+    let dir = tempdir().unwrap();
+    // Deliberately NOT created: `notify` cannot watch a missing path, so this
+    // config's parent is deferred and produces no events, ever.
+    let missing = dir.path().join("created-later");
+    let global = missing.join("mcp.json");
+
+    let client = Arc::new(VsCode::from_paths(
+        Some(global.clone()),
+        None,
+        Vec::<PathBuf>::new(),
+    ));
+    let (events, _handle) = Watcher::new(vec![client as Arc<dyn Agent>])
+        .spawn()
+        .unwrap();
+
+    std::thread::sleep(Duration::from_millis(300));
+
+    std::fs::create_dir_all(&missing).unwrap();
+    std::fs::write(
+        &global,
+        r#"{"servers":{"late-arrival":{"command":"echo"}}}"#,
+    )
+    .unwrap();
+
+    // Generous: the rescan interval is 5s, and the change may land just after a
+    // tick. Without the rescan this never arrives at all, so a slow pass and a
+    // failure are easy to tell apart.
+    let ev = wait_for(
+        &events,
+        Duration::from_secs(20),
+        |ev| matches!(ev, ChangeEvent::Added(s) if s.name == "late-arrival"),
+    );
+    assert!(
+        ev.is_some(),
+        "no Added event for a config in an unwatchable directory - the periodic \
+         rescan is not covering deferred watches"
+    );
+}

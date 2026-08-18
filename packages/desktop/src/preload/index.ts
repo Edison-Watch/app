@@ -3,6 +3,7 @@ import { electronAPI } from '@electron-toolkit/preload'
 
 import type { SecretOutcome } from '../main/detectord/protocol'
 import type { DetectordHealth } from '../main/detectord/health'
+import type { FullDiskAccessInfo } from '../main/detectord/fullDiskAccess'
 import type { StdiodLoginInput, StdiodResult, StdiodStatus } from '../main/stdiod/types'
 import type { UpdateState } from '../main/infra/updateManager'
 import type { UpdateSettings } from '../main/infra/updateSettings'
@@ -280,7 +281,17 @@ const api = {
       const handler = (_event: Electron.IpcRendererEvent, h: DetectordHealth): void => callback(h)
       ipcRenderer.on('detectord:health', handler)
       return () => ipcRenderer.removeListener('detectord:health', handler)
-    }
+    },
+    /**
+     * Does the DAEMON hold macOS Full Disk Access? Polled, not pushed: the
+     * grant is made in System Settings, outside the app, so there is no event
+     * to subscribe to.
+     */
+    fullDiskAccess: (): Promise<FullDiskAccessInfo> =>
+      ipcRenderer.invoke('detectord:fullDiskAccess'),
+    /** Open System Settings at the Full Disk Access pane. */
+    openFullDiskAccessSettings: (): Promise<void> =>
+      ipcRenderer.invoke('detectord:openFullDiskAccessSettings')
   },
 
   /** Bundled sealgate-stdiod daemon (stdio MCP tunnel) */

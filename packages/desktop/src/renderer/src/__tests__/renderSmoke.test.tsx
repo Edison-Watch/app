@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import React from 'react'
-import { render, screen, waitFor, cleanup } from '@testing-library/react'
+import { render, screen, waitFor, cleanup, act } from '@testing-library/react'
 
 import { installMockApi } from '../testing/mockApi'
 
@@ -16,6 +16,7 @@ vi.mock('../components/onboarding/PersonalKeyCard', () => ({
 }))
 import AppsStep from '../components/onboarding/AppsStep'
 import MainMenu from '../components/main/MainMenu'
+import { POLL_DENIED_MS, POLL_UNKNOWN_MS } from '../components/FullDiskAccessBanner'
 import ClientsView from '../components/main/ClientsView'
 import EncryptionStep from '../components/onboarding/EncryptionStep'
 
@@ -148,6 +149,124 @@ describe('MainMenu', () => {
     await waitFor(() => {
       expect(screen.getByRole('alert').textContent).toMatch(/Degraded/i)
     })
+    expectNoRenderErrors()
+  })
+
+  it('asks for Full Disk Access when the daemon reports it denied', async () => {
+    const api = installMockApi()
+    ;(api.setup as Record<string, unknown>).getData = async () => ({ completed: true })
+    ;(api.detectord as Record<string, unknown>).fullDiskAccess = async () => ({
+      state: 'denied',
+      binaryPath: '/Applications/SealGate.app/Contents/Resources/bin/sealgate-detectord'
+    })
+
+    render(<MainMenu />)
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert').textContent).toMatch(/Full Disk Access/i)
+    })
+    expectNoRenderErrors()
+  })
+
+  // 'unknown' is what a down or pre-field daemon reports. Showing a permissions
+  // banner then would nag during any routine daemon restart, so it must stay
+  // silent - this is the case the tri-state exists for.
+  it('stays silent when Full Disk Access is unknown', async () => {
+    const api = installMockApi()
+    ;(api.setup as Record<string, unknown>).getData = async () => ({ completed: true })
+    let calls = 0
+    ;(api.detectord as Record<string, unknown>).fullDiskAccess = async () => {
+      calls += 1
+      return { state: 'unknown', binaryPath: '/tmp/sealgate-detectord' }
+    }
+
+    render(<MainMenu />)
+
+    await waitFor(() => expect(screen.getByText('SealGate')).toBeTruthy())
+    // The banner holds `info === null` until its first poll RESOLVES, and
+    // renders nothing in that state. Asserting absence before then would pass
+    // for any state at all - including a `denied` that simply hadn't arrived -
+    // so wait for the call to land and for React to commit the resulting
+    // setInfo. Only then is the assertion below about how `unknown` is
+    // handled rather than about timing.
+    await waitFor(() => expect(calls).toBeGreaterThan(0))
+    await act(async () => {})
+
+    expect(screen.queryByRole('alert')).toBeNull()
+    expectNoRenderErrors()
+  })
+
+  // `granted` is the steady state on a correctly configured machine, and every
+  // poll costs an IPC round-trip plus a daemon status() that re-reads the
+  // enrollment and quarantine files. So once granted, polling must STOP rather
+  // than continue forever at the denied-state cadence.
+  // Asserted via what the banner SCHEDULES rather than by advancing the clock:
+  // the re-poll delays are seconds long, and fake timers do not compose cleanly
+  // with RTL's async helpers here. `setTimeout` keeps its real implementation -
+  // spyOn only records - so nothing else in the render is disturbed.
+  it('stops polling once Full Disk Access is granted', async () => {
+    const timeoutSpy = vi.spyOn(globalThis, 'setTimeout')
+    try {
+      const api = installMockApi()
+      ;(api.setup as Record<string, unknown>).getData = async () => ({ completed: true })
+      let calls = 0
+      ;(api.detectord as Record<string, unknown>).fullDiskAccess = async () => {
+        calls += 1
+        return { state: 'granted', binaryPath: '/tmp/sealgate-detectord' }
+      }
+
+      render(<MainMenu />)
+
+      await waitFor(() => expect(calls).toBe(1))
+      const delays = timeoutSpy.mock.calls.map((c) => c[1])
+      expect(delays).not.toContain(POLL_DENIED_MS)
+      expect(delays).not.toContain(POLL_UNKNOWN_MS)
+    } finally {
+      timeoutSpy.mockRestore()
+    }
+  })
+
+  // The other half of the same contract: `denied` is the one state that must
+  // keep re-polling, since the user is off in System Settings fixing it.
+  it('keeps polling while Full Disk Access is denied', async () => {
+    const timeoutSpy = vi.spyOn(globalThis, 'setTimeout')
+    try {
+      const api = installMockApi()
+      ;(api.setup as Record<string, unknown>).getData = async () => ({ completed: true })
+      ;(api.detectord as Record<string, unknown>).fullDiskAccess = async () => ({
+        state: 'denied',
+        binaryPath: '/tmp/sealgate-detectord'
+      })
+
+      render(<MainMenu />)
+
+      await waitFor(() =>
+        expect(timeoutSpy.mock.calls.map((c) => c[1])).toContain(POLL_DENIED_MS)
+      )
+    } finally {
+      timeoutSpy.mockRestore()
+    }
+  })
+
+  // Full Disk Access is macOS-only, and the main-process handler answers a
+  // constant `granted` off it. Polling there would be an IPC round-trip every
+  // 5s, forever, for an answer that cannot change - so the effect must not even
+  // start. Asserting on the call count rather than the absent banner, because
+  // the banner is absent either way and would pass without the guard.
+  it('does not poll for Full Disk Access off macOS', async () => {
+    const api = installMockApi()
+    ;(api.setup as Record<string, unknown>).getData = async () => ({ completed: true })
+    ;(api as Record<string, unknown>).platform = 'win32'
+    let calls = 0
+    ;(api.detectord as Record<string, unknown>).fullDiskAccess = async () => {
+      calls += 1
+      return { state: 'granted', binaryPath: 'C:\\sealgate-detectord.exe' }
+    }
+
+    render(<MainMenu />)
+
+    await waitFor(() => expect(screen.getByText('SealGate')).toBeTruthy())
+    expect(calls).toBe(0)
     expectNoRenderErrors()
   })
 })

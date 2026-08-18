@@ -15,10 +15,11 @@ name: Release desktop (stable)
 # Both daemons (sealgate-stdiod, sealgate-detectord) are built FROM SOURCE out of
 # crates/ in every job, so a release always matches the checked-out commit.
 #
-#   - macos:   signed + NOTARIZED .dmg/.zip for arm64 AND x64, both from one
-#              job (a single electron-builder run, so they share one
-#              latest-mac.yml listing both zips). The bundled daemons are
-#              universal lipo binaries; each .app loads its own slice.
+#   - macos:   signed + NOTARIZED .dmg/.zip for arm64 ONLY - Intel Macs are not
+#              supported. The bundled daemons are thin arm64 binaries; they must
+#              not go back to being `lipo`-merged, since a merged Mach-O whose
+#              x86_64 slice is unsigned has no designated requirement and TCC
+#              can then never remember a permission grant against it.
 #   - windows: UNSIGNED NSIS installer, one job per arch. NSIS auto-update
 #              verifies packages via the sha512 in the manifest, not
 #              Authenticode, so updates apply unsigned - users only see a
@@ -165,11 +166,11 @@ jobs:
         # daemon until 0.6.0.
         run: npm run build:detectord
 
-      - name: Build sealgate-stdiod from source (universal)
+      - name: Build sealgate-stdiod from source (arm64)
         # Built from the checkout, same as detectord - no downloading a pinned
         # published binary, so the release always matches crates/stdiod at this
-        # commit. The script builds both Darwin arches and lipo-merges them into
-        # bin/sealgate-stdiod for mac.extraResources.
+        # commit. The script stages a thin arm64 binary at bin/sealgate-stdiod
+        # for mac.extraResources.
         run: npm run build:stdiod
 
       - name: Build renderer/main/preload bundles (release mode)
@@ -189,25 +190,38 @@ jobs:
 
       - name: Verify bundled daemons
         # electron-builder treats a missing extraResources source as a warning,
-        # so assert both daemons made it into BOTH arch bundles - and that each
-        # is universal. One staged file is copied verbatim into both .app
-        # bundles, so a thin arm64 daemon would ship an unrunnable binary in the
-        # Intel app and nothing upstream of here would complain.
+        # so assert both daemons made it into the bundle.
+        #
+        # The arch check is inverted from what it used to be: these MUST be thin
+        # arm64, never `lipo`-merged. A merged Mach-O carries an unsigned x86_64
+        # slice (the linker ad-hoc-signs only the native arch), which leaves the
+        # whole file with no designated requirement - tccd then writes permission
+        # grants it can never re-verify, and the user gets the same folder-access
+        # dialog forever. Also assert each daemon has a designated requirement,
+        # which is the property that actually has to hold.
         run: |
           set -euo pipefail
           shopt -s nullglob
-          apps=(dist/mac/*.app dist/mac-arm64/*.app)
-          [ ${#apps[@]} -eq 2 ] || {
-            echo "::error::expected 2 .app bundles (x64 + arm64), found ${#apps[@]}"; exit 1; }
+          apps=(dist/mac-arm64/*.app)
+          [ ${#apps[@]} -eq 1 ] || {
+            echo "::error::expected 1 arm64 .app bundle, found ${#apps[@]}"; exit 1; }
           for app in "${apps[@]}"; do
             for bin in sealgate-stdiod sealgate-detectord; do
               f="$app/Contents/Resources/bin/$bin"
               test -f "$f" || { echo "::error::$bin missing from $app"; exit 1; }
               info=$(lipo -info "$f")
               case "$info" in
-                *x86_64*arm64*|*arm64*x86_64*) ;;
-                *) echo "::error::$f is not universal: $info"; exit 1 ;;
+                *x86_64*) echo "::error::$f must be thin arm64, got: $info"; exit 1 ;;
+                *arm64*) ;;
+                *) echo "::error::$f is not arm64: $info"; exit 1 ;;
               esac
+              # `#?` is load-bearing: codesign comments out a requirement it had
+              # to SYNTHESISE (ad-hoc) and prints a stored one bare (Developer
+              # ID). Matching only `^# ` passes locally and fails every signed
+              # build - see the longer note in scripts/build-detectord.sh.
+              codesign -d -r- "$f" 2>&1 | grep -qE '^#?[[:space:]]*designated[[:space:]]*=>' || {
+                echo "::error::$f has no designated requirement; TCC grants will not stick"
+                exit 1; }
               echo "bundled: $f -> $info"
             done
           done
@@ -215,10 +229,14 @@ jobs:
       - name: Verify update artifacts (auto-update sanity)
         # Same gate as the Windows/Linux jobs: latest-mac.yml must exist and
         # carry the release version, or electron-updater silently breaks on
-        # macOS once the publish job flips the draft public. macOS manifests are
-        # NOT arch-suffixed - both arches share latest-mac.yml and
-        # electron-updater picks the zip whose URL matches process.arch, so the
-        # manifest has to list BOTH or one arch silently updates to the other.
+        # macOS once the publish job flips the draft public.
+        #
+        # arm64 is the only mac arch shipped (see mac.target in
+        # electron-builder.yml), so it is the only one asserted here. Keep this
+        # list in step with mac.target: macOS manifests are NOT arch-suffixed -
+        # every arch shares latest-mac.yml and electron-updater picks the zip
+        # whose URL matches process.arch - so an arch that is built but missing
+        # from the manifest silently updates users to the other one.
         run: |
           set -euo pipefail
           VERSION="${{ needs.draft.outputs.version }}"
@@ -226,7 +244,7 @@ jobs:
           test -f "$YML" || { echo "::error::dist/latest-mac.yml missing"; exit 1; }
           MVER=$(grep -m1 '^version:' "$YML" | awk '{print $2}' | tr -d '\r')
           [ "$MVER" = "$VERSION" ] || { echo "::error::manifest version '$MVER' != release version '$VERSION'"; exit 1; }
-          for a in arm64 x64; do
+          for a in arm64; do
             ls dist/*-mac-$a.dmg >/dev/null 2>&1 || { echo "::error::no $a .dmg produced"; exit 1; }
             ls dist/*-$a.zip >/dev/null 2>&1 || { echo "::error::no $a .zip produced"; exit 1; }
             grep -q -- "-$a.zip" "$YML" || {

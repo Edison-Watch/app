@@ -1,6 +1,7 @@
 import StepIndicator from "./StepIndicator";
 import logoDark from "../../assets/logo-dark.png";
 import DaemonWarningBanner from "../DaemonWarningBanner";
+import FullDiskAccessBanner from "../FullDiskAccessBanner";
 
 interface WizardLayoutProps {
   currentStep: number;
@@ -17,6 +18,9 @@ export default function WizardLayout({ currentStep, maxVisitedStep, locked, onSt
           so the warning belongs here too, not only in the main window. */}
       <div className="w-full">
         <DaemonWarningBanner />
+        {/* Onboarding is also the first chance to ask for Full Disk Access, and
+            the point where the daemon starts watching agent configs. */}
+        <FullDiskAccessBanner />
       </div>
 
       {/* Header with branding */}

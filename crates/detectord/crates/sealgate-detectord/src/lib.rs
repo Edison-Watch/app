@@ -62,6 +62,7 @@ pub(crate) mod diff;
 pub mod error;
 pub mod fingerprint;
 pub mod secret_detection;
+pub mod tcc;
 pub mod types;
 pub mod watch;
 pub mod watcher;
@@ -69,6 +70,7 @@ pub mod watcher;
 pub use agent::Agent;
 pub use error::{Error, Result};
 pub use fingerprint::fingerprint;
+pub use tcc::{has_full_disk_access, watch_needs_full_disk_access};
 pub use types::{
     ChangeEvent, ConfigLocation, DiscoveredServer, HookBinding, HookInstall, HookScriptKind,
     HookStyle, HttpKind, LocationExtra, OpaqueReason, Scope, SealGateInstall, SealGateStyle,

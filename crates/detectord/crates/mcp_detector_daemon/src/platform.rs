@@ -126,3 +126,18 @@ pub fn hostname() -> String {
     }
     "unknown".to_string()
 }
+
+/// Whether this process holds macOS Full Disk Access, or `None` off macOS.
+///
+/// Delegates to [`sealgate_detectord::tcc`], which owns the probe because it is
+/// the watcher that has to act on the answer: without the grant it defers the
+/// `$HOME` watch rather than raising a separate prompt for Desktop, Documents
+/// and Downloads. Re-exported here so the status op can report it without
+/// reaching past `platform` for an OS-capability question.
+///
+/// Only the daemon can answer this for the daemon. TCC decides per-binary, and
+/// the desktop app that surfaces the prompt is a different binary with a
+/// different signature, so its own permissions say nothing about ours.
+pub fn has_full_disk_access() -> Option<bool> {
+    sealgate_detectord::tcc::has_full_disk_access()
+}

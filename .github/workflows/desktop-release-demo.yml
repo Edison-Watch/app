@@ -158,11 +158,11 @@ jobs:
         # daemon until 0.6.0.
         run: npm run build:detectord
 
-      - name: Build sealgate-stdiod from source (universal)
+      - name: Build sealgate-stdiod from source (arm64)
         # Built from the checkout, same as detectord - no downloading a pinned
         # published binary, so the prerelease always matches crates/stdiod at
-        # this commit. The script builds both Darwin arches and lipo-merges them
-        # into bin/sealgate-stdiod for mac.extraResources.
+        # this commit. The script stages a thin arm64 binary at
+        # bin/sealgate-stdiod for mac.extraResources.
         run: npm run build:stdiod
 
       - name: Build renderer/main/preload bundles (demo mode)
@@ -184,25 +184,35 @@ jobs:
 
       - name: Verify bundled daemons
         # electron-builder treats a missing extraResources source as a warning,
-        # so assert both daemons made it into BOTH arch bundles - and that each
-        # is universal. One staged file is copied verbatim into both .app
-        # bundles, so a thin arm64 daemon would ship an unrunnable binary in the
-        # Intel app and nothing upstream of here would complain.
+        # so assert both daemons made it into the bundle.
+        #
+        # The arch check is inverted from what it used to be: these MUST be thin
+        # arm64, never `lipo`-merged. A merged Mach-O carries an unsigned x86_64
+        # slice, which leaves the whole file with no designated requirement -
+        # tccd then writes permission grants it can never re-verify, and the user
+        # gets the same folder-access dialog forever.
         run: |
           set -euo pipefail
           shopt -s nullglob
-          apps=(dist/mac/*.app dist/mac-arm64/*.app)
-          [ ${#apps[@]} -eq 2 ] || {
-            echo "::error::expected 2 .app bundles (x64 + arm64), found ${#apps[@]}"; exit 1; }
+          apps=(dist/mac-arm64/*.app)
+          [ ${#apps[@]} -eq 1 ] || {
+            echo "::error::expected 1 arm64 .app bundle, found ${#apps[@]}"; exit 1; }
           for app in "${apps[@]}"; do
             for bin in sealgate-stdiod sealgate-detectord; do
               f="$app/Contents/Resources/bin/$bin"
               test -f "$f" || { echo "::error::$bin missing from $app"; exit 1; }
               info=$(lipo -info "$f")
               case "$info" in
-                *x86_64*arm64*|*arm64*x86_64*) ;;
-                *) echo "::error::$f is not universal: $info"; exit 1 ;;
+                *x86_64*) echo "::error::$f must be thin arm64, got: $info"; exit 1 ;;
+                *arm64*) ;;
+                *) echo "::error::$f is not arm64: $info"; exit 1 ;;
               esac
+              # `#?` is load-bearing: codesign comments out a synthesised
+              # requirement (ad-hoc) and prints a stored one bare (Developer ID).
+              # See the longer note in scripts/build-detectord.sh.
+              codesign -d -r- "$f" 2>&1 | grep -qE '^#?[[:space:]]*designated[[:space:]]*=>' || {
+                echo "::error::$f has no designated requirement; TCC grants will not stick"
+                exit 1; }
               echo "bundled: $f -> $info"
             done
           done
@@ -210,10 +220,14 @@ jobs:
       - name: Verify update artifacts (auto-update sanity)
         # Same gate as the Windows/Linux jobs: beta-mac.yml must exist and
         # carry the prerelease version, or electron-updater silently breaks on
-        # macOS once the publish job flips the draft public. macOS manifests are
-        # NOT arch-suffixed - both arches share beta-mac.yml and
-        # electron-updater picks the zip whose URL matches process.arch, so the
-        # manifest has to list BOTH or one arch silently updates to the other.
+        # macOS once the publish job flips the draft public.
+        #
+        # arm64 is the only mac arch shipped (see mac.target in
+        # electron-builder.yml), so it is the only one asserted here. Keep this
+        # list in step with mac.target: macOS manifests are NOT arch-suffixed -
+        # every arch shares beta-mac.yml and electron-updater picks the zip
+        # whose URL matches process.arch - so an arch that is built but missing
+        # from the manifest silently updates users to the other one.
         run: |
           set -euo pipefail
           VERSION="${{ needs.draft.outputs.version }}"
@@ -221,7 +235,7 @@ jobs:
           test -f "$YML" || { echo "::error::dist/beta-mac.yml missing"; exit 1; }
           MVER=$(grep -m1 '^version:' "$YML" | awk '{print $2}' | tr -d '\r')
           [ "$MVER" = "$VERSION" ] || { echo "::error::manifest version '$MVER' != release version '$VERSION'"; exit 1; }
-          for a in arm64 x64; do
+          for a in arm64; do
             ls dist/*-mac-$a.dmg >/dev/null 2>&1 || { echo "::error::no $a .dmg produced"; exit 1; }
             ls dist/*-$a.zip >/dev/null 2>&1 || { echo "::error::no $a .zip produced"; exit 1; }
             grep -q -- "-$a.zip" "$YML" || {
