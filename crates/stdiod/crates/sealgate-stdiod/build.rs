@@ -41,9 +41,10 @@ fn resolve_version() -> String {
     let manifest_dir = PathBuf::from(
         std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR set by cargo"),
     );
-    if let Some(v) = find_desktop_package_json(&manifest_dir).and_then(|pkg| read_json_version(&pkg))
-    {
-        return v;
+    if let Some(pkg) = find_desktop_package_json(&manifest_dir) {
+        if let Some(v) = read_json_version(&pkg) {
+            return v;
+        }
     }
 
     // 3. Fallback: the crate version - the pinned workspace `0.0.1`, i.e. the
