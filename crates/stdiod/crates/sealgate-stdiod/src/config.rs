@@ -412,16 +412,6 @@ fn nonempty(value: Option<&str>) -> Option<&str> {
     value.filter(|value| !value.is_empty())
 }
 
-/// The daemon's reported release version.
-///
-/// Stamped by `build.rs` from the desktop app's `packages/desktop/package.json`
-/// (or the `SEALGATE_DAEMON_VERSION` override), falling back to the crate
-/// version. This is what the daemon announces as `client_version` in the tunnel
-/// handshake and device-authorization request, and what the dashboard's Devices
-/// page displays - so it tracks the shipped release rather than the pinned
-/// `0.0.1` Rust workspace version.
-pub const DAEMON_VERSION: &str = env!("SEALGATE_DAEMON_VERSION");
-
 /// Detected OS, mapped to the wire-protocol `Os` enum.
 pub fn current_os() -> sealgate_tunnel_protocol::Os {
     if cfg!(target_os = "macos") {
