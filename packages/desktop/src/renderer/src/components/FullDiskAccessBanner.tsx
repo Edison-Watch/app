@@ -33,10 +33,23 @@ export const POLL_UNKNOWN_MS = 30000;
  *
  * Not dismissible while it applies: it clears itself within POLL_DENIED_MS of
  * the grant landing, so there is nothing to dismiss.
+ *
+ * Gated on `signedIn`. Before sign-in the daemon has no enrollment and there is
+ * nothing to detect yet, so a permissions warning is noise on top of a sign-in
+ * screen - and it asks for a system-wide grant before the user has decided to
+ * use the app at all. Nothing is even polled until then.
  */
-export default function FullDiskAccessBanner(): React.ReactNode {
+export default function FullDiskAccessBanner({
+  signedIn
+}: {
+  /** Whether the user is signed in. Nothing renders or polls before that. */
+  signedIn: boolean;
+}): React.ReactNode {
   const [info, setInfo] = useState<FullDiskAccessInfo | null>(null);
   const [copied, setCopied] = useState(false);
+  // The modal is the once-per-session nudge; the banner is the standing
+  // reminder that outlives it.
+  const [promptDismissed, setPromptDismissed] = useState(false);
 
   useEffect(() => {
     // Full Disk Access is a macOS concept. Off macOS `getFullDiskAccessInfo()`
@@ -45,6 +58,7 @@ export default function FullDiskAccessBanner(): React.ReactNode {
     // Leaving `info` null renders
     // nothing, which is what we want on those platforms anyway.
     if (window.api.platform !== "darwin") return;
+    if (!signedIn) return;
 
     let mounted = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -94,9 +108,12 @@ export default function FullDiskAccessBanner(): React.ReactNode {
       if (timer) clearTimeout(timer);
       window.removeEventListener("focus", onFocus);
     };
-  }, []);
+  }, [signedIn]);
 
-  if (!info || info.state !== "denied") return null;
+  // `signedIn` is re-checked here, not just in the effect: signing out leaves
+  // the last `info` in state, and a stale denied banner must not outlive the
+  // session that justified it.
+  if (!signedIn || !info || info.state !== "denied") return null;
 
   const copyPath = (): void => {
     void navigator.clipboard.writeText(info.binaryPath).then(() => {
@@ -105,41 +122,124 @@ export default function FullDiskAccessBanner(): React.ReactNode {
     });
   };
 
+  const openSettings = (): void => void window.api.detectord.openFullDiskAccessSettings();
+
+  return (
+    <>
+      {!promptDismissed && (
+        <FullDiskAccessPrompt
+          binaryPath={info.binaryPath}
+          onOpenSettings={() => {
+            openSettings();
+            setPromptDismissed(true);
+          }}
+          onDismiss={() => setPromptDismissed(true)}
+        />
+      )}
+      <div
+        role="alert"
+        className="flex items-center gap-2 border-b border-amber-500/30 bg-amber-500/10 px-4 py-1.5"
+      >
+        <svg
+          viewBox="0 0 16 16"
+          fill="none"
+          className="h-3 w-3 shrink-0 text-amber-400"
+          aria-hidden="true"
+        >
+          <path
+            d="M8 5v4m0 2.5v.01M7.1 1.8 1.3 12.2A1 1 0 0 0 2.2 13.7h11.6a1 1 0 0 0 .9-1.5L8.9 1.8a1 1 0 0 0-1.8 0Z"
+            stroke="currentColor"
+            strokeWidth="1.4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+        <span className="truncate text-[11px] text-[var(--text-secondary)]">
+          Detection is degraded: grant Full Disk Access to the SealGate daemon so it can watch your
+          agent configs as they change.
+        </span>
+        <button
+          type="button"
+          onClick={openSettings}
+          className="ml-auto shrink-0 rounded border border-amber-500/40 px-2 py-0.5 text-[11px] text-amber-300 hover:bg-amber-500/15"
+        >
+          Open Settings
+        </button>
+        {/* The pane's + button opens a file picker that hides bundle internals,
+            so the user needs the path to paste into Cmd-Shift-G. */}
+        <button
+          type="button"
+          onClick={copyPath}
+          title={info.binaryPath}
+          className="shrink-0 rounded border border-amber-500/40 px-2 py-0.5 text-[11px] text-amber-300 hover:bg-amber-500/15"
+        >
+          {copied ? "Copied" : "Copy path"}
+        </button>
+      </div>
+    </>
+  );
+}
+
+/**
+ * One-time nudge shown when a signed-in user turns out not to have granted
+ * Full Disk Access.
+ *
+ * Dismissible on purpose: the banner behind it is the standing reminder, so
+ * this only has to be seen once per session rather than blocking the app. It
+ * carries the binary path because the Full Disk Access pane's `+` opens a file
+ * picker that hides bundle internals, and without the path the user is stuck at
+ * that step.
+ */
+function FullDiskAccessPrompt({
+  binaryPath,
+  onOpenSettings,
+  onDismiss
+}: {
+  binaryPath: string;
+  onOpenSettings: () => void;
+  onDismiss: () => void;
+}): React.ReactNode {
   return (
     <div
-      role="alert"
-      className="flex items-center gap-2 border-b border-amber-500/30 bg-amber-500/10 px-4 py-1.5"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6"
+      role="presentation"
+      onClick={onDismiss}
     >
-      <svg viewBox="0 0 16 16" fill="none" className="h-3 w-3 shrink-0 text-amber-400" aria-hidden="true">
-        <path
-          d="M8 5v4m0 2.5v.01M7.1 1.8 1.3 12.2A1 1 0 0 0 2.2 13.7h11.6a1 1 0 0 0 .9-1.5L8.9 1.8a1 1 0 0 0-1.8 0Z"
-          stroke="currentColor"
-          strokeWidth="1.4"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-      <span className="truncate text-[11px] text-[var(--text-secondary)]">
-        Detection is delayed: grant Full Disk Access to the SealGate daemon so it can watch your
-        agent configs as they change.
-      </span>
-      <button
-        type="button"
-        onClick={() => void window.api.detectord.openFullDiskAccessSettings()}
-        className="ml-auto shrink-0 rounded border border-amber-500/40 px-2 py-0.5 text-[11px] text-amber-300 hover:bg-amber-500/15"
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="fda-prompt-title"
+        className="w-full max-w-sm rounded-lg border border-[var(--border)] bg-[var(--bg-overlay)] p-4 shadow-lg"
+        onClick={(e) => e.stopPropagation()}
       >
-        Open Settings
-      </button>
-      {/* The pane's + button opens a file picker that hides bundle internals,
-          so the user needs the path to paste into Cmd-Shift-G. */}
-      <button
-        type="button"
-        onClick={copyPath}
-        title={info.binaryPath}
-        className="shrink-0 rounded border border-amber-500/40 px-2 py-0.5 text-[11px] text-amber-300 hover:bg-amber-500/15"
-      >
-        {copied ? "Copied" : "Copy path"}
-      </button>
+        <h2 id="fda-prompt-title" className="text-sm font-medium text-[var(--text-primary)]">
+          Grant Full Disk Access
+        </h2>
+        <p className="mt-2 text-[11px] leading-relaxed text-[var(--text-secondary)]">
+          SealGate monitors your AI client&apos;s MCP configuration for changes. Full Disk Access is
+          required for this purpose, otherwise monitoring will be degraded.
+        </p>
+        <p className="mt-3 text-[11px] text-[var(--text-muted)]">Add to the list:</p>
+        <code className="mt-1 block truncate rounded bg-[var(--bg-hover)] px-2 py-1 text-[10px] text-[var(--text-secondary)]">
+          {binaryPath}
+        </code>
+        <div className="mt-4 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onDismiss}
+            className="rounded border border-[var(--border)] px-3 py-1 text-[11px] text-[var(--text-muted)] hover:bg-[var(--bg-hover)]"
+          >
+            Not now
+          </button>
+          <button
+            type="button"
+            onClick={onOpenSettings}
+            className="rounded border border-amber-500/40 bg-amber-500/10 px-3 py-1 text-[11px] text-amber-300 hover:bg-amber-500/20"
+          >
+            Open Settings
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

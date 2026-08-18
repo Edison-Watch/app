@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import React from 'react'
-import { render, screen, waitFor, cleanup, act } from '@testing-library/react'
+import { render, screen, waitFor, cleanup, act, fireEvent, within } from '@testing-library/react'
 
 import { installMockApi } from '../testing/mockApi'
 
@@ -136,7 +136,7 @@ describe('MainMenu', () => {
 
   it('shows the degraded banner when the daemon is down', async () => {
     const api = installMockApi()
-    ;(api.setup as Record<string, unknown>).getData = async () => ({ completed: true })
+    ;(api.setup as Record<string, unknown>).getData = async () => ({ completed: true, userEmail: 'a@b.c' })
     ;(api.detectord as Record<string, unknown>).health = async () => ({
       ok: false,
       kind: 'unreachable',
@@ -154,7 +154,7 @@ describe('MainMenu', () => {
 
   it('asks for Full Disk Access when the daemon reports it denied', async () => {
     const api = installMockApi()
-    ;(api.setup as Record<string, unknown>).getData = async () => ({ completed: true })
+    ;(api.setup as Record<string, unknown>).getData = async () => ({ completed: true, userEmail: 'a@b.c' })
     ;(api.detectord as Record<string, unknown>).fullDiskAccess = async () => ({
       state: 'denied',
       binaryPath: '/Applications/SealGate.app/Contents/Resources/bin/sealgate-detectord'
@@ -173,7 +173,7 @@ describe('MainMenu', () => {
   // silent - this is the case the tri-state exists for.
   it('stays silent when Full Disk Access is unknown', async () => {
     const api = installMockApi()
-    ;(api.setup as Record<string, unknown>).getData = async () => ({ completed: true })
+    ;(api.setup as Record<string, unknown>).getData = async () => ({ completed: true, userEmail: 'a@b.c' })
     let calls = 0
     ;(api.detectord as Record<string, unknown>).fullDiskAccess = async () => {
       calls += 1
@@ -196,6 +196,75 @@ describe('MainMenu', () => {
     expectNoRenderErrors()
   })
 
+  // Before sign-in there is no enrollment and nothing to detect, so a
+  // permissions warning is noise on a sign-in screen - and it asks for a
+  // system-wide grant before the user has committed to the app. Asserted on the
+  // call count as well as the absent banner: without the gate the banner would
+  // still be absent for a beat, but the poll would have fired.
+  it('does not ask for Full Disk Access before the user signs in', async () => {
+    const api = installMockApi()
+    ;(api.setup as Record<string, unknown>).getData = async () => ({ completed: true })
+    let calls = 0
+    ;(api.detectord as Record<string, unknown>).fullDiskAccess = async () => {
+      calls += 1
+      return { state: 'denied', binaryPath: '/tmp/sealgate-detectord' }
+    }
+
+    render(<MainMenu />)
+
+    await waitFor(() => expect(screen.getByText('SealGate')).toBeTruthy())
+    expect(calls).toBe(0)
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.queryByText(/Detection is degraded/i)).toBeNull()
+    expectNoRenderErrors()
+  })
+
+  // Signed in and denied: the banner is the standing reminder, and the modal is
+  // the one-time nudge on top of it.
+  it('prompts with a modal when a signed-in user has not granted access', async () => {
+    const api = installMockApi()
+    ;(api.setup as Record<string, unknown>).getData = async () => ({
+      completed: true,
+      userEmail: 'a@b.c'
+    })
+    ;(api.detectord as Record<string, unknown>).fullDiskAccess = async () => ({
+      state: 'denied',
+      binaryPath: '/Applications/SealGate.app/Contents/Resources/bin/sealgate-detectord'
+    })
+
+    render(<MainMenu />)
+
+    const dialog = await screen.findByRole('dialog')
+    expect(dialog.textContent).toMatch(/Grant Full Disk Access/i)
+    // The path is the part the System Settings file picker hides, so it has to
+    // be on screen to copy.
+    expect(dialog.textContent).toMatch(/sealgate-detectord/)
+    expectNoRenderErrors()
+  })
+
+  // Dismissing the modal must not dismiss the banner: the modal is a nudge, the
+  // banner is the standing reminder that the grant is still missing.
+  it('keeps the banner after the Full Disk Access modal is dismissed', async () => {
+    const api = installMockApi()
+    ;(api.setup as Record<string, unknown>).getData = async () => ({
+      completed: true,
+      userEmail: 'a@b.c'
+    })
+    ;(api.detectord as Record<string, unknown>).fullDiskAccess = async () => ({
+      state: 'denied',
+      binaryPath: '/tmp/sealgate-detectord'
+    })
+
+    render(<MainMenu />)
+
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByText('Not now'))
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(screen.getByRole('alert').textContent).toMatch(/Detection is degraded/i)
+    expectNoRenderErrors()
+  })
+
   // `granted` is the steady state on a correctly configured machine, and every
   // poll costs an IPC round-trip plus a daemon status() that re-reads the
   // enrollment and quarantine files. So once granted, polling must STOP rather
@@ -208,7 +277,7 @@ describe('MainMenu', () => {
     const timeoutSpy = vi.spyOn(globalThis, 'setTimeout')
     try {
       const api = installMockApi()
-      ;(api.setup as Record<string, unknown>).getData = async () => ({ completed: true })
+      ;(api.setup as Record<string, unknown>).getData = async () => ({ completed: true, userEmail: 'a@b.c' })
       let calls = 0
       ;(api.detectord as Record<string, unknown>).fullDiskAccess = async () => {
         calls += 1
@@ -232,7 +301,7 @@ describe('MainMenu', () => {
     const timeoutSpy = vi.spyOn(globalThis, 'setTimeout')
     try {
       const api = installMockApi()
-      ;(api.setup as Record<string, unknown>).getData = async () => ({ completed: true })
+      ;(api.setup as Record<string, unknown>).getData = async () => ({ completed: true, userEmail: 'a@b.c' })
       ;(api.detectord as Record<string, unknown>).fullDiskAccess = async () => ({
         state: 'denied',
         binaryPath: '/tmp/sealgate-detectord'
@@ -255,7 +324,7 @@ describe('MainMenu', () => {
   // the banner is absent either way and would pass without the guard.
   it('does not poll for Full Disk Access off macOS', async () => {
     const api = installMockApi()
-    ;(api.setup as Record<string, unknown>).getData = async () => ({ completed: true })
+    ;(api.setup as Record<string, unknown>).getData = async () => ({ completed: true, userEmail: 'a@b.c' })
     ;(api as Record<string, unknown>).platform = 'win32'
     let calls = 0
     ;(api.detectord as Record<string, unknown>).fullDiskAccess = async () => {
