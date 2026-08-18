@@ -42,6 +42,11 @@ fn resolve_version() -> String {
         std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR set by cargo"),
     );
     if let Some(pkg) = find_desktop_package_json(&manifest_dir) {
+        // Re-stamp when the located package.json changes. Cargo does not
+        // reliably watch a not-yet-created file, but no real build path needs
+        // that: release builds pin the version via SEALGATE_DAEMON_VERSION
+        // (watched above) and in-tree builds always have the file present.
+        println!("cargo:rerun-if-changed={}", pkg.display());
         if let Some(v) = read_json_version(&pkg) {
             return v;
         }
@@ -69,37 +74,27 @@ fn resolve_version() -> String {
 /// vendored under an unrelated project therefore falls through to the
 /// crate-version fallback and its warning instead of silently adopting some
 /// far-off project's `packages/desktop/package.json`.
-///
-/// Every candidate path is registered with `cargo:rerun-if-changed`, including
-/// ones that don't exist yet, so a build that runs before the package.json is
-/// present re-stamps once it appears rather than Cargo reusing a stale fallback.
 fn find_desktop_package_json(start: &Path) -> Option<PathBuf> {
     // 4 parents reach the monorepo root; allow a little slack for layout
     // changes without an unbounded walk. `ancestors()` yields `start` first.
     const MAX_ANCESTORS: usize = 6;
-    let mut found = None;
-    for ancestor in start.ancestors().take(MAX_ANCESTORS) {
-        let candidate = ancestor.join("packages/desktop/package.json");
-        // Register the watch even when the file is absent, and keep scanning
-        // after a hit so a closer package.json added later also re-triggers.
-        println!("cargo:rerun-if-changed={}", candidate.display());
-        if found.is_none() && candidate.is_file() {
-            found = Some(candidate);
-        }
-    }
-    found
+    start
+        .ancestors()
+        .take(MAX_ANCESTORS)
+        .map(|ancestor| ancestor.join("packages/desktop/package.json"))
+        .find(|candidate| candidate.is_file())
 }
 
 /// Read the top-level `version` string from a package.json. Parses the whole
 /// document so a nested `version` key (a tool pin, a dependency block) can't be
-/// mistaken for the package's own. An empty string is treated as no version, so
-/// it falls through to the loud crate-version fallback rather than stamping an
-/// empty `client_version`.
+/// mistaken for the package's own. An empty or whitespace-only string is treated
+/// as no version, so it falls through to the loud crate-version fallback rather
+/// than stamping an unusable `client_version`.
 fn read_json_version(path: &Path) -> Option<String> {
     let text = std::fs::read_to_string(path).ok()?;
     let json: serde_json::Value = serde_json::from_str(&text).ok()?;
-    json.get("version")?
-        .as_str()
-        .filter(|v| !v.is_empty())
-        .map(str::to_owned)
+    json.get("version")?.as_str().and_then(|v| {
+        let v = v.trim();
+        (!v.is_empty()).then(|| v.to_owned())
+    })
 }
