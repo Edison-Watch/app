@@ -56,14 +56,18 @@ jobs:
       run:
         working-directory: packages/desktop
     env:
-      # Sign only on post-merge push to main; PR builds stay unsigned (see header).
-      # On pull_request these resolve to empty / false so electron-builder skips
-      # signing entirely instead of erroring on a missing certificate.
-      CSC_LINK: ${{ github.event_name == 'push' && secrets.CSC_LINK || '' }}
-      CSC_KEY_PASSWORD: ${{ github.event_name == 'push' && secrets.CSC_KEY_PASSWORD || '' }}
+      # Sign on post-merge push to main and on manual dispatch; PR builds stay
+      # unsigned (see header). On pull_request these resolve to empty / false so
+      # electron-builder skips signing entirely instead of erroring on a missing
+      # certificate.
+      # Allow-list, not `!= 'pull_request'`: any trigger added later must opt in
+      # to the signing cert deliberately. A deny-list would hand it to, say, a
+      # future pull_request_target run, which builds fork-authored code.
+      CSC_LINK: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && secrets.CSC_LINK || '' }}
+      CSC_KEY_PASSWORD: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && secrets.CSC_KEY_PASSWORD || '' }}
       # false => electron-builder produces an unsigned build without probing the
       # keychain for a Developer ID identity (none exists on PR runs).
-      CSC_IDENTITY_AUTO_DISCOVERY: ${{ github.event_name == 'push' && secrets.CSC_LINK != '' }}
+      CSC_IDENTITY_AUTO_DISCOVERY: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && secrets.CSC_LINK != '' }}
       # Demo backend config. Vite's loadEnv() also reads matching keys from the
       # environment, so these flow into the bundle even without ../frontend-v2.
       # Set the DEMO_VITE_* repository variables (Settings > Variables).
