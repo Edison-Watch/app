@@ -2,32 +2,40 @@
 #
 # install-beeper.sh - wire Beeper into the SealGate MCP gateway on macOS.
 #
-# Reality check (2026-07): `@beeper/desktop-mcp` is itself the MCP server; it
-# bridges Beeper's local Client API (127.0.0.1:23373-23378) to MCP. That API is
-# served by either the Beeper Desktop app OR a headless `beeper` server
-# (`beeper setup --server`), so a headless setup works (verified against a
-# headless server on a real Mac). Beeper's main `execute` tool runs code in a
-# local Deno sandbox, so Deno must be installed. Full automation still stops at
-# the human-gated steps below (device approval, server approval, Beeper login).
+# Reality check (2026-08): Beeper's local Client API (127.0.0.1:23373-23378)
+# now ships a built-in Streamable HTTP MCP server, and `@beeper/mcp-remote` is
+# a thin stdio proxy to it. That API is served by either the Beeper Desktop app
+# OR a headless `beeper` server (`beeper setup --server`). Full automation
+# still stops at the human-gated steps below (device approval, server
+# approval, Beeper login).
+#
+# Auth model: `@beeper/mcp-remote` authenticates with the MCP OAuth flow. On
+# first connect Beeper raises an approve/deny prompt (in the Desktop app; a
+# headless server prints an approval URL instead) and caches the grant
+# locally, so there is no token to mint, discover, or paste. (The earlier
+# static-token flow around `@beeper/desktop-mcp`, with its `token` and
+# `bind-token` subcommands and its Deno prerequisite, is gone; see git
+# history.)
 #
 # What it automates:
-#   1. Install prerequisites (node/npx, Deno, `sealgate-stdiod`).
+#   1. Install prerequisites (node/npx, `sealgate-stdiod`).
 #   2. Authorize this device to SealGate via the stdiod browser/device flow
 #      (`sealgate-stdiod login`; no API key paste, no step-up dance).
 #   3. Supervise the tunnel daemon (`sealgate-stdiod install`).
-#   4. Submit Beeper's stdio MCP proxy (`npx @beeper/desktop-mcp`) as a tunnel
+#   4. Submit Beeper's stdio MCP proxy (`npx @beeper/mcp-remote`) as a tunnel
 #      server (`sealgate-stdiod server add`, which requests admin approval).
+#   5. Prime the Beeper OAuth grant by driving one MCP handshake through the
+#      proxy, so the approval prompt fires now instead of at first daemon spawn.
 #
 # What still needs a human (each one printed with the exact action):
 #   A. Enable MCP in Beeper Desktop (Settings > Developers > MCP) so :23373
 #      answers, and link WhatsApp / Telegram / etc. in the Beeper app.
 #   B. Approve the submitted `beeper` server once in the SealGate dashboard.
-#   C. Set BEEPER_ACCESS_TOKEN on that server in the dashboard so the child can
-#      authenticate. The script discovers a reusable token for you to paste.
+#   C. Approve the Beeper OAuth prompt when step 5 raises it.
 #
 # End-to-end topology once those are done:
 #   AI client --MCP--> SealGate Gateway --WS tunnel--> sealgate-stdiod
-#     --stdio--> npx @beeper/desktop-mcp --HTTP :23373--> Beeper Desktop
+#     --stdio--> npx @beeper/mcp-remote --HTTP+OAuth :23373--> Beeper Client API
 #     --> WhatsApp / Telegram / LinkedIn / ...
 #
 # Built to be driven by an agent or a human: every input is a flag or an
@@ -53,14 +61,16 @@ export HOMEBREW_NO_ENV_HINTS="${HOMEBREW_NO_ENV_HINTS:-1}"
 # like passing --sg-backend, so resolve_backend must not override it with the
 # device's saved session. Capture that before applying the release default.
 if [ -n "${SG_BACKEND:-}" ]; then SG_BACKEND_SET=1; else SG_BACKEND_SET=0; fi
+# sealgate.ai is the canonical host: the old edison.watch domains answer with a
+# 308 the login client will not re-POST across.
 SG_BACKEND="${SG_BACKEND:-https://dashboard.sealgate.ai}"  # --sg-backend/--demo/--release also set SG_BACKEND_SET
 SG_API_KEY="${SG_API_KEY:-}"                       # only for the mcp-url client snippet
-BEEPER_ACCESS_TOKEN="${BEEPER_ACCESS_TOKEN:-}"     # skip token discovery if set
 SERVER_NAME="${SERVER_NAME:-beeper}"               # tunnel server name / gateway prefix
 # Display label for this script's own output only. It does NOT set the stdiod
 # device record: `sealgate-stdiod login` issues the device identity server-side.
 DEVICE_LABEL="${DEVICE_LABEL:-$(hostname -s 2>/dev/null || echo my-mac)}"
-MCP_PKG="${MCP_PKG:-@beeper/desktop-mcp}"          # the stdio proxy npx package
+MCP_PKG="${MCP_PKG:-@beeper/mcp-remote}"           # the stdio->HTTP OAuth proxy npx package
+OAUTH_WAIT="${OAUTH_WAIT:-120}"                    # seconds to wait for the Beeper OAuth approval
 
 DRY_RUN=0
 ASSUME_YES=0
@@ -71,7 +81,7 @@ VERBOSE=0
 NO_COLOR_FLAG=0
 NO_OPEN=0            # pass through to `sealgate-stdiod login --no-open` for headless auth
 RELOGIN=0           # force a fresh `sealgate-stdiod login` even if already authorized
-REVEAL=0            # `token --reveal` prints the full token to stdout (default: masked)
+NO_PREAUTH=0        # skip the OAuth-grant priming step during install
 
 PROG="$(basename "$0")"
 
@@ -158,12 +168,12 @@ parse_flags() {
       --demo)         SG_BACKEND="https://demo-dashboard.sealgate.ai"; SG_BACKEND_SET=1; shift;;
       --release)      SG_BACKEND="https://dashboard.sealgate.ai"; SG_BACKEND_SET=1; shift;;
       --sg-api-key)   needval $# "$1" "${2:-}"; SG_API_KEY="$2"; shift 2;;
-      --beeper-token) needval $# "$1" "${2:-}"; BEEPER_ACCESS_TOKEN="$2"; shift 2;;
       --server-name)  needval $# "$1" "${2:-}"; SERVER_NAME="$2"; shift 2;;
       --device-label) needval $# "$1" "${2:-}"; DEVICE_LABEL="$2"; shift 2;;
+      --oauth-wait)   needval $# "$1" "${2:-}"; OAUTH_WAIT="$2"; shift 2;;
       --no-open)      NO_OPEN=1; shift;;
       --relogin)      RELOGIN=1; shift;;
-      --reveal)       REVEAL=1; shift;;
+      --no-preauth)   NO_PREAUTH=1; shift;;
       --dry-run)      DRY_RUN=1; shift;;
       -y|--yes)       ASSUME_YES=1; shift;;
       --interactive)  INTERACTIVE=1; shift;;
@@ -217,18 +227,15 @@ ensure_deps() {
   ensure_tool npx \
     "install Node (brew install node) or re-run with --install-deps" \
     brew install --quiet node
-  # @beeper/desktop-mcp runs its `execute` tool (the main Beeper surface) in a
-  # Deno sandbox spawned on this machine, so Deno is a hard runtime dep.
-  ensure_tool deno \
-    "install Deno (brew install deno); @beeper/desktop-mcp runs its execute tool in a Deno sandbox" \
-    brew install deno
+  # No Deno: @beeper/mcp-remote only proxies to Beeper's built-in MCP server.
+  # The Deno sandbox was a @beeper/desktop-mcp `execute` tool requirement.
   ensure_tool sealgate-stdiod \
     "run: cargo install --path crates/sealgate-stdiod   (or re-run with --install-deps)" \
     cargo install --path "$stdiod_src"
   if [ "$DRY_RUN" -eq 1 ]; then
     info "deps: preview only (nothing was installed)"
   else
-    ok "npx, deno, and sealgate-stdiod present"
+    ok "npx and sealgate-stdiod present"
   fi
 }
 
@@ -272,6 +279,22 @@ beeper_api_base() {
   return 1
 }
 
+# Sets MCP_ENDPOINT (the full /v0/mcp URL) when Beeper answers on a base other
+# than the proxy's built-in default (http://localhost:23373), so the proxy must
+# be told where to connect; leaves it empty when the default works or Beeper is
+# down. The headless `beeper` server commonly lands on 23374, which the probe
+# finds but the proxy would never try on its own.
+MCP_ENDPOINT=""
+resolve_mcp_endpoint() {
+  MCP_ENDPOINT=""
+  local base
+  base="$(beeper_api_base 2>/dev/null)" || return 0
+  case "$base" in
+    http://127.0.0.1:23373|http://localhost:23373) ;;
+    *) MCP_ENDPOINT="$base/v0/mcp";;
+  esac
+}
+
 # Non-fatal: if Beeper Desktop is not answering we still wire the automatable
 # SealGate side and print the exact action, so `install` makes progress instead of
 # stopping the operator at the first prerequisite.
@@ -289,23 +312,14 @@ ensure_beeper_desktop() {
   warn "the Beeper Client API is not answering on 23373-23378"
   todo "start Beeper: the Desktop app, or a headless server via 'beeper setup --server --install'"
   todo "link the chats you want (WhatsApp / Telegram / ...) in Beeper"
-  info "@beeper/desktop-mcp bridges this local Client API to MCP, so either the Desktop app or a headless server works"
+  info "@beeper/mcp-remote proxies this local Client API's MCP server, so either the Desktop app or a headless server works"
   warn "continuing to wire the SealGate side; the Beeper child stays idle until Beeper is reachable"
-}
-
-# ---------------------------------------------------------------------------
-# Step B: Beeper access token (for the stdio MCP proxy child)
-# ---------------------------------------------------------------------------
-mask_token() {
-  local s="$1"
-  [ "${#s}" -le 12 ] && { printf '<len %s>' "${#s}"; return; }
-  printf '%s...%s (len %s)' "${s:0:6}" "${s: -4}" "${#s}"
 }
 
 # Escape a value for safe interpolation into a JSON string literal. Covers the
 # characters JSON forbids raw: backslash (first), double-quote, and the common
-# controls. Keeps --json output and the bind-token body valid even when a token,
-# label, or backend contains quotes or backslashes.
+# controls. Keeps --json output valid even when a label or backend contains
+# quotes or backslashes.
 json_escape() {
   local s="$1"
   s="${s//\\/\\\\}"
@@ -316,96 +330,74 @@ json_escape() {
   printf '%s' "$s"
 }
 
-# Resolve the Beeper OAuth userinfo endpoint from the well-known document, with
-# a sensible default. Echoes the URL; empty on no reachable API.
-beeper_userinfo_endpoint() {
-  local base uinfo
-  base="$(beeper_api_base)" || return 1
-  uinfo="$(curl -s -m 4 "$base/.well-known/oauth-authorization-server" 2>/dev/null \
-           | grep -oE '"userinfo_endpoint"[[:space:]]*:[[:space:]]*"[^"]+"' \
-           | grep -oE 'https?://[^"]+' | head -1)"
-  # $base is already loopback; refuse to follow a userinfo_endpoint that points
-  # anywhere else, since candidate tokens are sent here with an Authorization
-  # header. Fall back to the local default rather than leaking to a remote host.
-  if [ -z "$uinfo" ] || ! is_loopback_url "$uinfo"; then
-    [ -n "$uinfo" ] && warn "ignoring non-loopback userinfo_endpoint ($uinfo); using the local default"
-    uinfo="$base/oauth/userinfo"
+# ---------------------------------------------------------------------------
+# Step 5 / C: prime the Beeper OAuth grant
+# ---------------------------------------------------------------------------
+# @beeper/mcp-remote authenticates to Beeper's MCP server with the MCP OAuth
+# flow: on first connect Beeper raises an approve/deny prompt (in the Desktop
+# app; a headless server prints an approval URL) and caches the grant locally
+# for later spawns (same $HOME, so the daemon's child reuses it). Priming here
+# surfaces the prompt while a human is watching the install, instead of the
+# daemon's first spawn stalling on an unseen dialog. Mechanism: spawn the
+# proxy, send one MCP initialize over stdio, and poll for a reply; the proxy
+# only answers once the grant exists.
+prime_oauth_grant() {
+  step "Beeper OAuth grant (approve in Beeper if prompted)"
+  if [ "$DRY_RUN" -eq 1 ]; then
+    info "would run 'npx -y $MCP_PKG', send an MCP initialize, and wait up to ${OAUTH_WAIT}s for the grant"
+    return 0
   fi
-  printf '%s' "$uinfo"
-}
-
-# discover_beeper_token - find a Desktop API bearer the Beeper app already holds,
-# so you can paste it into the dashboard without minting a fresh one by hand.
-# Beeper has no headless mint (OAuth is authorization_code + PKCE). The reliable
-# invariant is that Beeper stores the bearer verbatim as "accessToken"; a capped
-# generic scrape and the Keychain are best-effort fallbacks. Candidates are
-# validated against the userinfo endpoint, first one that returns 200 wins.
-# Prints the working token to stdout; diagnostics to stderr.
-discover_beeper_token() {
-  local uinfo
-  uinfo="$(beeper_userinfo_endpoint)" || { warn "the Beeper Desktop API is not reachable on 23373-23378"; return 1; }
-
-  # Search the Beeper config dir(s). Use an array so paths with spaces (the
-  # macOS "Application Support" norm, or a spaced $HOME) survive intact.
-  local dirs=("$HOME/.beeper") d cp
-  if command -v beeper >/dev/null 2>&1; then
-    cp="$(beeper config path 2>/dev/null || true)"
-    if [ -n "$cp" ]; then
-      if [ -d "$cp" ]; then dirs=("$cp" "${dirs[@]}"); else dirs=("$(dirname "$cp")" "${dirs[@]}"); fi
+  if ! beeper_api_base >/dev/null 2>&1; then
+    warn "skipping: the Beeper Client API is not reachable, so there is nothing to authorize yet"
+    todo "once Beeper is running with MCP enabled, run: $PROG preauth"
+    return 0
+  fi
+  resolve_mcp_endpoint
+  [ -n "$MCP_ENDPOINT" ] && info "Beeper answers on a non-default port; pointing the proxy at $MCP_ENDPOINT"
+  local dir init pid waited=0 auth_url=""
+  dir="$(mktemp -d "${TMPDIR:-/tmp}/install-beeper.XXXXXX")"
+  init='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"install-beeper","version":"1.0.0"}}}'
+  # The sleep holds the proxy's stdin open while OAuth completes; after we kill
+  # npx, that same EOF (or the sleep expiring) winds down any child it spawned.
+  # ${MCP_ENDPOINT:+...} expands to nothing when unset, so the proxy keeps its
+  # built-in default; the guarded form stays safe under bash 3.2's set -u.
+  { printf '%s\n' "$init"; sleep "$OAUTH_WAIT"; } | npx -y "$MCP_PKG" ${MCP_ENDPOINT:+"$MCP_ENDPOINT"} >"$dir/out" 2>"$dir/err" &
+  pid=$!
+  info "if Beeper raises an approval prompt, approve it (waiting up to ${OAUTH_WAIT}s)"
+  while [ "$waited" -lt "$OAUTH_WAIT" ]; do
+    grep -q '"result"' "$dir/out" 2>/dev/null && break
+    kill -0 "$pid" 2>/dev/null || break
+    # Surface the authorization URL as soon as the proxy prints it: on a
+    # headless server there is no Desktop dialog, so this URL is the only way
+    # to approve. Print it once. The trailing || true keeps a no-match grep
+    # (status 1) from killing the script under set -e + pipefail.
+    if [ -z "$auth_url" ]; then
+      auth_url="$(grep -oE 'https?://[^[:space:]"'\'']*authorize[^[:space:]"'\'']*' "$dir/err" 2>/dev/null | head -n1 || true)"
+      [ -n "$auth_url" ] && todo "no prompt? open this URL in a browser to approve: $auth_url"
     fi
-  fi
-
-  # Primary (targeted): target files store the bearer verbatim as "accessToken".
-  # Remember the first as the canonical fallback if live validation is flaky.
-  local explicit="" f t cands=""
-  for d in "${dirs[@]}"; do
-    [ -d "$d" ] || continue
-    while IFS= read -r f; do
-      [ -n "$f" ] || continue
-      t="$(sed -n 's/.*"accessToken"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$f" 2>/dev/null | head -n1)"
-      if [ -n "$t" ]; then cands="$t
-$cands"; [ -z "$explicit" ] && explicit="$t"; fi
-    done <<EOF2
-$(find "$d" -type f -name '*.json' 2>/dev/null)
-EOF2
+    sleep 1; waited=$((waited + 1))
   done
-
-  # Secondary (best-effort, capped): token-shaped strings from small JSON files.
-  for d in "${dirs[@]}"; do
-    [ -d "$d" ] || continue
-    cands="$cands
-$(find "$d" -type f -name '*.json' -size -1M -exec cat {} + 2>/dev/null \
-      | grep -oE '[A-Za-z0-9._-]{24,}' | sort -u | head -n 40)"
-  done
-
-  # Best-effort Keychain fallback.
-  if command -v security >/dev/null 2>&1; then
-    local svc kc
-    for svc in beeper Beeper beeper-cli com.beeper.cli "Beeper Desktop" "Beeper Desktop API"; do
-      kc="$(security find-generic-password -s "$svc" -w 2>/dev/null || true)"
-      [ -n "$kc" ] && cands="$cands
-$kc"
-    done
+  # Bounded teardown: TERM, give it a second, then KILL. A blocking `wait`
+  # here could stall the whole script if the child defers TERM while inside a
+  # long-running call; the script exits soon anyway, so reaping can wait.
+  kill "$pid" 2>/dev/null || true
+  sleep 1
+  kill -9 "$pid" 2>/dev/null || true
+  if grep -q '"result"' "$dir/out" 2>/dev/null; then
+    if [ "$waited" -le 3 ]; then
+      ok "MCP handshake completed immediately (grant already cached)"
+    else
+      ok "OAuth grant approved; the MCP handshake completed"
+    fi
+    rm -rf "$dir"
+    return 0
   fi
-
-  # Validate candidates (deduped, order preserved so accessToken hits first).
-  # Bounded so a bad guess set cannot turn this into minutes of silent curls.
-  local tok code tried=0 max=20
-  while IFS= read -r tok; do
-    [ -z "$tok" ] && continue
-    tried=$((tried + 1))
-    if [ "$tried" -gt "$max" ]; then warn "checked $max candidate tokens without a live match; stopping"; break; fi
-    code="$(curl -s -o /dev/null -w '%{http_code}' -m 3 -H "Authorization: Bearer $tok" "$uinfo" 2>/dev/null || true)"
-    if [ "$code" = "200" ]; then printf '%s' "$tok"; return 0; fi
-  done <<EOF
-$(printf '%s\n' "$cands" | awk 'NF && !seen[$0]++')
-EOF
-
-  if [ -n "$explicit" ]; then
-    warn "using the Beeper accessToken without a live userinfo check"
-    printf '%s' "$explicit"; return 0
-  fi
-  return 1
+  warn "no MCP handshake within ${OAUTH_WAIT}s"
+  [ -s "$dir/err" ] && info "proxy stderr (tail): $(tail -n 3 "$dir/err" | tr '\n' ' ')"
+  todo "keep Beeper running and re-run: $PROG preauth   (then approve the prompt it raises)"
+  info "until the grant exists, the daemon's '$SERVER_NAME' child cannot reach Beeper"
+  rm -rf "$dir"
+  return 0
 }
 
 # ---------------------------------------------------------------------------
@@ -446,7 +438,7 @@ stdiod_saved_backend() {
 
 # When no backend was given explicitly, follow the one this device is already
 # authorized to (from stdiod config) instead of the release default. Stops
-# commands like bind-token from silently targeting the wrong environment.
+# commands from silently targeting the wrong environment.
 resolve_backend() {
   [ "$SG_BACKEND_SET" -eq 1 ] && return 0
   local saved; saved="$(stdiod_saved_backend)"
@@ -508,9 +500,13 @@ ensure_stdiod_supervised() {
 # approved servers bound to this device, so we use it as the idempotency check.
 submit_beeper_server() {
   step "Submitting the Beeper server"
+  # The submitted command must carry the endpoint when Beeper sits on a
+  # non-default port, or the daemon's child dials 23373 and ECONNREFUSEs.
+  resolve_mcp_endpoint
+  [ -n "$MCP_ENDPOINT" ] && info "Beeper answers on a non-default port; the server command includes $MCP_ENDPOINT"
   if [ "$DRY_RUN" -eq 1 ]; then
     run sealgate-stdiod server add "$SERVER_NAME" --display-name "Beeper" \
-      --command npx --arg=-y --arg="$MCP_PKG"
+      --command npx --arg=-y --arg="$MCP_PKG" ${MCP_ENDPOINT:+--arg="$MCP_ENDPOINT"}
     return 0
   fi
   if server_registered; then
@@ -521,11 +517,14 @@ submit_beeper_server() {
   # Use --arg=VALUE: clap rejects a hyphen-leading value in the space form.
   local out rc
   out="$(sealgate-stdiod server add "$SERVER_NAME" --display-name "Beeper" \
-        --command npx --arg=-y --arg="$MCP_PKG" 2>&1)" && rc=0 || rc=$?
+        --command npx --arg=-y --arg="$MCP_PKG" ${MCP_ENDPOINT:+--arg="$MCP_ENDPOINT"} 2>&1)" && rc=0 || rc=$?
   printf '%s\n' "$out" | grep -viE '^[[:space:]]*$' >&2 || true
   if [ "$rc" -ne 0 ]; then
-    if printf '%s' "$out" | grep -qiE 'already (exists|submitted|pending)|duplicate'; then
-      ok "a request for '$SERVER_NAME' is already pending; approve it in the dashboard"
+    # The backend reports a duplicate submission as a bare HTTP 409, so match
+    # that alongside the wordier variants.
+    if printf '%s' "$out" | grep -qiE 'already (exists|submitted|pending)|duplicate|(http )?409( conflict)?'; then
+      ok "a request for '$SERVER_NAME' already exists on the backend; approve it in the dashboard"
+      info "if that request predates this script version its command may be stale; run 'sealgate-stdiod server remove $SERVER_NAME' and re-run install to resubmit"
       return 0
     fi
     die "sealgate-stdiod server add failed for '$SERVER_NAME'" \
@@ -533,38 +532,7 @@ submit_beeper_server() {
   fi
   ok "submitted '$SERVER_NAME' (npx $MCP_PKG) for approval"
   todo "approve '$SERVER_NAME' as an admin: ${SG_BACKEND%/}  ->  Servers page (pending requests), or Overview"
-  info "a 'not verified' badge before the token is set is expected and does not block approval"
-}
-
-# ---------------------------------------------------------------------------
-# Step C: hand the Beeper token to the operator for the dashboard
-# ---------------------------------------------------------------------------
-# The device-scoped client request carries no env, and the daemon receives each
-# server's environment from the backend (a ServerEnvUpdate frame merged into the
-# device's per-installation env_store). So BEEPER_ACCESS_TOKEN is set in the
-# dashboard when the server is configured, not by a call from this script. We
-# discover a reusable token and print it (masked) with the exact place to paste.
-report_beeper_token() {
-  step "Beeper access token for the dashboard"
-  local tok=""
-  if [ -n "$BEEPER_ACCESS_TOKEN" ]; then
-    tok="$BEEPER_ACCESS_TOKEN"
-    ok "using the supplied token [$(mask_token "$tok")]"
-  elif [ "$DRY_RUN" -eq 1 ]; then
-    info "would discover a reusable Beeper token to paste into the dashboard"
-    return 0
-  elif tok="$(discover_beeper_token)" && [ -n "$tok" ]; then
-    ok "discovered a working Beeper token [$(mask_token "$tok")]"
-  else
-    warn "could not discover a Beeper token automatically"
-    todo "in Beeper Desktop: Settings > Developers > Beeper Desktop API > create/copy a token"
-    tok=""
-  fi
-  todo "after approving '$SERVER_NAME', set the token: $PROG bind-token --sg-api-key <admin-key>"
-  info "the device-scoped add declares no env, so the dashboard shows no field for it; bind-token pushes it via the admin /env route"
-  # Keep the token off stdout so it is not captured by accident; print_result
-  # only reports whether one was found.
-  BEEPER_ACCESS_TOKEN="$tok"
+  info "a 'not verified' badge before the first successful spawn is expected and does not block approval"
 }
 
 # ---------------------------------------------------------------------------
@@ -573,9 +541,9 @@ report_beeper_token() {
 print_result() {
   local mcp_url="${SG_BACKEND%/}/mcp"
   if [ "$JSON" -eq 1 ]; then
-    printf '{"mcp_url":"%s","server":"%s","device_label":"%s","beeper_token_present":%s}\n' \
+    printf '{"mcp_url":"%s","server":"%s","device_label":"%s","mcp_pkg":"%s"}\n' \
       "$(json_escape "$mcp_url")" "$(json_escape "$SERVER_NAME")" "$(json_escape "$DEVICE_LABEL")" \
-      "$([ -n "$BEEPER_ACCESS_TOKEN" ] && echo true || echo false)"
+      "$(json_escape "$MCP_PKG")"
     return 0
   fi
   local b=$C_BOLD g=$C_GREEN d=$C_DIM r=$C_RESET
@@ -601,16 +569,20 @@ cmd_install() {
   ensure_stdiod_auth
   ensure_stdiod_supervised
   submit_beeper_server
-  report_beeper_token
+  if [ "$NO_PREAUTH" -eq 1 ]; then
+    info "skipping OAuth priming (--no-preauth); the grant prompt appears at the child's first spawn, or run: $PROG preauth"
+  else
+    prime_oauth_grant
+  fi
   printf '\n%s%s== SealGate side wired ==%s\n' "$C_BOLD" "$C_GREEN" "$C_RESET" >&2
-  log "remaining human steps are printed above as 'action:' lines (approve the server, set the token)."
+  log "remaining human steps are printed above as 'action:' lines (approve the server in the dashboard)."
   print_result
 }
 
 cmd_doctor() {
   step "Doctor"
   local allgood=1
-  for c in npx deno sealgate-stdiod; do
+  for c in npx sealgate-stdiod; do
     if command -v "$c" >/dev/null 2>&1; then ok "$c"; else warn "$c missing"; allgood=0; fi
   done
   if beeper_api_base >/dev/null 2>&1; then ok "Beeper Client API reachable"; else warn "Beeper Client API not reachable (start Beeper Desktop with MCP enabled, or a headless 'beeper' server)"; allgood=0; fi
@@ -629,64 +601,14 @@ cmd_status() {
   if [ -n "$base" ]; then ok "Beeper Client API: $base"; else warn "Beeper Client API not reachable (Beeper Desktop with MCP enabled, or a headless 'beeper' server)"; fi
 }
 
-cmd_token() {
-  step "Discovering a Beeper access token"
-  local tok="$BEEPER_ACCESS_TOKEN"
-  if [ -z "$tok" ]; then
-    if ! tok="$(discover_beeper_token)" || [ -z "$tok" ]; then
-      warn "no reusable token found (is Beeper Desktop running with MCP enabled?)"
-      die "no Beeper access token discovered" "create one in Beeper Desktop > Settings > Developers, or pass --beeper-token <TOKEN>"
-    fi
+# preauth: run the OAuth-grant priming on its own, e.g. after enabling MCP in
+# Beeper later, after revoking the grant, or after --no-preauth.
+cmd_preauth() {
+  if [ "$DRY_RUN" -eq 0 ] && ! beeper_api_base >/dev/null 2>&1; then
+    die "the Beeper Client API is not reachable on 23373-23378" \
+      "start Beeper Desktop with MCP enabled (or a headless 'beeper' server), then re-run: $PROG preauth"
   fi
-  if [ "$REVEAL" -eq 1 ]; then
-    ok "token found [$(mask_token "$tok")]; printing the full value to stdout"
-    printf '%s\n' "$tok"          # raw value on stdout so it can be piped/copied
-    return 0
-  fi
-  ok "found a working token [$(mask_token "$tok")]"
-  info "run '$PROG bind-token --sg-api-key <admin-key>' to push it (no copy needed); add --reveal to print the full value"
-}
-
-# bind-token: push BEEPER_ACCESS_TOKEN onto the (already approved) server via the
-# admin env endpoint. The device-scoped `server add` declares no env, so the
-# dashboard shows no field for it; this admin route (POST /servers/{name}/env)
-# forwards the value to the daemon's env_store and verifies the spawn. Run it
-# AFTER the '$SERVER_NAME' request is approved in the dashboard.
-cmd_bind_token() {
-  step "Binding BEEPER_ACCESS_TOKEN to server '$SERVER_NAME'"
-  # The admin key is only needed for the real POST. Requiring it before the
-  # dry-run branch would block a credential-free preview, so gate it on DRY_RUN.
-  if [ "$DRY_RUN" -eq 0 ]; then
-    [ -n "$SG_API_KEY" ] || die "an admin SealGate API key is required to push env" \
-      "pass --sg-api-key sealgate_... (must belong to an org admin on ${SG_BACKEND})"
-  fi
-  local tok="$BEEPER_ACCESS_TOKEN"
-  if [ -z "$tok" ] && [ "$DRY_RUN" -eq 0 ]; then
-    if ! tok="$(discover_beeper_token)" || [ -z "$tok" ]; then
-      die "no Beeper token to bind" "pass --beeper-token <TOKEN>, or run '$PROG token' to find one"
-    fi
-  fi
-  local url="${SG_BACKEND%/}/api/v1/servers/${SERVER_NAME}/env"
-  if [ "$DRY_RUN" -eq 1 ]; then
-    run curl -X POST "$url" '(env: BEEPER_ACCESS_TOKEN=<discovered>)'
-    return 0
-  fi
-  local code
-  code="$(curl -s -o /dev/null -w '%{http_code}' -m 60 --connect-timeout 5 -X POST "$url" \
-    -H "Authorization: Bearer ${SG_API_KEY}" -H "Content-Type: application/json" \
-    --data "$(printf '{"env":{"BEEPER_ACCESS_TOKEN":"%s"}}' "$(json_escape "$tok")")" 2>/dev/null || true)"
-  [ -z "$code" ] && code="000"
-  case "$code" in
-    2*)      ok "bound BEEPER_ACCESS_TOKEN; the backend verified the spawn and pushed it to the device [$(mask_token "$tok")]";;
-    400)     die "the server rejected the env or the spawn did not verify (http 400)" \
-               "confirm the '$SERVER_NAME' request is approved and Beeper Desktop is reachable, then re-run: $PROG bind-token";;
-    401|403) die "not authorized to push env (http ${code})" \
-               "the /env route is admin-only; --sg-api-key must be an org admin on ${SG_BACKEND}";;
-    404)     die "server '$SERVER_NAME' not found (http 404)" \
-               "approve the '$SERVER_NAME' request in the dashboard first, then re-run: $PROG bind-token";;
-    000)     die "could not reach ${url}" "check the network and that the daemon is connected, then re-run: $PROG bind-token";;
-    *)       die "env push returned http ${code}" "check server '$SERVER_NAME' in the dashboard, then re-run: $PROG bind-token";;
-  esac
+  prime_oauth_grant
 }
 
 cmd_mcp_url() { print_result; }
@@ -714,11 +636,10 @@ Usage:
   $PROG <command> [flags]
 
 Commands:
-  install     Deps, Beeper-Desktop check, device auth, supervise daemon, submit Beeper server
+  install     Deps, Beeper check, device auth, supervise daemon, submit Beeper server, prime OAuth
   doctor      Check prerequisites and current state (read-only)
-  status      Show stdiod daemon + Beeper Desktop API status
-  token       Discover a reusable Beeper token to paste into the dashboard
-  bind-token  Push BEEPER_ACCESS_TOKEN onto the approved server (needs --sg-api-key admin)
+  status      Show stdiod daemon + Beeper Client API status
+  preauth     Prime the Beeper OAuth grant (approve once in Beeper)
   mcp-url     Print the SealGate MCP URL and client snippet
   uninstall   Withdraw the server and remove the supervisor unit
 
@@ -728,8 +649,9 @@ Common flags (also settable as UPPER_SNAKE env vars):
   --release            Shortcut for --sg-backend https://dashboard.sealgate.ai
                        With none of these set, commands follow the backend this device
                        is already authorized to (from stdiod config).
-  --sg-api-key KEY     SealGate API key; admin key required for bind-token (SG_API_KEY)
-  --beeper-token TOK   Beeper access token   (BEEPER_ACCESS_TOKEN) skips discovery
+  --sg-api-key KEY     SealGate API key for the client snippet only (SG_API_KEY)
+  --oauth-wait SECS    How long to wait for the Beeper OAuth approval (OAUTH_WAIT, default $OAUTH_WAIT)
+  --no-preauth         Skip OAuth priming during install (prompt then fires at first spawn)
   --no-open            Headless device auth: print the approval URL, do not open a browser
   --relogin            Force a fresh device authorization even if already authorized
   --install-deps       Consent to auto-install missing deps (npx/sealgate-stdiod).
@@ -744,13 +666,13 @@ Common flags (also settable as UPPER_SNAKE env vars):
 
 Examples:
   # Agent-friendly: install deps and wire the SealGate side, headless device auth
-  $PROG install --install-deps --yes --no-open --sg-backend https://demo-dashboard.sealgate.ai
+  $PROG install --install-deps --yes --no-open --demo
 
   # Preview without changing anything
   $PROG install --dry-run
 
-  # Discover a Beeper token to paste into the dashboard
-  $PROG token
+  # Re-run the one-time Beeper OAuth approval (e.g. after enabling MCP later)
+  $PROG preauth
 
 Exit codes: 0 ok, 1 error (message + fix printed to stderr).
 EOF
@@ -759,12 +681,11 @@ EOF
 subcmd_help() {
   case "$1" in
     install)  log "install - wire the SealGate side and print remaining human steps. Idempotent; safe to re-run."
-              log "  optional: --sg-backend, --no-open, --install-deps, --yes, --dry-run.";;
-    token)    log "token - discover a reusable Beeper token to paste into the dashboard.";;
-    bind-token) log "bind-token - push BEEPER_ACCESS_TOKEN onto the approved server via the admin /env route."
-              log "  needs --sg-api-key <admin-key>. Run after approving the '$SERVER_NAME' request.";;
+              log "  optional: --sg-backend, --no-open, --install-deps, --yes, --dry-run, --no-preauth, --oauth-wait.";;
+    preauth)  log "preauth - drive one MCP handshake through 'npx $MCP_PKG' so Beeper raises its"
+              log "  approve/deny prompt and caches the OAuth grant. Idempotent; optional --oauth-wait.";;
     mcp-url)  log "mcp-url - print the gateway URL + client snippet. pass --sg-api-key for a ready-to-run snippet. supports --json.";;
-    status)   log "status - show stdiod daemon + Beeper Desktop API status.";;
+    status)   log "status - show stdiod daemon + Beeper Client API status.";;
     doctor)   log "doctor - verify prerequisites and current state (read-only).";;
     uninstall)log "uninstall - withdraw the server and remove the supervisor unit. pass --yes to skip the prompt.";;
     *)        usage;;
@@ -788,8 +709,7 @@ main() {
     install)    cmd_install;;
     doctor)     cmd_doctor;;
     status)     cmd_status;;
-    token)      cmd_token;;
-    bind-token) cmd_bind_token;;
+    preauth)    cmd_preauth;;
     mcp-url)    cmd_mcp_url;;
     uninstall)  cmd_uninstall;;
     ""|help|-h|--help) usage;;
