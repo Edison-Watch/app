@@ -367,15 +367,20 @@ prime_oauth_grant() {
     kill -0 "$pid" 2>/dev/null || break
     # Surface the authorization URL as soon as the proxy prints it: on a
     # headless server there is no Desktop dialog, so this URL is the only way
-    # to approve. Print it once.
+    # to approve. Print it once. The trailing || true keeps a no-match grep
+    # (status 1) from killing the script under set -e + pipefail.
     if [ -z "$auth_url" ]; then
-      auth_url="$(grep -oE 'https?://[^[:space:]"'\'']*authorize[^[:space:]"'\'']*' "$dir/err" 2>/dev/null | head -n1)"
+      auth_url="$(grep -oE 'https?://[^[:space:]"'\'']*authorize[^[:space:]"'\'']*' "$dir/err" 2>/dev/null | head -n1 || true)"
       [ -n "$auth_url" ] && todo "no prompt? open this URL in a browser to approve: $auth_url"
     fi
     sleep 1; waited=$((waited + 1))
   done
+  # Bounded teardown: TERM, give it a second, then KILL. A blocking `wait`
+  # here could stall the whole script if the child defers TERM while inside a
+  # long-running call; the script exits soon anyway, so reaping can wait.
   kill "$pid" 2>/dev/null || true
-  wait "$pid" 2>/dev/null || true
+  sleep 1
+  kill -9 "$pid" 2>/dev/null || true
   if grep -q '"result"' "$dir/out" 2>/dev/null; then
     if [ "$waited" -le 3 ]; then
       ok "MCP handshake completed immediately (grant already cached)"
