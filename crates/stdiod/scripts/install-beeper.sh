@@ -277,6 +277,22 @@ beeper_api_base() {
   return 1
 }
 
+# Sets MCP_ENDPOINT (the full /v0/mcp URL) when Beeper answers on a base other
+# than the proxy's built-in default (http://localhost:23373), so the proxy must
+# be told where to connect; leaves it empty when the default works or Beeper is
+# down. The headless `beeper` server commonly lands on 23374, which the probe
+# finds but the proxy would never try on its own.
+MCP_ENDPOINT=""
+resolve_mcp_endpoint() {
+  MCP_ENDPOINT=""
+  local base
+  base="$(beeper_api_base 2>/dev/null)" || return 0
+  case "$base" in
+    http://127.0.0.1:23373|http://localhost:23373) ;;
+    *) MCP_ENDPOINT="$base/v0/mcp";;
+  esac
+}
+
 # Non-fatal: if Beeper Desktop is not answering we still wire the automatable
 # SealGate side and print the exact action, so `install` makes progress instead of
 # stopping the operator at the first prerequisite.
@@ -334,17 +350,28 @@ prime_oauth_grant() {
     todo "once Beeper is running with MCP enabled, run: $PROG preauth"
     return 0
   fi
-  local dir init pid waited=0
+  resolve_mcp_endpoint
+  [ -n "$MCP_ENDPOINT" ] && info "Beeper answers on a non-default port; pointing the proxy at $MCP_ENDPOINT"
+  local dir init pid waited=0 auth_url=""
   dir="$(mktemp -d "${TMPDIR:-/tmp}/install-beeper.XXXXXX")"
   init='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"install-beeper","version":"1.0.0"}}}'
   # The sleep holds the proxy's stdin open while OAuth completes; after we kill
   # npx, that same EOF (or the sleep expiring) winds down any child it spawned.
-  { printf '%s\n' "$init"; sleep "$OAUTH_WAIT"; } | npx -y "$MCP_PKG" >"$dir/out" 2>"$dir/err" &
+  # ${MCP_ENDPOINT:+...} expands to nothing when unset, so the proxy keeps its
+  # built-in default; the guarded form stays safe under bash 3.2's set -u.
+  { printf '%s\n' "$init"; sleep "$OAUTH_WAIT"; } | npx -y "$MCP_PKG" ${MCP_ENDPOINT:+"$MCP_ENDPOINT"} >"$dir/out" 2>"$dir/err" &
   pid=$!
   info "if Beeper raises an approval prompt, approve it (waiting up to ${OAUTH_WAIT}s)"
   while [ "$waited" -lt "$OAUTH_WAIT" ]; do
     grep -q '"result"' "$dir/out" 2>/dev/null && break
     kill -0 "$pid" 2>/dev/null || break
+    # Surface the authorization URL as soon as the proxy prints it: on a
+    # headless server there is no Desktop dialog, so this URL is the only way
+    # to approve. Print it once.
+    if [ -z "$auth_url" ]; then
+      auth_url="$(grep -oE 'https?://[^[:space:]"'\'']*authorize[^[:space:]"'\'']*' "$dir/err" 2>/dev/null | head -n1)"
+      [ -n "$auth_url" ] && todo "no prompt? open this URL in a browser to approve: $auth_url"
+    fi
     sleep 1; waited=$((waited + 1))
   done
   kill "$pid" 2>/dev/null || true
@@ -466,9 +493,13 @@ ensure_stdiod_supervised() {
 # approved servers bound to this device, so we use it as the idempotency check.
 submit_beeper_server() {
   step "Submitting the Beeper server"
+  # The submitted command must carry the endpoint when Beeper sits on a
+  # non-default port, or the daemon's child dials 23373 and ECONNREFUSEs.
+  resolve_mcp_endpoint
+  [ -n "$MCP_ENDPOINT" ] && info "Beeper answers on a non-default port; the server command includes $MCP_ENDPOINT"
   if [ "$DRY_RUN" -eq 1 ]; then
     run sealgate-stdiod server add "$SERVER_NAME" --display-name "Beeper" \
-      --command npx --arg=-y --arg="$MCP_PKG"
+      --command npx --arg=-y --arg="$MCP_PKG" ${MCP_ENDPOINT:+--arg="$MCP_ENDPOINT"}
     return 0
   fi
   if server_registered; then
@@ -479,7 +510,7 @@ submit_beeper_server() {
   # Use --arg=VALUE: clap rejects a hyphen-leading value in the space form.
   local out rc
   out="$(sealgate-stdiod server add "$SERVER_NAME" --display-name "Beeper" \
-        --command npx --arg=-y --arg="$MCP_PKG" 2>&1)" && rc=0 || rc=$?
+        --command npx --arg=-y --arg="$MCP_PKG" ${MCP_ENDPOINT:+--arg="$MCP_ENDPOINT"} 2>&1)" && rc=0 || rc=$?
   printf '%s\n' "$out" | grep -viE '^[[:space:]]*$' >&2 || true
   if [ "$rc" -ne 0 ]; then
     if printf '%s' "$out" | grep -qiE 'already (exists|submitted|pending)|duplicate'; then
