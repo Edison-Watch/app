@@ -520,8 +520,11 @@ submit_beeper_server() {
         --command npx --arg=-y --arg="$MCP_PKG" ${MCP_ENDPOINT:+--arg="$MCP_ENDPOINT"} 2>&1)" && rc=0 || rc=$?
   printf '%s\n' "$out" | grep -viE '^[[:space:]]*$' >&2 || true
   if [ "$rc" -ne 0 ]; then
-    if printf '%s' "$out" | grep -qiE 'already (exists|submitted|pending)|duplicate'; then
-      ok "a request for '$SERVER_NAME' is already pending; approve it in the dashboard"
+    # The backend reports a duplicate submission as a bare HTTP 409, so match
+    # that alongside the wordier variants.
+    if printf '%s' "$out" | grep -qiE 'already (exists|submitted|pending)|duplicate|(http )?409( conflict)?'; then
+      ok "a request for '$SERVER_NAME' already exists on the backend; approve it in the dashboard"
+      info "if that request predates this script version its command may be stale; run 'sealgate-stdiod server remove $SERVER_NAME' and re-run install to resubmit"
       return 0
     fi
     die "sealgate-stdiod server add failed for '$SERVER_NAME'" \
