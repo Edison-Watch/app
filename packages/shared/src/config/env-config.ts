@@ -47,9 +47,9 @@ const DEMO_CONFIG: EnvConfig = {
   POSTHOG_API_KEY: 'phc_KNuu0bmHlZwps48BcFYfax4aqVJJJWBF00mP43490CQ',
   POSTHOG_FEEDBACK_SURVEY_ID: '019c5262-bd68-0000-2209-0e41b3563834',
   DEPLOY_ENV: 'demo',
-  API_BASE_URL: 'https://demo-dashboard.edison.watch',
-  MCP_BASE_URL: 'https://sealgate-demo.up.railway.app',
-  RELEASES_BASE_URL: 'https://demo-releases.edison.watch'
+  API_BASE_URL: 'https://demo-dashboard.sealgate.ai',
+  MCP_BASE_URL: 'https://self-host-ew-demo.up.railway.app',
+  RELEASES_BASE_URL: 'https://demo-releases.sealgate.ai'
 }
 
 const RELEASE_CONFIG: EnvConfig = {
@@ -58,9 +58,9 @@ const RELEASE_CONFIG: EnvConfig = {
   POSTHOG_API_KEY: 'phc_KNuu0bmHlZwps48BcFYfax4aqVJJJWBF00mP43490CQ',
   POSTHOG_FEEDBACK_SURVEY_ID: '019c5262-bd68-0000-2209-0e41b3563834',
   DEPLOY_ENV: 'release',
-  API_BASE_URL: 'https://dashboard.edison.watch',
-  MCP_BASE_URL: 'https://mcp.edison.watch',
-  RELEASES_BASE_URL: 'https://releases.edison.watch'
+  API_BASE_URL: 'https://dashboard.sealgate.ai',
+  MCP_BASE_URL: 'https://mcp.sealgate.ai',
+  RELEASES_BASE_URL: 'https://releases.sealgate.ai'
 }
 
 // Fully-offline local stack (docker-compose). Everything - including device

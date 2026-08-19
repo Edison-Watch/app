@@ -121,7 +121,7 @@ Each is stated with its rationale; details follow in §4+.
 
 ## 5. Enrollment, policy & state ownership
 
-**Root-owned enrollment store** — `/Library/Application Support/SealGate/daemon/
+**Root-owned enrollment store** — `/Library/Application Support/sealgate-detectord/
 enrollments.json`, `root:wheel`, `0600` — keyed by OS user:
 
 ```jsonc
@@ -129,7 +129,7 @@ enrollments.json`, `root:wheel`, `0600` — keyed by OS user:
   "enrollments": {
     "alice": {
       "env": "prod",
-      "api_base_url": "https://api.edison.watch",
+      "api_base_url": "https://dashboard.sealgate.ai",
       "api_key": "sg_live_…",            // alice's bearer — same key the app uses
       "org_id": "org_…",
       "policy":     { "auto_quarantine": true, "fetched_at": "…" },  // last-known-good

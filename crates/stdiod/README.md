@@ -67,7 +67,7 @@ cargo build --release   # binary at target/release/sealgate-stdiod
 ```sh
 # 1. Authorize this installation in a browser. The credential and backend URL
 #    are stored in ~/.config/sealgate-stdiod/config.toml (mode 0600).
-sealgate-stdiod login --backend https://dashboard.edison.watch
+sealgate-stdiod login --backend https://dashboard.sealgate.ai
 
 # 2. Register the OS supervisor unit (macOS LaunchAgent) so the daemon
 #    starts at login and is restarted on crash. Requires `login` first.
@@ -142,7 +142,7 @@ Settings resolve in two layers, highest precedence first:
 
 ```toml
 # ~/.config/sealgate-stdiod/config.toml  (mode 0600)
-backend_url      = "https://dashboard.edison.watch"  # Backend base URL (http://localhost:3001 for dev)
+backend_url      = "https://dashboard.sealgate.ai"  # Backend base URL (http://localhost:3001 for dev)
 client_access_token = "…"                             # Long-lived opaque Bearer client token (plaintext, 0600)
 client_installation_id = "…"                          # Account/install namespace issued by the backend
 authenticated_user_id = "…"
@@ -155,7 +155,7 @@ device_label     = "My Laptop"                         # Human-readable label sh
 
 | Field (`config.toml`) | Env var | Description |
 | --- | --- | --- |
-| `backend_url` | `SEALGATE_BACKEND_URL` | Backend base URL (`http://localhost:3001` for dev, `https://dashboard.edison.watch` for prod). |
+| `backend_url` | `SEALGATE_BACKEND_URL` | Backend base URL (`http://localhost:3001` for dev, `https://dashboard.sealgate.ai` for prod). |
 | `client_access_token` | - | Opaque client Bearer token issued by browser/device authorization. Stored in plaintext at mode `0600`; no refresh token is used in the MVP. |
 | `client_installation_id` | - | Backend-issued installation/account namespace. Local per-server environment values are isolated by this ID. |
 | `api_key` | `SEALGATE_API_KEY` | Deprecated legacy API key. Explicit flag/env values still override persisted client auth. |

@@ -48,7 +48,7 @@ vi.mock('../detectord/lifecycle', () => ({
 
 import { getHookStatus } from '../runtime/hookStatus'
 
-const EXPECTED_URL = 'https://mcp.edison.watch/mcp'
+const EXPECTED_URL = 'https://mcp.sealgate.ai/mcp'
 
 function agent(over: Partial<AgentFacts> = {}): AgentFacts {
   return {

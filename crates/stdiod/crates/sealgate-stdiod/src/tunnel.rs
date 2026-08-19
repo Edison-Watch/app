@@ -306,8 +306,8 @@ mod tests {
             "ws://localhost:8000/api/v1/stdio-tunnel/ws"
         );
         assert_eq!(
-            build_ws_url("HTTPS://DEMO-DASHBOARD.EDISON.WATCH/").unwrap(),
-            "wss://demo-dashboard.edison.watch/api/v1/stdio-tunnel/ws"
+            build_ws_url("HTTPS://DEMO-DASHBOARD.SEALGATE.AI/").unwrap(),
+            "wss://demo-dashboard.sealgate.ai/api/v1/stdio-tunnel/ws"
         );
         assert!(build_ws_url("ws://127.0.0.1:9999").is_err());
         assert!(build_ws_url("plain.example.com").is_err());

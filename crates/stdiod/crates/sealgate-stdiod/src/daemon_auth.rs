@@ -8,7 +8,7 @@ use crate::{config, tunnel};
 
 #[derive(Debug, Args, Clone)]
 pub struct RunArgs {
-    /// Backend base URL (http://localhost:8000, https://dashboard.edison.watch, ...).
+    /// Backend base URL (http://localhost:8000, https://dashboard.sealgate.ai, ...).
     /// Falls back to `backend_url` in `~/.config/sealgate-stdiod/config.toml`.
     #[arg(long, env = "SEALGATE_BACKEND_URL")]
     pub backend: Option<String>,

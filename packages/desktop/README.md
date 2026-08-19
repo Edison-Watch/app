@@ -28,7 +28,7 @@
 
 ---
 
-SealGate Desktop is the local control plane for [SealGate](https://edison.watch) that governs the [MCP](https://modelcontextprotocol.io/) servers wired into your AI tools, using a menu-bar app that watches every client on your machine. It discovers the servers your AI clients have configured, quarantines risky or unapproved ones before they can run, encrypts their credentials with zero-knowledge keys, and bridges local servers to the SealGate gateway through a single outbound tunnel. Built for developers who run MCP servers across many AI clients and want one place to see and control them all.
+SealGate Desktop is the local control plane for [SealGate](https://sealgate.ai) that governs the [MCP](https://modelcontextprotocol.io/) servers wired into your AI tools, using a menu-bar app that watches every client on your machine. It discovers the servers your AI clients have configured, quarantines risky or unapproved ones before they can run, encrypts their credentials with zero-knowledge keys, and bridges local servers to the SealGate gateway through a single outbound tunnel. Built for developers who run MCP servers across many AI clients and want one place to see and control them all.
 
 Discover → review → approve → encrypt → bridge, without secrets ever leaving your device in the clear.
 
@@ -173,7 +173,7 @@ Development / runtime toggles:
 
 ## Security
 
-Please **do not** report security issues through public GitHub issues or pull requests. Report privately via the repository's **Security** tab ("Report a vulnerability") or by emailing <security@edison.watch>.
+Please **do not** report security issues through public GitHub issues or pull requests. Report privately via the repository's **Security** tab ("Report a vulnerability") or by emailing <security@sealgate.ai>.
 
 ## Contributing
 

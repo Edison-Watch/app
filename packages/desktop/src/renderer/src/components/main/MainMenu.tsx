@@ -48,7 +48,7 @@ export default function MainMenu(): React.ReactNode {
   const [copied, setCopied] = useState(false);
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [version, setVersion] = useState("");
-  const [docsUrl, setDocsUrl] = useState("https://docs.edison.watch");
+  const [docsUrl, setDocsUrl] = useState("https://docs.sealgate.ai");
   const [accounts, setAccounts] = useState<SavedAccount[]>([]);
   const [showAccounts, setShowAccounts] = useState(false);
   const [switching, setSwitching] = useState(false);
