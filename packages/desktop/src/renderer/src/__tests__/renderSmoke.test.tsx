@@ -236,9 +236,11 @@ describe('MainMenu', () => {
 
     const dialog = await screen.findByRole('dialog')
     expect(dialog.textContent).toMatch(/Grant Full Disk Access/i)
-    // The path is the part the System Settings file picker hides, so it has to
-    // be on screen to copy.
-    expect(dialog.textContent).toMatch(/sealgate-detectord/)
+    // The daemon binary path is deliberately NOT offered: the daemon lives
+    // inside the .app, so TCC attributes it to the SealGate bundle. Adding the
+    // inner binary to the pane does nothing, and toggling that row off writes an
+    // explicit deny that overrides the bundle's grant.
+    expect(dialog.textContent).not.toMatch(/sealgate-detectord/)
     expectNoRenderErrors()
   })
 
