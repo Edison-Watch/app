@@ -61,6 +61,8 @@ export HOMEBREW_NO_ENV_HINTS="${HOMEBREW_NO_ENV_HINTS:-1}"
 # like passing --sg-backend, so resolve_backend must not override it with the
 # device's saved session. Capture that before applying the release default.
 if [ -n "${SG_BACKEND:-}" ]; then SG_BACKEND_SET=1; else SG_BACKEND_SET=0; fi
+# sealgate.ai is the canonical host: the old edison.watch domains answer with a
+# 308 the login client will not re-POST across.
 SG_BACKEND="${SG_BACKEND:-https://dashboard.sealgate.ai}"  # --sg-backend/--demo/--release also set SG_BACKEND_SET
 SG_API_KEY="${SG_API_KEY:-}"                       # only for the mcp-url client snippet
 SERVER_NAME="${SERVER_NAME:-beeper}"               # tunnel server name / gateway prefix
@@ -661,7 +663,7 @@ Common flags (also settable as UPPER_SNAKE env vars):
 
 Examples:
   # Agent-friendly: install deps and wire the SealGate side, headless device auth
-  $PROG install --install-deps --yes --no-open --sg-backend https://demo-dashboard.sealgate.ai
+  $PROG install --install-deps --yes --no-open --demo
 
   # Preview without changing anything
   $PROG install --dry-run
