@@ -46,7 +46,6 @@ export default function FullDiskAccessBanner({
   signedIn: boolean;
 }): React.ReactNode {
   const [info, setInfo] = useState<FullDiskAccessInfo | null>(null);
-  const [copied, setCopied] = useState(false);
   // The modal is the once-per-session nudge; the banner is the standing
   // reminder that outlives it.
   const [promptDismissed, setPromptDismissed] = useState(false);
@@ -115,20 +114,12 @@ export default function FullDiskAccessBanner({
   // session that justified it.
   if (!signedIn || !info || info.state !== "denied") return null;
 
-  const copyPath = (): void => {
-    void navigator.clipboard.writeText(info.binaryPath).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
-  };
-
   const openSettings = (): void => void window.api.detectord.openFullDiskAccessSettings();
 
   return (
     <>
       {!promptDismissed && (
         <FullDiskAccessPrompt
-          binaryPath={info.binaryPath}
           onOpenSettings={() => {
             openSettings();
             setPromptDismissed(true);
@@ -165,16 +156,6 @@ export default function FullDiskAccessBanner({
         >
           Open Settings
         </button>
-        {/* The pane's + button opens a file picker that hides bundle internals,
-            so the user needs the path to paste into Cmd-Shift-G. */}
-        <button
-          type="button"
-          onClick={copyPath}
-          title={info.binaryPath}
-          className="shrink-0 rounded border border-amber-500/40 px-2 py-0.5 text-[11px] text-amber-300 hover:bg-amber-500/15"
-        >
-          {copied ? "Copied" : "Copy path"}
-        </button>
       </div>
     </>
   );
@@ -185,17 +166,12 @@ export default function FullDiskAccessBanner({
  * Full Disk Access.
  *
  * Dismissible on purpose: the banner behind it is the standing reminder, so
- * this only has to be seen once per session rather than blocking the app. It
- * carries the binary path because the Full Disk Access pane's `+` opens a file
- * picker that hides bundle internals, and without the path the user is stuck at
- * that step.
+ * this only has to be seen once per session rather than blocking the app.
  */
 function FullDiskAccessPrompt({
-  binaryPath,
   onOpenSettings,
   onDismiss
 }: {
-  binaryPath: string;
   onOpenSettings: () => void;
   onDismiss: () => void;
 }): React.ReactNode {
@@ -219,10 +195,6 @@ function FullDiskAccessPrompt({
           SealGate monitors your AI client&apos;s MCP configuration for changes. Full Disk Access is
           required for this purpose, otherwise monitoring will be degraded.
         </p>
-        <p className="mt-3 text-[11px] text-[var(--text-muted)]">Add to the list:</p>
-        <code className="mt-1 block truncate rounded bg-[var(--bg-hover)] px-2 py-1 text-[10px] text-[var(--text-secondary)]">
-          {binaryPath}
-        </code>
         <div className="mt-4 flex justify-end gap-2">
           <button
             type="button"
