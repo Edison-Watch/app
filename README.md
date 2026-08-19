@@ -8,7 +8,7 @@
 
 </div>
 
-[SealGate](https://edison.watch) is a security gateway that sits between AI
+[SealGate](https://sealgate.ai) is a security gateway that sits between AI
 tools (Claude, Cursor, VS Code, and friends) and the MCP servers they call, so
 an organization can see, approve, and block what its AI agents do. Those MCP
 servers can read files, hold credentials, and reach the network, and they're
@@ -38,7 +38,7 @@ Each component's README covers its own architecture and usage.
   dashboard are server-side and developed separately. The split is deliberate:
   this repo is exactly the code that runs with access to your machine, so it's
   the part you can audit.
-- Product and setup docs are at [edison.watch](https://edison.watch).
+- Product and setup docs are at [sealgate.ai](https://sealgate.ai).
 
 Each component here started as its own repository
 ([desktop](https://github.com/Edison-Watch/desktop),
@@ -70,7 +70,7 @@ cargo build --manifest-path crates/detectord/Cargo.toml
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md). For security issues, do not open a
 public issue; follow [SECURITY.md](./SECURITY.md) (private advisory or
-security@edison.watch).
+security@sealgate.ai).
 
 ## License
 
