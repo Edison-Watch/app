@@ -18,7 +18,9 @@
 # history.)
 #
 # What it automates:
-#   1. Install prerequisites (node/npx, `sealgate-stdiod`).
+#   1. Install prerequisites (node/npx, Rust via rustup when a build is
+#      needed, `sealgate-stdiod`, and on macOS the Beeper Desktop app itself
+#      via the Homebrew cask), each behind the --install-deps consent gate.
 #   2. Authorize this device to SealGate via the stdiod browser/device flow
 #      (`sealgate-stdiod login`; no API key paste, no step-up dance).
 #   3. Supervise the tunnel daemon (`sealgate-stdiod install`).
@@ -28,7 +30,7 @@
 #      proxy, so the approval prompt fires now instead of at first daemon spawn.
 #
 # What still needs a human (each one printed with the exact action):
-#   A. Enable MCP in Beeper Desktop (Settings > Developers > MCP) so :23373
+#   A. Sign in to Beeper, enable MCP (Settings > Developers > MCP) so :23373
 #      answers, and link WhatsApp / Telegram / etc. in the Beeper app.
 #   B. Approve the submitted `beeper` server once in the SealGate dashboard.
 #   C. Approve the Beeper OAuth prompt when step 5 raises it.
@@ -220,6 +222,37 @@ ensure_tool() {
   ok "installed '$cmd'"
 }
 
+# Rust toolchain, needed only to build sealgate-stdiod. rustup is the
+# canonical installer; --no-modify-path leaves the user's shell files alone
+# and we extend PATH for this process ourselves. Same consent model as
+# ensure_tool, with one extra grace: a rustup already sitting in ~/.cargo/bin
+# that just is not on PATH counts as installed.
+ensure_rust() {
+  command -v cargo >/dev/null 2>&1 && return 0
+  if [ -x "$HOME/.cargo/bin/cargo" ]; then
+    PATH="$HOME/.cargo/bin:$PATH"
+    ok "found cargo in ~/.cargo/bin (added to PATH for this run)"
+    return 0
+  fi
+  if [ "$DRY_RUN" -eq 1 ]; then
+    info "dep 'cargo' missing; would install Rust via rustup (https://sh.rustup.rs)"
+    return 0
+  fi
+  if [ "$INSTALL_DEPS" -eq 0 ] && [ "$INTERACTIVE" -eq 0 ]; then
+    die "'cargo' is not installed (needed to build sealgate-stdiod)" \
+      "install Rust: https://rustup.rs   (or re-run with --install-deps)"
+  fi
+  confirm "'cargo' is missing. Install Rust now via rustup (curl https://sh.rustup.rs | sh)?" \
+    || die "declined; 'cargo' not installed" "install Rust: https://rustup.rs"
+  step "installing Rust via rustup"
+  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path \
+    || die "rustup install failed" "install Rust manually: https://rustup.rs, then re-run: $PROG install"
+  PATH="$HOME/.cargo/bin:$PATH"
+  command -v cargo >/dev/null 2>&1 || die "'cargo' still not on PATH after rustup" \
+    "open a new terminal and re-run: $PROG install"
+  ok "installed Rust (rustup; ~/.cargo/bin on PATH for this run)"
+}
+
 ensure_deps() {
   step "Checking prerequisites"
   require_supported_platform
@@ -229,6 +262,9 @@ ensure_deps() {
     brew install --quiet node
   # No Deno: @beeper/mcp-remote only proxies to Beeper's built-in MCP server.
   # The Deno sandbox was a @beeper/desktop-mcp `execute` tool requirement.
+  # Rust is only needed to BUILD sealgate-stdiod, so skip it when the binary
+  # is already present.
+  command -v sealgate-stdiod >/dev/null 2>&1 || ensure_rust
   ensure_tool sealgate-stdiod \
     "run: cargo install --path crates/sealgate-stdiod   (or re-run with --install-deps)" \
     cargo install --path "$stdiod_src"
@@ -295,13 +331,54 @@ resolve_mcp_endpoint() {
   esac
 }
 
+# Echo the installed Beeper Desktop bundle path on macOS, or nothing (exit 1).
+# The Homebrew cask installs "Beeper Desktop.app"; older manual installs may
+# be named "Beeper.app".
+beeper_desktop_app() {
+  local d
+  for d in "/Applications/Beeper Desktop.app" "$HOME/Applications/Beeper Desktop.app" \
+           "/Applications/Beeper.app" "$HOME/Applications/Beeper.app"; do
+    [ -d "$d" ] && { printf '%s' "$d"; return 0; }
+  done
+  return 1
+}
+
+# Offer to install Beeper Desktop via the Homebrew cask (macOS only; the cask
+# needs macOS 12+). Consent model matches ensure_tool (--install-deps or
+# --interactive to attempt, confirmed unless --yes), but NON-FATAL throughout:
+# install can still wire the whole SealGate side with Beeper absent, so every
+# failure path prints the manual action and returns 1 instead of dying.
+install_beeper_desktop() {
+  local fix="install Beeper Desktop: brew install --cask beeper   (or https://www.beeper.com/download)"
+  if ! { [ "$INSTALL_DEPS" -eq 1 ] || [ "$INTERACTIVE" -eq 1 ]; } \
+     || ! { [ "$ASSUME_YES" -eq 1 ] || [ "$INTERACTIVE" -eq 1 ]; }; then
+    todo "$fix, then re-run: $PROG install"
+    return 1
+  fi
+  confirm "Beeper Desktop is not installed. Install it now via: brew install --cask beeper" \
+    || { todo "$fix, then re-run: $PROG install"; return 1; }
+  command -v brew >/dev/null 2>&1 \
+    || { warn "brew not found; cannot auto-install Beeper Desktop"; todo "$fix"; return 1; }
+  step "installing Beeper Desktop via: brew install --cask beeper"
+  if ! brew install --quiet --cask beeper; then
+    warn "brew install --cask beeper failed (the cask needs macOS 12+)"
+    todo "$fix"
+    return 1
+  fi
+  ok "installed Beeper Desktop"
+  return 0
+}
+
 # Non-fatal: if Beeper Desktop is not answering we still wire the automatable
 # SealGate side and print the exact action, so `install` makes progress instead of
-# stopping the operator at the first prerequisite.
+# stopping the operator at the first prerequisite. On macOS this also offers to
+# install the app itself (consent-gated) and opens it so the operator can sign
+# in; signing in and linking chats stay human steps by nature.
 ensure_beeper_desktop() {
   step "Beeper Desktop MCP endpoint"
   if [ "$DRY_RUN" -eq 1 ]; then
     info "would probe 127.0.0.1:23373-23378 for the Beeper Desktop API"
+    info "if unreachable on macOS: would offer 'brew install --cask beeper' and open the app"
     return 0
   fi
   local base
@@ -310,8 +387,24 @@ ensure_beeper_desktop() {
     return 0
   fi
   warn "the Beeper Client API is not answering on 23373-23378"
-  todo "start Beeper: the Desktop app, or a headless server via 'beeper setup --server --install'"
-  todo "link the chats you want (WhatsApp / Telegram / ...) in Beeper"
+  local app
+  case "$(uname -s)" in
+    Darwin)
+      if app="$(beeper_desktop_app)"; then
+        info "Beeper Desktop is installed but not answering; opening it"
+        open "$app" 2>/dev/null || true
+      elif install_beeper_desktop; then
+        open -a "Beeper Desktop" 2>/dev/null || true
+      fi
+      todo "in Beeper Desktop: sign in (create the account if needed), then enable Settings > Developers > MCP"
+      todo "link the chats you want (WhatsApp / Telegram / ...) in Beeper"
+      info "once MCP is enabled, re-run '$PROG install' (idempotent) or '$PROG preauth' to finish the Beeper side"
+      ;;
+    *)
+      todo "start Beeper: the Desktop app (https://www.beeper.com/download), or a headless server via 'beeper setup --server --install'"
+      todo "link the chats you want (WhatsApp / Telegram / ...) in Beeper"
+      ;;
+  esac
   info "@beeper/mcp-remote proxies this local Client API's MCP server, so either the Desktop app or a headless server works"
   warn "continuing to wire the SealGate side; the Beeper child stays idle until Beeper is reachable"
 }
@@ -654,8 +747,9 @@ Common flags (also settable as UPPER_SNAKE env vars):
   --no-preauth         Skip OAuth priming during install (prompt then fires at first spawn)
   --no-open            Headless device auth: print the approval URL, do not open a browser
   --relogin            Force a fresh device authorization even if already authorized
-  --install-deps       Consent to auto-install missing deps (npx/sealgate-stdiod).
-                       Confirms first unless --yes; validates each landed on PATH.
+  --install-deps       Consent to auto-install missing deps: npx (brew), Rust
+                       (rustup), sealgate-stdiod (cargo), and on macOS Beeper
+                       Desktop itself (brew cask). Confirms first unless --yes.
   --dry-run            Print what would run; change nothing
   --yes                Skip confirmations (agents pass this)
   --interactive        Allow interactive prompts as a fallback
