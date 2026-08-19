@@ -8,7 +8,7 @@ import type { McpClientId } from '../discovery/types'
  * cases here are the ones where something looks healthy but isn't.
  */
 
-const EXPECTED_URL = 'https://mcp.edison.watch/mcp?client=claude-code'
+const EXPECTED_URL = 'https://mcp.sealgate.ai/mcp?client=claude-code'
 
 let facts: Map<McpClientId, AgentFacts> | null = new Map()
 
@@ -86,8 +86,8 @@ describe('getHookStatus', () => {
   })
 
   it('ignores query strings and trailing slashes when matching the URL', async () => {
-    facts = claudeCode({ sealgateUrl: 'https://mcp.edison.watch/mcp/' })
-    const s = await statusFor('claude-code', 'https://mcp.edison.watch/mcp?client=claude-code', true, 'connected')
+    facts = claudeCode({ sealgateUrl: 'https://mcp.sealgate.ai/mcp/' })
+    const s = await statusFor('claude-code', 'https://mcp.sealgate.ai/mcp?client=claude-code', true, 'connected')
     expect(s.mcpConfigured).toBe(true)
   })
 

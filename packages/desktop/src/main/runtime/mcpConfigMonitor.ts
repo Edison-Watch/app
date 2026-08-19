@@ -22,14 +22,14 @@ export function isSealGateServer(server: DiscoveredMcpServer): boolean {
     return (
       config.command === 'npx' &&
       args.includes('mcp-remote') &&
-      (args.includes('edison.watch') ||
+      (args.includes('sealgate.ai') ||
         (args.includes('localhost:') && argsList.some((arg) => /\/mcp(?:\/|$)/.test(String(arg)))))
     )
   }
   if ('url' in config && config.url) {
     if (config.url.includes('sealgate')) return true
     return (
-      config.url.includes('edison.watch') ||
+      config.url.includes('sealgate.ai') ||
       (config.url.includes('localhost') && /\/mcp(?:\/|$)/.test(config.url))
     )
   }

@@ -54,7 +54,7 @@ impl<'a> CredentialRef<'a> {
 #[derive(Default, Clone, Serialize, Deserialize)]
 pub struct PersistedConfig {
     /// Backend base URL (`http://localhost:3001` for dev,
-    /// `https://dashboard.edison.watch` for prod).
+    /// `https://dashboard.sealgate.ai` for prod).
     #[serde(default)]
     pub backend_url: Option<String>,
     /// Deprecated legacy API key. Retained because released desktop clients

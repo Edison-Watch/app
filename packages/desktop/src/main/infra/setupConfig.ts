@@ -49,7 +49,7 @@ export const DEV_API_BASE_URL = "http://localhost:3001";
 // Values are injected at build time from frontend-v2/.env.<mode> - do not hardcode here.
 export const ENV_API_URL: string = import.meta.env.VITE_API_BASE_URL ?? "";
 export const ENV_MCP_URL: string = import.meta.env.VITE_MCP_BASE_URL ?? "";
-export const ENV_DOCS_URL: string = import.meta.env.VITE_DOCS_BASE_URL ?? "https://docs.edison.watch";
+export const ENV_DOCS_URL: string = import.meta.env.VITE_DOCS_BASE_URL ?? "https://docs.sealgate.ai";
 
 // Derive per-env URLs from the shared config (single source of truth).
 // "custom" is resolved here, not in the shared package: the main process has

@@ -5,7 +5,7 @@
   "private": true,
   "description": "SealGate Desktop Client v2 - Electron + React 19",
   "main": "./out/main/index.js",
-  "author": "SealGate Team <hello@edison.watch>",
+  "author": "SealGate Team <hello@sealgate.ai>",
   "scripts": {
     "dev": "electron-vite dev",
     "dev:dry": "cross-env SEALGATE_DRY_RUN=1 electron-vite dev",

@@ -53,7 +53,7 @@ export HOMEBREW_NO_ENV_HINTS="${HOMEBREW_NO_ENV_HINTS:-1}"
 # like passing --sg-backend, so resolve_backend must not override it with the
 # device's saved session. Capture that before applying the release default.
 if [ -n "${SG_BACKEND:-}" ]; then SG_BACKEND_SET=1; else SG_BACKEND_SET=0; fi
-SG_BACKEND="${SG_BACKEND:-https://dashboard.edison.watch}"  # --sg-backend/--demo/--release also set SG_BACKEND_SET
+SG_BACKEND="${SG_BACKEND:-https://dashboard.sealgate.ai}"  # --sg-backend/--demo/--release also set SG_BACKEND_SET
 SG_API_KEY="${SG_API_KEY:-}"                       # only for the mcp-url client snippet
 BEEPER_ACCESS_TOKEN="${BEEPER_ACCESS_TOKEN:-}"     # skip token discovery if set
 SERVER_NAME="${SERVER_NAME:-beeper}"               # tunnel server name / gateway prefix
@@ -155,8 +155,8 @@ parse_flags() {
   while [ $# -gt 0 ]; do
     case "$1" in
       --sg-backend)   needval $# "$1" "${2:-}"; SG_BACKEND="$2"; SG_BACKEND_SET=1; shift 2;;
-      --demo)         SG_BACKEND="https://demo-dashboard.edison.watch"; SG_BACKEND_SET=1; shift;;
-      --release)      SG_BACKEND="https://dashboard.edison.watch"; SG_BACKEND_SET=1; shift;;
+      --demo)         SG_BACKEND="https://demo-dashboard.sealgate.ai"; SG_BACKEND_SET=1; shift;;
+      --release)      SG_BACKEND="https://dashboard.sealgate.ai"; SG_BACKEND_SET=1; shift;;
       --sg-api-key)   needval $# "$1" "${2:-}"; SG_API_KEY="$2"; shift 2;;
       --beeper-token) needval $# "$1" "${2:-}"; BEEPER_ACCESS_TOKEN="$2"; shift 2;;
       --server-name)  needval $# "$1" "${2:-}"; SERVER_NAME="$2"; shift 2;;
@@ -724,8 +724,8 @@ Commands:
 
 Common flags (also settable as UPPER_SNAKE env vars):
   --sg-backend URL     SealGate backend        (SG_BACKEND, default $SG_BACKEND)
-  --demo               Shortcut for --sg-backend https://demo-dashboard.edison.watch (main deploy)
-  --release            Shortcut for --sg-backend https://dashboard.edison.watch
+  --demo               Shortcut for --sg-backend https://demo-dashboard.sealgate.ai (main deploy)
+  --release            Shortcut for --sg-backend https://dashboard.sealgate.ai
                        With none of these set, commands follow the backend this device
                        is already authorized to (from stdiod config).
   --sg-api-key KEY     SealGate API key; admin key required for bind-token (SG_API_KEY)
@@ -744,7 +744,7 @@ Common flags (also settable as UPPER_SNAKE env vars):
 
 Examples:
   # Agent-friendly: install deps and wire the SealGate side, headless device auth
-  $PROG install --install-deps --yes --no-open --sg-backend https://demo-dashboard.edison.watch
+  $PROG install --install-deps --yes --no-open --sg-backend https://demo-dashboard.sealgate.ai
 
   # Preview without changing anything
   $PROG install --dry-run

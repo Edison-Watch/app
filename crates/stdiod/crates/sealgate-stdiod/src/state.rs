@@ -161,7 +161,7 @@ mod tests {
     fn state_roundtrips_through_json() {
         let s = State {
             connection_state: ConnectionState::Connected,
-            backend_url: Some("https://demo-dashboard.edison.watch".into()),
+            backend_url: Some("https://demo-dashboard.sealgate.ai".into()),
             device_id: Some("laptop".into()),
             device_label: Some("Laptop".into()),
             last_connected_at: Some(Utc::now()),

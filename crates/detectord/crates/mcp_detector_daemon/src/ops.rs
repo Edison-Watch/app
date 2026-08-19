@@ -1295,7 +1295,7 @@ mod tests {
             "/home/u/work/app/.cursor/mcp.json",
             &["mcpServers"],
             Scope::Project(PathBuf::from("/home/u/work/app")),
-            "https://mcp.edison.watch/mcp",
+            "https://mcp.sealgate.ai/mcp",
         );
         let record = quarantine_record("/home/u/work/app/.cursor/mcp.json");
 
@@ -1415,7 +1415,7 @@ mod tests {
         std::fs::create_dir_all(cfg.parent().unwrap()).unwrap();
         std::fs::write(
             &cfg,
-            r#"{"mcpServers":{"sealgate":{"url":"https://mcp.edison.watch/mcp"},"other":{"url":"https://x"}}}"#,
+            r#"{"mcpServers":{"sealgate":{"url":"https://mcp.sealgate.ai/mcp"},"other":{"url":"https://x"}}}"#,
         )
         .unwrap();
 
@@ -1427,7 +1427,7 @@ mod tests {
             extra: Default::default(),
         };
         let config = ServerConfig::Http {
-            url: "https://mcp.edison.watch/mcp".into(),
+            url: "https://mcp.sealgate.ai/mcp".into(),
             headers: Default::default(),
             kind: HttpKind::Http,
         };
@@ -1447,7 +1447,7 @@ mod tests {
         let back: serde_json::Value =
             serde_json::from_str(&std::fs::read_to_string(&cfg).unwrap()).unwrap();
         assert_eq!(
-            back["mcpServers"]["sealgate"]["url"], "https://mcp.edison.watch/mcp",
+            back["mcpServers"]["sealgate"]["url"], "https://mcp.sealgate.ai/mcp",
             "the entry did not come back - it is stranded with no record"
         );
         assert!(
@@ -1467,7 +1467,7 @@ mod tests {
             std::fs::create_dir_all(cfg.parent().unwrap()).unwrap();
             std::fs::write(
                 &cfg,
-                r#"{"mcpServers":{"sealgate":{"url":"https://mcp.edison.watch/mcp"}}}"#,
+                r#"{"mcpServers":{"sealgate":{"url":"https://mcp.sealgate.ai/mcp"}}}"#,
             )
             .unwrap();
             let loc = ConfigLocation {
@@ -1478,7 +1478,7 @@ mod tests {
                 extra: Default::default(),
             };
             let config = ServerConfig::Http {
-                url: "https://mcp.edison.watch/mcp".into(),
+                url: "https://mcp.sealgate.ai/mcp".into(),
                 headers: Default::default(),
                 kind: HttpKind::Http,
             };
@@ -1525,12 +1525,12 @@ mod tests {
             "/home/u/.cursor/mcp.json",
             &["mcpServers"],
             Scope::Global,
-            "https://mcp.edison.watch/mcp?client=cursor",
+            "https://mcp.sealgate.ai/mcp?client=cursor",
         )];
         let found = installed_sealgate_entry("cursor", &installs, &observed);
         assert_eq!(
             found.and_then(|s| sealgate_entry_url(&s.config)).as_deref(),
-            Some("https://mcp.edison.watch/mcp?client=cursor")
+            Some("https://mcp.sealgate.ai/mcp?client=cursor")
         );
     }
 
@@ -1576,7 +1576,7 @@ mod tests {
             "/home/u/.cursor/mcp.json",
             &["mcpServers"],
             Scope::Global,
-            "https://mcp.edison.watch/mcp?client=vscode",
+            "https://mcp.sealgate.ai/mcp?client=vscode",
         )];
         assert!(installed_sealgate_entry("cursor", &installs, &observed).is_none());
     }
@@ -1591,13 +1591,13 @@ mod tests {
             args: vec![
                 "-y".into(),
                 "mcp-remote".into(),
-                "https://mcp.edison.watch/mcp?client=cursor".into(),
+                "https://mcp.sealgate.ai/mcp?client=cursor".into(),
             ],
             env: Default::default(),
         };
         assert_eq!(
             sealgate_entry_url(&config).as_deref(),
-            Some("https://mcp.edison.watch/mcp?client=cursor")
+            Some("https://mcp.sealgate.ai/mcp?client=cursor")
         );
     }
 
@@ -1706,7 +1706,7 @@ mod tests {
             &["--package", "mcp-remote", "other-server"]
         )));
         assert!(!is_mcp_remote_shim(&ServerConfig::Http {
-            url: "https://mcp.edison.watch/mcp/K/".into(),
+            url: "https://mcp.sealgate.ai/mcp/K/".into(),
             headers: Default::default(),
             kind: sealgate_detectord::HttpKind::Http,
         }));

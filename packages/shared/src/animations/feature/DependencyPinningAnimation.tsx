@@ -1,7 +1,7 @@
 /**
  * MCP supply-chain protection animation.
  *
- * Visualises https://docs.edison.watch/en/docs/security/mcp-dependency-pinning
+ * Visualises https://docs.sealgate.ai/en/docs/security/mcp-dependency-pinning
  * at the connector level: an AI agent reaches three MCP servers through the
  * SealGate Gateway. An attacker compromises one of the servers (it turns red);
  * the moment the compromise is reported, SealGate severs that connection - a

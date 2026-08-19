@@ -99,7 +99,7 @@ fn render_unit(binary: &Path, log: &Path, enforce: bool) -> String {
     format!(
         "[Unit]\n\
          Description=SealGate MCP detector and quarantine daemon\n\
-         Documentation=https://edison.watch\n\
+         Documentation=https://sealgate.ai\n\
          After=network-online.target\n\
          Wants=network-online.target\n\
          \n\

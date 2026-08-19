@@ -54,7 +54,7 @@ export const AwaitingApproval: Story = {
       loading: true,
       awaitingBrowserCallback: true,
       pendingUserCode: 'ABCD-EFGH',
-      pendingVerificationUri: 'https://dashboard.edison.watch/device?user_code=ABCD-EFGH',
+      pendingVerificationUri: 'https://dashboard.sealgate.ai/device?user_code=ABCD-EFGH',
     },
     onNext: () => {},
   },
