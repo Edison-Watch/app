@@ -1,37 +1,40 @@
-name: Release (stdiod)
+name: Build daemon (stdiod)
 
-# Build the sealgate-stdiod daemon for arm64 macOS and publish it.
+# Build sealgate-stdiod for macOS arm64 and static-musl Linux, and upload the
+# results as WORKFLOW ARTIFACTS you can download from the run page.
 #
-# Two ways to trigger:
-#   * Push a tag matching stdiod-v* -> builds + attaches assets to a GitHub Release.
-#   * Run manually (workflow_dispatch) -> builds + uploads a workflow artifact you
-#     can download from the run page to inspect, without publishing a Release.
+# This workflow no longer publishes a GitHub Release, and no longer triggers on
+# a tag. Release assets for the daemon are published by desktop-release.yml onto
+# the app's own `v<version>` release - see the DAEMON ASSETS note there for why.
+# In short: the daemon version follows the app version, so a separate stdiod-v*
+# tag had nothing left to express, and publishing one would steal GitHub's
+# "Latest" pointer from the app and break electron-updater's stable channel.
 #
-# The published binary is intentionally UNSIGNED (ad-hoc). When consumed by the
-# desktop app it is re-signed and notarized as part of the app bundle, so a
-# Developer ID signature here would just be overwritten. Integrity for the
-# desktop build is provided by SHA256SUMS, which the consumer verifies.
+# What is left here is the inspect-a-build path: run it manually to check that
+# crates/stdiod still cross-compiles cleanly, or to grab a one-off binary,
+# without cutting an app release.
+#
+# The binaries are intentionally UNSIGNED (ad-hoc). When consumed by the desktop
+# app they are re-signed and notarized as part of the app bundle, so a Developer
+# ID signature here would just be overwritten.
 
 on:
-  push:
-    tags:
-      - "stdiod-v*"
   workflow_dispatch:
 
-# Don't cancel an in-progress release mid-upload; just serialize per ref.
+# Manual runs only, so a superseded run is never something a human is waiting
+# on; serialize per ref rather than cancelling a build someone asked for.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
 permissions:
-  contents: write
+  contents: read
 
 env:
   CARGO_TERM_COLOR: always
   BIN_NAME: sealgate-stdiod
-  # Renamed from -macos-universal when Intel support was dropped. Anything
-  # downloading the old asset name by hand needs updating; the desktop build
-  # compiles stdiod from source and is unaffected.
+  # Matches the asset name desktop-release.yml publishes, so a binary pulled
+  # from this workflow's artifacts is interchangeable with the released one.
   ASSET_NAME: sealgate-stdiod-macos-arm64
 
 jobs:
@@ -80,8 +83,7 @@ jobs:
         working-directory: crates/stdiod/dist
         run: shasum -a 256 "$ASSET_NAME" > SHA256SUMS
 
-      # Always available: download from the run's Artifacts section to inspect a
-      # build without publishing a Release (e.g. manual workflow_dispatch runs).
+      # Download from the run's Artifacts section to inspect the build.
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v7
         with:
@@ -90,17 +92,6 @@ jobs:
             crates/stdiod/dist/${{ env.ASSET_NAME }}
             crates/stdiod/dist/SHA256SUMS
           if-no-files-found: error
-
-      # Only on a stdiod-v* tag: publish (or update) the matching GitHub Release.
-      - name: Publish GitHub Release
-        if: startsWith(github.ref, 'refs/tags/stdiod-v')
-        uses: softprops/action-gh-release@v3
-        with:
-          files: |
-            crates/stdiod/dist/${{ env.ASSET_NAME }}
-            crates/stdiod/dist/SHA256SUMS
-          fail_on_unmatched_files: true
-          generate_release_notes: true
 
   linux:
     name: Linux static musl (x64 + arm64)
@@ -158,13 +149,3 @@ jobs:
             crates/stdiod/dist/SHA256SUMS-linux
           if-no-files-found: error
 
-      - name: Publish GitHub Release
-        if: startsWith(github.ref, 'refs/tags/stdiod-v')
-        uses: softprops/action-gh-release@v3
-        with:
-          files: |
-            crates/stdiod/dist/sealgate-stdiod-linux-x64
-            crates/stdiod/dist/sealgate-stdiod-linux-arm64
-            crates/stdiod/dist/SHA256SUMS-linux
-          fail_on_unmatched_files: true
-          generate_release_notes: true

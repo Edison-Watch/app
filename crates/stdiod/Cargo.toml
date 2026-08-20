@@ -7,7 +7,15 @@ members = [
 
 [workspace.package]
 edition = "2021"
-version = "0.0.1"
+# Follows the desktop app release version (packages/desktop/package.json).
+# Do not hand-edit: run `npm run version:sync` from the repo root after bumping
+# the app, which rewrites this and both Cargo.lock files. CI fails on drift.
+#
+# Until this tracked the app, the daemon's own crate version (0.0.1) disagreed
+# with the version it actually reports - build.rs stamps SEALGATE_DAEMON_VERSION
+# from packages/desktop/package.json - so `--version` and Cargo.toml said
+# different things. build.rs is now a fallback, not the mechanism.
+version = "0.6.6"
 license = "AGPL-3.0-only"
 authors = ["SealGate"]
 repository = "https://github.com/Edison-Watch/stdiod"
@@ -35,4 +43,4 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 webbrowser = "1"
 
 # Workspace member crates
-sealgate-tunnel-protocol = { path = "crates/sealgate-tunnel-protocol", version = "0.0.1" }
+sealgate-tunnel-protocol = { path = "crates/sealgate-tunnel-protocol", version = "0.6.6" }

@@ -8,5 +8,9 @@
   },
   "workspaces": [
     "packages/*"
-  ]
+  ],
+  "scripts": {
+    "version:sync": "node scripts/sync-versions.mjs",
+    "version:check": "node scripts/sync-versions.mjs --check"
+  }
 }

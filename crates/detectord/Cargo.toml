@@ -10,4 +10,8 @@ members = [
 [workspace.package]
 edition = "2024"
 rust-version = "1.88"
+# Follows the desktop app release version (packages/desktop/package.json).
+# Do not hand-edit: run `npm run version:sync` from the repo root after bumping
+# the app, which rewrites this and both Cargo.lock files. CI fails on drift.
+version = "0.6.6"
 license = "AGPL-3.0-only"
