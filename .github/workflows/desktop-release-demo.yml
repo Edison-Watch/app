@@ -178,6 +178,14 @@ jobs:
         # this commit. The script stages a thin arm64 binary at
         # bin/sealgate-stdiod for mac.extraResources.
         run: npm run build:stdiod
+        env:
+          # Stamp the FULL prerelease version. Without this the daemon reports
+          # the bare package.json version (0.6.6) because that is all
+          # build-stdiod.sh can see - the -beta.<run_number> suffix is computed
+          # by the draft job, not stored anywhere on disk - so a demo daemon and
+          # a stable 0.6.6 daemon were indistinguishable by --version and on the
+          # dashboard's Devices page.
+          SEALGATE_DAEMON_VERSION: ${{ needs.draft.outputs.version }}
 
       - name: Build renderer/main/preload bundles (demo mode)
         run: npm run build:demo
@@ -378,6 +386,11 @@ jobs:
         # Native cargo build from the checked-out crates/stdiod source, this
         # leg's arch only. Staged into bin/stdiod/<arch>/ for win.extraResources.
         working-directory: crates/stdiod
+        env:
+          # See the note on the macOS leg. This leg calls cargo directly rather
+          # than going through build-stdiod.sh, but build.rs reads the same env
+          # var, so the override lands the same way.
+          SEALGATE_DAEMON_VERSION: ${{ needs.draft.outputs.version }}
         run: |
           set -euo pipefail
           rustup target add ${{ matrix.target }}
@@ -596,6 +609,8 @@ jobs:
         run: npm run build:stdiod:linux
         env:
           TARGET_ARCHES: ${{ matrix.arch }}
+          # See the note on the macOS leg.
+          SEALGATE_DAEMON_VERSION: ${{ needs.draft.outputs.version }}
 
       - name: Build renderer/main/preload bundles (demo mode)
         run: npm run build:demo

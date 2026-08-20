@@ -250,6 +250,43 @@ pub fn is_installed() -> Result<bool> {
     Ok(schtasks(&["/query", "/tn", &task_name()])?.status.success())
 }
 
+/// True iff the Task Scheduler knows the task.
+///
+/// On macOS and Linux this is a genuinely different question from
+/// [`is_installed`], which reads the filesystem - see the macOS counterpart.
+/// Here there is no on-disk unit to get out of step: `is_installed` already
+/// asks the scheduler, so the two answers are the same by construction.
+pub fn is_loaded() -> Result<bool> {
+    is_installed()
+}
+
+/// Restart the daemon: end the running instance, then run it again.
+///
+/// schtasks has no atomic restart verb. `/end` on a task that is not running
+/// returns an error, which is benign here - the `/run` that follows is what
+/// matters. See the macOS counterpart for why this does not fall back to
+/// `install`.
+pub fn restart() -> Result<()> {
+    if !is_loaded()? {
+        return Err(anyhow!(
+            "the scheduled task is not registered, so there is nothing to restart\n\
+             hint: run `sealgate-stdiod install` to (re)create it"
+        ));
+    }
+    let _ = schtasks(&["/end", "/tn", &task_name()])?;
+    let out = schtasks(&["/run", "/tn", &task_name()])?;
+    if !out.status.success() {
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        return Err(anyhow!("schtasks /run failed: {}", stderr.trim()));
+    }
+    info!(task = %task_name(), "scheduled task restarted");
+    println!(
+        "Restarted {}. Tail logs with `sealgate-stdiod logs --follow`.",
+        task_name()
+    );
+    Ok(())
+}
+
 /// True iff the task is currently executing (its action process is alive).
 /// Parses `schtasks /query /v`'s "Status:" field - English-locale, mirroring
 /// the macOS `launchctl print` parse.

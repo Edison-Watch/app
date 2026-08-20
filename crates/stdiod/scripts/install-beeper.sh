@@ -79,7 +79,14 @@ MCP_PKG="${MCP_PKG:-@beeper/mcp-remote}"           # the stdio->HTTP OAuth proxy
 OAUTH_WAIT="${OAUTH_WAIT:-120}"                    # seconds to wait for the Beeper OAuth approval
 STDIOD_REPO="${STDIOD_REPO:-Edison-Watch/app}"     # GitHub repo whose releases carry stdiod binaries
 STDIOD_TAG="${STDIOD_TAG:-}"                       # pin an app release tag, e.g. v0.6.6 (default: newest)
-STDIOD_PRERELEASE="${STDIOD_PRERELEASE:-0}"        # 1 = take the daemon from the demo channel (-beta tags) instead of stable
+# Daemon channel. Left UNSET, it follows the backend: the demo backend gets the
+# demo (-beta) daemon, everything else gets stable - so `--demo` and `--release`
+# each pull the matching daemon without a second flag. Setting it explicitly
+# (env, --stdiod-prerelease, --stdiod-release) pins it and stops that
+# inference; --stdiod-tag overrides both, since a pinned tag names its own
+# channel. See resolve_stdiod_channel.
+if [ -n "${STDIOD_PRERELEASE:-}" ]; then STDIOD_CHANNEL_SET=1; else STDIOD_CHANNEL_SET=0; fi
+STDIOD_PRERELEASE="${STDIOD_PRERELEASE:-0}"        # 1 = demo channel (-beta tags), 0 = stable
 
 DRY_RUN=0
 ASSUME_YES=0
@@ -188,7 +195,8 @@ parse_flags() {
       --relogin)      RELOGIN=1; shift;;
       --no-preauth)   NO_PREAUTH=1; shift;;
       --stdiod-tag)   needval $# "$1" "${2:-}"; STDIOD_TAG="$2"; shift 2;;
-      --stdiod-prerelease) STDIOD_PRERELEASE=1; shift;;
+      --stdiod-prerelease) STDIOD_PRERELEASE=1; STDIOD_CHANNEL_SET=1; shift;;
+      --stdiod-release)    STDIOD_PRERELEASE=0; STDIOD_CHANNEL_SET=1; shift;;
       # --build-from-source is the pre-rename spelling, kept so existing
       # invocations and docs do not break.
       --from-source|--build-from-source) FROM_SOURCE=1; shift;;
@@ -730,9 +738,54 @@ server_registered() {
 stdiod_config() { printf '%s' "${SEALGATE_STDIOD_CONFIG:-$HOME/.config/sealgate-stdiod/config.toml}"; }
 
 # True when config already holds a client credential from a prior browser login.
+# Says nothing about whether that credential still WORKS - see
+# stdiod_credential_state.
 stdiod_logged_in() {
   local f; f="$(stdiod_config)"
   [ -f "$f" ] && grep -q 'client_access_token' "$f" 2>/dev/null
+}
+
+# Cached result of stdiod_credential_state. Cleared after a successful login so
+# a re-probe reflects the new credential.
+STDIOD_CRED_STATE=""
+
+# Echo the real state of the saved credential, one of:
+#
+#   absent   no credential in config - never logged in, or config was wiped
+#   live     the backend accepted it
+#   dead     the backend rejected it (401): expired, revoked, or the device was
+#            removed by an admin
+#   unknown  the check itself could not run (backend unreachable, no binary) -
+#            NOT evidence of anything about the credential
+#
+# `dead` is the state that used to be invisible. Presence of the token in
+# config.toml was treated as proof of authorization, so a revoked credential
+# reported as authorized while every backend call 401'd, and the failure
+# surfaced downstream as "server not approved yet" - pointing at the dashboard
+# instead of at `--relogin`, which is the only thing that fixes it.
+#
+# `unknown` is deliberately distinct from `dead`: an offline machine must not be
+# told its credential was revoked, and must not be pushed into a browser login
+# that cannot succeed either.
+stdiod_credential_state() {
+  if [ -n "$STDIOD_CRED_STATE" ]; then printf '%s' "$STDIOD_CRED_STATE"; return 0; fi
+  local out
+  if ! stdiod_logged_in; then
+    STDIOD_CRED_STATE="absent"
+  elif ! command -v sealgate-stdiod >/dev/null 2>&1; then
+    STDIOD_CRED_STATE="unknown"
+  elif out="$(sealgate-stdiod server list --json 2>&1)"; then
+    STDIOD_CRED_STATE="live"
+  elif printf '%s' "$out" | grep -qiE '\b401\b|unauthorized|invalid[-_ ]?token|token (expired|revoked)'; then
+    STDIOD_CRED_STATE="dead"
+  else
+    # Some other failure - DNS, TLS, proxy, backend 5xx. Report it under
+    # --verbose; the step that actually needs the backend will fail with a
+    # better message than a guess made here.
+    vlog "credential check inconclusive: $(printf '%s' "$out" | tail -n 1)"
+    STDIOD_CRED_STATE="unknown"
+  fi
+  printf '%s' "$STDIOD_CRED_STATE"
 }
 
 # Echo the backend_url persisted in config (trailing slash stripped), or nothing.
@@ -755,28 +808,69 @@ resolve_backend() {
   fi
 }
 
+# Pick the daemon channel to match the backend, unless it was pinned.
+#
+# The demo backend is fed by the demo release workflow off main, and stable by
+# the release branch - so a device pointed at demo wants the -beta daemon, and
+# mixing them means running a daemon from a different lineage than the backend
+# it talks to. Runs AFTER resolve_backend so it follows a backend inherited
+# from the device's saved session too, not just an explicit flag.
+#
+# Not applied when --stdiod-tag pinned a tag: the tag already names a specific
+# build, and second-guessing it would make the pin unreliable.
+resolve_stdiod_channel() {
+  [ "$STDIOD_CHANNEL_SET" -eq 1 ] && return 0
+  [ -n "$STDIOD_TAG" ] && return 0
+  case "${SG_BACKEND%/}" in
+    *//demo-*|*//*-demo.*)
+      STDIOD_PRERELEASE=1
+      vlog "demo backend (${SG_BACKEND}): taking the daemon from the demo channel"
+      ;;
+  esac
+}
+
 ensure_stdiod_auth() {
   step "SealGate device authorization (browser)"
   if [ "$DRY_RUN" -eq 1 ]; then
     run sealgate-stdiod login --backend "$SG_BACKEND"
     return 0
   fi
-  if [ "$RELOGIN" -eq 0 ] && stdiod_logged_in; then
-    local saved; saved="$(stdiod_saved_backend)"
-    if [ -n "$saved" ] && [ "$saved" != "${SG_BACKEND%/}" ]; then
-      # An explicit --sg-backend that disagrees with the saved session is
-      # ambiguous, so stop rather than silently target the wrong backend. With
-      # no explicit flag, prefer the authorized session.
-      if [ "$SG_BACKEND_SET" -eq 1 ]; then
-        die "this device is authorized to ${saved}, but --sg-backend asked for ${SG_BACKEND}" \
-          "pass --relogin to switch to ${SG_BACKEND}, or drop --sg-backend to keep ${saved}"
+  # `dead` falls through to the login below rather than short-circuiting: a
+  # revoked credential used to be treated as proof of authorization, so install
+  # skipped login, then failed at `server add` with a 401 and told the operator
+  # to re-run - which skipped login again, forever. Re-authorizing is the repair,
+  # and doing it here is what makes `install` idempotent for this case too.
+  local cred="skip"
+  [ "$RELOGIN" -eq 0 ] && cred="$(stdiod_credential_state)"
+  case "$cred" in
+    live|unknown)
+      local saved; saved="$(stdiod_saved_backend)"
+      if [ -n "$saved" ] && [ "$saved" != "${SG_BACKEND%/}" ]; then
+        # An explicit --sg-backend that disagrees with the saved session is
+        # ambiguous, so stop rather than silently target the wrong backend. With
+        # no explicit flag, prefer the authorized session.
+        if [ "$SG_BACKEND_SET" -eq 1 ]; then
+          die "this device is authorized to ${saved}, but --sg-backend asked for ${SG_BACKEND}" \
+            "pass --relogin to switch to ${SG_BACKEND}, or drop --sg-backend to keep ${saved}"
+        fi
+        warn "using the authorized backend ${saved} (pass --sg-backend <url> --relogin to switch)"
+        SG_BACKEND="$saved"
       fi
-      warn "using the authorized backend ${saved} (pass --sg-backend <url> --relogin to switch)"
-      SG_BACKEND="$saved"
-    fi
-    ok "already authorized on this device (client credential in $(stdiod_config))"
-    return 0
-  fi
+      if [ "$cred" = "unknown" ]; then
+        # Could not reach the backend to check. Logging in again would not work
+        # either, so keep the credential and let the next step report the real
+        # network error.
+        warn "could not verify the saved credential (backend unreachable); using it as-is"
+      else
+        ok "already authorized on this device (client credential in $(stdiod_config))"
+      fi
+      return 0
+      ;;
+    dead)
+      warn "the saved credential is expired or revoked (${SG_BACKEND%/} returned 401)"
+      info "re-running the browser device flow to replace it"
+      ;;
+  esac
   # `sealgate-stdiod login` runs the OAuth device flow: it prints a URL to approve
   # (and opens a browser unless --no-open), then stores a scoped client
   # credential. No API key, no step-up token.
@@ -786,6 +880,7 @@ ensure_stdiod_auth() {
   if ! run sealgate-stdiod "${args[@]}"; then
     die "sealgate-stdiod login failed" "check --sg-backend (${SG_BACKEND}) and complete the browser approval, then re-run: $PROG install"
   fi
+  STDIOD_CRED_STATE=""   # a fresh credential: drop the cached probe result
   ok "device authorized to ${SG_BACKEND}"
 }
 
@@ -893,12 +988,91 @@ cmd_doctor() {
     if command -v "$c" >/dev/null 2>&1; then ok "$c"; else warn "$c missing"; allgood=0; fi
   done
   if beeper_api_base >/dev/null 2>&1; then ok "Beeper Client API reachable"; else warn "Beeper Client API not reachable (start Beeper Desktop with MCP enabled, or a headless 'beeper' server)"; allgood=0; fi
-  if stdiod_logged_in; then ok "device authorized to SealGate"; else warn "not authorized (run: $PROG install)"; allgood=0; fi
-  if command -v sealgate-stdiod >/dev/null 2>&1 && sealgate-stdiod status >/dev/null 2>&1; then
-    ok "stdiod daemon connected"; else warn "stdiod daemon not running (run: $PROG install)"; allgood=0; fi
-  if server_registered; then
-    ok "server '$SERVER_NAME' approved on this device"; else warn "server '$SERVER_NAME' not approved yet (submit + approve in dashboard)"; fi
-  if [ "$allgood" -eq 1 ]; then ok "core checks passed"; else die "some checks failed (see above)" "$PROG install --install-deps"; fi
+  # Report what the backend says about the credential, not merely whether one is
+  # on disk. `dead` is the case worth naming: only --relogin clears it, and it
+  # otherwise shows up as an unrelated-looking failure further down.
+  local cred; cred="$(stdiod_credential_state)"
+  local fix="$PROG install --install-deps"
+  case "$cred" in
+    live)    ok "device authorized to SealGate";;
+    dead)    warn "SealGate credential expired or revoked (backend returned 401)"
+             todo "re-authorize this device: $PROG install --relogin"
+             fix="$PROG install --relogin"; allgood=0;;
+    unknown) warn "could not verify the SealGate credential (backend unreachable)"; allgood=0;;
+    *)       warn "not authorized (run: $PROG install)"; allgood=0;;
+  esac
+  # `status` exit codes: 0 running, 3 installed-but-not-running, 4 not
+  # installed (see cli/status.rs). It used to exit 0 unconditionally, so this
+  # check passed for a daemon that had never started and reported it as
+  # connected. Distinguish the two failures - they have different fixes.
+  if ! command -v sealgate-stdiod >/dev/null 2>&1; then
+    warn "cannot check the daemon: sealgate-stdiod is not installed"; allgood=0
+  else
+    # Capture with '&& st=0 || st=$?' so a non-zero status does not trip set -e
+    # now that the command reports unhealthy states through its exit code.
+    local st
+    sealgate-stdiod status >/dev/null 2>&1 && st=0 || st=$?
+    case "$st" in
+      0) ok "stdiod daemon running";;
+      3) warn "supervisor installed but the daemon is not running"
+         todo "check why it exited: sealgate-stdiod logs --follow"; allgood=0;;
+      4) warn "no supervisor unit installed (run: $PROG install)"; allgood=0;;
+      *) warn "sealgate-stdiod status failed (exit $st)"; allgood=0;;
+    esac
+  fi
+  # Only meaningful once the credential works: server_registered lists servers
+  # over the same API, so with a dead credential it fails for auth reasons and
+  # would read as "not approved yet" - sending the operator to the dashboard to
+  # approve something that is already approved.
+  if [ "$cred" = "live" ]; then
+    if server_registered; then
+      ok "server '$SERVER_NAME' approved on this device"; else warn "server '$SERVER_NAME' not approved yet (submit + approve in dashboard)"; fi
+  else
+    info "skipped the '$SERVER_NAME' server check: it needs a working credential"
+  fi
+  if [ "$allgood" -eq 1 ]; then ok "core checks passed"; else die "some checks failed (see above)" "$fix"; fi
+}
+
+# tags: list the releases a daemon binary can be pulled from, so --stdiod-tag
+# does not have to be guessed. Marks which ones actually carry an asset for THIS
+# machine - a release cut before the daemon assets existed has none, which is
+# otherwise only discoverable by trying it and reading the failure.
+cmd_tags() {
+  local pair asset
+  pair="$(stdiod_release_asset)" \
+    || die "no prebuilt sealgate-stdiod exists for $(uname -s)/$(uname -m)" \
+           "build locally instead: $PROG install --install-deps --from-source"
+  asset="${pair%% *}"
+  step "Releases on $STDIOD_REPO carrying $asset"
+  local json
+  json="$(curl_quiet -m 20 "https://api.github.com/repos/$STDIOD_REPO/releases?per_page=100")" \
+    || die "could not reach the GitHub API" "check connectivity, or browse https://github.com/$STDIOD_REPO/releases"
+  # jq gives the asset list per release; without it fall back to tag + channel
+  # only, which still answers "what can I pass to --stdiod-tag".
+  if command -v jq >/dev/null 2>&1; then
+    # Sort on the numbers pulled out of the tag, not the string: lexically
+    # "v0.6.4-beta.9" beats "v0.6.4-beta.10", which would list a stale build as
+    # the newest. [0,6,4,9] vs [0,6,4,10] compares correctly.
+    printf '%s' "$json" | jq -r --arg a "$asset" '
+      sort_by(.tag_name | [scan("[0-9]+") | tonumber]) | reverse | .[]
+      | select(.draft | not)
+      | [ .tag_name,
+          (if .prerelease then "demo" else "stable" end),
+          (if any(.assets[]?; .name == $a) then "daemon: yes" else "daemon: NO" end)
+        ] | @tsv' \
+      | awk -F'\t' '{ printf "   %-24s %-8s %s\n", $1, $2, $3 }' >&2
+  else
+    warn "jq not installed: listing tags and channels only (cannot check assets)"
+    printf '%s' "$json" \
+      | grep -oE '"(tag_name|prerelease)": *("[^"]*"|true|false)' \
+      | sed -E 's/.*: *"?([^"]*)"?$/\1/' \
+      | paste - - \
+      | awk -F'\t' '{ printf "   %-24s %s\n", $1, ($2 == "true" ? "demo" : "stable") }' >&2
+  fi
+  log ""
+  info "install from one:   $PROG install --install-deps --stdiod-tag <tag>"
+  info "newest stable:      $PROG install --install-deps            (or --release)"
+  info "newest demo build:  $PROG install --install-deps --demo     (or --stdiod-prerelease)"
 }
 
 cmd_status() {
@@ -946,16 +1120,21 @@ Commands:
   install     Deps, Beeper check, device auth, supervise daemon, submit Beeper server, prime OAuth
   doctor      Check prerequisites and current state (read-only)
   status      Show stdiod daemon + Beeper Client API status
+  tags        List releases the sealgate-stdiod binary can be pulled from
   preauth     Prime the Beeper OAuth grant (approve once in Beeper)
   mcp-url     Print the SealGate MCP URL and client snippet
   uninstall   Withdraw the server and remove the supervisor unit
 
 Common flags (also settable as UPPER_SNAKE env vars):
   --sg-backend URL     SealGate backend        (SG_BACKEND, default $SG_BACKEND)
-  --demo               Shortcut for --sg-backend https://demo-dashboard.sealgate.ai (main deploy)
-  --release            Shortcut for --sg-backend https://dashboard.sealgate.ai
+  --demo               Shortcut for --sg-backend https://demo-dashboard.sealgate.ai (main deploy).
+                       Also selects the DEMO daemon build (newest v*-beta.N).
+  --release            Shortcut for --sg-backend https://dashboard.sealgate.ai (the default).
+                       Also selects the STABLE daemon build.
                        With none of these set, commands follow the backend this device
-                       is already authorized to (from stdiod config).
+                       is already authorized to (from stdiod config), and the daemon
+                       channel follows that backend. Override the daemon side alone
+                       with --stdiod-tag / --stdiod-release / --stdiod-prerelease.
   --sg-api-key KEY     SealGate API key for the client snippet only (SG_API_KEY)
   --oauth-wait SECS    How long to wait for the Beeper OAuth approval (OAUTH_WAIT, default $OAUTH_WAIT)
   --no-preauth         Skip OAuth priming during install (prompt then fires at first spawn)
@@ -970,12 +1149,17 @@ Common flags (also settable as UPPER_SNAKE env vars):
                        the daemon version follows the app version). Env:
                        STDIOD_TAG. STDIOD_REPO overrides the repo (default
                        $STDIOD_REPO).
-  --stdiod-prerelease  Take the daemon from the DEMO channel: the newest
-                       v<version>-beta.N prerelease, built from main. The
-                       default is the stable channel, built from the release
-                       branch. The two are separate lineages, so this picks the
-                       newest beta specifically - never a stable that happens to
-                       be more recent. Env: STDIOD_PRERELEASE=1.
+  --stdiod-prerelease  Force the DEMO daemon channel: the newest
+                       v<version>-beta.N prerelease, built from main. Picks the
+  --stdiod-release     newest beta specifically, never a stable that happens to
+                       be more recent - the two are separate lineages.
+                       --stdiod-release forces the stable channel (release
+                       branch) the same way. Env: STDIOD_PRERELEASE=1 / =0.
+                       You rarely need either: with neither set the daemon
+                       channel FOLLOWS THE BACKEND, so --demo gets the demo
+                       daemon and --release (the default) gets the stable one.
+                       Use these only to deliberately cross the streams.
+                       --stdiod-tag overrides all of it.
   --from-source        Build sealgate-stdiod with cargo instead of downloading
                        it. Adds real prerequisites - a Rust toolchain (installed
                        via rustup under --install-deps), a C toolchain for the
@@ -1015,6 +1199,8 @@ subcmd_help() {
     status)   log "status - show stdiod daemon + Beeper Client API status.";;
     doctor)   log "doctor - verify prerequisites and current state (read-only).";;
     uninstall)log "uninstall - withdraw the server and remove the supervisor unit. pass --yes to skip the prompt.";;
+    tags)     log "tags - list releases a sealgate-stdiod binary can come from, and whether each carries"
+              log "  one for this platform. Feed a tag to --stdiod-tag.";;
     *)        usage;;
   esac
 }
@@ -1037,8 +1223,10 @@ main() {
   done
   # No subcommand takes positional args; reject stray ones so typos are loud.
   [ "${#ARGS[@]}" -gt 0 ] && die "unexpected argument: ${ARGS[0]}" "run '$PROG --help' for usage"
-  # Default the backend to the device's authorized session unless set explicitly.
+  # Default the backend to the device's authorized session unless set explicitly,
+  # then match the daemon channel to whatever backend that settled on.
   resolve_backend
+  resolve_stdiod_channel
 
   case "$cmd" in
     install)    cmd_install;;
@@ -1047,6 +1235,7 @@ main() {
     preauth)    cmd_preauth;;
     mcp-url)    cmd_mcp_url;;
     uninstall)  cmd_uninstall;;
+    tags)       cmd_tags;;
     ""|help|-h|--help) usage;;
     *) die "unknown command: $cmd" "run '$PROG --help' for the command list";;
   esac
