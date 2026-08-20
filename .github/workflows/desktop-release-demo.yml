@@ -25,6 +25,20 @@ name: Release desktop (demo prerelease)
 # (desktop-build-macos.yml / desktop-build-windows.yml, Actions artifacts, NOT
 # published) auto-update TO whatever this workflow publishes - that's why those
 # builds are usable upstream.
+#
+# DAEMON ASSETS: as in desktop-release.yml, each build leg uploads its
+# sealgate-stdiod binary + a per-platform-arch checksum file onto this release,
+# so the daemon can be installed without a Rust toolchain or a checkout.
+#
+# These are the DEMO lineage - built from main, tagged v<version>-beta.<n> -
+# and are not interchangeable with the stable ones desktop-release.yml publishes
+# off the release branch. crates/stdiod/scripts/install-beeper.sh keeps the two
+# apart: by default it resolves GitHub's "Latest" pointer, which skips
+# prereleases entirely, so the plain one-liner can only ever install a stable
+# daemon. Testers on main opt in with `install-beeper.sh install
+# --stdiod-prerelease`, which picks the newest -beta tag specifically (never a
+# stable that happens to be more recent), or pin one with
+# `--stdiod-tag v<version>-beta.<n>`.
 
 on:
   workflow_dispatch:
@@ -217,6 +231,32 @@ jobs:
             done
           done
 
+      - name: Publish standalone sealgate-stdiod (macos-arm64)
+        # Mirrors the stable release (see the DAEMON ASSETS note in
+        # desktop-release.yml). Taken from INSIDE the packaged .app, not from
+        # bin/: the staged copy is only ad-hoc signed, while electron-builder
+        # re-signs the nested binary with the Developer ID and notarization
+        # covers it as part of the bundle. The step above has already asserted
+        # its arch and designated requirement.
+        #
+        # These land on a PRERELEASE tag, which the installer's default tag
+        # resolution (GitHub's "Latest" pointer) deliberately skips - reach them
+        # with `install-beeper.sh install --stdiod-prerelease`, or pin the exact
+        # tag with --stdiod-tag.
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          apps=(dist/mac-arm64/*.app)
+          src="${apps[0]}/Contents/Resources/bin/sealgate-stdiod"
+          out="$RUNNER_TEMP/assets"
+          mkdir -p "$out"
+          cp "$src" "$out/sealgate-stdiod-macos-arm64"
+          chmod +x "$out/sealgate-stdiod-macos-arm64"
+          ( cd "$out" && shasum -a 256 sealgate-stdiod-macos-arm64 > SHA256SUMS-macos-arm64 )
+          gh release upload "v${{ needs.draft.outputs.version }}" --repo "$GITHUB_REPOSITORY" --clobber \
+            "$out/sealgate-stdiod-macos-arm64" "$out/SHA256SUMS-macos-arm64"
+          cat "$out/SHA256SUMS-macos-arm64"
+
       - name: Verify update artifacts (auto-update sanity)
         # Same gate as the Windows/Linux jobs: beta-mac.yml must exist and
         # carry the prerelease version, or electron-updater silently breaks on
@@ -388,6 +428,24 @@ jobs:
             echo "bundled: $found"
           done
 
+      - name: Publish standalone sealgate-stdiod (windows-${{ matrix.arch }})
+        # Same rationale as the macOS leg above. Windows binaries are unsigned
+        # here (Authenticode is deferred), so this is the same artifact the
+        # installer bundles.
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/assets"
+          mkdir -p "$out"
+          cp "dist/${{ matrix.unpacked }}/resources/bin/sealgate-stdiod.exe" \
+             "$out/sealgate-stdiod-windows-${{ matrix.arch }}.exe"
+          ( cd "$out" && sha256sum "sealgate-stdiod-windows-${{ matrix.arch }}.exe" \
+              > "SHA256SUMS-windows-${{ matrix.arch }}" )
+          gh release upload "v${{ needs.draft.outputs.version }}" --repo "$GITHUB_REPOSITORY" --clobber \
+            "$out/sealgate-stdiod-windows-${{ matrix.arch }}.exe" \
+            "$out/SHA256SUMS-windows-${{ matrix.arch }}"
+          cat "$out/SHA256SUMS-windows-${{ matrix.arch }}"
+
       - name: Verify update artifacts (auto-update sanity)
         # Fail BEFORE the publish job flips the draft public: a wrong version
         # in the manifest or a missing installer silently breaks
@@ -503,7 +561,7 @@ jobs:
 
       # Static musl so one binary runs on any distro. zig + cargo-zigbuild supply
       # the C cross-toolchain `ring` needs when this leg's arch differs from the
-      # runner's - the exact setup stdiod-release.yml's linux job uses.
+      # runner's - the exact setup stdiod-build.yml's linux job uses.
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: x86_64-unknown-linux-musl, aarch64-unknown-linux-musl
@@ -562,6 +620,24 @@ jobs:
             test -f "$dir/resources/bin/$bin" || { echo "::error::$bin missing from $dir"; exit 1; }
             echo "bundled: $dir/resources/bin/$bin"
           done
+
+      - name: Publish standalone sealgate-stdiod (linux-${{ matrix.arch }})
+        # Same rationale as the macOS leg above. These are the static-musl
+        # builds, so the published asset runs on any distro with no glibc
+        # dependency.
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/assets"
+          mkdir -p "$out"
+          cp "dist/${{ matrix.unpacked }}/resources/bin/sealgate-stdiod" \
+             "$out/sealgate-stdiod-linux-${{ matrix.arch }}"
+          chmod +x "$out/sealgate-stdiod-linux-${{ matrix.arch }}"
+          ( cd "$out" && sha256sum "sealgate-stdiod-linux-${{ matrix.arch }}" \
+              > "SHA256SUMS-linux-${{ matrix.arch }}" )
+          gh release upload "v${{ needs.draft.outputs.version }}" --repo "$GITHUB_REPOSITORY" --clobber \
+            "$out/sealgate-stdiod-linux-${{ matrix.arch }}" \
+            "$out/SHA256SUMS-linux-${{ matrix.arch }}"
+          cat "$out/SHA256SUMS-linux-${{ matrix.arch }}"
 
       - name: Verify update artifacts (auto-update sanity)
         # This leg's manifest (beta-linux.yml for x64, beta-linux-arm64.yml for

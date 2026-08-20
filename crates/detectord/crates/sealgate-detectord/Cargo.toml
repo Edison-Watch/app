@@ -1,6 +1,6 @@
 [package]
 name = "sealgate-detectord"
-version = "0.1.0"
+version.workspace = true
 edition = "2024"
 rust-version = "1.88"
 description = "Watches MCP (Model Context Protocol) client configs and reports added or removed servers as they happen."

@@ -18,7 +18,13 @@
 # history.)
 #
 # What it automates:
-#   1. Install prerequisites (node/npx, `sealgate-stdiod`).
+#   1. Install prerequisites (node/npx, `sealgate-stdiod` as a prebuilt
+#      checksum-verified release binary, and on macOS the Beeper Desktop app
+#      itself via the Homebrew cask), each behind the --install-deps consent
+#      gate. NO Rust toolchain and no checkout are needed on this path: the
+#      daemon is downloaded from the app's own GitHub release, whose version it
+#      matches. `--from-source` opts into a cargo build instead, and is the only
+#      way to reach one.
 #   2. Authorize this device to SealGate via the stdiod browser/device flow
 #      (`sealgate-stdiod login`; no API key paste, no step-up dance).
 #   3. Supervise the tunnel daemon (`sealgate-stdiod install`).
@@ -28,7 +34,7 @@
 #      proxy, so the approval prompt fires now instead of at first daemon spawn.
 #
 # What still needs a human (each one printed with the exact action):
-#   A. Enable MCP in Beeper Desktop (Settings > Developers > MCP) so :23373
+#   A. Sign in to Beeper, enable MCP (Settings > Developers > MCP) so :23373
 #      answers, and link WhatsApp / Telegram / etc. in the Beeper app.
 #   B. Approve the submitted `beeper` server once in the SealGate dashboard.
 #   C. Approve the Beeper OAuth prompt when step 5 raises it.
@@ -71,6 +77,9 @@ SERVER_NAME="${SERVER_NAME:-beeper}"               # tunnel server name / gatewa
 DEVICE_LABEL="${DEVICE_LABEL:-$(hostname -s 2>/dev/null || echo my-mac)}"
 MCP_PKG="${MCP_PKG:-@beeper/mcp-remote}"           # the stdio->HTTP OAuth proxy npx package
 OAUTH_WAIT="${OAUTH_WAIT:-120}"                    # seconds to wait for the Beeper OAuth approval
+STDIOD_REPO="${STDIOD_REPO:-Edison-Watch/app}"     # GitHub repo whose releases carry stdiod binaries
+STDIOD_TAG="${STDIOD_TAG:-}"                       # pin an app release tag, e.g. v0.6.6 (default: newest)
+STDIOD_PRERELEASE="${STDIOD_PRERELEASE:-0}"        # 1 = take the daemon from the demo channel (-beta tags) instead of stable
 
 DRY_RUN=0
 ASSUME_YES=0
@@ -82,8 +91,12 @@ NO_COLOR_FLAG=0
 NO_OPEN=0            # pass through to `sealgate-stdiod login --no-open` for headless auth
 RELOGIN=0           # force a fresh `sealgate-stdiod login` even if already authorized
 NO_PREAUTH=0        # skip the OAuth-grant priming step during install
+FROM_SOURCE=0       # cargo-build sealgate-stdiod instead of downloading the release binary
 
 PROG="$(basename "$0")"
+# The user's PATH as we found it, before this script prepends ~/.local/bin or
+# ~/.cargo/bin for its own run; used to decide whether to print a PATH todo.
+PATH_AT_LAUNCH="$PATH"
 
 # ---------------------------------------------------------------------------
 # Colors (auto-off when stderr is not a TTY, when NO_COLOR is set, or with
@@ -174,6 +187,11 @@ parse_flags() {
       --no-open)      NO_OPEN=1; shift;;
       --relogin)      RELOGIN=1; shift;;
       --no-preauth)   NO_PREAUTH=1; shift;;
+      --stdiod-tag)   needval $# "$1" "${2:-}"; STDIOD_TAG="$2"; shift 2;;
+      --stdiod-prerelease) STDIOD_PRERELEASE=1; shift;;
+      # --build-from-source is the pre-rename spelling, kept so existing
+      # invocations and docs do not break.
+      --from-source|--build-from-source) FROM_SOURCE=1; shift;;
       --dry-run)      DRY_RUN=1; shift;;
       -y|--yes)       ASSUME_YES=1; shift;;
       --interactive)  INTERACTIVE=1; shift;;
@@ -220,18 +238,250 @@ ensure_tool() {
   ok "installed '$cmd'"
 }
 
+# Rust toolchain, needed only to build sealgate-stdiod. rustup is the
+# canonical installer; --no-modify-path leaves the user's shell files alone
+# and we extend PATH for this process ourselves. Same consent model as
+# ensure_tool, with one extra grace: a rustup already sitting in ~/.cargo/bin
+# that just is not on PATH counts as installed.
+ensure_rust() {
+  command -v cargo >/dev/null 2>&1 && return 0
+  if [ -x "$HOME/.cargo/bin/cargo" ]; then
+    PATH="$HOME/.cargo/bin:$PATH"
+    ok "found cargo in ~/.cargo/bin (added to PATH for this run)"
+    return 0
+  fi
+  if [ "$DRY_RUN" -eq 1 ]; then
+    info "dep 'cargo' missing; would install Rust via rustup (https://sh.rustup.rs)"
+    return 0
+  fi
+  if [ "$INSTALL_DEPS" -eq 0 ] && [ "$INTERACTIVE" -eq 0 ]; then
+    die "'cargo' is not installed (needed to build sealgate-stdiod)" \
+      "install Rust: https://rustup.rs   (or re-run with --install-deps)"
+  fi
+  confirm "'cargo' is missing. Install Rust now via rustup (curl https://sh.rustup.rs | sh)?" \
+    || die "declined; 'cargo' not installed" "install Rust: https://rustup.rs"
+  step "installing Rust via rustup"
+  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path \
+    || die "rustup install failed" "install Rust manually: https://rustup.rs, then re-run: $PROG install"
+  PATH="$HOME/.cargo/bin:$PATH"
+  command -v cargo >/dev/null 2>&1 || die "'cargo' still not on PATH after rustup" \
+    "open a new terminal and re-run: $PROG install"
+  ok "installed Rust (rustup; ~/.cargo/bin on PATH for this run)"
+}
+
+# ---------------------------------------------------------------------------
+# sealgate-stdiod binary: download the prebuilt release binary
+# ---------------------------------------------------------------------------
+# The DEFAULT path needs no Rust toolchain and no checkout: the desktop app's
+# release workflow (.github/workflows/desktop-release.yml) publishes a
+# per-platform sealgate-stdiod binary onto the app's own `v<version>` release,
+# so we just download and checksum-verify one. Building from source is the
+# opt-in power-user path (--from-source) and is never entered automatically -
+# a silent multi-minute cargo build after a failed download is exactly the
+# surprise this one-liner exists to avoid.
+#
+# The daemon version follows the app version (npm run version:sync), so there
+# is no separate stdiod-v* tag to discover: the app's newest release IS the
+# newest daemon.
+
+# Map this machine to a published asset. Echoes "<asset> <checksums-file>".
+# Names and the per-platform-arch checksum split match the upload steps in
+# desktop-release.yml; a shared SHA256SUMS would race across its five build legs.
+stdiod_release_asset() {
+  case "$(uname -s)/$(uname -m)" in
+    Darwin/arm64)              printf 'sealgate-stdiod-macos-arm64 SHA256SUMS-macos-arm64';;
+    Linux/x86_64)              printf 'sealgate-stdiod-linux-x64 SHA256SUMS-linux-x64';;
+    Linux/aarch64|Linux/arm64) printf 'sealgate-stdiod-linux-arm64 SHA256SUMS-linux-arm64';;
+    *) return 1;;
+  esac
+}
+
+# Newest app release tag carrying the daemon assets, for the requested channel.
+#
+# The two channels are separate LINEAGES, not two points on one line, so this
+# never mixes them:
+#
+#   stable (default)      `v<major>.<minor>.<patch>`, built from the release
+#                         branch by desktop-release.yml.
+#   demo (--stdiod-prerelease)
+#                         `v<version>-beta.<n>`, built from main by
+#                         desktop-release-demo.yml.
+#
+# So --stdiod-prerelease selects the newest BETA specifically - not "the newest
+# release of any kind". Those differ whenever a stable was cut more recently
+# than the last demo build, and picking the stable there would silently hand a
+# main-tracking tester a release-branch daemon.
+#
+# When the API is unreachable (proxy, unauthenticated rate limit), fall back to
+# git tag listing over the same endpoint cloning uses, version-sorted
+# client-side and filtered to the same channel's tags.
+latest_stdiod_tag() {
+  local tag tag_re='^v[0-9]+\.[0-9]+\.[0-9]+$'
+  if [ "$STDIOD_PRERELEASE" = "1" ]; then
+    # Require the prerelease suffix: this pool is betas only.
+    tag_re='^v[0-9]+\.[0-9]+\.[0-9]+-[0-9A-Za-z.]+$'
+    # The list endpoint carries prereleases (and, unauthenticated, no drafts),
+    # but it is ordered by the release's created_at - the TAG date, not the
+    # publish date - so its order does not track "newest" at all: this repo
+    # currently lists v0.6.4-beta.9, then beta.8, then beta.10. Sort the tags
+    # ourselves instead of trusting the order.
+    tag="$(curl -fsSL -m 15 "https://api.github.com/repos/$STDIOD_REPO/releases?per_page=100" 2>/dev/null \
+      | grep -oE '"tag_name": *"[^"]*"' \
+      | sed -E 's/.*"([^"]*)"$/\1/' \
+      | grep -E "$tag_re" \
+      | sort -uV 2>/dev/null | tail -n 1 || true)"
+  else
+    # A single authoritative value - GitHub's own "Latest" pointer - so there is
+    # nothing to sort and no chance of picking up a prerelease.
+    tag="$(curl -fsSL -m 15 "https://api.github.com/repos/$STDIOD_REPO/releases/latest" 2>/dev/null \
+      | grep -oE '"tag_name": *"[^"]*"' \
+      | sed -E 's/.*"([^"]*)"$/\1/' \
+      | head -n 1 || true)"
+  fi
+  if [ -n "$tag" ]; then printf '%s' "$tag"; return 0; fi
+  command -v git >/dev/null 2>&1 || return 1
+  git ls-remote --tags "https://github.com/$STDIOD_REPO" 'v*' 2>/dev/null \
+    | sed -E 's#.*refs/tags/##; s#\^\{\}$##' \
+    | grep -E "$tag_re" \
+    | sort -uV 2>/dev/null | tail -n 1
+}
+
+sha256_of() {
+  if command -v shasum >/dev/null 2>&1; then shasum -a 256 "$1" | awk '{print $1}'
+  else sha256sum "$1" | awk '{print $1}'; fi
+}
+
+# curl for release downloads: fail on HTTP errors, follow redirects, and keep
+# curl's own error line off stderr unless --verbose asked for it.
+curl_quiet() {
+  if [ "$VERBOSE" -eq 1 ]; then curl -fsSL "$@"; else curl -fsSL "$@" 2>/dev/null; fi
+}
+
+# Download + verify + install the prebuilt binary into ~/.local/bin.
+# Returns 1 on any recoverable miss (unsupported platform, no tag, missing asset
+# or checksums, binary that will not run here); the caller turns that into a
+# clear failure naming --from-source, rather than silently starting a build.
+# A checksum MISMATCH is never recoverable; that dies loudly on the spot.
+install_stdiod_prebuilt() {
+  local pair asset sums tag base dir want got dest="$HOME/.local/bin"
+  pair="$(stdiod_release_asset)" \
+    || { info "no prebuilt sealgate-stdiod for $(uname -s)/$(uname -m)"; return 1; }
+  asset="${pair%% *}"; sums="${pair##* }"
+  tag="${STDIOD_TAG:-$(latest_stdiod_tag)}"
+  local channel="stable"; [ "$STDIOD_PRERELEASE" = "1" ] && channel="demo (-beta)"
+  [ -n "$tag" ] \
+    || { warn "no $channel release found on $STDIOD_REPO (or the GitHub API is unreachable)"; return 1; }
+  base="https://github.com/$STDIOD_REPO/releases/download/$tag"
+  step "downloading prebuilt sealgate-stdiod ($tag)"
+  dir="$(mktemp -d)"
+  # curl's own stderr is suppressed unless --verbose: a bare "curl: (56) ..."
+  # printed above our warn() line reads like the real diagnosis when it is not.
+  # The warn lines below say what actually went wrong; -v recovers the detail.
+  if ! curl_quiet -m 300 -o "$dir/$asset" "$base/$asset"; then
+    warn "release $tag has no asset '$asset' (or the download failed)"
+    rm -rf "$dir"; return 1
+  fi
+  if ! curl_quiet -m 60 -o "$dir/sums" "$base/$sums"; then
+    warn "release $tag has no checksums file '$sums'; refusing the unverified binary"
+    rm -rf "$dir"; return 1
+  fi
+  want="$(grep -E "[[:space:]]\*?$asset\$" "$dir/sums" | awk '{print $1}' | head -n 1)"
+  got="$(sha256_of "$dir/$asset")"
+  if [ -z "$want" ] || [ "$want" != "$got" ]; then
+    rm -rf "$dir"
+    die "checksum mismatch for $asset from $tag (expected ${want:-<absent>}, got $got)" \
+      "the release assets may be corrupt or tampered with; retry, or build locally: $PROG install --from-source"
+  fi
+  chmod +x "$dir/$asset"
+  if ! "$dir/$asset" --version >/dev/null 2>&1; then
+    warn "downloaded $asset does not run on this machine ('--version' failed)"
+    rm -rf "$dir"; return 1
+  fi
+  mkdir -p "$dest"
+  mv "$dir/$asset" "$dest/sealgate-stdiod"
+  rm -rf "$dir"
+  PATH="$dest:$PATH"
+  ok "installed prebuilt sealgate-stdiod $tag -> $dest/sealgate-stdiod (sha256 verified)"
+  case ":$PATH_AT_LAUNCH:" in
+    *":$dest:"*) ;;
+    *) todo "add $dest to your PATH (e.g. append 'export PATH=\"\$HOME/.local/bin:\$PATH\"' to your shell profile)";;
+  esac
+  return 0
+}
+
+# Build sealgate-stdiod locally. Only ever reached via --from-source: this is
+# the path with real prerequisites (Rust, a C toolchain for `ring`'s crypto, and
+# a checkout of this repo), so it must never happen to someone who just ran the
+# one-liner.
+build_stdiod_from_source() {
+  local fix="drop --from-source to download the prebuilt binary instead"
+  local stdiod_src; stdiod_src="$(dirname "$0")/../crates/sealgate-stdiod"
+  [ -f "$stdiod_src/Cargo.toml" ] \
+    || die "--from-source needs a checkout, and there is none at $stdiod_src" \
+           "clone it and run the script from there: git clone https://github.com/$STDIOD_REPO && bash app/crates/stdiod/scripts/$PROG install --from-source"
+  # `ring` compiles C, which rustup does not provide a compiler for. Checking
+  # here turns a confusing linker error minutes into the build into an
+  # actionable message before cargo starts.
+  if [ "$(uname -s)" = "Darwin" ] && ! xcrun --find cc >/dev/null 2>&1; then
+    die "--from-source needs a C toolchain (the 'ring' crate compiles C) and the Xcode Command Line Tools are missing" \
+      "install them: xcode-select --install"
+  fi
+  ensure_rust
+  step "building sealgate-stdiod from source (cargo install; takes a few minutes)"
+  cargo install --path "$stdiod_src" || die "cargo install failed" "$fix"
+  command -v sealgate-stdiod >/dev/null 2>&1 \
+    || die "'sealgate-stdiod' still not on PATH after cargo install" \
+           "ensure ~/.cargo/bin is on PATH, then re-run: $PROG install"
+  ok "built and installed sealgate-stdiod from source"
+}
+
+# One entry point for getting the binary, honoring the shared consent model.
+#
+# Download-only by default. A failed download does NOT fall through to a build:
+# the whole point of the one-liner is that it needs no Rust and no checkout, so
+# an automatic fallback would spring a multi-minute toolchain install on someone
+# who never asked for one. It fails instead, naming --from-source.
+ensure_stdiod_bin() {
+  command -v sealgate-stdiod >/dev/null 2>&1 && return 0
+  if [ -x "$HOME/.local/bin/sealgate-stdiod" ]; then
+    PATH="$HOME/.local/bin:$PATH"
+    ok "found sealgate-stdiod in ~/.local/bin (added to PATH for this run)"
+    return 0
+  fi
+  if [ "$DRY_RUN" -eq 1 ]; then
+    if [ "$FROM_SOURCE" -eq 1 ]; then
+      info "dep 'sealgate-stdiod' missing; would build it from source (needs Rust + a C toolchain + a checkout)"
+    else
+      info "dep 'sealgate-stdiod' missing; would download the prebuilt release binary (no Rust needed)"
+    fi
+    return 0
+  fi
+  local fix="re-run with --install-deps"
+  if [ "$INSTALL_DEPS" -eq 0 ] && [ "$INTERACTIVE" -eq 0 ]; then
+    die "'sealgate-stdiod' is not installed" "$fix"
+  fi
+  if [ "$FROM_SOURCE" -eq 1 ]; then
+    confirm "sealgate-stdiod is missing. Build it from source now (needs Rust and a few minutes)?" \
+      || die "declined; 'sealgate-stdiod' not installed" "$fix"
+    build_stdiod_from_source
+    return 0
+  fi
+  confirm "sealgate-stdiod is missing. Download the prebuilt release binary now?" \
+    || die "declined; 'sealgate-stdiod' not installed" "$fix"
+  install_stdiod_prebuilt && return 0
+  die "could not install a prebuilt sealgate-stdiod (see the warnings above)" \
+    "check https://github.com/$STDIOD_REPO/releases for an asset matching $(uname -s)/$(uname -m), pin one with --stdiod-tag <tag>, or build locally: $PROG install --install-deps --from-source"
+}
+
 ensure_deps() {
   step "Checking prerequisites"
   require_supported_platform
-  local stdiod_src; stdiod_src="$(dirname "$0")/../crates/sealgate-stdiod"
   ensure_tool npx \
     "install Node (brew install node) or re-run with --install-deps" \
     brew install --quiet node
   # No Deno: @beeper/mcp-remote only proxies to Beeper's built-in MCP server.
   # The Deno sandbox was a @beeper/desktop-mcp `execute` tool requirement.
-  ensure_tool sealgate-stdiod \
-    "run: cargo install --path crates/sealgate-stdiod   (or re-run with --install-deps)" \
-    cargo install --path "$stdiod_src"
+  ensure_stdiod_bin
   if [ "$DRY_RUN" -eq 1 ]; then
     info "deps: preview only (nothing was installed)"
   else
@@ -295,13 +545,54 @@ resolve_mcp_endpoint() {
   esac
 }
 
+# Echo the installed Beeper Desktop bundle path on macOS, or nothing (exit 1).
+# The Homebrew cask installs "Beeper Desktop.app"; older manual installs may
+# be named "Beeper.app".
+beeper_desktop_app() {
+  local d
+  for d in "/Applications/Beeper Desktop.app" "$HOME/Applications/Beeper Desktop.app" \
+           "/Applications/Beeper.app" "$HOME/Applications/Beeper.app"; do
+    [ -d "$d" ] && { printf '%s' "$d"; return 0; }
+  done
+  return 1
+}
+
+# Offer to install Beeper Desktop via the Homebrew cask (macOS only; the cask
+# needs macOS 12+). Consent model matches ensure_tool (--install-deps or
+# --interactive to attempt, confirmed unless --yes), but NON-FATAL throughout:
+# install can still wire the whole SealGate side with Beeper absent, so every
+# failure path prints the manual action and returns 1 instead of dying.
+install_beeper_desktop() {
+  local fix="install Beeper Desktop: brew install --cask beeper   (or https://www.beeper.com/download)"
+  if ! { [ "$INSTALL_DEPS" -eq 1 ] || [ "$INTERACTIVE" -eq 1 ]; } \
+     || ! { [ "$ASSUME_YES" -eq 1 ] || [ "$INTERACTIVE" -eq 1 ]; }; then
+    todo "$fix, then re-run: $PROG install"
+    return 1
+  fi
+  confirm "Beeper Desktop is not installed. Install it now via: brew install --cask beeper" \
+    || { todo "$fix, then re-run: $PROG install"; return 1; }
+  command -v brew >/dev/null 2>&1 \
+    || { warn "brew not found; cannot auto-install Beeper Desktop"; todo "$fix"; return 1; }
+  step "installing Beeper Desktop via: brew install --cask beeper"
+  if ! brew install --quiet --cask beeper; then
+    warn "brew install --cask beeper failed (the cask needs macOS 12+)"
+    todo "$fix"
+    return 1
+  fi
+  ok "installed Beeper Desktop"
+  return 0
+}
+
 # Non-fatal: if Beeper Desktop is not answering we still wire the automatable
 # SealGate side and print the exact action, so `install` makes progress instead of
-# stopping the operator at the first prerequisite.
+# stopping the operator at the first prerequisite. On macOS this also offers to
+# install the app itself (consent-gated) and opens it so the operator can sign
+# in; signing in and linking chats stay human steps by nature.
 ensure_beeper_desktop() {
   step "Beeper Desktop MCP endpoint"
   if [ "$DRY_RUN" -eq 1 ]; then
     info "would probe 127.0.0.1:23373-23378 for the Beeper Desktop API"
+    info "if unreachable on macOS: would offer 'brew install --cask beeper' and open the app"
     return 0
   fi
   local base
@@ -310,8 +601,24 @@ ensure_beeper_desktop() {
     return 0
   fi
   warn "the Beeper Client API is not answering on 23373-23378"
-  todo "start Beeper: the Desktop app, or a headless server via 'beeper setup --server --install'"
-  todo "link the chats you want (WhatsApp / Telegram / ...) in Beeper"
+  local app
+  case "$(uname -s)" in
+    Darwin)
+      if app="$(beeper_desktop_app)"; then
+        info "Beeper Desktop is installed but not answering; opening it"
+        open "$app" 2>/dev/null || true
+      elif install_beeper_desktop; then
+        open -a "Beeper Desktop" 2>/dev/null || true
+      fi
+      todo "in Beeper Desktop: sign in (create the account if needed), then enable Settings > Developers > MCP"
+      todo "link the chats you want (WhatsApp / Telegram / ...) in Beeper"
+      info "once MCP is enabled, re-run '$PROG install' (idempotent) or '$PROG preauth' to finish the Beeper side"
+      ;;
+    *)
+      todo "start Beeper: the Desktop app (https://www.beeper.com/download), or a headless server via 'beeper setup --server --install'"
+      todo "link the chats you want (WhatsApp / Telegram / ...) in Beeper"
+      ;;
+  esac
   info "@beeper/mcp-remote proxies this local Client API's MCP server, so either the Desktop app or a headless server works"
   warn "continuing to wire the SealGate side; the Beeper child stays idle until Beeper is reachable"
 }
@@ -654,8 +961,27 @@ Common flags (also settable as UPPER_SNAKE env vars):
   --no-preauth         Skip OAuth priming during install (prompt then fires at first spawn)
   --no-open            Headless device auth: print the approval URL, do not open a browser
   --relogin            Force a fresh device authorization even if already authorized
-  --install-deps       Consent to auto-install missing deps (npx/sealgate-stdiod).
-                       Confirms first unless --yes; validates each landed on PATH.
+  --install-deps       Consent to auto-install missing deps: npx (brew),
+                       sealgate-stdiod (prebuilt release download - no Rust
+                       needed), and on macOS Beeper Desktop itself (brew cask).
+                       Confirms first unless --yes.
+  --stdiod-tag TAG     Pin the release the sealgate-stdiod binary comes from,
+                       e.g. v0.6.6 (default: the newest published app release;
+                       the daemon version follows the app version). Env:
+                       STDIOD_TAG. STDIOD_REPO overrides the repo (default
+                       $STDIOD_REPO).
+  --stdiod-prerelease  Take the daemon from the DEMO channel: the newest
+                       v<version>-beta.N prerelease, built from main. The
+                       default is the stable channel, built from the release
+                       branch. The two are separate lineages, so this picks the
+                       newest beta specifically - never a stable that happens to
+                       be more recent. Env: STDIOD_PRERELEASE=1.
+  --from-source        Build sealgate-stdiod with cargo instead of downloading
+                       it. Adds real prerequisites - a Rust toolchain (installed
+                       via rustup under --install-deps), a C toolchain for the
+                       'ring' crate, and a checkout of this repo to run from -
+                       so it is never entered automatically. Without it, a
+                       failed download is an error, not a silent build.
   --dry-run            Print what would run; change nothing
   --yes                Skip confirmations (agents pass this)
   --interactive        Allow interactive prompts as a fallback
@@ -681,7 +1007,8 @@ EOF
 subcmd_help() {
   case "$1" in
     install)  log "install - wire the SealGate side and print remaining human steps. Idempotent; safe to re-run."
-              log "  optional: --sg-backend, --no-open, --install-deps, --yes, --dry-run, --no-preauth, --oauth-wait.";;
+              log "  optional: --sg-backend, --no-open, --install-deps, --yes, --dry-run, --no-preauth, --oauth-wait,"
+              log "            --stdiod-tag <tag>, --from-source (build the daemon instead of downloading it).";;
     preauth)  log "preauth - drive one MCP handshake through 'npx $MCP_PKG' so Beeper raises its"
               log "  approve/deny prompt and caches the OAuth grant. Idempotent; optional --oauth-wait.";;
     mcp-url)  log "mcp-url - print the gateway URL + client snippet. pass --sg-api-key for a ready-to-run snippet. supports --json.";;
@@ -700,6 +1027,14 @@ main() {
   ARGS=()
   parse_flags "$@" || { init_colors; subcmd_help "$cmd"; exit 0; }
   init_colors
+  # A binary we installed to ~/.local/bin (or cargo put in ~/.cargo/bin) may
+  # not be on the user's PATH yet; every subcommand should still find it.
+  local d
+  for d in "$HOME/.local/bin" "$HOME/.cargo/bin"; do
+    if [ -x "$d/sealgate-stdiod" ]; then
+      case ":$PATH:" in *":$d:"*) ;; *) PATH="$d:$PATH";; esac
+    fi
+  done
   # No subcommand takes positional args; reject stray ones so typos are loud.
   [ "${#ARGS[@]}" -gt 0 ] && die "unexpected argument: ${ARGS[0]}" "run '$PROG --help' for usage"
   # Default the backend to the device's authorized session unless set explicitly.
