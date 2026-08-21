@@ -1128,6 +1128,10 @@ cmd_uninstall() {
 # Help
 # ===========================================================================
 usage() {
+  # UNQUOTED heredoc delimiter, deliberately: $PROG, $STDIOD_REPO and friends
+  # have to interpolate. The cost is that backticks in here are COMMAND
+  # SUBSTITUTION, not quoting - a `sealgate-stdiod login` in the prose runs and
+  # is replaced by its (empty) output. Quote command names with 'single quotes'.
   cat >&2 <<EOF
 $PROG - wire Beeper into the SealGate MCP gateway (macOS)
 
@@ -1157,6 +1161,13 @@ Common flags (also settable as UPPER_SNAKE env vars):
                        channel follows that backend. Override the daemon side alone
                        with --stdiod-tag / --stdiod-release / --stdiod-prerelease.
   --sg-api-key KEY     SealGate API key for the client snippet only (SG_API_KEY)
+  --server-name NAME   Tunnel server name, and the gateway tool prefix
+                       (SERVER_NAME, default beeper). Change it to wire a second
+                       Beeper account alongside the first.
+  --device-label TEXT  Label for this script's own output only (DEVICE_LABEL,
+                       default this host's short name). It does NOT name the
+                       stdiod device record - 'sealgate-stdiod login' issues the
+                       device identity server-side.
   --oauth-wait SECS    How long to wait for the Beeper OAuth approval (OAUTH_WAIT, default $OAUTH_WAIT)
   --no-preauth         Skip OAuth priming during install (prompt then fires at first spawn)
   --no-open            Headless device auth: print the approval URL, do not open a browser
@@ -1171,16 +1182,18 @@ Common flags (also settable as UPPER_SNAKE env vars):
                        STDIOD_TAG. STDIOD_REPO overrides the repo (default
                        $STDIOD_REPO).
   --stdiod-prerelease  Force the DEMO daemon channel: the newest
-                       v<version>-beta.N prerelease, built from main. Picks the
-  --stdiod-release     newest beta specifically, never a stable that happens to
-                       be more recent - the two are separate lineages.
-                       --stdiod-release forces the stable channel (release
-                       branch) the same way. Env: STDIOD_PRERELEASE=1 / =0.
-                       You rarely need either: with neither set the daemon
-                       channel FOLLOWS THE BACKEND, so --demo gets the demo
-                       daemon and --release (the default) gets the stable one.
-                       Use these only to deliberately cross the streams.
-                       --stdiod-tag overrides all of it.
+                       v<version>-beta.N prerelease, built from main.
+                       Env: STDIOD_PRERELEASE=1.
+  --stdiod-release     Force the STABLE daemon channel: the newest v<version>
+                       release, built from the release branch.
+                       Env: STDIOD_PRERELEASE=0.
+                       Both: the channels are separate lineages, so each picks
+                       from its own and never from the other, however recent
+                       the other may be. Neither flag is usually needed - with
+                       neither set the daemon channel FOLLOWS THE BACKEND, so
+                       --demo gets the demo daemon and --release (the default)
+                       gets the stable one. Reach for these only to cross the
+                       streams deliberately. --stdiod-tag overrides both.
   --from-source        Build sealgate-stdiod with cargo instead of downloading
                        it. Adds real prerequisites - a Rust toolchain (installed
                        via rustup under --install-deps), a C toolchain for the
