@@ -77,6 +77,8 @@ SERVER_NAME="${SERVER_NAME:-beeper}"               # tunnel server name / gatewa
 DEVICE_LABEL="${DEVICE_LABEL:-$(hostname -s 2>/dev/null || echo my-mac)}"
 MCP_PKG="${MCP_PKG:-@beeper/mcp-remote}"           # the stdio->HTTP OAuth proxy npx package
 OAUTH_WAIT="${OAUTH_WAIT:-120}"                    # seconds to wait for the Beeper OAuth approval
+BEEPER_WAIT="${BEEPER_WAIT:-30}"                   # seconds to wait for Beeper's client API after opening the app (0 = skip)
+CONNECT_WAIT="${CONNECT_WAIT:-45}"                 # seconds to wait for the daemon to register with the backend
 STDIOD_REPO="${STDIOD_REPO:-Edison-Watch/app}"     # GitHub repo whose releases carry stdiod binaries
 STDIOD_TAG="${STDIOD_TAG:-}"                       # pin an app release tag, e.g. v0.6.6 (default: newest)
 # Daemon channel. Left UNSET, it follows the backend: the demo backend gets the
@@ -98,6 +100,8 @@ NO_COLOR_FLAG=0
 NO_OPEN=0            # pass through to `sealgate-stdiod login --no-open` for headless auth
 RELOGIN=0           # force a fresh `sealgate-stdiod login` even if already authorized
 NO_PREAUTH=0        # skip the OAuth-grant priming step during install
+BEEPER_READY=0      # set by ensure_beeper_desktop when Beeper's client API answers
+STDIOD_CONNECTED=0  # set by ensure_stdiod_supervised once the daemon registers
 FROM_SOURCE=0       # cargo-build sealgate-stdiod instead of downloading the release binary
 
 PROG="$(basename "$0")"
@@ -191,6 +195,7 @@ parse_flags() {
       --server-name)  needval $# "$1" "${2:-}"; SERVER_NAME="$2"; shift 2;;
       --device-label) needval $# "$1" "${2:-}"; DEVICE_LABEL="$2"; shift 2;;
       --oauth-wait)   needval $# "$1" "${2:-}"; OAUTH_WAIT="$2"; shift 2;;
+      --beeper-wait)  needval $# "$1" "${2:-}"; BEEPER_WAIT="$2"; shift 2;;
       --no-open)      NO_OPEN=1; shift;;
       --relogin)      RELOGIN=1; shift;;
       --no-preauth)   NO_PREAUTH=1; shift;;
@@ -406,6 +411,11 @@ install_stdiod_prebuilt() {
     rm -rf "$dir"; return 1
   fi
   mkdir -p "$dest"
+  # Unlink first. Writing over a signed Mach-O in place keeps the inode, and the
+  # kernel's cached signing state for that vnode goes stale - the binary then
+  # dies with SIGKILL. `mv` across filesystems degrades to a copy, so this is
+  # not hypothetical.
+  rm -f "$dest/sealgate-stdiod"
   mv "$dir/$asset" "$dest/sealgate-stdiod"
   rm -rf "$dir"
   PATH="$dest:$PATH"
@@ -587,7 +597,16 @@ install_beeper_desktop() {
     todo "$fix"
     return 1
   fi
-  ok "installed Beeper Desktop"
+  # brew can exit 0 with the cask recorded but the .app never placed (a staged
+  # or interrupted install leaves an empty Caskroom dir). Check the artifact,
+  # not the exit code.
+  local app
+  if ! app="$(beeper_desktop_app)"; then
+    warn "brew reported success but Beeper Desktop.app is not in /Applications"
+    todo "reinstall it: brew reinstall --cask beeper   (or https://www.beeper.com/download)"
+    return 1
+  fi
+  ok "installed Beeper Desktop: $app"
   return 0
 }
 
@@ -596,27 +615,66 @@ install_beeper_desktop() {
 # stopping the operator at the first prerequisite. On macOS this also offers to
 # install the app itself (consent-gated) and opens it so the operator can sign
 # in; signing in and linking chats stay human steps by nature.
+# Poll the Beeper client API for up to N seconds. Echoes the base URL when it
+# comes up. beeper_api_base returns fast when nothing is listening.
+wait_beeper_api() {
+  local deadline=$(( SECONDS + $1 )) base
+  while [ "$SECONDS" -lt "$deadline" ]; do
+    base="$(beeper_api_base 2>/dev/null)" && { printf '%s' "$base"; return 0; }
+    sleep 2
+  done
+  return 1
+}
+
 ensure_beeper_desktop() {
-  step "Beeper Desktop MCP endpoint"
+  step "Beeper Desktop"
   if [ "$DRY_RUN" -eq 1 ]; then
-    info "would probe 127.0.0.1:23373-23378 for the Beeper Desktop API"
-    info "if unreachable on macOS: would offer 'brew install --cask beeper' and open the app"
+    info "would look for Beeper Desktop.app in /Applications and ~/Applications"
+    info "would probe 127.0.0.1:23373-23378 for the Beeper Client API"
+    info "if either is missing on macOS: would offer 'brew install --cask beeper' and open the app"
     return 0
   fi
-  local base
-  if base="$(beeper_api_base)"; then
-    ok "Beeper Desktop API reachable at $base"
-    return 0
+
+  # Report the app and the API separately. They are independent: an installed
+  # app says nothing about the API (MCP is off by default), and a headless
+  # 'beeper' server answers the API with no app at all.
+  local app="" base=""
+  app="$(beeper_desktop_app)" || true
+  if [ -n "$app" ]; then
+    ok "app:        $app"
+  else
+    warn "app:        Beeper Desktop.app not found in /Applications or ~/Applications"
   fi
-  warn "the Beeper Client API is not answering on 23373-23378"
-  local app
+
+  base="$(beeper_api_base)" || true
+  if [ -n "$base" ]; then
+    ok "client API: responding at $base"
+    BEEPER_READY=1
+  else
+    warn "client API: no response on 127.0.0.1:23373-23378"
+  fi
+
+  [ -n "$base" ] && return 0
+
   case "$(uname -s)" in
     Darwin)
-      if app="$(beeper_desktop_app)"; then
-        info "Beeper Desktop is installed but not answering; opening it"
-        open "$app" 2>/dev/null || true
-      elif install_beeper_desktop; then
-        open -a "Beeper Desktop" 2>/dev/null || true
+      # Install first if needed, then re-read the path: opening by bundle name
+      # fails silently if the cask ever ships a different display name.
+      if [ -z "$app" ] && install_beeper_desktop; then
+        app="$(beeper_desktop_app)" || app=""
+      fi
+      if [ -n "$app" ]; then
+        info "opening $app"
+        if open "$app" 2>/dev/null && [ "$BEEPER_WAIT" -gt 0 ]; then
+          # An app that is already signed in with MCP on comes up in seconds.
+          # Waiting here lets preauth run in this same pass.
+          info "waiting up to ${BEEPER_WAIT}s for the client API"
+          if base="$(wait_beeper_api "$BEEPER_WAIT")"; then
+            ok "client API: responding at $base"
+            BEEPER_READY=1
+            return 0
+          fi
+        fi
       fi
       todo "in Beeper Desktop: sign in (create the account if needed), then enable Settings > Developers > MCP"
       todo "link the chats you want (WhatsApp / Telegram / ...) in Beeper"
@@ -884,13 +942,52 @@ ensure_stdiod_auth() {
   ok "device authorized to ${SG_BACKEND}"
 }
 
+# Current connection_state from state.json ("connected", "needs_reauth", ...).
+stdiod_connection_state() {
+  local f="${SEALGATE_STDIOD_STATE:-$HOME/.config/sealgate-stdiod/state.json}"
+  [ -f "$f" ] || return 0
+  sed -n 's/.*"connection_state"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$f" | head -n1
+}
+
+# Wait for the daemon to register with the backend. The backend refuses a
+# server request until the device has connected, and answers with a 409 that
+# looks exactly like a name conflict - so submitting before this is ready sends
+# the caller chasing the wrong problem.
+wait_stdiod_connected() {
+  local deadline=$(( SECONDS + $1 )) st
+  while [ "$SECONDS" -lt "$deadline" ]; do
+    st="$(stdiod_connection_state)"
+    case "$st" in
+      connected) return 0;;
+      needs_reauth) warn "the daemon's credential was rejected (run: $PROG install --relogin)"; return 1;;
+      needs_upgrade) warn "the daemon is too old for this backend; update it"; return 1;;
+    esac
+    sleep 2
+  done
+  return 1
+}
+
 ensure_stdiod_supervised() {
   step "SealGate tunnel daemon (supervisor)"
+  # Drop the old state file first. It describes the PREVIOUS run, and the
+  # daemon does not rewrite it until it starts - so a stale "needs_reauth" from
+  # a run before this login would be read as a live verdict and abort the wait
+  # below while the new daemon was connecting normally. The daemon recreates it
+  # on start; `sealgate-stdiod uninstall` removes it for the same reason.
+  [ "$DRY_RUN" -eq 0 ] && rm -f "${SEALGATE_STDIOD_STATE:-$HOME/.config/sealgate-stdiod/state.json}"
   if ! run sealgate-stdiod install; then
     die "sealgate-stdiod install could not register the supervisor unit" \
       "macOS needs no privileges; Linux needs a logged-in systemd --user session. Fix that, then re-run: $PROG install"
   fi
   ok "daemon installed and supervised"
+  [ "$DRY_RUN" -eq 1 ] && return 0
+  info "waiting up to ${CONNECT_WAIT}s for the daemon to register with the backend"
+  if wait_stdiod_connected "$CONNECT_WAIT"; then
+    ok "daemon connected"
+    STDIOD_CONNECTED=1
+  else
+    warn "the daemon has not connected yet (state: $(stdiod_connection_state))"
+  fi
 }
 
 # ---------------------------------------------------------------------------
@@ -900,6 +997,28 @@ ensure_stdiod_supervised() {
 # exact device (POST /api/v1/client/mcp-requests). An org admin approves it once
 # in the dashboard; it does not run until then. `server_registered` lists only
 # approved servers bound to this device, so we use it as the idempotency check.
+# First 3 chars of this device's user id, used to disambiguate a taken server
+# name. Empty if the config has no user id (legacy credential).
+stdiod_uid_suffix() {
+  local f; f="$(stdiod_config)"
+  [ -f "$f" ] || return 0
+  sed -n 's/^[[:space:]]*authenticated_user_id[[:space:]]*=[[:space:]]*"\{0,1\}\([^"]*\)"\{0,1\}.*/\1/p' \
+    "$f" 2>/dev/null | head -n1 | cut -c1-3
+}
+
+# Submit one server by name. Echoes the CLI output; returns its exit code.
+server_add() {
+  sealgate-stdiod server add "$1" --display-name "Beeper" \
+    --command npx --arg=-y --arg="$MCP_PKG" ${MCP_ENDPOINT:+--arg="$MCP_ENDPOINT"} 2>&1
+}
+
+# True when the add failed with a 409, which the backend uses for a name that
+# is already taken. The CLI prints "<op> returned HTTP <status>" (http.rs) and
+# never the response body, so the status line is the only thing to match on.
+name_taken() {
+  printf '%s' "$1" | grep -qiE 'HTTP 409'
+}
+
 submit_beeper_server() {
   step "Submitting the Beeper server"
   # The submitted command must carry the endpoint when Beeper sits on a
@@ -911,27 +1030,51 @@ submit_beeper_server() {
       --command npx --arg=-y --arg="$MCP_PKG" ${MCP_ENDPOINT:+--arg="$MCP_ENDPOINT"}
     return 0
   fi
+
+  local suffix alt=""
+  suffix="$(stdiod_uid_suffix)"
+  [ -n "$suffix" ] && alt="${SERVER_NAME}-${suffix}"
+
   if server_registered; then
     ok "server '$SERVER_NAME' is already approved and bound to this device"
     return 0
   fi
+  # A previous run may have fallen back to the suffixed name; adopt it so
+  # re-running does not submit a second server.
+  if [ -n "$alt" ] && SERVER_NAME="$alt" server_registered; then
+    SERVER_NAME="$alt"
+    ok "server '$SERVER_NAME' is already approved and bound to this device"
+    return 0
+  fi
+
   # Capture with '&& rc=0 || rc=$?' so a non-zero add does not trip set -e.
   # Use --arg=VALUE: clap rejects a hyphen-leading value in the space form.
-  local out rc
-  out="$(sealgate-stdiod server add "$SERVER_NAME" --display-name "Beeper" \
-        --command npx --arg=-y --arg="$MCP_PKG" ${MCP_ENDPOINT:+--arg="$MCP_ENDPOINT"} 2>&1)" && rc=0 || rc=$?
+  # `tried` is the name the messages below refer to - it may not be SERVER_NAME,
+  # which only changes once an add succeeds.
+  local out rc tried="$SERVER_NAME"
+  out="$(server_add "$tried")" && rc=0 || rc=$?
   printf '%s\n' "$out" | grep -viE '^[[:space:]]*$' >&2 || true
+
+  # The name is unique across the backend, not per device, so it can be held by
+  # a server this device cannot see. Retry once under a user-scoped name rather
+  # than stopping on a conflict the operator has no way to inspect.
+  if [ "$rc" -ne 0 ] && name_taken "$out" && [ -n "$alt" ]; then
+    warn "'$tried' is already taken on this backend; retrying as '$alt'"
+    tried="$alt"
+    out="$(server_add "$tried")" && rc=0 || rc=$?
+    printf '%s\n' "$out" | grep -viE '^[[:space:]]*$' >&2 || true
+  fi
+
   if [ "$rc" -ne 0 ]; then
-    # The backend reports a duplicate submission as a bare HTTP 409, so match
-    # that alongside the wordier variants.
-    if printf '%s' "$out" | grep -qiE 'already (exists|submitted|pending)|duplicate|(http )?409( conflict)?'; then
-      ok "a request for '$SERVER_NAME' already exists on the backend; approve it in the dashboard"
-      info "if that request predates this script version its command may be stale; run 'sealgate-stdiod server remove $SERVER_NAME' and re-run install to resubmit"
+    if name_taken "$out"; then
+      ok "a request for '$tried' already exists on the backend; approve it in the dashboard"
+      info "if that request predates this script version its command may be stale; run 'sealgate-stdiod server remove $tried' and re-run install to resubmit"
       return 0
     fi
-    die "sealgate-stdiod server add failed for '$SERVER_NAME'" \
+    die "sealgate-stdiod server add failed for '$tried'" \
       "check 'sealgate-stdiod status' shows the daemon connected, then re-run: $PROG install"
   fi
+  SERVER_NAME="$tried"
   ok "submitted '$SERVER_NAME' (npx $MCP_PKG) for approval"
   todo "approve '$SERVER_NAME' as an admin: ${SG_BACKEND%/}  ->  Servers page (pending requests), or Overview"
   info "a 'not verified' badge before the first successful spawn is expected and does not block approval"
@@ -966,16 +1109,43 @@ print_result() {
 # Subcommands
 # ===========================================================================
 cmd_install() {
+  # The daemon is installed and authorized regardless of Beeper: it is useful on
+  # its own, and Beeper can be down for reasons that have nothing to do with
+  # this machine. Registering the Beeper SERVER is different - that is the step
+  # that only makes sense once Beeper actually works, so it is gated below.
   ensure_deps
   ensure_beeper_desktop
   ensure_stdiod_auth
   ensure_stdiod_supervised
-  submit_beeper_server
-  if [ "$NO_PREAUTH" -eq 1 ]; then
-    info "skipping OAuth priming (--no-preauth); the grant prompt appears at the child's first spawn, or run: $PROG preauth"
-  else
+
+  # Both gates must hold before registering the server.
+  #
+  # BEEPER_READY: otherwise the name gets taken by a server whose child cannot
+  # reach Beeper.
+  #
+  # STDIOD_CONNECTED: the backend refuses a server request until the device has
+  # registered over the tunnel, and answers with a 409 - the same status it uses
+  # for a name conflict. Submitting before then produces a 409 that this script
+  # would read as "name taken", rename, and fail again, pointing the operator at
+  # a conflict that does not exist.
+  if [ "$DRY_RUN" -eq 1 ]; then
+    submit_beeper_server
     prime_oauth_grant
+  elif [ "$STDIOD_CONNECTED" -eq 0 ]; then
+    warn "not registering the '$SERVER_NAME' server: the daemon has not registered its device yet"
+    todo "check 'sealgate-stdiod status', then re-run: $PROG install"
+  elif [ "$BEEPER_READY" -eq 0 ]; then
+    warn "not registering the '$SERVER_NAME' server: Beeper is not reachable yet"
+    todo "sign in to Beeper with MCP enabled, then re-run: $PROG install"
+  else
+    submit_beeper_server
+    if [ "$NO_PREAUTH" -eq 1 ]; then
+      info "skipping OAuth priming (--no-preauth); the grant prompt appears at the child's first spawn, or run: $PROG preauth"
+    else
+      prime_oauth_grant
+    fi
   fi
+
   printf '\n%s%s== SealGate side wired ==%s\n' "$C_BOLD" "$C_GREEN" "$C_RESET" >&2
   log "remaining human steps are printed above as 'action:' lines (approve the server in the dashboard)."
   print_result
@@ -1169,6 +1339,9 @@ Common flags (also settable as UPPER_SNAKE env vars):
                        stdiod device record - 'sealgate-stdiod login' issues the
                        device identity server-side.
   --oauth-wait SECS    How long to wait for the Beeper OAuth approval (OAUTH_WAIT, default $OAUTH_WAIT)
+  --beeper-wait SECS   After opening Beeper, how long to wait for its client API
+                       before falling back to the manual steps (BEEPER_WAIT,
+                       default $BEEPER_WAIT; 0 skips the wait)
   --no-preauth         Skip OAuth priming during install (prompt then fires at first spawn)
   --no-open            Headless device auth: print the approval URL, do not open a browser
   --relogin            Force a fresh device authorization even if already authorized

@@ -176,7 +176,7 @@ impl PersistedConfig {
             }
             if nonempty(self.device_id.as_deref()).is_none() {
                 return Err(anyhow!(
-                    "client credential is missing its server-issued device_id; run `sealgate-stdiod login` again"
+                    "client credential is missing its device_id; run `sealgate-stdiod login` again"
                 ));
             }
         }
