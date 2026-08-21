@@ -382,12 +382,21 @@ pub fn status(user: &str) -> anyhow::Result<Status> {
 }
 
 /// Re-fetch the policy (fail-closed) and return the updated status.
+///
+/// A failed fetch keeps the cached policy, but it is LOGGED rather than
+/// swallowed: the returned `Status` is indistinguishable from a successful
+/// refresh, so a silently-dropped error let a dead API key look like a
+/// confirmed-fresh policy to whoever asked for the refresh.
 pub async fn refresh_policy(user: &str) -> anyhow::Result<Status> {
     if let Some(mut e) = Enrollment::load_for(user)? {
         let client = BackendClient::new(e.api_base_url.clone(), e.api_key.clone());
-        if let Ok(p) = client.fetch_policy().await {
-            e.quarantine = p.quarantine;
-            e.save_for(user)?;
+        match client.fetch_policy().await {
+            // Same tenant check the reconcile loop applies; `apply_policy`
+            // persists on its own.
+            Ok(p) => crate::runner::apply_policy(&p, &mut e, user),
+            Err(err) => {
+                tracing::warn!(error = %err, "policy refresh failed; keeping last-known-good")
+            }
         }
     }
     status(user)
