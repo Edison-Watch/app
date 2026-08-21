@@ -83,6 +83,10 @@ pub async fn run(args: LoginArgs) -> Result<()> {
     cfg.client_installation_id = Some(token.client_installation_id);
     cfg.authenticated_user_id = Some(token.user_id);
     cfg.authenticated_org_id = Some(token.org_id);
+    // Must be the backend-issued id: the access token is bound to that device
+    // record and the tunnel sends device_id as a header, so anything else is
+    // rejected with 403. (Using hostname here to match the app's legacy login
+    // was tried and fails for exactly that reason.)
     cfg.device_id = Some(token.device_id);
     cfg.scopes = token.scope;
     if let Some(label) = args.device_label {
