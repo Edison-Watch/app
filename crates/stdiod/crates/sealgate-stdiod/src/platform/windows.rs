@@ -19,6 +19,7 @@
 use std::os::windows::process::CommandExt;
 use std::path::Path;
 use std::process::Command;
+use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, Context, Result};
 use tracing::{debug, info, warn};
@@ -260,12 +261,47 @@ pub fn is_loaded() -> Result<bool> {
     is_installed()
 }
 
-/// Restart the daemon: end the running instance, then run it again.
+/// How long to wait for the previous instance to exit before giving up.
+const STOP_TIMEOUT: Duration = Duration::from_secs(15);
+/// How long to wait for the new instance to report Running after `/run`.
+const START_TIMEOUT: Duration = Duration::from_secs(10);
+const POLL_INTERVAL: Duration = Duration::from_millis(250);
+
+/// Poll [`is_running`] until it reports `want`, or `timeout` expires. Returns
+/// whether the wanted state was observed.
+fn wait_for_running(want: bool, timeout: Duration) -> bool {
+    let start = Instant::now();
+    loop {
+        if is_running().unwrap_or(false) == want {
+            return true;
+        }
+        if start.elapsed() >= timeout {
+            return false;
+        }
+        std::thread::sleep(POLL_INTERVAL);
+    }
+}
+
+/// Restart the daemon: end the running instance, wait for it to actually go
+/// away, then run it again.
 ///
-/// schtasks has no atomic restart verb. `/end` on a task that is not running
-/// returns an error, which is benign here - the `/run` that follows is what
-/// matters. See the macOS counterpart for why this does not fall back to
-/// `install`.
+/// schtasks has no atomic restart verb, and the naive `/end` + `/run` pair is
+/// unsound here for two compounding reasons:
+///
+/// - `/end` is ASYNCHRONOUS. It requests termination and returns; the process
+///   can still be alive when the next command runs.
+/// - the task sets `MultipleInstancesPolicy=IgnoreNew`, so a `/run` issued
+///   while an instance is still alive is silently DROPPED - and `schtasks /run`
+///   still exits 0, because it reports that the request was accepted, not that
+///   an instance started.
+///
+/// Together those mean the old process finishes exiting, nothing replaces it,
+/// and the daemon is left stopped while this function reports success.
+/// (`RestartOnFailure` may eventually paper over it, but not for a minute, and
+/// only if the ended task counts as a failure.) So: wait for the task to stop
+/// before starting it, and refuse to issue a `/run` that would be ignored.
+///
+/// See the macOS counterpart for why this does not fall back to `install`.
 pub fn restart() -> Result<()> {
     if !is_loaded()? {
         return Err(anyhow!(
@@ -273,12 +309,61 @@ pub fn restart() -> Result<()> {
              hint: run `sealgate-stdiod install` to (re)create it"
         ));
     }
-    let _ = schtasks(&["/end", "/tn", &task_name()])?;
+
+    // Can we read the task's run state at all? The "Status:" field name is
+    // localized, so on a non-English Windows it is simply absent. That gates
+    // the post-start verification below, which would otherwise warn on every
+    // restart for those users. Asking running_status() (rather than inferring
+    // it from is_running() being true) keeps "readable, and currently stopped"
+    // distinct from "unreadable" - so restarting an already-dead daemon is
+    // still verified.
+    let status_readable = matches!(running_status(), Ok(Some(_)));
+
+    // `/end` "fails" both when nothing was running (benign) and for real
+    // problems like access denied, and its message is localized - so neither
+    // the exit code nor the text is a reliable signal. The task's actual state
+    // is the arbiter instead; the message is kept only to enrich the error if
+    // the task never stops, which is the case a genuine /end failure produces.
+    let end = schtasks(&["/end", "/tn", &task_name()])?;
+    let end_msg = String::from_utf8_lossy(&end.stderr).trim().to_owned();
+
+    if !wait_for_running(false, STOP_TIMEOUT) {
+        let detail = if end_msg.is_empty() {
+            String::new()
+        } else {
+            format!("\nschtasks /end reported: {end_msg}")
+        };
+        return Err(anyhow!(
+            "the running instance did not stop within {}s, so starting a new one would be \
+             ignored (the task sets MultipleInstancesPolicy=IgnoreNew) and this would report \
+             a restart that never happened{detail}\n\
+             hint: check for a stuck sealgate-stdiod process, or run `sealgate-stdiod \
+             uninstall` followed by `sealgate-stdiod install`",
+            STOP_TIMEOUT.as_secs()
+        ));
+    }
+
     let out = schtasks(&["/run", "/tn", &task_name()])?;
     if !out.status.success() {
         let stderr = String::from_utf8_lossy(&out.stderr);
         return Err(anyhow!("schtasks /run failed: {}", stderr.trim()));
     }
+
+    // `/run` exiting 0 means the request was accepted, not that the action is
+    // alive, so confirm rather than assume. Skipped when the status field was
+    // never readable (see status_readable): there we cannot tell "not started"
+    // from "cannot see it" and must not cry wolf.
+    if status_readable && !wait_for_running(true, START_TIMEOUT) {
+        warn!(task = %task_name(), "task did not report Running after /run");
+        println!(
+            "Started {} but it is not reporting Running after {}s. \
+             Check `sealgate-stdiod status` and `sealgate-stdiod logs`.",
+            task_name(),
+            START_TIMEOUT.as_secs()
+        );
+        return Ok(());
+    }
+
     info!(task = %task_name(), "scheduled task restarted");
     println!(
         "Restarted {}. Tail logs with `sealgate-stdiod logs --follow`.",
@@ -287,22 +372,36 @@ pub fn restart() -> Result<()> {
     Ok(())
 }
 
-/// True iff the task is currently executing (its action process is alive).
-/// Parses `schtasks /query /v`'s "Status:" field - English-locale, mirroring
-/// the macOS `launchctl print` parse.
-#[allow(dead_code)] // consumed by the `status` subcommand
-pub fn is_running() -> Result<bool> {
+/// The task's run state, or `None` when it could not be determined.
+///
+/// `None` means the "Status:" line was absent from `schtasks /query /v` - the
+/// field name is localized, so on a non-English Windows the parse finds
+/// nothing. That is very different from a confident "not running", and callers
+/// that act on the answer need to tell them apart: [`restart`] uses it to
+/// decide whether verifying the restart is even possible. [`is_running`]
+/// flattens it for callers that just want a boolean.
+fn running_status() -> Result<Option<bool>> {
     let out = schtasks(&["/query", "/tn", &task_name(), "/fo", "LIST", "/v"])?;
     if !out.status.success() {
-        return Ok(false);
+        // The query itself failed - most likely the task does not exist, which
+        // is a definite "not running" rather than an unreadable status.
+        return Ok(Some(false));
     }
     let stdout = String::from_utf8_lossy(&out.stdout);
     for line in stdout.lines() {
         if let Some(rest) = line.trim().strip_prefix("Status:") {
-            return Ok(rest.trim().eq_ignore_ascii_case("Running"));
+            return Ok(Some(rest.trim().eq_ignore_ascii_case("Running")));
         }
     }
-    Ok(false)
+    Ok(None)
+}
+
+/// True iff the task is currently executing (its action process is alive).
+/// Parses `schtasks /query /v`'s "Status:" field - English-locale, mirroring
+/// the macOS `launchctl print` parse. An unreadable status reads as `false`.
+#[allow(dead_code)] // consumed by the `status` subcommand
+pub fn is_running() -> Result<bool> {
+    Ok(running_status()?.unwrap_or(false))
 }
 
 #[cfg(test)]

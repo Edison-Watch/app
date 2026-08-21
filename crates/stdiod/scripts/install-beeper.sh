@@ -1037,6 +1037,16 @@ cmd_doctor() {
 # does not have to be guessed. Marks which ones actually carry an asset for THIS
 # machine - a release cut before the daemon assets existed has none, which is
 # otherwise only discoverable by trying it and reading the failure.
+#
+# The rows are DATA and go to stdout, per this script's contract (see the output
+# helpers above): the whole point of the command is to feed a tag to something
+# else, so this has to work -
+#
+#   newest tag with a daemon for this machine:
+#     install-beeper.sh tags | awk '$3 == "yes" { print $1; exit }'
+#
+# Only the heading, the column header, the jq warning and the closing hints are
+# diagnostics; those stay on stderr so they never contaminate a pipe.
 cmd_tags() {
   local pair asset
   pair="$(stdiod_release_asset)" \
@@ -1047,9 +1057,21 @@ cmd_tags() {
   local json
   json="$(curl_quiet -m 20 "https://api.github.com/repos/$STDIOD_REPO/releases?per_page=100")" \
     || die "could not reach the GitHub API" "check connectivity, or browse https://github.com/$STDIOD_REPO/releases"
-  # jq gives the asset list per release; without it fall back to tag + channel
-  # only, which still answers "what can I pass to --stdiod-tag".
-  if command -v jq >/dev/null 2>&1; then
+  # jq gives the asset list per release; without it the third column cannot be
+  # determined, but tag + channel still answer "what can I pass to --stdiod-tag".
+  # Warn BEFORE the header so the caveat precedes the table it applies to.
+  local has_jq=1
+  command -v jq >/dev/null 2>&1 || {
+    has_jq=0
+    warn "jq not installed: the DAEMON column reads 'unknown' (cannot inspect assets)"
+  }
+  # Three whitespace-separated columns, always: TAG CHANNEL DAEMON. Kept to one
+  # word each (no "daemon: yes", which awk would split into two fields) so $3 is
+  # directly testable. The header is a diagnostic, so it goes to stderr and a
+  # pipe sees only rows; it carries no indent so it lines up with those rows,
+  # which start at column 0 to keep the fields clean.
+  printf '%-24s %-8s %s\n' "TAG" "CHANNEL" "DAEMON" >&2
+  if [ "$has_jq" -eq 1 ]; then
     # Sort on the numbers pulled out of the tag, not the string: lexically
     # "v0.6.4-beta.9" beats "v0.6.4-beta.10", which would list a stale build as
     # the newest. [0,6,4,9] vs [0,6,4,10] compares correctly.
@@ -1058,16 +1080,15 @@ cmd_tags() {
       | select(.draft | not)
       | [ .tag_name,
           (if .prerelease then "demo" else "stable" end),
-          (if any(.assets[]?; .name == $a) then "daemon: yes" else "daemon: NO" end)
+          (if any(.assets[]?; .name == $a) then "yes" else "no" end)
         ] | @tsv' \
-      | awk -F'\t' '{ printf "   %-24s %-8s %s\n", $1, $2, $3 }' >&2
+      | awk -F'\t' '{ printf "%-24s %-8s %s\n", $1, $2, $3 }'
   else
-    warn "jq not installed: listing tags and channels only (cannot check assets)"
     printf '%s' "$json" \
       | grep -oE '"(tag_name|prerelease)": *("[^"]*"|true|false)' \
       | sed -E 's/.*: *"?([^"]*)"?$/\1/' \
       | paste - - \
-      | awk -F'\t' '{ printf "   %-24s %s\n", $1, ($2 == "true" ? "demo" : "stable") }' >&2
+      | awk -F'\t' '{ printf "%-24s %-8s %s\n", $1, ($2 == "true" ? "demo" : "stable"), "unknown" }'
   fi
   log ""
   info "install from one:   $PROG install --install-deps --stdiod-tag <tag>"

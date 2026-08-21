@@ -187,6 +187,28 @@ fn wait_for_bootout(timeout: std::time::Duration) {
     );
 }
 
+/// A human-readable reason for a failed `launchctl` call, guaranteed non-empty.
+///
+/// Empty-string reasons are what let a failure masquerade as a success (see the
+/// bootstrap loop) and they also produce useless errors like
+/// "launchctl bootstrap failed: ". launchctl normally puts its diagnostic on
+/// stderr, but fall through to stdout and finally to the exit status so there is
+/// always something to report.
+fn launchctl_failure_detail(out: &std::process::Output) -> String {
+    let stderr = String::from_utf8_lossy(&out.stderr).trim().to_owned();
+    if !stderr.is_empty() {
+        return stderr;
+    }
+    let stdout = String::from_utf8_lossy(&out.stdout).trim().to_owned();
+    if !stdout.is_empty() {
+        return stdout;
+    }
+    match out.status.code() {
+        Some(code) => format!("exit status {code} with no output"),
+        None => "terminated by a signal".to_string(),
+    }
+}
+
 /// True when a failed `bootstrap` looks like the transient post-bootout race
 /// rather than a real misconfiguration.
 ///
@@ -229,6 +251,13 @@ pub fn install() -> Result<()> {
     }
 
     const BOOTSTRAP_ATTEMPTS: u32 = 4;
+    // Success is tracked by its own flag, NOT by whether `last_err` is empty.
+    // Overloading the message as the sentinel meant a failure that produced no
+    // message - `is_transient_bootstrap_error` deliberately accepts a bare exit
+    // code 5, with no text at all - left `last_err` empty after every attempt
+    // was exhausted, and install went on to print "Daemon is running" for a
+    // LaunchAgent that had never loaded.
+    let mut bootstrapped = false;
     let mut last_err = String::new();
     for attempt in 1..=BOOTSTRAP_ATTEMPTS {
         let out = launchctl(&[
@@ -237,28 +266,27 @@ pub fn install() -> Result<()> {
             plist.to_string_lossy().as_ref(),
         ])?;
         if out.status.success() {
-            last_err.clear();
+            bootstrapped = true;
             break;
         }
-        let stderr = String::from_utf8_lossy(&out.stderr).trim().to_owned();
-        let code = out.status.code();
-        if !is_transient_bootstrap_error(&stderr, code) {
-            return Err(anyhow!("launchctl bootstrap failed: {stderr}"));
+        let detail = launchctl_failure_detail(&out);
+        if !is_transient_bootstrap_error(&detail, out.status.code()) {
+            return Err(anyhow!("launchctl bootstrap failed: {detail}"));
         }
-        last_err = stderr;
+        last_err = detail;
         if attempt < BOOTSTRAP_ATTEMPTS {
             // 200ms, 400ms, 800ms - the race clears well inside that.
             let backoff = std::time::Duration::from_millis(200 * 2_u64.pow(attempt - 1));
             warn!(
                 attempt,
                 backoff_ms = backoff.as_millis() as u64,
-                stderr = %last_err,
+                error = %last_err,
                 "launchctl bootstrap hit a transient error; retrying"
             );
             std::thread::sleep(backoff);
         }
     }
-    if !last_err.is_empty() {
+    if !bootstrapped {
         return Err(anyhow!(
             "launchctl bootstrap failed after {BOOTSTRAP_ATTEMPTS} attempts: {last_err}\n\
              hint: this is usually a launchd domain that is still busy. If it persists, \
@@ -410,6 +438,43 @@ mod tests {
             "Operation already in progress",
             Some(37)
         ));
+    }
+
+    /// Build an `Output` with the given streams and exit code, for the
+    /// detail-extraction tests below.
+    fn output(stdout: &str, stderr: &str, code: i32) -> std::process::Output {
+        use std::os::unix::process::ExitStatusExt;
+        std::process::Output {
+            // Wait status encodes a normal exit in the high byte.
+            status: std::process::ExitStatus::from_raw(code << 8),
+            stdout: stdout.as_bytes().to_vec(),
+            stderr: stderr.as_bytes().to_vec(),
+        }
+    }
+
+    // The invariant the bootstrap loop's failure reporting rests on: a failed
+    // launchctl call always yields SOMETHING to print. An empty reason
+    // previously made an exhausted retry loop indistinguishable from success.
+    #[test]
+    fn failure_detail_is_never_empty() {
+        assert_eq!(
+            launchctl_failure_detail(&output("", "Bootstrap failed: 5: Input/output error", 5)),
+            "Bootstrap failed: 5: Input/output error"
+        );
+        // Message on stdout instead of stderr.
+        assert_eq!(
+            launchctl_failure_detail(&output("Bootstrap failed: 5", "", 5)),
+            "Bootstrap failed: 5"
+        );
+        // The case that caused the bug: a code with no output at all.
+        let bare = launchctl_failure_detail(&output("", "", 5));
+        assert!(!bare.is_empty());
+        assert!(
+            bare.contains('5'),
+            "should name the exit code, got {bare:?}"
+        );
+        // Whitespace-only output is still empty for our purposes.
+        assert!(!launchctl_failure_detail(&output("  ", "\n", 5)).is_empty());
     }
 
     #[test]
