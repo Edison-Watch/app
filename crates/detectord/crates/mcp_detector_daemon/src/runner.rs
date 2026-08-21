@@ -71,7 +71,8 @@ pub async fn worker(user: String, enforce: bool, events: Option<EventTx>) -> any
     paths::ensure_user_dir(&user)?;
     let mut enrollment = Enrollment::load_for(&user)?
         .ok_or_else(|| anyhow::anyhow!("not enrolled; run `enroll` first"))?;
-    let client = BackendClient::new(enrollment.api_base_url.clone(), enrollment.api_key.clone());
+    let mut client =
+        BackendClient::new(enrollment.api_base_url.clone(), enrollment.api_key.clone());
     let mut seen = SeenStore::open(paths::seen_store_path(&user), enrollment.org_id.clone())?;
     refresh(&client, &mut enrollment, &mut seen, &user).await;
 
@@ -106,6 +107,7 @@ pub async fn worker(user: String, enforce: bool, events: Option<EventTx>) -> any
     );
 
     let mut last_refresh = Instant::now();
+    let mut force_refresh = false;
     let mut reported = HashSet::new();
     loop {
         // Re-read the enrollment from disk each pass so an onboarding-completion
@@ -122,6 +124,20 @@ pub async fn worker(user: String, enforce: bool, events: Option<EventTx>) -> any
             }
             if fresh.selected_agents != enrollment.selected_agents {
                 tracing::info!(agents = ?fresh.selected_agents, "selected agents changed");
+            }
+            // `client` is bound to the URL + key it was built from, so a
+            // re-enroll that repoints the daemon (a different deploy
+            // environment, or a rotated key) has to rebuild it. Without this
+            // the worker keeps polling the OLD backend for the whole life of
+            // the process: policy and fingerprints come back for the wrong
+            // tenant, and `refresh` persists that answer over the correct one.
+            if fresh.api_base_url != enrollment.api_base_url || fresh.api_key != enrollment.api_key
+            {
+                tracing::info!(url = %fresh.api_base_url, "backend credentials changed; rebuilding client");
+                client = BackendClient::new(fresh.api_base_url.clone(), fresh.api_key.clone());
+                // Don't sit on the wrong tenant's cached policy for up to
+                // REFRESH_INTERVAL; re-fetch on this pass.
+                force_refresh = true;
             }
             enrollment = fresh;
         }
@@ -145,9 +161,10 @@ pub async fn worker(user: String, enforce: bool, events: Option<EventTx>) -> any
                 tracing::info!(count = healed, "self-healed sealgate install");
             }
         }
-        if last_refresh.elapsed() >= REFRESH_INTERVAL {
+        if force_refresh || last_refresh.elapsed() >= REFRESH_INTERVAL {
             refresh(&client, &mut enrollment, &mut seen, &user).await;
             last_refresh = Instant::now();
+            force_refresh = false;
         }
         // Cheap (one open() of a file that is either readable or not), and this
         // tick is at most every RESCAN_INTERVAL, so no need to pace it further.
@@ -323,6 +340,42 @@ fn chown_new_files(record: &QuarantineRecord, user: &str) {
     }
 }
 
+/// Whether a fetched policy may be trusted for the org we are enrolled in.
+///
+/// Split out from [`apply_policy`] so the tenant rule is testable without
+/// touching the on-disk enrollment.
+fn policy_matches_tenant(p: &mcp_backend::Policy, enrolled_org: &str) -> bool {
+    match p.org_id.as_deref() {
+        Some(org) => org == enrolled_org,
+        // Unverifiable, not wrong: an older backend reports no org at all.
+        None => true,
+    }
+}
+
+/// Cache a freshly-fetched policy onto `enrollment` and persist it.
+///
+/// Defence in depth behind the credential rebuild in [`worker`]: a policy is
+/// only trusted when the backend attributes it to the org we are enrolled in,
+/// so a client left pointing at another tenant can never write that tenant's
+/// answer over ours. An older backend that reports no `org_id` is unverifiable
+/// rather than wrong, so it is applied as before instead of bricking
+/// quarantine for everyone on it.
+pub fn apply_policy(p: &mcp_backend::Policy, enrollment: &mut Enrollment, user: &str) {
+    if !policy_matches_tenant(p, &enrollment.org_id) {
+        tracing::warn!(
+            policy_org = ?p.org_id,
+            enrolled_org = %enrollment.org_id,
+            "policy org mismatch; keeping last-known-good (re-enroll to repoint this daemon)"
+        );
+        return;
+    }
+    if p.quarantine != enrollment.quarantine {
+        tracing::info!(quarantine = p.quarantine, "policy updated");
+    }
+    enrollment.quarantine = p.quarantine;
+    let _ = enrollment.save_for(user);
+}
+
 /// Refresh policy + known fingerprints into the enrollment/seen-store.
 /// Fail-closed: on any error the cached values are kept, never downgraded.
 pub async fn refresh(
@@ -332,13 +385,7 @@ pub async fn refresh(
     user: &str,
 ) {
     match client.fetch_policy().await {
-        Ok(p) => {
-            if p.quarantine != enrollment.quarantine {
-                tracing::info!(quarantine = p.quarantine, "policy updated");
-            }
-            enrollment.quarantine = p.quarantine;
-            let _ = enrollment.save_for(user);
-        }
+        Ok(p) => apply_policy(&p, enrollment, user),
         Err(e) => tracing::warn!(error = %e, "policy refresh failed; keeping last-known-good"),
     }
 
@@ -572,5 +619,37 @@ fn log_skips(skips: &[Skip]) {
     // line carries the counts at info.
     for s in skips {
         tracing::debug!(server = %s.name, agent = s.agent, reason = s.reason, fingerprint = %s.fingerprint, "will not quarantine");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn policy(org: Option<&str>) -> mcp_backend::Policy {
+        mcp_backend::Policy {
+            quarantine: true,
+            org_id: org.map(str::to_string),
+        }
+    }
+
+    #[test]
+    fn tenant_check_accepts_the_enrolled_org() {
+        assert!(policy_matches_tenant(&policy(Some("org-a")), "org-a"));
+    }
+
+    #[test]
+    fn tenant_check_rejects_another_org() {
+        // The demo-backend-after-release-re-enroll case: a perfectly valid 200
+        // for the wrong tenant must not overwrite our cached policy.
+        assert!(!policy_matches_tenant(
+            &policy(Some("org-demo")),
+            "org-release"
+        ));
+    }
+
+    #[test]
+    fn tenant_check_allows_a_backend_that_reports_no_org() {
+        assert!(policy_matches_tenant(&policy(None), "org-a"));
     }
 }
