@@ -17,6 +17,9 @@ use crate::platform;
 pub struct InstallArgs {}
 
 #[derive(Debug, Args)]
+pub struct RestartArgs {}
+
+#[derive(Debug, Args)]
 pub struct UninstallArgs {
     /// Also delete the daemon's persisted config and logs.
     ///
@@ -30,6 +33,16 @@ pub struct UninstallArgs {
 
 pub fn install(_args: InstallArgs) -> Result<()> {
     platform::install()
+}
+
+/// Restart the already-registered daemon without re-rendering the unit.
+///
+/// `install` doubles as a restart (it boots out and bootstraps again), but it
+/// also rewrites the unit from the current binary path and refuses to run
+/// without credentials on disk - so it is the wrong tool for "the daemon is
+/// wedged, bounce it", and the name gives no hint that it restarts anything.
+pub fn restart(_args: RestartArgs) -> Result<()> {
+    platform::restart()
 }
 
 pub fn uninstall(args: UninstallArgs) -> Result<()> {
