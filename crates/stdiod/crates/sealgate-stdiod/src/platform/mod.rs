@@ -6,7 +6,11 @@
 //! - [`install`] - writes the supervisor unit pointing at the current
 //!   binary and starts the daemon now. Idempotent (re-running replaces).
 //! - [`uninstall`] - stops + removes the unit. Idempotent.
-//! - [`is_installed`] / [`is_running`] - used by ``status``.
+//! - [`restart`] - restart the daemon in place, without re-rendering the
+//!   unit or touching credentials.
+//! - [`is_installed`] / [`is_loaded`] / [`is_running`] - used by ``status``.
+//!   `is_installed` asks the filesystem, `is_loaded` asks the supervisor, and
+//!   they disagree exactly when a unit was written but never loaded.
 //!
 //! Non-macOS builds compile and surface "not yet supported on this
 //! platform" at runtime rather than failing to build, so dev iteration on
@@ -16,34 +20,34 @@
 pub mod macos;
 
 #[cfg(target_os = "macos")]
-pub use macos::{install, uninstall};
+pub use macos::{install, restart, uninstall};
 
 // is_installed / is_running are consumed by the `status` subcommand
 // (next commit). Pull them through with an allow so the unused-import
 // lint doesn't fire until that subcommand lands.
 #[cfg(target_os = "macos")]
 #[allow(unused_imports)]
-pub use macos::{is_installed, is_running};
+pub use macos::{is_installed, is_loaded, is_running};
 
 #[cfg(target_os = "windows")]
 pub mod windows;
 
 #[cfg(target_os = "windows")]
-pub use windows::{install, uninstall};
+pub use windows::{install, restart, uninstall};
 
 #[cfg(target_os = "windows")]
 #[allow(unused_imports)]
-pub use windows::{is_installed, is_running};
+pub use windows::{is_installed, is_loaded, is_running};
 
 #[cfg(target_os = "linux")]
 pub mod linux;
 
 #[cfg(target_os = "linux")]
-pub use linux::{install, uninstall};
+pub use linux::{install, restart, uninstall};
 
 #[cfg(target_os = "linux")]
 #[allow(unused_imports)]
-pub use linux::{is_installed, is_running};
+pub use linux::{is_installed, is_loaded, is_running};
 
 #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
 mod stub {
@@ -63,7 +67,17 @@ mod stub {
         ))
     }
 
+    pub fn restart() -> Result<()> {
+        Err(anyhow!(
+            "restart is implemented for macOS, Linux (systemd), and Windows.",
+        ))
+    }
+
     pub fn is_installed() -> Result<bool> {
+        Ok(false)
+    }
+
+    pub fn is_loaded() -> Result<bool> {
         Ok(false)
     }
 
@@ -73,4 +87,4 @@ mod stub {
 }
 
 #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
-pub use stub::{install, is_installed, is_running, uninstall};
+pub use stub::{install, is_installed, is_loaded, is_running, restart, uninstall};

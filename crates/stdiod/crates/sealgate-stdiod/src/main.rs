@@ -57,6 +57,9 @@ enum Command {
     /// Stop and remove the OS supervisor unit. Pass `--purge` to also
     /// delete the persisted config and logs.
     Uninstall(cli::install::UninstallArgs),
+    /// Restart the running daemon in place, without re-registering the
+    /// supervisor unit or touching credentials.
+    Restart(cli::install::RestartArgs),
     /// Print a one-shot summary of daemon health (supervisor unit
     /// status, connection state, and currently-running child servers).
     Status(cli::status::StatusArgs),
@@ -123,6 +126,7 @@ async fn main() -> anyhow::Result<()> {
         Command::Logout(args) => cli::logout::run(args).await,
         Command::Install(args) => cli::install::install(args),
         Command::Uninstall(args) => cli::install::uninstall(args),
+        Command::Restart(args) => cli::install::restart(args),
         Command::Status(args) => cli::status::run(args),
         Command::Logs(args) => cli::logs::run(args),
         Command::Server(args) => cli::server::run(cli::server::ServerArgs { command: args }).await,

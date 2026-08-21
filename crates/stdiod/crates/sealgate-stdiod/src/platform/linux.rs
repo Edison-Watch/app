@@ -212,6 +212,54 @@ pub fn is_installed() -> Result<bool> {
     Ok(home.join(".config/systemd/user").join(UNIT_NAME).exists())
 }
 
+/// True iff systemd has the unit loaded (parsed and known to the manager).
+///
+/// The macOS counterpart carries the rationale: this is deliberately distinct
+/// from [`is_installed`]'s filesystem check, so "the unit file was written but
+/// never enabled" is not reported as "the daemon crashed".
+///
+/// `show -p LoadState` prints `LoadState=loaded`. Parsed rather than using
+/// `--value`, which needs systemd 249+.
+pub fn is_loaded() -> Result<bool> {
+    if !systemd_user_available() {
+        return Ok(false);
+    }
+    let out = systemctl(&["show", UNIT_NAME, "-p", "LoadState"])?;
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    Ok(stdout
+        .lines()
+        .filter_map(|l| l.trim().strip_prefix("LoadState="))
+        .any(|v| v.trim() == "loaded"))
+}
+
+/// Restart the daemon with `systemctl --user restart`.
+///
+/// See the macOS counterpart for why this does not fall back to `install`.
+pub fn restart() -> Result<()> {
+    if !systemd_user_available() {
+        return Err(anyhow!(
+            "no systemd --user session available, so there is nothing to restart"
+        ));
+    }
+    if !is_loaded()? {
+        return Err(anyhow!(
+            "{UNIT_NAME} is not loaded, so there is nothing to restart\n\
+             hint: run `sealgate-stdiod install` to (re)load it"
+        ));
+    }
+    let out = systemctl(&["restart", UNIT_NAME])?;
+    if !out.status.success() {
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        return Err(anyhow!(
+            "systemctl --user restart {UNIT_NAME} failed: {}",
+            stderr.trim()
+        ));
+    }
+    info!(unit = UNIT_NAME, "systemd user service restarted");
+    println!("Restarted {UNIT_NAME}. Tail logs with `sealgate-stdiod logs --follow`.");
+    Ok(())
+}
+
 /// True iff `systemctl --user is-active` reports the unit active.
 #[allow(dead_code)] // consumed by the `status` subcommand
 pub fn is_running() -> Result<bool> {
