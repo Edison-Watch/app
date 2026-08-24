@@ -63,7 +63,7 @@ pub async fn run(args: LoginArgs) -> Result<()> {
     let existing_installation = match reusable_installation(&cfg, same_issuer) {
         Some(id) => Some(id),
         None => {
-            derived = config::machine_installation_id();
+            derived = crate::machine_id::installation_id();
             if derived.is_some() {
                 debug!("no installation id on disk; using the machine-derived one");
             }
