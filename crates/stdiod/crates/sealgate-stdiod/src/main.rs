@@ -17,6 +17,7 @@ mod daemon;
 mod daemon_auth;
 mod env_store;
 mod http;
+mod machine_id;
 mod paths;
 mod platform;
 mod proc;
