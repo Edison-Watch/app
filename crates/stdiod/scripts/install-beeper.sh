@@ -72,6 +72,7 @@ if [ -n "${SG_BACKEND:-}" ]; then SG_BACKEND_SET=1; else SG_BACKEND_SET=0; fi
 SG_BACKEND="${SG_BACKEND:-https://dashboard.sealgate.ai}"  # --sg-backend/--demo/--release also set SG_BACKEND_SET
 SG_API_KEY="${SG_API_KEY:-}"                       # only for the mcp-url client snippet
 SERVER_NAME="${SERVER_NAME:-beeper}"               # tunnel server name / gateway prefix
+MARKETPLACE_ID="${MARKETPLACE_ID:-beeper}"         # marketplace id -> backend seeds curated per-tool ACLs on approval
 # Display label for this script's own output only. It does NOT set the stdiod
 # device record: `sealgate-stdiod login` issues the device identity server-side.
 DEVICE_LABEL="${DEVICE_LABEL:-$(hostname -s 2>/dev/null || echo my-mac)}"
@@ -1007,8 +1008,12 @@ stdiod_uid_suffix() {
 }
 
 # Submit one server by name. Echoes the CLI output; returns its exit code.
+# --from-marketplace-id lets the backend seed Beeper's curated per-tool ACLs
+# (reads PRIVATE, send_message SECRET, search_docs PUBLIC) on approval instead
+# of defaulting every tool to SECRET+trifecta; the id is resolved server-side.
 server_add() {
   sealgate-stdiod server add "$1" --display-name "Beeper" \
+    --from-marketplace-id "$MARKETPLACE_ID" \
     --command npx --arg=-y --arg="$MCP_PKG" ${MCP_ENDPOINT:+--arg="$MCP_ENDPOINT"} 2>&1
 }
 
@@ -1027,6 +1032,7 @@ submit_beeper_server() {
   [ -n "$MCP_ENDPOINT" ] && info "Beeper answers on a non-default port; the server command includes $MCP_ENDPOINT"
   if [ "$DRY_RUN" -eq 1 ]; then
     run sealgate-stdiod server add "$SERVER_NAME" --display-name "Beeper" \
+      --from-marketplace-id "$MARKETPLACE_ID" \
       --command npx --arg=-y --arg="$MCP_PKG" ${MCP_ENDPOINT:+--arg="$MCP_ENDPOINT"}
     return 0
   fi

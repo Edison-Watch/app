@@ -48,6 +48,12 @@ pub struct AddArgs {
     /// Optional human-readable display name shown in the dashboard.
     #[arg(long)]
     pub display_name: Option<String>,
+    /// Marketplace id this server is being installed from (e.g. `beeper`).
+    /// Sent to the backend so it can seed the curated per-tool ACLs for that
+    /// server on approval, instead of every tool defaulting to SECRET. The
+    /// client only sends the id; the backend resolves the curated config.
+    #[arg(long = "from-marketplace-id")]
+    pub from_marketplace_id: Option<String>,
 }
 
 #[derive(Debug, Args)]
@@ -88,6 +94,8 @@ struct ClientCreateRequestBody {
     args: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     hostname: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    from_marketplace_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -104,6 +112,7 @@ async fn add_with(args: AddArgs, cfg: &PersistedConfig, client: &BackendClient) 
         args,
         working_dir,
         display_name,
+        from_marketplace_id,
     } = args;
     if working_dir.is_some() {
         bail!(
@@ -119,6 +128,7 @@ async fn add_with(args: AddArgs, cfg: &PersistedConfig, client: &BackendClient) 
                 command,
                 args,
                 hostname: None,
+                from_marketplace_id,
             };
             let response: ClientCreateRequestResponse = client
                 .post_json("/api/v1/client/mcp-requests", &body)
@@ -132,6 +142,7 @@ async fn add_with(args: AddArgs, cfg: &PersistedConfig, client: &BackendClient) 
                 command,
                 args,
                 hostname: Some(crate::config::hostname()),
+                from_marketplace_id,
             };
             let response: ClientCreateRequestResponse =
                 client.post_json("/api/v1/mcp-requests", &body).await?;
@@ -388,6 +399,7 @@ mod tests {
                 args: vec!["-y".into(), "server-filesystem".into()],
                 working_dir: None,
                 display_name: Some("Filesystem".into()),
+                from_marketplace_id: Some("beeper".into()),
             },
             &cfg,
             &client,
@@ -405,7 +417,41 @@ mod tests {
             serde_json::from_str(requests[0].split("\r\n\r\n").nth(1).unwrap()).unwrap();
         assert_eq!(body["name"], "filesystem");
         assert_eq!(body["command"], "npx");
+        // The marketplace id must reach the backend so it can seed curated ACLs.
+        assert_eq!(body["from_marketplace_id"], "beeper");
         assert!(body.get("device_id").is_none());
+    }
+
+    #[tokio::test]
+    async fn client_add_omits_marketplace_id_when_absent() {
+        let (base, requests) = mock_backend(vec![(
+            201,
+            r#"{"status":"success","message":"queued","request_id":7,"auto_approved":false}"#,
+        )])
+        .await;
+        let cfg = client_config(base.clone());
+        let client = BackendClient::new(base, "client-token").unwrap();
+
+        add_with(
+            AddArgs {
+                name: "plain".into(),
+                command: "npx".into(),
+                args: Vec::new(),
+                working_dir: None,
+                display_name: None,
+                from_marketplace_id: None,
+            },
+            &cfg,
+            &client,
+        )
+        .await
+        .unwrap();
+
+        let requests = requests.await.unwrap();
+        let body: serde_json::Value =
+            serde_json::from_str(requests[0].split("\r\n\r\n").nth(1).unwrap()).unwrap();
+        // skip_serializing_if keeps a non-marketplace install's body unchanged.
+        assert!(body.get("from_marketplace_id").is_none());
     }
 
     #[tokio::test]
@@ -420,6 +466,7 @@ mod tests {
                 args: Vec::new(),
                 working_dir: Some("/tmp".into()),
                 display_name: None,
+                from_marketplace_id: None,
             },
             &cfg,
             &client,
@@ -489,6 +536,7 @@ mod tests {
                 args: Vec::new(),
                 working_dir: None,
                 display_name: None,
+                from_marketplace_id: None,
             },
             &cfg,
             &client,
