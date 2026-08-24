@@ -3,7 +3,7 @@
 
 use anyhow::{anyhow, Result};
 use clap::Args;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 use crate::auth::{AuthClient, Pkce};
 use crate::config::{self, PersistedConfig};
@@ -57,7 +57,19 @@ pub async fn run(args: LoginArgs) -> Result<()> {
     let pkce = Pkce::generate()?;
     let auth = AuthClient::new(backend.clone())?;
     let label = args.device_label.as_deref().or(cfg.device_label.as_deref());
-    let existing_installation = reusable_installation(&cfg, same_issuer);
+    // Prefer the id already on disk. With none - a first install, or a wiped
+    // config - fall back to a machine-derived one.
+    let derived;
+    let existing_installation = match reusable_installation(&cfg, same_issuer) {
+        Some(id) => Some(id),
+        None => {
+            derived = config::machine_installation_id();
+            if derived.is_some() {
+                debug!("no installation id on disk; using the machine-derived one");
+            }
+            derived.as_deref()
+        }
+    };
     let code = auth
         .initiate(pkce.challenge(), label, existing_installation)
         .await?;
