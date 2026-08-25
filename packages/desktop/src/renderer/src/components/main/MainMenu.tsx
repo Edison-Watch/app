@@ -10,7 +10,6 @@ import StdiodEnableCard from "../StdiodEnableCard";
 import OrgKeyCard from "../OrgKeyCard";
 import UpdateBanner from "../UpdateBanner";
 import DaemonWarningBanner from "../DaemonWarningBanner";
-import FullDiskAccessBanner from "../FullDiskAccessBanner";
 import UpdateSettingsCard from "./UpdateSettingsCard";
 
 /** Effective API origin: main-process override first, env default as fallback. */
@@ -190,7 +189,6 @@ export default function MainMenu(): React.ReactNode {
   return (
     <div className="flex h-screen flex-col bg-[var(--bg-base)]">
       <DaemonWarningBanner />
-      <FullDiskAccessBanner signedIn={Boolean(setupData?.userEmail)} />
       <UpdateBanner />
       <div className="flex-1 overflow-y-auto p-5">
         <div className="mx-auto flex max-w-sm flex-col gap-4">

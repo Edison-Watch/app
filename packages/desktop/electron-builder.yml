@@ -104,21 +104,19 @@ mac:
     # Camera / microphone / audio capture: never used, pure boilerplate.
     #
     # Desktop / Documents / Downloads: deliberately ABSENT, not merely unused.
-    # The filesystem work lives entirely in the detector daemon, which watches
-    # the parent directory of every MCP config it knows about - including $HOME,
-    # since Claude Code lists $HOME itself in its projects map. An FSEvents
-    # stream on $HOME reaches into all three of those folders, which is three
-    # separate TCC services and three near-identical dialogs.
+    # The filesystem work lives entirely in the detector daemon, and the daemon
+    # never touches those folders: it skips them outright, and watches the one
+    # config file that sits directly in $HOME as a leaf path rather than
+    # watching $HOME (an FSEvents stream there is recursive at the API level and
+    # would reach all three, which is three separate TCC services and three
+    # near-identical dialogs). See crates/detectord .../src/tcc.rs.
     #
-    # The daemon holds Full Disk Access instead (see
-    # src/main/detectord/fullDiskAccess.ts): one grant, no per-folder prompts,
-    # and it keeps working as the watch set grows. Per-folder usage strings here
-    # could not help anyway - the daemon is a separate binary reaching those
-    # paths under its OWN code signature, and this bundle's Info.plist cannot
-    # speak for it. Adding them back would only mislabel the app as the thing
-    # asking. Nothing in this bundle opens a path inside a user project
-    # directory; if that ever changes, prefer widening the daemon's role over
-    # restoring these keys.
+    # Per-folder usage strings here could not help anyway - the daemon is a
+    # separate binary reaching paths under its OWN code signature, and this
+    # bundle's Info.plist cannot speak for it. Adding them back would only
+    # mislabel the app as the thing asking. Nothing in this bundle opens a path
+    # inside a user project directory; if that ever changes, prefer narrowing
+    # the daemon's watch further over restoring these keys.
     NSCameraUsageDescription: null
     NSMicrophoneUsageDescription: null
     NSAudioCaptureUsageDescription: null

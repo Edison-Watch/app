@@ -134,10 +134,10 @@ fn dropping_the_handle_stops_the_worker() {
 /// Regression test for a real gap: when a watch is deferred there is no event
 /// source for that directory at all, and the event loop did nothing on timeout -
 /// so changes stayed invisible until some *other* watched directory happened to
-/// fire and incidentally re-parsed every client. On macOS the deferral is
-/// triggered by Full Disk Access being absent; that is not reproducible in a
-/// test, so this uses the other deferral cause with identical consequences - a
-/// config directory that does not exist when the watcher starts.
+/// fire and incidentally re-parsed every client. The other cause with identical
+/// consequences is a TCC-protected folder, which is skipped permanently and is
+/// not reproducible in a test - so this uses a config directory that does not
+/// exist when the watcher starts.
 #[test]
 fn rescan_reports_changes_in_a_directory_that_could_not_be_watched() {
     let dir = tempdir().unwrap();

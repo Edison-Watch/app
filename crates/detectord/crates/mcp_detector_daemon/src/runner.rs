@@ -45,8 +45,8 @@ type FsDebouncer = notify_debouncer_full::Debouncer<
     notify_debouncer_full::RecommendedCache,
 >;
 
-/// Directories held back for want of Full Disk Access, paired with the mode
-/// they should be watched in once it is granted.
+/// Directories that do not exist yet, paired with the mode they should be
+/// watched in once they appear.
 type DeferredWatches = Vec<(PathBuf, RecursiveMode)>;
 
 /// Run the reconcile loop for the current OS user until Ctrl-C. `enforce=false`
@@ -185,7 +185,7 @@ pub async fn worker(user: String, enforce: bool, events: Option<EventTx>) -> any
 
 /// Watch every agent's targets and signal `tx` (debounced) on any change.
 /// Returns the debouncer, which must be held alive to keep watching, plus any
-/// directories deferred for want of Full Disk Access (see [`retry_deferred`]).
+/// directories deferred because they do not exist yet (see [`retry_deferred`]).
 ///
 /// This is the daemon's own watcher, deliberately separate from
 /// [`sealgate_detectord::Watcher`]: it splits file-parent vs recursive dirs and
@@ -198,14 +198,16 @@ fn start_watcher(
     tx: tokio::sync::mpsc::UnboundedSender<()>,
 ) -> Option<(FsDebouncer, DeferredWatches)> {
     // Files → watch their parent dir non-recursively (editors write via atomic
-    // rename); dirs (workspace storage, plugin caches) → recursively.
+    // rename); dirs (workspace storage, plugin caches) → recursively. The one
+    // config file that lives directly in $HOME is watched as a leaf instead, so
+    // $HOME never enters the set - see `tcc::watch_path_for_file`.
     let mut file_dirs = HashSet::new();
     let mut rec_dirs = HashSet::new();
     for a in agents {
         let wt = a.watch_targets();
         for f in wt.files {
-            if let Some(p) = f.parent() {
-                file_dirs.insert(p.to_path_buf());
+            if let Some(p) = sealgate_detectord::tcc::watch_path_for_file(&f) {
+                file_dirs.insert(p);
             }
         }
         for d in wt.dirs {
@@ -221,31 +223,28 @@ fn start_watcher(
     .map_err(|e| tracing::warn!(error = %e, "fs watcher setup failed; periodic rescan only"))
     .ok()?;
 
-    // Watching a TCC-protected directory raises a permission dialog per folder
-    // service. $HOME is the parent of ~/.claude.json, so every Claude Code user
-    // hits it, and an FSEvents watch there prompts for Desktop, Documents AND
-    // Downloads. Defer those until Full Disk Access is granted; the reconcile
-    // loop's periodic rescan still sees changes under them, so detection
-    // degrades to polling rather than stopping.
+    // Watching a TCC-protected folder raises a permission dialog per folder
+    // service, and we hold no target inside one - so they are skipped outright
+    // rather than deferred pending a Full Disk Access grant. Anything under
+    // them is still covered by the reconcile loop's periodic rescan.
+    //
+    // `deferred` is now only ever "does not exist yet": a client's config
+    // directory is often created after the daemon starts, and `notify` cannot
+    // watch a missing path.
     let mut deferred: Vec<(PathBuf, RecursiveMode)> = Vec::new();
-    let fda = sealgate_detectord::tcc::has_full_disk_access();
     for (dirs, mode) in [
         (&file_dirs, RecursiveMode::NonRecursive),
         (&rec_dirs, RecursiveMode::Recursive),
     ] {
         for dir in dirs {
-            if !dir.exists() {
+            if sealgate_detectord::tcc::is_tcc_protected(dir) {
+                tracing::debug!(
+                    dir = %dir.display(),
+                    "not watching: TCC-protected folder; covered by the periodic rescan"
+                );
                 continue;
             }
-            if sealgate_detectord::tcc::watch_needs_full_disk_access(dir) && fda != Some(true) {
-                tracing::warn!(
-                    dir = %dir.display(),
-                    "deferring watch: needs Full Disk Access. Watching it would prompt \
-                     separately for Desktop, Documents and Downloads. Grant Full Disk \
-                     Access to this binary in System Settings -> Privacy & Security; \
-                     until then changes here are found by the periodic rescan instead \
-                     of live events."
-                );
+            if !dir.exists() {
                 deferred.push((dir.clone(), mode));
                 continue;
             }
@@ -255,12 +254,12 @@ fn start_watcher(
     Some((deb, deferred))
 }
 
-/// Pick up watches deferred for want of Full Disk Access, once it is granted.
+/// Pick up watches deferred because their directory did not exist yet.
 ///
-/// Called from the reconcile loop's periodic tick, so a grant made in System
-/// Settings takes effect without restarting the daemon. Retains whatever it
-/// could not watch, and only ever ADDS: a grant revoked later leaves existing
-/// watches alone, since that prompt has already been answered.
+/// Called from the reconcile loop's periodic tick, so a client installed after
+/// the daemon started gets a live watch without a restart. Retains whatever it
+/// could not watch, and only ever ADDS.
+///
 /// `warned` carries the directories whose failure has already been reported, so
 /// a durable failure (an exhausted inotify limit, an unreadable directory) is
 /// warned about once instead of on every reconcile tick for the life of the
@@ -271,26 +270,33 @@ fn retry_deferred(
     deferred: &mut DeferredWatches,
     warned: &mut HashSet<PathBuf>,
 ) {
-    if deferred.is_empty() || sealgate_detectord::tcc::has_full_disk_access() != Some(true) {
+    if deferred.is_empty() {
         return;
     }
-    deferred.retain(|(dir, mode)| match deb.watch(dir, *mode) {
-        Ok(()) => {
-            tracing::info!(dir = %dir.display(), "watching (Full Disk Access granted)");
-            warned.remove(dir);
-            false
+    deferred.retain(|(dir, mode)| {
+        // Still missing is the normal case, not a failure - stay quiet and keep
+        // it queued rather than logging a warning every tick.
+        if !dir.exists() {
+            return true;
         }
-        Err(e) => {
-            if warned.insert(dir.clone()) {
-                tracing::warn!(
-                    dir = %dir.display(),
-                    error = %e,
-                    "deferred watch failed; retrying quietly from here"
-                );
-            } else {
-                tracing::debug!(dir = %dir.display(), error = %e, "deferred watch still failing");
+        match deb.watch(dir, *mode) {
+            Ok(()) => {
+                tracing::info!(dir = %dir.display(), "watching (directory now exists)");
+                warned.remove(dir);
+                false
             }
-            true
+            Err(e) => {
+                if warned.insert(dir.clone()) {
+                    tracing::warn!(
+                        dir = %dir.display(),
+                        error = %e,
+                        "deferred watch failed; retrying quietly from here"
+                    );
+                } else {
+                    tracing::debug!(dir = %dir.display(), error = %e, "deferred watch still failing");
+                }
+                true
+            }
         }
     });
 }

@@ -191,11 +191,13 @@ pub struct Status {
     /// Whether the daemon holds macOS Full Disk Access; `None` off macOS (and
     /// on an older daemon that predates the field, hence `serde(default)`).
     ///
-    /// Reported here rather than probed by the app because TCC grants are
-    /// per-binary: the app is a different binary with a different signature, so
-    /// its own permissions say nothing about the daemon's. Without this the
-    /// daemon's watch of `$HOME` prompts separately for Documents, Desktop and
-    /// Downloads. See [`crate::platform::has_full_disk_access`].
+    /// DIAGNOSTIC ONLY - nothing depends on it. The daemon no longer needs the
+    /// grant: it never watches `$HOME` or the protected folders, so there is
+    /// nothing for FDA to unlock (see `sealgate_detectord::tcc`). Kept because
+    /// it is genuinely useful in a bug report, and because only the daemon can
+    /// answer it for the daemon - TCC decides per-binary, and the app is a
+    /// different binary with a different signature.
+    /// See [`crate::platform::has_full_disk_access`].
     #[serde(default)]
     pub full_disk_access: Option<bool>,
 }
