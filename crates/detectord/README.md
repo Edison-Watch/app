@@ -115,14 +115,25 @@ tempdir.
 
 ## Daemon — `mcp_detector_daemon`
 
-Long-lived macOS process wrapping the engine over a Unix-domain socket. **Today**
-it is the original read-only design: it watches configs gated on Full Disk Access
-and reports `ChangeEvent`s; it performs no mutation.
+Long-lived macOS process wrapping the engine over a Unix-domain socket. It runs
+a reconcile worker per enrolled user: each pass discovers every agent's servers,
+plans against the seen-store and org policy, and — once enrolment is armed —
+quarantines what the plan says to.
 
-It is being reworked into the privileged enforcement daemon from the design doc:
-root `LaunchDaemon`, one socket with `getpeereid` per-user scoping, per-user
-reconcile workers, enrollment + fail-closed policy, an operator CLI
-(`install`/`uninstall`/`unenroll`/`status`), and a `state.json` status file. See
+It needs **no Full Disk Access**. That grant is only ever about what may be
+*watched*: an FSEvents stream is recursive at the API level, so watching `$HOME`
+would reach Desktop, Documents and Downloads and prompt for each. The watch set
+therefore excludes `$HOME` (the one config file directly inside it is watched as
+a leaf path) and skips the protected folders outright — see
+[`tcc.rs`](crates/sealgate-detectord/src/tcc.rs). Reading and writing the config
+files themselves was never gated.
+
+Shipped from the design doc: per-user reconcile workers, enrollment + fail-closed
+policy, an operator CLI (`install`/`uninstall`/`unenroll`/`status`), and a
+`state.json` status file. Still outstanding is the *privileged* half — it
+installs today as a per-user `LaunchAgent` (`~/Library/LaunchAgents`), not a root
+`LaunchDaemon`, and the socket does not yet scope connections with `getpeereid`.
+Until then a user can `launchctl unload` their own agent. See
 [docs/architecture.md §4–§10](docs/architecture.md).
 
 ## Repository layout

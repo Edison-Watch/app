@@ -60,10 +60,11 @@ export interface Status {
    * Whether the DAEMON holds macOS Full Disk Access. `null` off macOS,
    * `undefined` from a daemon predating the field.
    *
-   * The app cannot work this out for itself: TCC grants are per-binary, and the
-   * daemon is a separate binary with its own signature. Without Full Disk
-   * Access its watch of `$HOME` prompts separately for Documents, Desktop and
-   * Downloads - see src/main/detectord/fullDiskAccess.ts.
+   * DIAGNOSTIC ONLY - nothing in the app reads it. The daemon does not need the
+   * grant: it never watches `$HOME` or the protected folders, so there is
+   * nothing for FDA to unlock. Kept on the wire because it is useful in a bug
+   * report and only the daemon can answer it for the daemon (TCC grants are
+   * per-binary, and the app is a separate binary with its own signature).
    */
   full_disk_access?: boolean | null
 }

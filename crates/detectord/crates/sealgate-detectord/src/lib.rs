@@ -70,7 +70,7 @@ pub mod watcher;
 pub use agent::Agent;
 pub use error::{Error, Result};
 pub use fingerprint::fingerprint;
-pub use tcc::{has_full_disk_access, watch_needs_full_disk_access};
+pub use tcc::{has_full_disk_access, is_tcc_protected, watch_path_for_file};
 pub use types::{
     ChangeEvent, ConfigLocation, DiscoveredServer, HookBinding, HookInstall, HookScriptKind,
     HookStyle, HttpKind, LocationExtra, OpaqueReason, Scope, SealGateInstall, SealGateStyle,

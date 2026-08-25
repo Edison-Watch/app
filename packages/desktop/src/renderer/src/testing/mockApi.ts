@@ -137,11 +137,7 @@ export function createMockApi(): PartialApi {
       // The warning banner asks on mount; a missing namespace here throws
       // inside its effect and takes the whole view down with it.
       health: async () => ({ ok: true, since: 0 }),
-      onHealth: noopUnsubscribe,
-      // Same deal for FullDiskAccessBanner. 'granted' is the quiet default, so
-      // a view under test doesn't render a permissions strip it isn't about.
-      fullDiskAccess: async () => ({ state: 'granted', binaryPath: '/tmp/sealgate-detectord' }),
-      openFullDiskAccessSettings: async () => {}
+      onHealth: noopUnsubscribe
     },
     stdiod: {
       // `running` was never a field on StdiodStatus - the tray reads

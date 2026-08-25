@@ -13,10 +13,6 @@ import { getHookStatus } from '../runtime/hookStatus'
 import { applyIntegrations, integrationErrors } from '../detectord/integrations'
 import { getAgentFacts } from '../detectord/agents'
 import { getDetectordHealth } from '../detectord/health'
-import {
-  getFullDiskAccessInfo,
-  openFullDiskAccessSettings
-} from '../detectord/fullDiskAccess'
 import { getDetectordClient } from '../detectord/lifecycle'
 import { CLIENT_DISPLAY } from '../clients/displayMeta'
 import {
@@ -493,17 +489,6 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   // Daemon health: the renderer shows a persistent warning while it's down.
   ipcMain.handle('detectord:health', () => getDetectordHealth())
-
-  // Full Disk Access (macOS): the daemon defers watching $HOME without it, so
-  // Claude Code config changes fall back to the periodic rescan. Polled by the
-  // renderer rather than pushed, because the grant happens outside the app -
-  // there is no event to broadcast when the user flips the switch in System
-  // Settings.
-  ipcMain.handle('detectord:fullDiskAccess', () => getFullDiskAccessInfo())
-  ipcMain.handle('detectord:openFullDiskAccessSettings', () =>
-    openFullDiskAccessSettings()
-  )
-
   // MCP discovery, submission, removal, and config management handlers
   registerMcpSubmitHandlers()
 

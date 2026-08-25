@@ -20,9 +20,9 @@ use crate::types::ChangeEvent;
 /// How often the event loop wakes up to check the stop flag.
 const STOP_CHECK_INTERVAL: Duration = Duration::from_millis(250);
 
-/// How often to re-check whether a deferred directory became watchable - it was
-/// created, or Full Disk Access was granted in System Settings. Lets both take
-/// effect without restarting the process.
+/// How often to re-check whether a deferred directory became watchable, i.e.
+/// was created. Lets a client installed after startup take effect without
+/// restarting the process.
 const DEFERRED_RETRY_INTERVAL: Duration = Duration::from_secs(5);
 
 /// How often to re-parse every client while any directory is deferred.
@@ -100,11 +100,14 @@ impl Watcher {
     }
 
     fn run_inner(self, stop: Arc<AtomicBool>, on_event: &mut dyn FnMut(ChangeEvent)) -> Result<()> {
+        // A config file is normally watched through its parent directory
+        // (atomic-rename writes replace the file), except for one that lives
+        // directly in $HOME - see `tcc::watch_path_for_file`.
         let mut dirs: HashSet<PathBuf> = HashSet::new();
         for c in &self.clients {
             for p in c.watch_targets().files {
-                if let Some(parent) = p.parent() {
-                    dirs.insert(parent.to_path_buf());
+                if let Some(target) = crate::tcc::watch_path_for_file(&p) {
+                    dirs.insert(target);
                 }
             }
         }
@@ -134,8 +137,8 @@ impl Watcher {
         //
         //   * it does not exist yet (a client's config directory is often
         //     created later, and `notify` cannot watch a missing path), or
-        //   * watching it would raise a TCC prompt and Full Disk Access has not
-        //     been granted (see crate::tcc).
+        //   * it is a TCC-protected folder, which we never watch (see
+        //     crate::tcc) - permanent, so it is retried but never promoted.
         //
         // Retried, and polled, for as long as any remain.
         let mut deferred: Vec<PathBuf> = Vec::new();
@@ -184,8 +187,8 @@ impl Watcher {
                 break;
             }
 
-            // Promote whatever became watchable: the directory got created, or
-            // Full Disk Access was granted. Cheap (an exists() and at most one
+            // Promote whatever became watchable, i.e. the directory got
+            // created. Cheap (an exists() and at most one
             // open()) but pointless on every 250ms stop-check tick, so it is
             // paced. Only ever ADDS watches - a grant revoked later leaves the
             // existing ones alone, which is harmless since that prompt has
@@ -288,7 +291,9 @@ enum DeferReason {
     /// The directory does not exist yet; `notify` cannot watch a missing path.
     Missing,
     /// Watching it would raise a macOS TCC prompt (see [`crate::tcc`]).
-    NeedsFullDiskAccess,
+    /// Permanent, not pending: we never watch these, rather than waiting on a
+    /// Full Disk Access grant to unlock them.
+    TccProtected,
 }
 
 impl DeferReason {
@@ -299,13 +304,13 @@ impl DeferReason {
                 dir = %dir.display(),
                 "deferring watch: directory does not exist yet"
             ),
-            Self::NeedsFullDiskAccess => tracing::warn!(
+            // Not a problem to fix, so not a warning: we hold no target under
+            // these folders, and watching one would prompt the user for access
+            // we do not need. The periodic rescan still covers it.
+            Self::TccProtected => tracing::debug!(
                 dir = %dir.display(),
-                "deferring watch: needs Full Disk Access. Watching it would prompt \
-                 separately for Desktop, Documents and Downloads. Grant Full Disk \
-                 Access to this binary in System Settings -> Privacy & Security; \
-                 until then changes here are found by the periodic rescan instead \
-                 of live events."
+                "not watching: TCC-protected folder (Desktop/Documents/Downloads); \
+                 changes here are found by the periodic rescan instead"
             ),
         }
     }
@@ -332,10 +337,8 @@ fn defer_reason(dir: &Path) -> Option<DeferReason> {
     if !dir.exists() {
         return Some(DeferReason::Missing);
     }
-    if crate::tcc::watch_needs_full_disk_access(dir)
-        && crate::tcc::has_full_disk_access() != Some(true)
-    {
-        return Some(DeferReason::NeedsFullDiskAccess);
+    if crate::tcc::is_tcc_protected(dir) {
+        return Some(DeferReason::TccProtected);
     }
     None
 }

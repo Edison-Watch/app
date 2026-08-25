@@ -54,8 +54,15 @@ Each is stated with its rationale; details follow in §4+.
 1. **Privileged, non-stoppable process.** A root `LaunchDaemon`
    (`/Library/LaunchDaemons`), not a per-user `LaunchAgent`. A user can
    `launchctl unload` their own agent, so the agent model cannot satisfy
-   "not stoppable by the user." Root ownership also dissolves the Full-Disk-Access
-   dance (the current FDA state machine goes away).
+   "not stoppable by the user."
+
+   This decision now rests on stoppability alone. It used to carry a second
+   argument about macOS permissions: the daemon needed Full Disk Access, which
+   only a human can grant, by hand, in System Settings — and can revoke at any
+   time. That requirement no longer exists. The daemon never watches `$HOME` or
+   the TCC-protected folders (Desktop, Documents, Downloads), so there is no
+   grant to obtain and nothing to revoke. See
+   [`tcc.rs`](../crates/sealgate-detectord/src/tcc.rs).
 
 2. **The daemon owns *all* detection — read *and* write.** Enforcement integrity
    requires the same privileged process that detects to also act. The Electron UI
