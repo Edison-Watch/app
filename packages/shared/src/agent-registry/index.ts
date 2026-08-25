@@ -32,6 +32,7 @@ export type AgentId =
   | 'chatgpt'
   | 'oai-workspace-agents'
   | 'grok'
+  | 'grokbot'
 
 export interface AgentIconEntry {
   displayName: string
@@ -296,6 +297,35 @@ export const AGENT_REGISTRY: Record<AgentId, AgentIconEntry> = {
       '<path fill="#FFFFFF" d="M395.479 633.828L735.91 381.105C752.599 368.715 776.454 373.548 784.406 392.792C826.26 494.285 807.561 616.253 724.288 699.996C641.016 783.739 525.151 802.104 419.247 760.277L303.556 814.143C469.49 928.202 670.987 899.995 796.901 773.282C896.776 672.843 927.708 535.937 898.785 412.476L899.047 412.739C857.105 231.37 909.358 158.874 1016.4 10.6326C1018.93 7.11771 1021.47 3.60279 1024 0L883.144 141.651V141.212L395.392 633.916"/>',
       '<path fill="#FFFFFF" d="M325.226 695.251C206.128 580.84 226.662 403.776 328.285 301.668C403.431 226.097 526.549 195.254 634.026 240.596L749.454 186.994C728.657 171.88 702.007 155.623 671.424 144.2C533.19 86.9942 367.693 115.465 255.323 228.382C147.234 337.081 113.244 504.215 171.613 646.833C215.216 753.423 143.739 828.818 71.7385 904.916C46.2237 931.893 20.6216 958.87 0 987.429L325.139 695.339"/>'
     ].join('')
+  },
+
+  // Grokbot - a distinct agent from xAI's `grok` above. Brand mark supplied by
+  // Eito (eito.me/icons): a self-contained squircle "card" (white->#eef0f2
+  // gradient) with a dark disc and two light eyes, so it's a customSvg rather
+  // than a single path. It carries its own plate and clips itself to the
+  // squircle, so it renders full-bleed with no brand tile behind it (and drops
+  // straight into the background-less Electron dialog icons). Ids are prefixed
+  // `grokbot-` so they can't collide with the other inline SVGs on the page.
+  grokbot: {
+    displayName: 'Grokbot',
+    brandColor: 'transparent',
+    customViewBox: '-125 -125 250 250',
+    customSvg: [
+      '<defs>',
+      '<clipPath id="grokbot-squircle"><rect x="-125" y="-125" width="250" height="250" rx="57"/></clipPath>',
+      '<linearGradient id="grokbot-card" x1="-125" y1="-125" x2="125" y2="125" gradientUnits="userSpaceOnUse">',
+      '<stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#eef0f2"/>',
+      '</linearGradient>',
+      '</defs>',
+      '<g clip-path="url(#grokbot-squircle)">',
+      '<rect x="-125" y="-125" width="250" height="250" fill="url(#grokbot-card)"/>',
+      '<path d="M100.37 -0.24C100.37 3.03 100.21 6.32 99.88 9.58C99.56 12.84 99.08 16.1 98.45 19.31C97.81 22.53 97.01 25.72 96.06 28.86C95.11 31.99 94 35.09 92.75 38.12C91.5 41.15 90.1 44.13 88.56 47.01C87.02 49.9 85.33 52.73 83.51 55.45C81.7 58.18 79.74 60.82 77.67 63.35C75.59 65.89 73.39 68.33 71.08 70.64C68.77 72.96 66.33 75.17 63.81 77.25C61.28 79.33 58.64 81.29 55.92 83.11C53.21 84.93 50.39 86.63 47.51 88.17C44.62 89.71 41.65 91.12 38.63 92.38C35.62 93.63 32.52 94.74 29.39 95.69C26.27 96.64 23.08 97.44 19.88 98.08C16.67 98.72 13.42 99.2 10.17 99.52C6.92 99.85 3.63 100.01 0.37 100.01C-2.9 100.01 -6.18 99.85 -9.44 99.52C-12.69 99.2 -15.94 98.72 -19.14 98.08C-22.35 97.44 -25.54 96.64 -28.66 95.69C-31.79 94.74 -34.88 93.63 -37.9 92.38C-40.92 91.12 -43.89 89.71 -46.77 88.17C-49.65 86.63 -52.47 84.93 -55.19 83.11C-57.91 81.29 -60.55 79.33 -63.07 77.25C-65.6 75.17 -68.03 72.96 -70.34 70.64C-72.65 68.33 -74.86 65.89 -76.93 63.35C-79.01 60.82 -80.97 58.18 -82.78 55.45C-84.6 52.73 -86.29 49.9 -87.83 47.01C-89.37 44.13 -90.77 41.15 -92.02 38.12C-93.27 35.09 -94.38 31.99 -95.33 28.86C-96.28 25.72 -97.07 22.53 -97.71 19.31C-98.35 16.1 -98.83 12.84 -99.15 9.58C-99.47 6.32 -99.63 3.03 -99.63 -0.24C-99.63 -3.52 -99.47 -6.81 -99.15 -10.07C-98.83 -13.33 -98.35 -16.59 -97.71 -19.8C-97.07 -23.01 -96.28 -26.21 -95.33 -29.34C-94.38 -32.48 -93.27 -35.58 -92.02 -38.61C-90.77 -41.63 -89.37 -44.61 -87.83 -47.5C-86.29 -50.39 -84.6 -53.22 -82.78 -55.94C-80.97 -58.66 -79.01 -61.31 -76.93 -63.84C-74.86 -66.37 -72.65 -68.81 -70.34 -71.13C-68.03 -73.45 -65.6 -75.66 -63.07 -77.74C-60.55 -79.82 -57.91 -81.78 -55.19 -83.6C-52.47 -85.42 -49.65 -87.11 -46.77 -88.66C-43.89 -90.2 -40.92 -91.61 -37.9 -92.86C-34.88 -94.12 -31.79 -95.23 -28.66 -96.18C-25.54 -97.13 -22.35 -97.93 -19.14 -98.57C-15.94 -99.21 -12.69 -99.69 -9.44 -100.01C-6.18 -100.33 -2.9 -100.49 0.37 -100.49C3.63 -100.49 6.92 -100.33 10.17 -100.01C13.42 -99.69 16.67 -99.21 19.88 -98.57C23.08 -97.93 26.27 -97.13 29.39 -96.18C32.52 -95.23 35.62 -94.12 38.63 -92.86C41.65 -91.61 44.62 -90.2 47.51 -88.66C50.39 -87.11 53.21 -85.42 55.92 -83.6C58.64 -81.78 61.28 -79.82 63.81 -77.74C66.33 -75.66 68.77 -73.45 71.08 -71.13C73.39 -68.81 75.59 -66.37 77.67 -63.84C79.74 -61.31 81.7 -58.66 83.51 -55.94C85.33 -53.22 87.02 -50.39 88.56 -47.5C90.1 -44.61 91.5 -41.63 92.75 -38.61C94 -35.58 95.11 -32.48 96.06 -29.34C97.01 -26.21 97.81 -23.01 98.45 -19.8C99.08 -16.59 99.56 -13.33 99.88 -10.07C100.21 -6.81 100.37 -3.52 100.37 -0.24Z" fill="#0a0c12"/>',
+      '<g fill="#f7f8fa">',
+      '<path d="M-9.3 -11.3A9.3 9.3 0 0 1 0 -20.6L0 -20.6A9.3 9.3 0 0 1 9.3 -11.3L9.3 11.3A9.3 9.3 0 0 1 0 20.6L0 20.6A9.3 9.3 0 0 1 -9.3 11.3Z" transform="matrix(0.87,-0.31,0.42,0.87,24.94,-37.71)"/>',
+      '<path d="M-9.3 -11.3A9.3 9.3 0 0 1 0 -20.6L0 -20.6A9.3 9.3 0 0 1 9.3 -11.3L9.3 11.3A9.3 9.3 0 0 1 0 20.6L0 20.6A9.3 9.3 0 0 1 -9.3 11.3Z" transform="matrix(0.62,-0.08,0.42,0.87,66.34,-48.51)"/>',
+      '</g>',
+      '</g>'
+    ].join('')
   }
 }
 
@@ -327,8 +357,12 @@ export function resolveAgentId(name: string): AgentId | null {
   for (const key of AGENT_KEYS) {
     if (AGENT_REGISTRY[key].displayName.toLowerCase() === lower) return key
   }
-  // Prefix / substring match against both forms
-  for (const key of AGENT_KEYS) {
+  // Prefix / substring match against both forms. Visit longer (more specific)
+  // keys first so a decorated name like "Grokbot CLI" resolves to `grokbot`
+  // rather than being shadowed by the shorter `grok` it also starts with (same
+  // for `claude-code` vs `claude`).
+  const keysBySpecificity = [...AGENT_KEYS].sort((a, b) => b.length - a.length)
+  for (const key of keysBySpecificity) {
     if (lower.startsWith(key) || lower.includes(key) || key.startsWith(lower)) return key
     // Also try space-separated form of the key ("claude-code" → "claude code")
     const spacedKey = key.replace(/-/g, ' ')
