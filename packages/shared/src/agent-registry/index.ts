@@ -357,8 +357,12 @@ export function resolveAgentId(name: string): AgentId | null {
   for (const key of AGENT_KEYS) {
     if (AGENT_REGISTRY[key].displayName.toLowerCase() === lower) return key
   }
-  // Prefix / substring match against both forms
-  for (const key of AGENT_KEYS) {
+  // Prefix / substring match against both forms. Visit longer (more specific)
+  // keys first so a decorated name like "Grokbot CLI" resolves to `grokbot`
+  // rather than being shadowed by the shorter `grok` it also starts with (same
+  // for `claude-code` vs `claude`).
+  const keysBySpecificity = [...AGENT_KEYS].sort((a, b) => b.length - a.length)
+  for (const key of keysBySpecificity) {
     if (lower.startsWith(key) || lower.includes(key) || key.startsWith(lower)) return key
     // Also try space-separated form of the key ("claude-code" → "claude code")
     const spacedKey = key.replace(/-/g, ' ')
