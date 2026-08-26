@@ -49,7 +49,7 @@ jobs:
         run: npm ci --ignore-scripts
         working-directory: .
 
-      - name: Build @edison-watch/shared
+      - name: Build @sealgate/shared
         run: npm run build -w packages/shared
         working-directory: .
 
@@ -84,7 +84,7 @@ jobs:
         run: npm ci
         working-directory: .
 
-      - name: Build @edison-watch/shared
+      - name: Build @sealgate/shared
         run: npm run build -w packages/shared
         working-directory: .
 

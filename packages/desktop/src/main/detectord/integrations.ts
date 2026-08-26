@@ -1,7 +1,7 @@
-// Installing and removing the edison-watch entry, via the daemon.
+// Installing and removing the sealgate entry, via the daemon.
 //
 // The daemon holds the credentials (in its enrollment) and is the only
-// component that writes agent config files, so "add edison-watch to Cursor"
+// component that writes agent config files, so "add sealgate to Cursor"
 // is a request, not something the app does itself. Reverting likewise: the
 // daemon removes the entry it wrote and forgets the agent, so its self-heal
 // doesn't reinstate it.
@@ -14,7 +14,7 @@ import type { IntegrationChange } from './protocol'
 export type { IntegrationChange }
 
 /**
- * Install the edison-watch entry + hooks for these client ids.
+ * Install the sealgate entry + hooks for these client ids.
  *
  * Unmanageable clients are not filtered here. The daemon drops them, because
  * it is not the only caller: enroll sends the saved app selection on every
@@ -28,7 +28,7 @@ export async function applyIntegrations(clients: string[]): Promise<IntegrationC
   })
 }
 
-/** Remove the edison-watch entry for these client ids. */
+/** Remove the sealgate entry for these client ids. */
 export async function revertIntegrations(clients: string[]): Promise<IntegrationChange[]> {
   return withDetectordHealth('revert_integrations', async () => {
     const daemon = getDetectordClient()

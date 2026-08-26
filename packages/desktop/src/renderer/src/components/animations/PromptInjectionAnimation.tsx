@@ -1,1 +1,1 @@
-export { PromptInjectionAnimation as default } from "@edison-watch/shared/animations";
+export { PromptInjectionAnimation as default } from "@sealgate/shared/animations";

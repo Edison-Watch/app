@@ -1,0 +1,53 @@
+name: Version sync
+
+# Fail the build when the Rust workspaces drift from the desktop app's release
+# version. packages/desktop/package.json is the single source of truth (the
+# release tag is v${version}, and the daemons stamp their reported
+# client_version from it); `npm run version:sync` propagates it into
+# crates/*/Cargo.toml and both Cargo.lock files.
+#
+# This lives in its OWN workflow rather than in stdiod-ci / detectord-ci because
+# those are path-filtered to their own crate directories: a bump that touches
+# only packages/desktop/package.json would not trigger either of them, which is
+# exactly the drift this gate exists to catch. The paths below therefore cover
+# the source of truth AND every file the sync writes.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/desktop/package.json'
+      - 'crates/*/Cargo.toml'
+      - 'crates/*/Cargo.lock'
+      - 'crates/*/crates/*/Cargo.toml'
+      - 'scripts/sync-versions.mjs'
+      - '.github/workflows/version-sync.yml'
+  pull_request:
+    paths:
+      - 'packages/desktop/package.json'
+      - 'crates/*/Cargo.toml'
+      - 'crates/*/Cargo.lock'
+      - 'crates/*/crates/*/Cargo.toml'
+      - 'scripts/sync-versions.mjs'
+      - '.github/workflows/version-sync.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: crate versions match the app
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      # No `npm ci`: the script is dependency-free Node, and installing the
+      # Electron toolchain to compare a handful of version strings would cost
+      # more than the rest of this job put together.
+      - name: Check version sync
+        run: node scripts/sync-versions.mjs --check

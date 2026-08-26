@@ -100,7 +100,7 @@ pub use imp::*;
 /// Best-effort machine hostname, sent to the backend so a local (stdio) server
 /// can be approved for the specific host it lives on.
 ///
-/// IMPORTANT: this must stay aligned with edison-stdiod's `config::hostname()`
+/// IMPORTANT: this must stay aligned with sealgate-stdiod's `config::hostname()`
 /// (env `HOSTNAME`, then `COMPUTERNAME`, then the `hostname` command) so the
 /// backend keys the *same* machine identity for both daemons. The command
 /// fallback is what works on macOS, where `HOSTNAME` isn't exported to
@@ -125,4 +125,19 @@ pub fn hostname() -> String {
         }
     }
     "unknown".to_string()
+}
+
+/// Whether this process holds macOS Full Disk Access, or `None` off macOS.
+///
+/// Diagnostic only - no watch decision consults it. The daemon does not need
+/// the grant: it never watches `$HOME` or the protected folders, so there is
+/// nothing for FDA to unlock (see [`sealgate_detectord::tcc`], which owns the
+/// probe). Re-exported here so the status op can report it without reaching
+/// past `platform` for an OS-capability question.
+///
+/// Only the daemon can answer this for the daemon. TCC decides per-binary, and
+/// the desktop app that surfaces the prompt is a different binary with a
+/// different signature, so its own permissions say nothing about ours.
+pub fn has_full_disk_access() -> Option<bool> {
+    sealgate_detectord::tcc::has_full_disk_access()
 }

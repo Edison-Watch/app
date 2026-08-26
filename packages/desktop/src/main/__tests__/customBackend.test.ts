@@ -33,7 +33,7 @@ import {
 
 describe('custom backend persistence', () => {
   beforeEach(() => {
-    userDataDir = mkdtempSync(join(tmpdir(), 'ew-custom-'))
+    userDataDir = mkdtempSync(join(tmpdir(), 'sg-custom-'))
   })
   afterEach(() => {
     rmSync(userDataDir, { recursive: true, force: true })
@@ -41,17 +41,17 @@ describe('custom backend persistence', () => {
   })
 
   it('stores the URL, activates the custom env, and resolves both base URLs from it', () => {
-    setCustomBackend('https://self-host-ew-demo.up.railway.app/')
+    setCustomBackend('https://self-host-sg-demo.up.railway.app/')
 
     expect(getDebugEnvOverride()).toBe('custom')
     // Trailing slash is stripped; MCP defaults to the same origin because the
     // backend serves /mcp/<key>/ same-origin.
     expect(getCustomBackend()).toEqual({
-      apiBaseUrl: 'https://self-host-ew-demo.up.railway.app',
-      mcpBaseUrl: 'https://self-host-ew-demo.up.railway.app'
+      apiBaseUrl: 'https://self-host-sg-demo.up.railway.app',
+      mcpBaseUrl: 'https://self-host-sg-demo.up.railway.app'
     })
-    expect(getApiBaseUrl()).toBe('https://self-host-ew-demo.up.railway.app')
-    expect(getMcpBaseUrl()).toBe('https://self-host-ew-demo.up.railway.app')
+    expect(getApiBaseUrl()).toBe('https://self-host-sg-demo.up.railway.app')
+    expect(getMcpBaseUrl()).toBe('https://self-host-sg-demo.up.railway.app')
   })
 
   it('keeps the stored URL when switching envs away and back', () => {
@@ -74,15 +74,15 @@ describe('custom backend persistence', () => {
   })
 
   it('keeps the stored URL when the override is cleared entirely', () => {
-    // "Use the default Edison server instead" must not delete the custom URL:
+    // "Use the default SealGate server instead" must not delete the custom URL:
     // the Developer menu needs it to offer switching back later.
-    setCustomBackend('https://edison.example.com')
+    setCustomBackend('https://sealgate.example.com')
     setDebugEnvOverride(null)
 
     expect(getDebugEnvOverride()).toBeNull()
     expect(getCustomBackend()).toEqual({
-      apiBaseUrl: 'https://edison.example.com',
-      mcpBaseUrl: 'https://edison.example.com'
+      apiBaseUrl: 'https://sealgate.example.com',
+      mcpBaseUrl: 'https://sealgate.example.com'
     })
   })
 
@@ -110,14 +110,14 @@ describe('custom backend persistence', () => {
   it('rejects URLs with embedded credentials, query strings, or fragments', () => {
     // Credentials would end up in logs and menus; query/fragment would break
     // every appended endpoint path.
-    expect(parseCustomBackendUrl('https://user:pass@edison.example.com')).toBeNull()
-    expect(parseCustomBackendUrl('https://edison.example.com?tenant=a')).toBeNull()
-    expect(parseCustomBackendUrl('https://edison.example.com#section')).toBeNull()
+    expect(parseCustomBackendUrl('https://user:pass@sealgate.example.com')).toBeNull()
+    expect(parseCustomBackendUrl('https://sealgate.example.com?tenant=a')).toBeNull()
+    expect(parseCustomBackendUrl('https://sealgate.example.com#section')).toBeNull()
   })
 
   it('normalizes trailing slashes and whitespace', () => {
-    expect(parseCustomBackendUrl('  https://edison.example.com//  ')).toBe(
-      'https://edison.example.com'
+    expect(parseCustomBackendUrl('  https://sealgate.example.com//  ')).toBe(
+      'https://sealgate.example.com'
     )
   })
 
@@ -127,7 +127,7 @@ describe('custom backend persistence', () => {
       JSON.stringify({ env: 'demo', futureField: true }),
       'utf-8'
     )
-    setCustomBackend('https://edison.example.com')
+    setCustomBackend('https://sealgate.example.com')
     const raw = JSON.parse(readFileSync(getDebugEnvOverridePath(), 'utf-8'))
     expect(raw.futureField).toBe(true)
     expect(raw.env).toBe('custom')

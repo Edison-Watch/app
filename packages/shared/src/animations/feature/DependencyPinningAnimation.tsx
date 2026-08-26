@@ -1,16 +1,16 @@
 /**
  * MCP supply-chain protection animation.
  *
- * Visualises https://docs.edison.watch/en/docs/security/mcp-dependency-pinning
+ * Visualises https://docs.sealgate.ai/en/docs/security/mcp-dependency-pinning
  * at the connector level: an AI agent reaches three MCP servers through the
- * Edison Gateway. An attacker compromises one of the servers (it turns red);
- * the moment the compromise is reported, Edison severs that connection - a
+ * SealGate Gateway. An attacker compromises one of the servers (it turns red);
+ * the moment the compromise is reported, SealGate severs that connection - a
  * warning pops above the gateway, a deny badge drops on the route, and the
  * line goes dark - while the other two MCP servers stay connected.
  *
  * The gateway blocks compromised MCP servers (connectors), not individual
  * libraries. Single 11s loop, colour encodes trust: RED = attacker/compromised,
- * var(--accent) = Edison-mediated. Pure SVG + CSS. Respects
+ * var(--accent) = SealGate-mediated. Pure SVG + CSS. Respects
  * `prefers-reduced-motion`.
  * Requires CSS custom properties: --text-primary, --text-muted, --accent.
  */
@@ -20,7 +20,7 @@ import {
   ATTACKER_HIGHLIGHT_PATHS,
   ATTACKER_SVG_VIEWBOX
 } from '../../svg/attacker-svg'
-import { EdisonLogo, McpIcon, ProgressBar, RED, RobotIcon, VerdictBadge } from '../_shared'
+import { SealGateLogo, McpIcon, ProgressBar, RED, RobotIcon, VerdictBadge } from '../_shared'
 
 const CSS = `
 .dp-anim { color: var(--text-primary); }
@@ -83,14 +83,14 @@ const CSS = `
 /* attacker only appears as it strikes the server */
 @keyframes dp-atk-show { 0%,18% { opacity: 0; } 24% { opacity: 1; } 96% { opacity: 1; } 100% { opacity: 0; } }
 
-/* Edison detection pulse the moment it flags the compromise */
+/* SealGate detection pulse the moment it flags the compromise */
 @keyframes dp-detect-w { 0%,42% { opacity: 0; } 46% { opacity: 1; } 96% { opacity: 1; } 100% { opacity: 0; } }
 @keyframes dp-detect   { 0% { transform: scale(1); opacity: 0; } 12% { opacity: .5; } 70% { transform: scale(1.6); opacity: 0; } 100% { opacity: 0; } }
 
 /* deny badge drops on the severed route */
 @keyframes dp-deny { 0%,46% { opacity: 0; transform: scale(.5); } 52% { opacity: 1; transform: scale(1); } 96% { opacity: 1; transform: scale(1); } 100% { opacity: 0; } }
 
-/* warning sign pops above the gateway the moment Edison flags the compromise */
+/* warning sign pops above the gateway the moment SealGate flags the compromise */
 @keyframes dp-warn {
   0%,38% { opacity: 0; transform: scale(0); }
   43% { opacity: 1; transform: scale(1.18); }
@@ -178,7 +178,7 @@ function McpServer({ x, y, bad }: { x: number; y: number; bad?: boolean }): Reac
 }
 
 export default function DependencyPinningAnimation(): React.ReactNode {
-  // Edison gateway right edge -> each server's left-middle connection point.
+  // SealGate gateway right edge -> each server's left-middle connection point.
   const lines: Array<[number, number, string]> = [
     [372, 37, 'dp-line'], // top server
     [372, 149, 'dp-line'] // bottom server
@@ -195,7 +195,7 @@ export default function DependencyPinningAnimation(): React.ReactNode {
         role="presentation"
         aria-hidden="true"
       >
-        {/* agent -> Edison */}
+        {/* agent -> SealGate */}
         <line
           className="dp-line"
           x1="134"
@@ -207,7 +207,7 @@ export default function DependencyPinningAnimation(): React.ReactNode {
           strokeWidth="1.5"
           strokeDasharray="3 3"
         />
-        {/* Edison -> top + bottom servers */}
+        {/* SealGate -> top + bottom servers */}
         {lines.map(([sx, sy, cls], i) => (
           <line
             key={i}
@@ -222,7 +222,7 @@ export default function DependencyPinningAnimation(): React.ReactNode {
             strokeDasharray="3 3"
           />
         ))}
-        {/* Edison -> middle server: two stubs that snap apart when severed */}
+        {/* SealGate -> middle server: two stubs that snap apart when severed */}
         <line
           className="dp-line dp-cut-l"
           x1="259"
@@ -272,7 +272,7 @@ export default function DependencyPinningAnimation(): React.ReactNode {
           AI agent
         </text>
 
-        {/* Edison gateway + detection pulse */}
+        {/* SealGate gateway + detection pulse */}
         <g className="dp-detect-w">
           <circle
             className="dp-detect"
@@ -285,7 +285,7 @@ export default function DependencyPinningAnimation(): React.ReactNode {
             strokeWidth="1.5"
           />
         </g>
-        <EdisonLogo x={205} y={67} w={54} h={52.5} />
+        <SealGateLogo x={205} y={67} w={54} h={52.5} />
         <text
           x="232"
           y="138"
@@ -295,10 +295,10 @@ export default function DependencyPinningAnimation(): React.ReactNode {
           fontWeight="bold"
           fontFamily="system-ui,sans-serif"
         >
-          Edison Gateway
+          SealGate Gateway
         </text>
 
-        {/* warning: pops above the gateway when Edison flags the compromise */}
+        {/* warning: pops above the gateway when SealGate flags the compromise */}
         <g className="dp-warn">
           <path
             d="M232 19 L253 56 L211 56 Z"
@@ -385,7 +385,7 @@ export default function DependencyPinningAnimation(): React.ReactNode {
           <Pkt />
         </g>
 
-        {/* Edison severs the compromised route */}
+        {/* SealGate severs the compromised route */}
         <VerdictBadge cx={316} cy={93} r={9} variant="deny" className="dp-deny" />
 
         {/* captions */}

@@ -1,5 +1,5 @@
 /**
- * Helpers for fetching organisation-level domain config from the Edison Watch API.
+ * Helpers for fetching organisation-level domain config from the SealGate API.
  */
 
 /**

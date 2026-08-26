@@ -19,7 +19,7 @@ import { applyIntegrations, revertIntegrations, integrationErrors } from "../det
 import { CLIENT_DISPLAY } from "../clients/displayMeta";
 import { detectSecrets } from "../discovery/secretDetection";
 import type { TemplatizedConfig } from "../discovery/secretDetection";
-import { filterOutEdisonWatchServers } from "../runtime/mcpConfigMonitor";
+import { filterOutSealGateServers } from "../runtime/mcpConfigMonitor";
 import { deduplicateServers, findDuplicateGroups } from "../discovery/serverDeduplication";
 import { DRY_RUN, getApiBaseUrl, getSetupData, getCredentialsForEnv } from "../infra/setupConfig";
 
@@ -30,8 +30,8 @@ let discoveryCache: { servers: DiscoveredMcpServer[]; raw: DiscoveredMcpServer[]
 /** Run discovery, populate cache, return filtered+deduped servers. */
 async function runDiscovery() {
   const { servers, raw, unsupported } = await discoverMcpServers({ includeRaw: true });
-  const filtered = filterOutEdisonWatchServers(servers);
-  const rawFiltered = filterOutEdisonWatchServers(raw);
+  const filtered = filterOutSealGateServers(servers);
+  const rawFiltered = filterOutSealGateServers(raw);
   discoveryCache = { servers: filtered, raw: rawFiltered, unsupported };
   return discoveryCache;
 }
@@ -126,7 +126,7 @@ export function registerMcpSubmitHandlers(): void {
     removed: string[];
     errors: string[];
   }> => {
-    // The daemon owns removal. Servers the user didn't send to EW are
+    // The daemon owns removal. Servers the user didn't send to SG are
     // auto-quarantined once enforcement arms at setup:complete, so there's
     // nothing for the client to remove here.
     const names = targets.map((t) => (typeof t === "string" ? t : t.name));
@@ -147,20 +147,38 @@ export function registerMcpSubmitHandlers(): void {
       // as an error, so pass the reason on rather than rendering "no config".
       const message = err instanceof Error ? err.message : String(err);
 
-      // An unmanageable client has no local config, so the failure above is
-      // expected and its message is one the user can do nothing about. Say
-      // what's actually going on instead. The daemon is the authority on which
-      // clients those are, so this asks it - but only here, on a path that has
-      // already failed. Asking up front cost a `list_agents` (a full discovery
-      // pass, plus a workspace hook scan) on every successful read, and the
-      // refresh in AppsStep re-reads every expanded client at once.
+      // A connector-only client fails here every time, with a message the user
+      // can do nothing about. Say what's actually going on.
+      //
+      // BOTH conditions, because either alone names a different set:
+      //
+      //   unmanageable, has a config   Claude Desktop / Cowork - SealGate cannot
+      //                                write a URL into a stdio-only file, but
+      //                                reads that file on every scan. Gating on
+      //                                `manageable` alone told those users the
+      //                                file below did not exist.
+      //   manageable, no config path   JetBrains with no IDE installed - it
+      //                                reports zero install targets and is
+      //                                perfectly manageable the moment one
+      //                                appears. Gating on the path alone told
+      //                                them their servers live in an account.
+      //
+      // Only a client that is both is genuinely connector-only. `configPath` is
+      // optional on the wire, so an older daemon omitting it must not on its
+      // own be enough to trigger this.
+      //
+      // The daemon is the authority here, so this asks it - but only on a read
+      // that has already failed. Asking up front cost a `list_agents` (a full
+      // discovery pass, plus a workspace hook scan) on every successful read,
+      // and AppsStep re-reads every expanded client at once on refresh.
       const facts = await getAgentFacts();
-      if (facts?.get(client as McpClientId)?.manageable === false) {
+      const fact = facts?.get(client as McpClientId);
+      if (fact && !fact.configPath && !fact.manageable) {
         const name = CLIENT_DISPLAY[client as McpClientId]?.name ?? client;
         return {
           content:
             `${name} keeps its MCP servers as Connectors in your account, not in a ` +
-            `local config file. There is nothing here for Edison Watch to read or protect.`,
+            `local config file. There is nothing here for SealGate to read or protect.`,
         };
       }
 
@@ -173,10 +191,10 @@ export function registerMcpSubmitHandlers(): void {
     serverAddress?: string;
     mcpBaseUrl?: string;
     apiKey?: string;
-    edisonSecretKey?: string;
+    sealgateSecretKey?: string;
     apps: string[];
   }): Promise<{ success: boolean; modifiedConfigs: ModifiedConfig[]; errors?: string[] }> => {
-    // The daemon installs the edison-watch entry and the hooks: it holds the
+    // The daemon installs the sealgate entry and the hooks: it holds the
     // credentials in its enrollment and it is the only writer of agent configs.
     // The URL/key arguments are vestigial - they came from the app's own writer
     // and are ignored rather than second-guessing the enrollment.
@@ -196,7 +214,7 @@ export function registerMcpSubmitHandlers(): void {
     }
   });
 
-  // Revert app integrations: the daemon removes the edison-watch entry it
+  // Revert app integrations: the daemon removes the sealgate entry it
   // installed (and drops the agent from the enrolled selection so its
   // self-heal doesn't put it straight back).
   ipcMain.handle("mcp:revertAppIntegrations", async (_event, args: {

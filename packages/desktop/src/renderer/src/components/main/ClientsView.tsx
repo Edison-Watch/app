@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Badge } from "@edison-watch/shared/ui";
+import { Badge } from "@sealgate/shared/ui";
 import { AppLogo } from "../AppLogo";
 import { CONNECTOR_BACKED_REASON, type UnmanageableReason } from "../clientSupport";
 
@@ -17,7 +17,7 @@ interface HookStatus {
   mcpConfigured: boolean;
   mcpApplicable: boolean;
   hooksApplicable: boolean;
-  /** False when Edison can only see this client, not configure it. */
+  /** False when SealGate can only see this client, not configure it. */
   manageable: boolean;
   mcpRuntimeStatus?: ClaudeCodeMcpStatus;
 }
@@ -33,7 +33,7 @@ interface ClientInfo {
   mcpConfigured: boolean;
   mcpApplicable: boolean;
   hooksApplicable: boolean;
-  /** False when Edison can only see this client, not configure it. */
+  /** False when SealGate can only see this client, not configure it. */
   manageable: boolean;
   mcpRuntimeStatus?: ClaudeCodeMcpStatus;
 }
@@ -59,7 +59,7 @@ const CLIENT_NAMES = new Map<string, string>([
 
 /**
  * `unmanaged` is installed-and-outside-our-reach: a client whose MCP servers
- * are Connectors in the vendor's account, so there is nothing for Edison to
+ * are Connectors in the vendor's account, so there is nothing for SealGate to
  * configure. It exists because the alternatives both lie - scoring such a
  * client against setup conditions reports "gateway not configured" (blaming
  * the user for something they cannot fix), and dropping it from the list tells
@@ -78,8 +78,8 @@ type ClientStatus = "connected" | "partial-setup" | "installed" | "unmanaged" | 
  * cause nobody established.
  */
 const FALLBACK_REASON: UnmanageableReason = {
-  row: "Edison Watch can't configure this app",
-  tooltip: "Edison Watch can see this app but cannot configure or protect it.",
+  row: "SealGate can't configure this app",
+  tooltip: "SealGate can see this app but cannot configure or protect it.",
 };
 
 const unmanageableReason = (id: string): UnmanageableReason =>
@@ -126,6 +126,13 @@ function getClientStatus(client: ClientInfo): ClientStatus {
   // - its account-side Connectors are still unproxied, and saying Connected
   // there is the overstatement this whole state exists to avoid.
   //
+  // Every connector-backed client happens to be unmanageable today, so the
+  // check above catches all of them and this one currently fires for nobody.
+  // It stays because those are different questions - `clientSupport.ts` calls
+  // the grouping a presentation fact, not a capability - and a connector-backed
+  // client that SealGate *can* configure is exactly the case where "Connected"
+  // becomes an overstatement again with nothing else to catch it.
+  //
   // Only once setup is done, though: an unreachable gateway is actionable and
   // outranks a caveat the user can do nothing about right now. Reporting the
   // caveat over a broken install would bury the fixable problem.
@@ -144,7 +151,7 @@ function getIssueDetail(client: ClientInfo): string {
     } else if (client.mcpRuntimeStatus === "not-found") {
       issues.push("MCP server not registered in client");
     } else if (client.mcpRuntimeStatus === "connected" && !client.mcpConfigured) {
-      // The client connects, just not to us: a leftover edison-watch entry from
+      // The client connects, just not to us: a leftover sealgate entry from
       // another account or environment. "Not configured" would be misleading
       // when there is plainly an entry, and a working one.
       issues.push("MCP gateway points at a different server - re-apply to fix");

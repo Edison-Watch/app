@@ -7,7 +7,7 @@
  * CI limit. No Electron window/state lives here - callers own the BrowserWindow.
  */
 
-import { AGENT_REGISTRY, resolveAgentId } from '@edison-watch/shared/agent-registry'
+import { AGENT_REGISTRY, resolveAgentId } from '@sealgate/shared/agent-registry'
 
 import { BASE_CSS, HEADER_CSS, BUTTON_CSS } from './dialogStyles'
 import type { PendingApproval, RiskInfo, RiskLegs, RiskLevel } from '../ipc/approvalsHandler'
@@ -40,7 +40,7 @@ function escapeHtml(s: string | null | undefined): string {
 }
 
 // Auto-deny window the countdown bar runs against. Must match APPROVAL_EXPIRY_MS
-// in ipc/approvalsHandler.ts (and the backend EDISON_APPROVAL_TIMEOUT_S default).
+// in ipc/approvalsHandler.ts (and the backend SEALGATE_APPROVAL_TIMEOUT_S default).
 const APPROVAL_TIMEOUT_MS = 30_000
 
 // The three trifecta legs, in display order, with their literal colors

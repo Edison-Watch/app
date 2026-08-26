@@ -30,7 +30,7 @@ const config: StorybookConfig = {
     config.resolve.alias = {
       ...config.resolve.alias,
       '@': resolve(__dirname, '../src/renderer/src'),
-      '@edison/shared': resolve(__dirname, '../../packages/shared/src'),
+      '@sealgate/shared': resolve(__dirname, '../../packages/shared/src'),
     };
     config.server = config.server || {};
     config.server.fs = config.server.fs || {};

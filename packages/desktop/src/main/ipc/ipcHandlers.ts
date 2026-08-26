@@ -105,14 +105,14 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     })
 
     authWindow.webContents.on('will-navigate', (_event, url) => {
-      if (url.startsWith('edison-watch://')) {
+      if (url.startsWith('sealgate://')) {
         getMainWindow()?.webContents.send('auth:callback', url)
         authWindow.close()
       }
     })
 
     authWindow.webContents.on('will-redirect', (_event, url) => {
-      if (url.startsWith('edison-watch://')) {
+      if (url.startsWith('sealgate://')) {
         getMainWindow()?.webContents.send('auth:callback', url)
         authWindow.close()
       }
@@ -147,7 +147,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   // Re-enroll the detector daemon so already-configured agents follow an env
   // switch (same contract as the Developer menu's switcher): enrollment hands
   // the daemon the target env's credentials and its install step rewrites the
-  // edison-watch entry with the new URL. Skipped when the target env has no
+  // sealgate entry with the new URL. Skipped when the target env has no
   // stored API key yet - there is nothing to repoint agents to.
   const repointAgents = async (env: string, context: string): Promise<void> => {
     if (!getCredentialsForEnv(env)?.apiKey || !getMcpBaseUrl()) return
@@ -253,7 +253,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     'detectord:enroll',
     async (
       _event,
-      input: { apiUrl?: string; mcpUrl?: string; apiKey?: string; edisonSecretKey?: string }
+      input: { apiUrl?: string; mcpUrl?: string; apiKey?: string; sealgateSecretKey?: string }
     ) => {
       const outcome = await bootstrapDetectord(input).catch((err) => {
         console.error('[detectord] enroll (push) failed:', err)
@@ -311,7 +311,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   // doesn't assemble them. Mirrors the "Update Keys" tray flow: a missing or
   // empty configuredApps falls back to ALL_SUPPORTED_APPS, otherwise older
   // setups would rewrite no client configs and the new key wouldn't take effect.
-  ipcMain.handle('mcp:applyForSecretKey', async (_event, args: { edisonSecretKey: string }) => {
+  ipcMain.handle('mcp:applyForSecretKey', async (_event, args: { sealgateSecretKey: string }) => {
     const setup = getSetupData()
     const apps = setup.configuredApps?.length ? setup.configuredApps : ALL_SUPPORTED_APPS
     console.log('[mcp:applyForSecretKey]', apps, DRY_RUN ? '(dry-run)' : '')
@@ -323,7 +323,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     // adopt would leave those stale headers behind while the UI reported
     // success. verify_secret validates against the backend before adopting, so
     // requiring it here also means we never write an unverified key.
-    const adopted = await setDetectordSecret(args.edisonSecretKey)
+    const adopted = await setDetectordSecret(args.sealgateSecretKey)
     if (!adopted.ok || adopted.outcome?.valid === false) {
       const reason = adopted.reason ?? 'the detector daemon did not accept the key'
       console.error(`[mcp:applyForSecretKey] not applying: ${reason}`)
@@ -361,7 +361,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     startEventSubscription()
 
     // Re-point the agents at the new account: re-enrolling hands the daemon the
-    // new credentials, and its install step rewrites the edison-watch entry
+    // new credentials, and its install step rewrites the sealgate entry
     // with the new URL and key. Without this the configs would keep the
     // previous account's.
     const reEnrolled = await bootstrapDetectord().catch((err) => {
@@ -480,7 +480,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         // path, saying where its MCP config actually lives.
         configPath: f.configPath ?? CLIENT_DISPLAY[id]?.configLabel ?? '',
         // Drives whether the wizard offers a checkbox at all: selecting a
-        // client Edison can't configure does nothing.
+        // client SealGate can't configure does nothing.
         manageable: f.manageable
       })
     }
@@ -489,11 +489,10 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   // Daemon health: the renderer shows a persistent warning while it's down.
   ipcMain.handle('detectord:health', () => getDetectordHealth())
-
   // MCP discovery, submission, removal, and config management handlers
   registerMcpSubmitHandlers()
 
-  // edison-stdiod daemon control (install / login / uninstall / status).
+  // sealgate-stdiod daemon control (install / login / uninstall / status).
   registerStdiodHandlers()
 
   ipcMain.handle('mcp:getHookStatus', async () => {

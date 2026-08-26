@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
-import { Button, Card } from "@edison-watch/shared/ui";
-import { AGENT_REGISTRY, type AgentId } from "@edison-watch/shared/agent-registry";
+import { Button, Card } from "@sealgate/shared/ui";
+import { AGENT_REGISTRY, type AgentId } from "@sealgate/shared/agent-registry";
 import type { ModifiedConfig, DiscoveredServer, RemovalTarget } from "./AppsStep";
 import { AppLogo } from "../AppLogo";
 import EncryptionAnimation from "../animations/EncryptionAnimation";
@@ -161,16 +161,16 @@ export default function EncryptionStep({
         serverAddress,
         mcpBaseUrl,
         apiKey,
-        edisonSecretKey: compositeKey || undefined,
+        sealgateSecretKey: compositeKey || undefined,
         apps: selectedApps,
       });
       if (!result.success) {
         // Advancing here would land the user on Finish - which reports the
-        // setup as done - while none of their apps route through Edison Watch.
+        // setup as done - while none of their apps route through SealGate.
         setApplyError(
           result.errors?.length
             ? `Couldn't configure your apps: ${result.errors.join("; ")}`
-            : "Couldn't apply the Edison Watch configuration to your apps.",
+            : "Couldn't apply the SealGate configuration to your apps.",
         );
         return;
       }
@@ -194,7 +194,7 @@ export default function EncryptionStep({
       <div className="text-center">
         <h2 className="text-lg font-semibold text-[var(--text-primary)]">Secure Your Setup</h2>
         <p className="mt-1 text-sm text-[var(--text-secondary)]">
-          Edison will securely store your MCP server credentials encrypted, using your personal key before adding to the Edison MCP gateway.
+          SealGate will securely store your MCP server credentials encrypted, using your personal key before adding to the SealGate MCP gateway.
         </p>
       </div>
 
@@ -222,8 +222,8 @@ export default function EncryptionStep({
                 <p className="text-sm font-medium text-[var(--text-primary)]">Register Your Servers</p>
                 <p className="text-xs text-[var(--text-muted)] mt-0.5">
                   {autoQuarantine
-                    ? "Your organisation requires all MCP servers to be registered with Edison Watch. Unregistered servers will be quarantined and removed from your configurations."
-                    : "Register your servers so Edison Watch can monitor and protect them. You can also do this later from the dashboard."}
+                    ? "Your organisation requires all MCP servers to be registered with SealGate. Unregistered servers will be quarantined and removed from your configurations."
+                    : "Register your servers so SealGate can monitor and protect them. You can also do this later from the dashboard."}
                 </p>
               </div>
 
@@ -324,7 +324,7 @@ export default function EncryptionStep({
               </p>
               {autoQuarantine && (
                 <p className="text-xs text-red-400 leading-relaxed font-medium">
-                  Your organisation requires all MCP servers to be protected by Edison Watch. Unregistered servers will be automatically quarantined and removed from your configurations.
+                  Your organisation requires all MCP servers to be protected by SealGate. Unregistered servers will be automatically quarantined and removed from your configurations.
                 </p>
               )}
               <div className="flex gap-2 justify-end">

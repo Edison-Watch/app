@@ -7,17 +7,18 @@
 //! adds fs-event triggering, per-user workers, and IPC on top of this shape.
 
 use std::collections::HashSet;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use edison_detectord::{Agent, DiscoveredServer, ServerConfig, fingerprint};
 use mcp_backend::{BackendClient, KnownStatus};
 use mcp_quarantine::{
     Action as SeenAction, ConfigStore, FileConfigStore, Policy, QuarantineRecord, ReconcileAction,
-    SeenStore, is_edison_entry, plan,
+    SeenStore, is_sealgate_entry, plan,
 };
 use notify::RecursiveMode;
 use notify_debouncer_full::{DebounceEventResult, new_debouncer};
+use sealgate_detectord::{Agent, DiscoveredServer, ServerConfig, fingerprint};
 use tokio::sync::broadcast;
 
 use crate::agents;
@@ -37,6 +38,16 @@ const RESCAN_INTERVAL: Duration = Duration::from_secs(20);
 const REFRESH_INTERVAL: Duration = Duration::from_secs(300);
 /// Debounce window coalescing rapid fs events into one reconcile.
 const DEBOUNCE: Duration = Duration::from_millis(500);
+
+/// The concrete fs-watcher type `start_watcher` hands back.
+type FsDebouncer = notify_debouncer_full::Debouncer<
+    notify::RecommendedWatcher,
+    notify_debouncer_full::RecommendedCache,
+>;
+
+/// Directories that do not exist yet, paired with the mode they should be
+/// watched in once they appear.
+type DeferredWatches = Vec<(PathBuf, RecursiveMode)>;
 
 /// Run the reconcile loop for the current OS user until Ctrl-C. `enforce=false`
 /// is a dry run.
@@ -60,7 +71,8 @@ pub async fn worker(user: String, enforce: bool, events: Option<EventTx>) -> any
     paths::ensure_user_dir(&user)?;
     let mut enrollment = Enrollment::load_for(&user)?
         .ok_or_else(|| anyhow::anyhow!("not enrolled; run `enroll` first"))?;
-    let client = BackendClient::new(enrollment.api_base_url.clone(), enrollment.api_key.clone());
+    let mut client =
+        BackendClient::new(enrollment.api_base_url.clone(), enrollment.api_key.clone());
     let mut seen = SeenStore::open(paths::seen_store_path(&user), enrollment.org_id.clone())?;
     refresh(&client, &mut enrollment, &mut seen, &user).await;
 
@@ -71,8 +83,17 @@ pub async fn worker(user: String, enforce: bool, events: Option<EventTx>) -> any
     // fs-event triggering. `tx` (held for the loop) keeps the channel open so
     // `rx.recv()` pends forever even if the watcher fails to start.
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<()>();
-    let _debouncer = start_watcher(&agents, tx.clone());
-    let watching = _debouncer.is_some();
+    let started = start_watcher(&agents, tx.clone());
+    let watching = started.is_some();
+    // Held for the lifetime of the loop: dropping the debouncer stops watching.
+    let (mut _debouncer, mut deferred) = match started {
+        Some((deb, deferred)) => (Some(deb), deferred),
+        None => (None, Vec::new()),
+    };
+    let deferred_watches = deferred.len();
+    // Directories already reported as unwatchable; keeps `retry_deferred` from
+    // warning on every tick about a failure that is not going to change.
+    let mut watch_failures: HashSet<PathBuf> = HashSet::new();
 
     tracing::info!(
         user = %user,
@@ -81,10 +102,12 @@ pub async fn worker(user: String, enforce: bool, events: Option<EventTx>) -> any
         enforce,
         agents = agents.len(),
         watching,
+        deferred_watches,
         "reconcile worker starting (Ctrl-C to stop)"
     );
 
     let mut last_refresh = Instant::now();
+    let mut force_refresh = false;
     let mut reported = HashSet::new();
     loop {
         // Re-read the enrollment from disk each pass so an onboarding-completion
@@ -92,7 +115,7 @@ pub async fn worker(user: String, enforce: bool, events: Option<EventTx>) -> any
         // enforcement AND fills in selected_agents / mcp_base_url / secret (the
         // login enroll started empty). Until armed the daemon is detect-only —
         // lists/reports but quarantines nothing — so onboarding can review +
-        // send-to-EW first. Policy (`quarantine`) is refreshed from the backend
+        // send-to-SG first. Policy (`quarantine`) is refreshed from the backend
         // separately and persisted, so reading it back from disk keeps
         // last-known-good.
         if let Ok(Some(fresh)) = Enrollment::load_for(&user) {
@@ -101,6 +124,20 @@ pub async fn worker(user: String, enforce: bool, events: Option<EventTx>) -> any
             }
             if fresh.selected_agents != enrollment.selected_agents {
                 tracing::info!(agents = ?fresh.selected_agents, "selected agents changed");
+            }
+            // `client` is bound to the URL + key it was built from, so a
+            // re-enroll that repoints the daemon (a different deploy
+            // environment, or a rotated key) has to rebuild it. Without this
+            // the worker keeps polling the OLD backend for the whole life of
+            // the process: policy and fingerprints come back for the wrong
+            // tenant, and `refresh` persists that answer over the correct one.
+            if fresh.api_base_url != enrollment.api_base_url || fresh.api_key != enrollment.api_key
+            {
+                tracing::info!(url = %fresh.api_base_url, "backend credentials changed; rebuilding client");
+                client = BackendClient::new(fresh.api_base_url.clone(), fresh.api_key.clone());
+                // Don't sit on the wrong tenant's cached policy for up to
+                // REFRESH_INTERVAL; re-fetch on this pass.
+                force_refresh = true;
             }
             enrollment = fresh;
         }
@@ -115,18 +152,24 @@ pub async fn worker(user: String, enforce: bool, events: Option<EventTx>) -> any
             events.as_ref(),
             &mut reported,
         );
-        // Self-heal: if a config was overwritten and dropped our edison-watch
+        // Self-heal: if a config was overwritten and dropped our sealgate
         // entry, put it back. Only while enforcing + armed (i.e. we own the
         // install); a no-op when the entry is already present, so no fs loop.
         if enforce && enrollment.armed {
-            let healed = crate::ops::heal_edison_install(&user, &enrollment);
+            let healed = crate::ops::heal_sealgate_install(&user, &enrollment);
             if healed > 0 {
-                tracing::info!(count = healed, "self-healed edison-watch install");
+                tracing::info!(count = healed, "self-healed sealgate install");
             }
         }
-        if last_refresh.elapsed() >= REFRESH_INTERVAL {
+        if force_refresh || last_refresh.elapsed() >= REFRESH_INTERVAL {
             refresh(&client, &mut enrollment, &mut seen, &user).await;
             last_refresh = Instant::now();
+            force_refresh = false;
+        }
+        // Cheap (one open() of a file that is either readable or not), and this
+        // tick is at most every RESCAN_INTERVAL, so no need to pace it further.
+        if let Some(deb) = _debouncer.as_mut() {
+            retry_deferred(deb, &mut deferred, &mut watch_failures);
         }
         // Stops when the task is dropped (Ctrl-C in `run`, or the supervisor
         // aborting the worker).
@@ -141,25 +184,30 @@ pub async fn worker(user: String, enforce: bool, events: Option<EventTx>) -> any
 }
 
 /// Watch every agent's targets and signal `tx` (debounced) on any change.
-/// Returns the debouncer, which must be held alive to keep watching.
+/// Returns the debouncer, which must be held alive to keep watching, plus any
+/// directories deferred because they do not exist yet (see [`retry_deferred`]).
+///
+/// This is the daemon's own watcher, deliberately separate from
+/// [`sealgate_detectord::Watcher`]: it splits file-parent vs recursive dirs and
+/// signals a channel rather than diffing snapshots itself, because the reconcile
+/// loop already re-discovers everything. The TCC gating therefore has to be
+/// applied HERE as well - the library `Watcher` is used only by its own tests
+/// and example, so gating it alone left the daemon prompting exactly as before.
 fn start_watcher(
     agents: &[Arc<dyn Agent>],
     tx: tokio::sync::mpsc::UnboundedSender<()>,
-) -> Option<
-    notify_debouncer_full::Debouncer<
-        notify::RecommendedWatcher,
-        notify_debouncer_full::RecommendedCache,
-    >,
-> {
+) -> Option<(FsDebouncer, DeferredWatches)> {
     // Files → watch their parent dir non-recursively (editors write via atomic
-    // rename); dirs (workspace storage, plugin caches) → recursively.
+    // rename); dirs (workspace storage, plugin caches) → recursively. The one
+    // config file that lives directly in $HOME is watched as a leaf instead, so
+    // $HOME never enters the set - see `tcc::watch_path_for_file`.
     let mut file_dirs = HashSet::new();
     let mut rec_dirs = HashSet::new();
     for a in agents {
         let wt = a.watch_targets();
         for f in wt.files {
-            if let Some(p) = f.parent() {
-                file_dirs.insert(p.to_path_buf());
+            if let Some(p) = sealgate_detectord::tcc::watch_path_for_file(&f) {
+                file_dirs.insert(p);
             }
         }
         for d in wt.dirs {
@@ -175,17 +223,82 @@ fn start_watcher(
     .map_err(|e| tracing::warn!(error = %e, "fs watcher setup failed; periodic rescan only"))
     .ok()?;
 
-    for dir in &file_dirs {
-        if dir.exists() {
-            let _ = deb.watch(dir, RecursiveMode::NonRecursive);
+    // Watching a TCC-protected folder raises a permission dialog per folder
+    // service, and we hold no target inside one - so they are skipped outright
+    // rather than deferred pending a Full Disk Access grant. Anything under
+    // them is still covered by the reconcile loop's periodic rescan.
+    //
+    // `deferred` is now only ever "does not exist yet": a client's config
+    // directory is often created after the daemon starts, and `notify` cannot
+    // watch a missing path.
+    let mut deferred: Vec<(PathBuf, RecursiveMode)> = Vec::new();
+    for (dirs, mode) in [
+        (&file_dirs, RecursiveMode::NonRecursive),
+        (&rec_dirs, RecursiveMode::Recursive),
+    ] {
+        for dir in dirs {
+            if sealgate_detectord::tcc::is_tcc_protected(dir) {
+                tracing::debug!(
+                    dir = %dir.display(),
+                    "not watching: TCC-protected folder; covered by the periodic rescan"
+                );
+                continue;
+            }
+            if !dir.exists() {
+                deferred.push((dir.clone(), mode));
+                continue;
+            }
+            let _ = deb.watch(dir, mode);
         }
     }
-    for dir in &rec_dirs {
-        if dir.exists() {
-            let _ = deb.watch(dir, RecursiveMode::Recursive);
-        }
+    Some((deb, deferred))
+}
+
+/// Pick up watches deferred because their directory did not exist yet.
+///
+/// Called from the reconcile loop's periodic tick, so a client installed after
+/// the daemon started gets a live watch without a restart. Retains whatever it
+/// could not watch, and only ever ADDS.
+///
+/// `warned` carries the directories whose failure has already been reported, so
+/// a durable failure (an exhausted inotify limit, an unreadable directory) is
+/// warned about once instead of on every reconcile tick for the life of the
+/// daemon. Retrying continues regardless - those causes are often transient, and
+/// the periodic rescan still covers the directory meanwhile.
+fn retry_deferred(
+    deb: &mut FsDebouncer,
+    deferred: &mut DeferredWatches,
+    warned: &mut HashSet<PathBuf>,
+) {
+    if deferred.is_empty() {
+        return;
     }
-    Some(deb)
+    deferred.retain(|(dir, mode)| {
+        // Still missing is the normal case, not a failure - stay quiet and keep
+        // it queued rather than logging a warning every tick.
+        if !dir.exists() {
+            return true;
+        }
+        match deb.watch(dir, *mode) {
+            Ok(()) => {
+                tracing::info!(dir = %dir.display(), "watching (directory now exists)");
+                warned.remove(dir);
+                false
+            }
+            Err(e) => {
+                if warned.insert(dir.clone()) {
+                    tracing::warn!(
+                        dir = %dir.display(),
+                        error = %e,
+                        "deferred watch failed; retrying quietly from here"
+                    );
+                } else {
+                    tracing::debug!(dir = %dir.display(), error = %e, "deferred watch still failing");
+                }
+                true
+            }
+        }
+    });
 }
 
 /// Publish a `Quarantined` event for `user` (no-op when there's no channel).
@@ -233,6 +346,42 @@ fn chown_new_files(record: &QuarantineRecord, user: &str) {
     }
 }
 
+/// Whether a fetched policy may be trusted for the org we are enrolled in.
+///
+/// Split out from [`apply_policy`] so the tenant rule is testable without
+/// touching the on-disk enrollment.
+fn policy_matches_tenant(p: &mcp_backend::Policy, enrolled_org: &str) -> bool {
+    match p.org_id.as_deref() {
+        Some(org) => org == enrolled_org,
+        // Unverifiable, not wrong: an older backend reports no org at all.
+        None => true,
+    }
+}
+
+/// Cache a freshly-fetched policy onto `enrollment` and persist it.
+///
+/// Defence in depth behind the credential rebuild in [`worker`]: a policy is
+/// only trusted when the backend attributes it to the org we are enrolled in,
+/// so a client left pointing at another tenant can never write that tenant's
+/// answer over ours. An older backend that reports no `org_id` is unverifiable
+/// rather than wrong, so it is applied as before instead of bricking
+/// quarantine for everyone on it.
+pub fn apply_policy(p: &mcp_backend::Policy, enrollment: &mut Enrollment, user: &str) {
+    if !policy_matches_tenant(p, &enrollment.org_id) {
+        tracing::warn!(
+            policy_org = ?p.org_id,
+            enrolled_org = %enrollment.org_id,
+            "policy org mismatch; keeping last-known-good (re-enroll to repoint this daemon)"
+        );
+        return;
+    }
+    if p.quarantine != enrollment.quarantine {
+        tracing::info!(quarantine = p.quarantine, "policy updated");
+    }
+    enrollment.quarantine = p.quarantine;
+    let _ = enrollment.save_for(user);
+}
+
 /// Refresh policy + known fingerprints into the enrollment/seen-store.
 /// Fail-closed: on any error the cached values are kept, never downgraded.
 pub async fn refresh(
@@ -242,13 +391,7 @@ pub async fn refresh(
     user: &str,
 ) {
     match client.fetch_policy().await {
-        Ok(p) => {
-            if p.quarantine != enrollment.quarantine {
-                tracing::info!(quarantine = p.quarantine, "policy updated");
-            }
-            enrollment.quarantine = p.quarantine;
-            let _ = enrollment.save_for(user);
-        }
+        Ok(p) => apply_policy(&p, enrollment, user),
         Err(e) => tracing::warn!(error = %e, "policy refresh failed; keeping last-known-good"),
     }
 
@@ -286,13 +429,13 @@ fn reconcile_once(
 ) {
     let observed = agents::discover_all(agents);
 
-    // Notify the UI of report-only servers (edge-triggered, once each): non-edison
+    // Notify the UI of report-only servers (edge-triggered, once each): non-sealgate
     // servers we won't quarantine — everything when the policy is off, plus
     // untouchable-opaque servers when it's on. Actioned servers get their own
     // Quarantined event instead.
     if let Some(tx) = events {
         for s in &observed {
-            let report_only = !is_edison_entry(s)
+            let report_only = !is_sealgate_entry(s)
                 && (!quarantine
                     || matches!(
                         &s.config,
@@ -324,8 +467,8 @@ fn reconcile_once(
     let skips: Vec<Skip> = observed
         .iter()
         .filter_map(|s| {
-            let skip = if is_edison_entry(s) {
-                Skip::edison(s)
+            let skip = if is_sealgate_entry(s) {
+                Skip::sealgate(s)
             } else if matches!(
                 &s.config,
                 ServerConfig::Opaque {
@@ -374,21 +517,21 @@ fn reconcile_once(
         // Opaque removals: neutralise locally, no fingerprint / disposition.
         if let ReconcileAction::RemoveOpaque { server } = &action {
             if !enforce {
-                tracing::debug!(server = %server.name, agent = server.client, "[dry-run] would remove (opaque, cannot send to EW)");
+                tracing::debug!(server = %server.name, agent = server.client, "[dry-run] would remove (opaque, cannot send to SG)");
                 continue;
             }
             match store.quarantine(&server.location, &server.config) {
                 Ok(record) => {
                     chown_new_files(&record, user);
                     publish(events, user, server, "removed");
-                    tracing::info!(server = %server.name, agent = server.client, "removed (opaque, cannot send to EW)");
+                    tracing::info!(server = %server.name, agent = server.client, "removed (opaque, cannot send to SG)");
                     qstate.upsert(QuarantinedEntry {
                         name: server.name.clone(),
                         agent: server.client.to_string(),
                         // Path-keyed so each plugin dir is a distinct record
                         // (the dir name repeats across projects).
                         fingerprint: format!("opaque:{}", server.location.path.display()),
-                        config: None, // opaque: can't be submitted to EW
+                        config: None, // opaque: can't be submitted to SG
                         record,
                     });
                     let _ = qstate.save_for(user);
@@ -420,7 +563,7 @@ fn reconcile_once(
             Ok(record) => {
                 chown_new_files(&record, user);
                 // Known servers are neutralised silently; new (unknown) ones need
-                // the UI to prompt (send to EW / keep quarantined).
+                // the UI to prompt (send to SG / keep quarantined).
                 let state = if known {
                     "quarantined"
                 } else {
@@ -458,16 +601,16 @@ struct Skip {
 }
 
 impl Skip {
-    fn edison(s: &edison_detectord::DiscoveredServer) -> Self {
+    fn sealgate(s: &sealgate_detectord::DiscoveredServer) -> Self {
         Self {
             name: s.name.clone(),
             agent: s.client,
-            reason: "edison-watch (our own server)",
+            reason: "sealgate (our own server)",
             fingerprint: fingerprint(&s.name, &s.config).unwrap_or_else(|| "-".into()),
         }
     }
 
-    fn untouchable(s: &edison_detectord::DiscoveredServer) -> Self {
+    fn untouchable(s: &sealgate_detectord::DiscoveredServer) -> Self {
         Self {
             name: s.name.clone(),
             agent: s.client,
@@ -482,5 +625,37 @@ fn log_skips(skips: &[Skip]) {
     // line carries the counts at info.
     for s in skips {
         tracing::debug!(server = %s.name, agent = s.agent, reason = s.reason, fingerprint = %s.fingerprint, "will not quarantine");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn policy(org: Option<&str>) -> mcp_backend::Policy {
+        mcp_backend::Policy {
+            quarantine: true,
+            org_id: org.map(str::to_string),
+        }
+    }
+
+    #[test]
+    fn tenant_check_accepts_the_enrolled_org() {
+        assert!(policy_matches_tenant(&policy(Some("org-a")), "org-a"));
+    }
+
+    #[test]
+    fn tenant_check_rejects_another_org() {
+        // The demo-backend-after-release-re-enroll case: a perfectly valid 200
+        // for the wrong tenant must not overwrite our cached policy.
+        assert!(!policy_matches_tenant(
+            &policy(Some("org-demo")),
+            "org-release"
+        ));
+    }
+
+    #[test]
+    fn tenant_check_allows_a_backend_that_reports_no_org() {
+        assert!(policy_matches_tenant(&policy(None), "org-a"));
     }
 }

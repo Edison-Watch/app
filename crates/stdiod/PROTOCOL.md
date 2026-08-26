@@ -1,6 +1,6 @@
 # stdiod tunnel protocol - normative client requirements
 
-Normative requirements for any client that speaks the Edison Watch stdio tunnel
+Normative requirements for any client that speaks the SealGate stdio tunnel
 protocol: the Rust daemon in this repo today, a Kotlin/Android client later.
 
 Scope and status:
@@ -11,7 +11,7 @@ Scope and status:
   not normative here.
 - Wire *shapes* are owned by `schema/tunnel-protocol.json` (canonical) and its
   vendored backend copy `src/stdio_tunnel/tunnel-protocol.json` in the
-  edison-watch repo. This document covers *behaviour* that a schema cannot
+  sealgate repo. This document covers *behaviour* that a schema cannot
   express.
 - Executable examples of every frame live in `schema/golden-frames/`.
 - Key words MUST / MUST NOT / SHOULD / MAY are used in the RFC 2119 sense.
@@ -20,11 +20,11 @@ Peers referenced below (read-only context for a client implementer):
 
 | Role | Source |
 |------|--------|
-| Wire types | `crates/edison-tunnel-protocol/src/lib.rs` |
-| Reference client | `crates/edison-stdiod/src/{daemon,tunnel,proc,env_store,state,config}.rs` |
-| Backend endpoint | edison-watch `src/api/v1/routes/stdio_tunnel.py` |
-| Backend frame router | edison-watch `src/stdio_tunnel/registry.py` |
-| Backend wire types | edison-watch `src/stdio_tunnel/protocol.py` |
+| Wire types | `crates/sealgate-tunnel-protocol/src/lib.rs` |
+| Reference client | `crates/sealgate-stdiod/src/{daemon,tunnel,proc,env_store,state,config}.rs` |
+| Backend endpoint | sealgate `src/api/v1/routes/stdio_tunnel.py` |
+| Backend frame router | sealgate `src/stdio_tunnel/registry.py` |
+| Backend wire types | sealgate `src/stdio_tunnel/protocol.py` |
 
 ---
 
@@ -51,13 +51,13 @@ request. The backend accepts an `ewc_`-prefixed client credential carrying the
 `tunnel:connect` scope, or a legacy API key; anything else is closed with 1008.
 *Source: `tunnel.rs::build_request`; `stdio_tunnel.py::_authenticate_ws`.*
 
-**T-05** A client MUST send `X-Edison-Device-Id`. When the credential is an
+**T-05** A client MUST send `X-SealGate-Device-Id`. When the credential is an
 `ewc_` client credential, the header value MUST equal the credential's bound
 `device_id`, otherwise the backend closes with 1008 / `device id does not match
 client credential`.
 *Source: `stdio_tunnel.py::_authenticate_ws`.*
 
-**T-06** A client SHOULD send `X-Edison-Secret-Key` when it holds one. The
+**T-06** A client SHOULD send `X-SealGate-Secret-Key` when it holds one. The
 header is optional at v2. Both the bearer token and the secret key MUST be
 treated as sensitive and MUST NOT appear in logs or in `last_error` text.
 *Source: `tunnel.rs::build_request` (`HeaderValue::set_sensitive`);
@@ -93,7 +93,7 @@ infer the bounds from a successful handshake.
 `protocol.py::MIN_SUPPORTED_PROTOCOL_VERSION`, `stdio_tunnel.py` version check;
 `lib.rs::PROTOCOL_VERSION`.*
 
-**T-10** `client_hello.device_id` MUST equal the `X-Edison-Device-Id` header
+**T-10** `client_hello.device_id` MUST equal the `X-SealGate-Device-Id` header
 value on the same connection. The backend closes with 1008 / `device_id
 mismatch between header and client_hello` otherwise.
 *Source: `stdio_tunnel.py::_stdio_tunnel_ws_inner`.*
@@ -470,7 +470,7 @@ immediately.
 The desktop tray reads the daemon's `state.json` directly, so its shape is part
 of the client contract even though it never touches the wire.
 
-**T-67** A client that ships with the Edison desktop app MUST publish a
+**T-67** A client that ships with the SealGate desktop app MUST publish a
 `state.json` with these members: `connection_state`, `backend_url`, `device_id`,
 `device_label`, `last_connected_at`, `last_error`, `servers[]`, `generation`.
 Every member except `servers` and `generation` is nullable.
@@ -554,7 +554,6 @@ golden fixture.
 | ARCHITECTURE.md says | Implementation |
 |----------------------|----------------|
 | Version types are generated from JSON Schema via `schemars`/`typify` | Both Rust and pydantic types are hand-written and kept in step by `check_tunnel_protocol_schema.py` |
-| Schema path `schema/edison-tunnel-protocol.json` | Actual path is `schema/tunnel-protocol.json` |
 | WS Ping every 15s, close if no Pong within 10s | Application-level `ping` frames every 15s; staleness declared after 25s of *any* silence (`HEARTBEAT_STALE_AFTER`) |
 | TCP keepalive is enabled | Not configured; `tokio-tungstenite` defaults apply (T-58) |
 | Backoff caps at 60s | Caps at 30s (`BACKOFF_MAX`) |
@@ -589,12 +588,12 @@ step; a subprocess client has none.
 
 A client that hosts capability modules in-process rather than spawning
 subprocesses (the planned Android/iOS client, design at
-`dev-docs/architecture/mobile-hardware-gateway-design.md` in the edison-watch
+`dev-docs/architecture/mobile-hardware-gateway-design.md` in the sealgate
 repo) maps three concepts differently while satisfying every MUST above.
 
 | Concept | Subprocess client | In-process client |
 |---------|-------------------|-------------------|
-| `DesiredServer.command` | An executable resolved on PATH | A virtual URI (`edison-mobile://<module>`) naming a built-in module. An unrecognised URI is a spawn failure, so it reports `server_spawn_result{ok:false}` per T-38 |
+| `DesiredServer.command` | An executable resolved on PATH | A virtual URI (`sealgate-mobile://<module>`) naming a built-in module. An unrecognised URI is a spawn failure, so it reports `server_spawn_result{ok:false}` per T-38 |
 | Spawn | `fork`/`exec` plus stdio pumps | Activate the module: acquire OS permissions and adapters, then ack per T-37 |
 | Child death | Output pump EOF | Module fatal (adapter revoked, permission withdrawn), reported as `tunnel_error{code:"server_offline"}` per T-42 |
 | `DesiredServer.args` / `env` / `working_dir` | Process argv, environment, cwd | Module configuration. `templated_args` substitution still applies as literal string rewriting per T-35 |

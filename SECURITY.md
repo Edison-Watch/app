@@ -6,7 +6,7 @@ This policy covers every component in this repository: the desktop app
 
 ## Supported versions
 
-Edison Watch's client components are pre-1.0, fast-moving software. Only the
+SealGate's client components are pre-1.0, fast-moving software. Only the
 latest `main` / most recent release receives security fixes. Pin a specific
 commit if you need stability.
 
@@ -24,7 +24,7 @@ Instead, report privately through either channel:
 
 - **GitHub private advisory** - open the repository's **Security** tab and click
   **"Report a vulnerability"** ([private vulnerability reporting](https://docs.github.com/en/code-security/security-advisories/guidance-on-reporting-and-writing-information-about-vulnerabilities/privately-reporting-a-security-vulnerability)).
-- **Email** - <security@edison.watch>.
+- **Email** - <security@sealgate.ai>.
 
 Please include enough detail to reproduce: affected component and
 version/commit, platform, configuration, and a description of the impact. We
@@ -39,10 +39,10 @@ so a few properties are worth understanding:
 
 - **Credentials at rest.** The long-lived opaque client access token (and
   optional secret key) are written in plaintext to
-  `~/.config/edison-stdiod/config.toml` with file mode `0600`. The MVP has no
-  refresh token. Protect the host account accordingly. `edison-stdiod logout`
+  `~/.config/sealgate-stdiod/config.toml` with file mode `0600`. The MVP has no
+  refresh token. Protect the host account accordingly. `sealgate-stdiod logout`
   best-effort revokes the client token and always removes the local credential;
-  `edison-stdiod uninstall --purge` removes all persisted state. Deprecated
+  `sealgate-stdiod uninstall --purge` removes all persisted state. Deprecated
   legacy API keys use the same storage protections.
 - **Account isolation.** Per-server environment values may contain secrets.
   Browser-auth installations store them in separate files namespaced by a hash

@@ -10,7 +10,7 @@
  *
  * Five phases (12s loop):
  *   0-15%   Agent IDE composes a TypeScript snippet (lines populate)
- *   15-25%  Code packet flies into the Edison sandbox (orange → accent)
+ *   15-25%  Code packet flies into the SealGate sandbox (orange → accent)
  *   25-35%  AST scan beam sweeps the code; `eval(` rejected, others pass
  *   35-72%  Deno runtime executes; three MCP request/response round-trips,
  *           variables receive taint dots (green = safe, red = tainted)
@@ -26,7 +26,7 @@ import { useId } from 'react'
 import { AGENT_REGISTRY } from '../../agent-registry'
 import {
   AgentIcon,
-  EdisonLogo,
+  SealGateLogo,
   GREEN as SAFE,
   McpIcon,
   McpPacket,
@@ -60,7 +60,7 @@ const CSS = `
 .cms .cms-code3 { animation: cms-code3 12s ease-in-out infinite; }
 .cms .cms-code4 { animation: cms-code4 12s ease-in-out infinite; }
 
-/* code packet: laptop -> Edison */
+/* code packet: laptop -> SealGate */
 .cms .cms-submit { color:${O}; animation: cms-submit 12s ease-in-out infinite; }
 
 /* AST scan beam */
@@ -535,7 +535,7 @@ export default function CodeModeSecurityAnimation(): React.ReactNode {
           AI Agent
         </text>
 
-        {/* ===== EDISON SANDBOX (center) ===== */}
+        {/* ===== SEALGATE SANDBOX (center) ===== */}
         <g className="cms-box">
           {/* Outer sandbox container */}
           <rect
@@ -552,8 +552,8 @@ export default function CodeModeSecurityAnimation(): React.ReactNode {
             strokeDasharray="4 3"
           />
 
-          {/* Edison logo badge */}
-          <EdisonLogo x={184} y={4} w={20} h={19.5} />
+          {/* SealGate logo badge */}
+          <SealGateLogo x={184} y={4} w={20} h={19.5} />
 
           {/* Sandbox label */}
           <text

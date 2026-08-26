@@ -1,0 +1,151 @@
+name: Build daemon (stdiod)
+
+# Build sealgate-stdiod for macOS arm64 and static-musl Linux, and upload the
+# results as WORKFLOW ARTIFACTS you can download from the run page.
+#
+# This workflow no longer publishes a GitHub Release, and no longer triggers on
+# a tag. Release assets for the daemon are published by desktop-release.yml onto
+# the app's own `v<version>` release - see the DAEMON ASSETS note there for why.
+# In short: the daemon version follows the app version, so a separate stdiod-v*
+# tag had nothing left to express, and publishing one would steal GitHub's
+# "Latest" pointer from the app and break electron-updater's stable channel.
+#
+# What is left here is the inspect-a-build path: run it manually to check that
+# crates/stdiod still cross-compiles cleanly, or to grab a one-off binary,
+# without cutting an app release.
+#
+# The binaries are intentionally UNSIGNED (ad-hoc). When consumed by the desktop
+# app they are re-signed and notarized as part of the app bundle, so a Developer
+# ID signature here would just be overwritten.
+
+on:
+  workflow_dispatch:
+
+# Manual runs only, so a superseded run is never something a human is waiting
+# on; serialize per ref rather than cancelling a build someone asked for.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  BIN_NAME: sealgate-stdiod
+  # Matches the asset name desktop-release.yml publishes, so a binary pulled
+  # from this workflow's artifacts is interchangeable with the released one.
+  ASSET_NAME: sealgate-stdiod-macos-arm64
+
+jobs:
+  macos:
+    name: macOS arm64
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: crates/stdiod
+    steps:
+      - uses: actions/checkout@v7
+
+      # crates/stdiod/rust-toolchain.toml pins the stable channel. arm64 ONLY:
+      # Intel Macs are not supported, and `lipo`-merging a cross-compiled x86_64
+      # slice (which carries no signature of its own) produced a Mach-O with no
+      # designated requirement at all, so TCC could never remember a grant made
+      # against it.
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: crates/stdiod
+
+      - name: Build aarch64-apple-darwin
+        run: cargo build --release --bin "$BIN_NAME" --target aarch64-apple-darwin
+
+      - name: Stage binary
+        run: |
+          mkdir -p dist
+          cp "target/aarch64-apple-darwin/release/$BIN_NAME" "dist/$ASSET_NAME"
+          chmod +x "dist/$ASSET_NAME"
+
+      - name: Verify architecture
+        run: |
+          lipo -info "dist/$ASSET_NAME"
+          if lipo -info "dist/$ASSET_NAME" | grep -q 'x86_64'; then
+            echo "::error::$ASSET_NAME contains an x86_64 slice; expected arm64 only"
+            exit 1
+          fi
+          file "dist/$ASSET_NAME"
+          "dist/$ASSET_NAME" --version || true
+
+      - name: Generate checksums
+        working-directory: crates/stdiod/dist
+        run: shasum -a 256 "$ASSET_NAME" > SHA256SUMS
+
+      # Download from the run's Artifacts section to inspect the build.
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.ASSET_NAME }}
+          path: |
+            crates/stdiod/dist/${{ env.ASSET_NAME }}
+            crates/stdiod/dist/SHA256SUMS
+          if-no-files-found: error
+
+  linux:
+    name: Linux static musl (x64 + arm64)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: crates/stdiod
+    steps:
+      - uses: actions/checkout@v7
+
+      # Both musl targets; built fully STATIC so the published binary has zero
+      # glibc/libc dependency and runs on any distro (incl. Alpine / containers).
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl, aarch64-unknown-linux-musl
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: crates/stdiod
+
+      # zig + cargo-zigbuild supply a C cross-toolchain for `ring`'s C-crypto,
+      # which can't be cross-built to musl with the stock toolchain. Mirrors the
+      # desktop app's scripts/build-stdiod-linux.sh.
+      - uses: mlugg/setup-zig@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-zigbuild
+
+      - name: Build static musl (both arches)
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          for spec in "x64:x86_64-unknown-linux-musl" "arm64:aarch64-unknown-linux-musl"; do
+            arch="${spec%%:*}"; target="${spec##*:}"
+            echo "Building $target ..."
+            cargo zigbuild --release --bin "$BIN_NAME" --target "$target"
+            cp "target/$target/release/$BIN_NAME" "dist/sealgate-stdiod-linux-$arch"
+            chmod +x "dist/sealgate-stdiod-linux-$arch"
+          done
+          file dist/sealgate-stdiod-linux-*
+          # x64 binary is native to this runner - smoke-test it.
+          ./dist/sealgate-stdiod-linux-x64 --version || true
+
+      - name: Generate checksums
+        working-directory: crates/stdiod/dist
+        run: shasum -a 256 sealgate-stdiod-linux-x64 sealgate-stdiod-linux-arm64 > SHA256SUMS-linux
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: sealgate-stdiod-linux
+          path: |
+            crates/stdiod/dist/sealgate-stdiod-linux-x64
+            crates/stdiod/dist/sealgate-stdiod-linux-arm64
+            crates/stdiod/dist/SHA256SUMS-linux
+          if-no-files-found: error
+

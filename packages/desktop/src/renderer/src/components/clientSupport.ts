@@ -1,16 +1,17 @@
 /**
  * Clients whose MCP servers can also live as Connectors in the vendor's
- * account, where Edison Watch cannot see or proxy them - and the copy each one
+ * account, where SealGate cannot see or proxy them - and the copy each one
  * gets when that is the most important thing to say about it.
  *
- * A **presentation grouping, not a capability**. Whether Edison can configure a
+ * A **presentation grouping, not a capability**. Whether SealGate can configure a
  * client is `manageable`, which the daemon declares; this is the separate
  * question of whether a client has a second, invisible place to keep servers.
- * The two overlap without being the same:
+ * Every member happens to be unmanageable today, for two different reasons:
  *
- *   Claude Desktop / Cowork   manageable, connector-backed     local servers proxied,
- *                                                             Connectors invisible
- *   ChatGPT                   unmanageable, connector-backed   nothing proxied
+ *   ChatGPT                   every server is a Connector - nothing local at all
+ *   Claude Desktop / Cowork   local servers exist, but `claude_desktop_config.json`
+ *                             accepts stdio entries only, so a gateway URL has
+ *                             no place to go; Connectors are the only route in
  *
  * Hardcoded because the daemon has no notion of Connectors: it reports what it
  * can read on disk, and a server held in someone's OpenAI or Anthropic account
@@ -21,9 +22,8 @@
  * membership - a fully set up member is downgraded out of "Connected" - and
  * then renders whatever the lookup returns for it. Split in two, adding an id
  * to the membership list and forgetting the copy list would fall through to the
- * generic "Edison Watch can't configure this app": a client Edison configures
- * perfectly well, labelled unconfigurable. That is the precise false message
- * this grouping exists to remove, so the two cannot be separated here.
+ * generic "SealGate can't configure this app", which says nothing about
+ * what the user should do instead.
  *
  * The wording still differs per client, which is why this is a map rather than
  * one shared string. `AppsStep` uses membership alone, for its warning banner.
@@ -34,30 +34,34 @@ export interface UnmanageableReason {
 }
 
 /**
- * Copy for a connector-backed client Edison *can* configure. Deliberately
- * unlike ChatGPT's below: Edison really does proxy these clients' local
- * servers, so telling the user nothing is protected would be false and would
- * send them hunting for a problem that isn't there. The caveat is narrower -
- * only the account-side Connectors are out of reach.
+ * Copy for the Claude hosts. Deliberately unlike ChatGPT's below: those apps do
+ * run local MCP servers, so "everything lives in your account" would be false.
+ * What is true is narrower - SealGate has no way to *install* itself, because the
+ * config file takes stdio entries only.
+ *
+ * It names the manual route, because unlike ChatGPT's case there is one that
+ * fully works: adding the gateway as a custom connector proxies the same
+ * servers SealGate would have proxied itself.
  */
 const CONNECTOR_CAVEAT: UnmanageableReason = {
-  row: "Local MCP servers are protected - account Connectors are not visible to Edison Watch",
+  row: "Add SealGate as a connector - this app can't be configured automatically",
   tooltip:
-    "Edison Watch proxies this app's local MCP servers. It cannot see or " +
-    "proxy Connectors held in your account - remove those manually and " +
-    "request equivalents from your admin.",
+    "This app only accepts local commands in its config file, so SealGate " +
+    "cannot install itself. Add the gateway under Settings > " +
+    "Connectors to route this app's servers through it.",
 };
 
 const CONNECTOR_BACKED = {
   "claude-desktop": CONNECTOR_CAVEAT,
   "claude-cowork": CONNECTOR_CAVEAT,
-  // No reassurance about local servers here, because there are none Edison can
-  // reach: every one of this client's servers lives in the account.
+  // No manual route offered here, because adding the gateway would not help:
+  // every one of this client's servers lives in the account, so there is
+  // nothing local for it to carry.
   chatgpt: {
-    row: "Connectors are managed in your account - Edison Watch can't proxy them",
+    row: "Connectors are managed in your account - SealGate can't proxy them",
     tooltip:
       "This app's MCP servers are Connectors held in your account, not local " +
-      "config Edison Watch can proxy. Remove them and request equivalents from " +
+      "config SealGate can proxy. Remove them and request equivalents from " +
       "your admin.",
   },
 } satisfies Record<string, UnmanageableReason>;

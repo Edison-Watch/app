@@ -1,12 +1,16 @@
 {
-  "name": "edison-watch-app",
+  "name": "sealgate-app",
   "private": true,
-  "description": "Everything Edison Watch runs on your machine: desktop app, daemons, and shared library.",
+  "description": "Everything SealGate runs on your machine: desktop app, daemons, and shared library.",
   "license": "AGPL-3.0-only",
   "engines": {
     "node": ">=22"
   },
   "workspaces": [
     "packages/*"
-  ]
+  ],
+  "scripts": {
+    "version:sync": "node scripts/sync-versions.mjs",
+    "version:check": "node scripts/sync-versions.mjs --check"
+  }
 }

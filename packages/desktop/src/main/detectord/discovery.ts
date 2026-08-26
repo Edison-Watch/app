@@ -37,7 +37,7 @@ function mapConfig(cfg: ServerConfig): McpServerConfig | null {
 }
 
 function toDiscovered(v: ServerView): DiscoveredMcpServer | null {
-  if (v.state === 'edison') return null // never surface our own entries
+  if (v.state === 'sealgate') return null // never surface our own entries
   if (!v.config) return null
   const config = mapConfig(v.config)
   if (!config) return null

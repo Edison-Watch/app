@@ -10,14 +10,14 @@ import {
   storeDeviceSession,
   type DeviceCodeGrant,
   type DeviceTokenResponse,
-} from "@edison-watch/shared/auth";
+} from "@sealgate/shared/auth";
 import {
   getEnv,
   getActiveEnvName,
   getStoredCustomBackend,
   storeCustomBackend,
   STORAGE_KEY,
-} from "@edison-watch/shared/config";
+} from "@sealgate/shared/config";
 
 // The main process owns the custom (self-hosted) backend URLs; mirror them
 // into localStorage so getEnv() can resolve the "custom" environment.
@@ -153,7 +153,7 @@ export default function useAuth() {
     }
   }, [update]);
 
-  // Finish sign-in once we hold a valid Edison API key: resolve base URLs,
+  // Finish sign-in once we hold a valid SealGate API key: resolve base URLs,
   // publish auth state, start health polling and fetch the org's domain config.
   const completeSignIn = useCallback(
     async (creds: { apiKey: string; userId: string; email: string }): Promise<boolean> => {
@@ -215,7 +215,7 @@ export default function useAuth() {
     [checkHealth, update],
   );
 
-  // Sign in via the Edison backend's device-authorization grant: open the
+  // Sign in via the SealGate backend's device-authorization grant: open the
   // dashboard approval page in the system browser and poll for the approval.
   const signInWithBrowser = useCallback(async () => {
     if (pollAbort.current) return; // A flow is already pending.
@@ -236,7 +236,7 @@ export default function useAuth() {
       grant = await requestDeviceCode(
         apiBaseUrl,
         {
-          deviceLabel: `Edison Desktop (${window.api.platform ?? "unknown"})`,
+          deviceLabel: `SealGate Desktop (${window.api.platform ?? "unknown"})`,
           platform: window.api.platform ?? undefined,
           clientVersion: clientVersion || undefined,
         },
@@ -282,7 +282,7 @@ export default function useAuth() {
       if (!token.api_key) {
         update({
           loading: false,
-          error: "The server did not return an API key. Please update Edison and try again.",
+          error: "The server did not return an API key. Please update SealGate and try again.",
           awaitingBrowserCallback: false,
           pendingUserCode: "",
           pendingVerificationUri: "",

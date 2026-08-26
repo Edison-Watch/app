@@ -16,10 +16,10 @@ const SETUP_DATA = {
   userEmail: 'alice@example.com',
   mcpBaseUrl: 'https://mcp.demo.example.com',
   apiBaseUrl: 'https://api.demo.example.com',
-  apiKey: 'edison_demo_apikey_abc123',
+  apiKey: 'sealgate_demo_apikey_abc123',
 };
 
-/** Connected to the Edison Watch server. */
+/** Connected to the SealGate server. */
 export const Connected: Story = {
   decorators: [
     (Story) => {

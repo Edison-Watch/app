@@ -1,13 +1,13 @@
 //! Linux systemd **user** service integration for the detector daemon.
 //!
 //! The Linux analog of the macOS LaunchAgent and the Windows logon task: a
-//! per-user unit at `~/.config/systemd/user/edison-detectord.service`, managed
+//! per-user unit at `~/.config/systemd/user/sealgate-detectord.service`, managed
 //! with `systemctl --user` (no `sudo`, no system-level unit) so the daemon runs
 //! as the logged-in user with their HOME, PATH, and MCP client configs - which
 //! is exactly the per-user model the daemon needs (it reads the user's
 //! `~/.claude.json` etc. and spawns their tools).
 //!
-//! Mirrors `edison-stdiod`'s Linux integration:
+//! Mirrors `sealgate-stdiod`'s Linux integration:
 //!
 //! - `Restart=on-failure`      - systemd restarts the binary on crash (the
 //!   worker loop also self-heals, so only a full process exit needs this).
@@ -33,14 +33,14 @@ use tracing::{debug, info, warn};
 
 use crate::{ipc, paths};
 
-const UNIT_NAME: &str = "edison-detectord.service";
+const UNIT_NAME: &str = "sealgate-detectord.service";
 /// A user service inherits a minimal PATH, which breaks child MCP spawns
 /// (`claude`, npx/uvx in ~/.local/bin or /usr/local/bin). The daemon augments
 /// child PATH at spawn too, but seeding it here keeps the common case working.
 const CHILD_PATH: &str =
     "%h/.local/bin:%h/bin:/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin";
 
-/// `~/.config/systemd/user/edison-detectord.service`.
+/// `~/.config/systemd/user/sealgate-detectord.service`.
 fn unit_path() -> Result<PathBuf> {
     let home = dirs::home_dir().ok_or_else(|| anyhow!("HOME not set"))?;
     let dir = home.join(".config/systemd/user");
@@ -98,8 +98,8 @@ fn render_unit(binary: &Path, log: &Path, enforce: bool) -> String {
     let log = log.display();
     format!(
         "[Unit]\n\
-         Description=Edison Watch MCP detector and quarantine daemon\n\
-         Documentation=https://edison.watch\n\
+         Description=SealGate MCP detector and quarantine daemon\n\
+         Documentation=https://sealgate.ai\n\
          After=network-online.target\n\
          Wants=network-online.target\n\
          \n\
@@ -132,7 +132,7 @@ pub fn install(enforce: bool) -> Result<()> {
             "no systemd user instance is available on this system.\n\
              The daemon still runs fine without it - start it under your init\n\
              system or process manager instead, e.g.:\n\
-             \n    edison-detectord daemon{}\n\n\
+             \n    sealgate-detectord daemon{}\n\n\
              (OpenRC/runit/s6 service files and containers should exec that\n\
              command directly.)",
             if enforce { " --enforce" } else { " --no-hooks" },
@@ -241,12 +241,12 @@ mod tests {
     #[test]
     fn render_unit_enforce_vs_report() {
         let e = render_unit(
-            Path::new("/usr/local/bin/edison-detectord"),
-            Path::new("/home/me/.config/edison-watch-detectord/logs/detectord.log"),
+            Path::new("/usr/local/bin/sealgate-detectord"),
+            Path::new("/home/me/.config/sealgate-detectord/logs/detectord.log"),
             true,
         );
         // The binary is quoted as one systemd argument (see systemd_quote).
-        assert!(e.contains("ExecStart=\"/usr/local/bin/edison-detectord\" daemon --enforce"));
+        assert!(e.contains("ExecStart=\"/usr/local/bin/sealgate-detectord\" daemon --enforce"));
         assert!(e.contains("Restart=on-failure"));
         assert!(e.contains("WantedBy=default.target"));
         assert!(e.contains("[Service]"));
@@ -261,12 +261,12 @@ mod tests {
         // A run-path under a home dir with a space must stay a single ExecStart
         // argument, or systemd splits it and the daemon fails (status=203/EXEC).
         let body = render_unit(
-            Path::new("/home/John Doe/.local/share/edison-watch/bin/edison-detectord"),
-            Path::new("/home/John Doe/.config/edison-watch-detectord/logs/detectord.log"),
+            Path::new("/home/John Doe/.local/share/sealgate/bin/sealgate-detectord"),
+            Path::new("/home/John Doe/.config/sealgate-detectord/logs/detectord.log"),
             true,
         );
         assert!(body.contains(
-            "ExecStart=\"/home/John Doe/.local/share/edison-watch/bin/edison-detectord\" daemon --enforce"
+            "ExecStart=\"/home/John Doe/.local/share/sealgate/bin/sealgate-detectord\" daemon --enforce"
         ));
     }
 

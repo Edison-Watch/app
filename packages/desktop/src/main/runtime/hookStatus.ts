@@ -2,9 +2,9 @@
  * Per-client hook + MCP-registration status, sourced entirely from the daemon.
  *
  * Nothing here opens a file. The daemon owns hook injection and the
- * edison-watch install, so it is also what reports their state: how many hook
+ * sealgate install, so it is also what reports their state: how many hook
  * bindings are in place, whether a workspace registration task is present, and
- * which URL the installed edison-watch entry points at. The app compares that
+ * which URL the installed sealgate entry points at. The app compares that
  * URL with the one it expects and renders the result.
  */
 
@@ -25,7 +25,7 @@ export interface HookStatusEntry {
   mcpApplicable: boolean
   hooksApplicable: boolean
   /**
-   * False when Edison can only see this client, not configure it (ChatGPT's
+   * False when SealGate can only see this client, not configure it (ChatGPT's
    * server-side Connectors). Reported rather than filtered out: the wizard is
    * seen once, this list is the permanent surface, and a client silently
    * missing from it is how a user ends up assuming they're covered.
@@ -88,17 +88,17 @@ export async function getHookStatus(
     }
 
     const { hookCount, totalHooks } = hookCoverage(f)
-    const mcpConfigured = f.installed && sameUrl(f.edisonUrl, url)
+    const mcpConfigured = f.installed && sameUrl(f.sealgateUrl, url)
 
     let mcpConnected = mcpConfigured && mcpServerAlive
     let mcpRuntimeStatus: ClaudeCodeMcpStatus | undefined
     if (client.id === 'claude-code') {
       mcpRuntimeStatus = claudeCodeMcpStatus
       // Claude Code reports its own live connection state (`claude mcp get
-      // edison-watch`), which is better than the "configured and the server
+      // sealgate`), which is better than the "configured and the server
       // answers" approximation - but only once we know the entry points at the
       // gateway we expect. That probe reports on whatever URL sits under the
-      // name `edison-watch`, so a leftover entry from another account or
+      // name `sealgate`, so a leftover entry from another account or
       // environment answers "connected" quite happily. Letting that satisfy
       // setup would paint a client green while its traffic goes elsewhere.
       if (mcpConfigured && claudeCodeMcpStatus && claudeCodeMcpStatus !== 'unknown') {

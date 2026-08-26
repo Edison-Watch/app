@@ -31,7 +31,7 @@ import { unwrapStdioShim } from './stdioShim'
 export class DetectordUnavailableError extends Error {
   constructor() {
     super(
-      "Edison Watch can't reach its detector daemon, so it can't tell which MCP servers are configured."
+      "SealGate can't reach its detector daemon, so it can't tell which MCP servers are configured."
     )
     this.name = 'DetectordUnavailableError'
   }

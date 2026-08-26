@@ -1,6 +1,6 @@
 /**
  * Records which app version + binary path last ran a successful
- * `edison-stdiod install`, so startup can detect when the daemon launchd
+ * `sealgate-stdiod install`, so startup can detect when the daemon launchd
  * unit is stale (app auto-updated, bundle moved) and needs a re-install.
  *
  * Stored as JSON in userData (mirrors updateSettings.ts). Written by

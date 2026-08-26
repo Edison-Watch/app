@@ -2,19 +2,19 @@
  * Iconography reused across animations.
  *
  * Each component renders into an `<svg>` positioned via `x`/`y` so it
- * can sit inside a parent animation `<svg>`. The Edison logo, MCP
+ * can sit inside a parent animation `<svg>`. The SealGate logo, MCP
  * paperclip, and agent square are all theme-aware via `var(--accent)`
  * or the caller's `fill`/`color`.
  */
 
 import type { AgentIconEntry } from '../../agent-registry'
 import {
-  EDISON_E_PATH,
-  EDISON_FRAME_PATH,
-  EDISON_LOGO_VIEWBOX,
-  EDISON_WATCH_FILL_PATH,
-  EDISON_WATCH_STROKE_PATH
-} from '../../svg/edison-logo-svg'
+  SEALGATE_E_PATH,
+  SEALGATE_FRAME_PATH,
+  SEALGATE_LOGO_VIEWBOX,
+  SEALGATE_FILL_PATH,
+  SEALGATE_STROKE_PATH
+} from '../../svg/sealgate-logo-svg'
 import { MCP_ICON_PATHS, MCP_ICON_VIEWBOX } from '../../svg/mcp-svg'
 
 /** MCP "paperclip" logo, two-path SVG, colored + opacity tunable. */
@@ -118,10 +118,10 @@ export function AgentIcon({
 }
 
 /**
- * Full Edison Watch logo (E + "Watch" subscript + frame) in accent color.
- * Used by animations that depict Edison as an active gateway/wrapper.
+ * Full SealGate logo (E + "Watch" subscript + frame) in accent color.
+ * Used by animations that depict SealGate as an active gateway/wrapper.
  */
-export function EdisonLogo({
+export function SealGateLogo({
   x,
   y,
   w,
@@ -133,25 +133,25 @@ export function EdisonLogo({
   h: number
 }): React.ReactNode {
   return (
-    <svg x={x} y={y} width={w} height={h} viewBox={EDISON_LOGO_VIEWBOX}>
+    <svg x={x} y={y} width={w} height={h} viewBox={SEALGATE_LOGO_VIEWBOX}>
       <path
-        d={EDISON_E_PATH}
+        d={SEALGATE_E_PATH}
         fill="var(--accent)"
         fillOpacity="0.8"
         stroke="var(--accent)"
         strokeWidth="5"
         strokeMiterlimit="10"
       />
-      <path d={EDISON_WATCH_FILL_PATH} fill="var(--accent)" fillOpacity="0.8" />
+      <path d={SEALGATE_FILL_PATH} fill="var(--accent)" fillOpacity="0.8" />
       <path
-        d={EDISON_WATCH_STROKE_PATH}
+        d={SEALGATE_STROKE_PATH}
         fill="none"
         stroke="var(--accent)"
         strokeOpacity="0.8"
         strokeWidth="4"
         strokeMiterlimit="10"
       />
-      <path d={EDISON_FRAME_PATH} fill="var(--accent)" fillOpacity="0.8" />
+      <path d={SEALGATE_FRAME_PATH} fill="var(--accent)" fillOpacity="0.8" />
     </svg>
   )
 }

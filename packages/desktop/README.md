@@ -1,6 +1,6 @@
 <div align="center">
 
-# Edison Watch - Desktop
+# SealGate - Desktop
 
 <b>The local control plane for your AI tools' MCP servers - discover, quarantine, and encrypt, all from your menu bar.</b>
 
@@ -23,30 +23,30 @@
 
 <!--
   TODO: add a hero screenshot or GIF of the setup wizard / main view here, e.g.
-  <div align="center"><img width="70%" src="resources/screenshot.png" alt="Edison Watch desktop app"></div>
+  <div align="center"><img width="70%" src="resources/screenshot.png" alt="SealGate desktop app"></div>
 -->
 
 ---
 
-Edison Watch Desktop is the local control plane for [Edison Watch](https://edison.watch) that governs the [MCP](https://modelcontextprotocol.io/) servers wired into your AI tools, using a menu-bar app that watches every client on your machine. It discovers the servers your AI clients have configured, quarantines risky or unapproved ones before they can run, encrypts their credentials with zero-knowledge keys, and bridges local servers to the Edison Watch gateway through a single outbound tunnel. Built for developers who run MCP servers across many AI clients and want one place to see and control them all.
+SealGate Desktop is the local control plane for [SealGate](https://sealgate.ai) that governs the [MCP](https://modelcontextprotocol.io/) servers wired into your AI tools, using a menu-bar app that watches every client on your machine. It discovers the servers your AI clients have configured, quarantines risky or unapproved ones before they can run, encrypts their credentials with zero-knowledge keys, and bridges local servers to the SealGate gateway through a single outbound tunnel. Built for developers who run MCP servers across many AI clients and want one place to see and control them all.
 
 Discover → review → approve → encrypt → bridge, without secrets ever leaving your device in the clear.
 
 <div align="center">
-  <img src="docs/architecture.svg" width="80%" alt="Edison Watch Desktop architecture: AI clients, the renderer, the main process and the edison-stdiod daemon run locally on your machine; the desktop app and the daemon reach the remote Edison Watch cloud over two outbound-initiated but bidirectional links, and the backend pushes events (trifecta / pre-block approvals, quarantine) back to the app." />
+  <img src="docs/architecture.svg" width="80%" alt="SealGate Desktop architecture: AI clients, the renderer, the main process and the sealgate-stdiod daemon run locally on your machine; the desktop app and the daemon reach the remote SealGate cloud over two outbound-initiated but bidirectional links, and the backend pushes events (trifecta / pre-block approvals, quarantine) back to the app." />
 </div>
 
 > [!WARNING]
-> **Edison Watch Desktop is experimental software under active development** and has **not** had an independent security audit. It is a **client for the Edison Watch platform** - it requires an Edison Watch account and connects to the Edison backend. UI, on-disk formats, and behavior may change before a 1.0 release.
+> **SealGate Desktop is experimental software under active development** and has **not** had an independent security audit. It is a **client for the SealGate platform** - it requires an SealGate account and connects to the SealGate backend. UI, on-disk formats, and behavior may change before a 1.0 release.
 
 ## What it does
 
-Modern AI tools (Claude, Cursor, VS Code, and friends) connect to MCP servers that can read your files, hold credentials, and reach the network. They're configured in a dozen different places and are easy to lose track of. Edison Watch Desktop gives you one place to see and control them:
+Modern AI tools (Claude, Cursor, VS Code, and friends) connect to MCP servers that can read your files, hold credentials, and reach the network. They're configured in a dozen different places and are easy to lose track of. SealGate Desktop gives you one place to see and control them:
 
 - **Discover** - every MCP server configured across the AI clients installed on your machine, with no manual inventory.
 - **Quarantine** - newly-appeared or unapproved servers ("shadow MCPs") before they can run, with a review-and-approve flow.
 - **Encrypt** - credentials with zero-knowledge keys (personal and organization), so secrets never leave your device in the clear.
-- **Bridge** - local stdio MCP servers to the Edison Watch gateway through the bundled [`edison-stdiod`](https://github.com/Edison-Watch/stdiod) daemon: a single outbound, no-inbound-ports tunnel, so they're reachable and governed without being exposed.
+- **Bridge** - local stdio MCP servers to the SealGate gateway through the bundled [`sealgate-stdiod`](https://github.com/Edison-Watch/stdiod) daemon: a single outbound, no-inbound-ports tunnel, so they're reachable and governed without being exposed.
 - **Stay current** - with in-app auto-updates.
 
 ### Supported AI clients
@@ -59,7 +59,7 @@ The ChatGPT desktop app is detected but not managed: its MCP servers are Connect
 
 1. **Install** the app - see [Installation](#installation) (or [build from source](#build-from-source) until signed installers ship).
 2. **Launch** it - the app lives in your menu bar / system tray. A setup wizard walks you through signing in, connecting your installed AI clients, and setting up encryption.
-3. **Review** - from then on the app watches your clients' MCP configuration, surfaces changes for approval, and keeps the tunnel to the Edison Watch backend healthy.
+3. **Review** - from then on the app watches your clients' MCP configuration, surfaces changes for approval, and keeps the tunnel to the SealGate backend healthy.
 
 New to MCP? See the [Model Context Protocol docs](https://modelcontextprotocol.io/).
 
@@ -70,7 +70,7 @@ New to MCP? See the [Model Context Protocol docs](https://modelcontextprotocol.i
 
 | Platform | Format |
 | --- | --- |
-| <img src="resources/icons/macos.svg" width="14" height="14" align="center" alt=""> macOS | `.dmg` (universal - Apple Silicon + Intel) |
+| <img src="resources/icons/macos.svg" width="14" height="14" align="center" alt=""> macOS | `.dmg` (arm64 for Apple Silicon; no Intel build) |
 | <img src="resources/icons/windows.svg" width="14" height="14" align="center" alt=""> Windows | `.exe` installer (x64, arm64) |
 | <img src="resources/icons/linux.svg" width="14" height="14" align="center" alt=""> Linux | `.AppImage` (x64, arm64) |
 
@@ -81,7 +81,7 @@ TLDR: `git clone` → `npm install` → `npm run dev`.
 <details>
 <summary>⚙️ Building from source</summary>
 
-You'll need [Node.js 22+](https://nodejs.org/) and npm. The app depends on [`@edison-watch/shared`](https://www.npmjs.com/package/@edison-watch/shared), published to npm, so a plain clone and install pulls everything in:
+You'll need [Node.js 22+](https://nodejs.org/) and npm. The app depends on [`@sealgate/shared`](https://www.npmjs.com/package/@sealgate/shared), published to npm, so a plain clone and install pulls everything in:
 
 ```sh
 git clone https://github.com/Edison-Watch/desktop.git
@@ -98,17 +98,17 @@ npm run typecheck    # typecheck only (node + web projects)
 npm run test         # unit tests (vitest)
 ```
 
-Packaging installers also bundles the `edison-stdiod` daemon and per-platform runtimes; see the `build:mac` / `build:win` / `build:linux` scripts in [`package.json`](./package.json) and the helpers under [`scripts/`](./scripts).
+Packaging installers also bundles the `sealgate-stdiod` daemon and per-platform runtimes; see the `build:mac` / `build:win` / `build:linux` scripts in [`package.json`](./package.json) and the helpers under [`scripts/`](./scripts).
 
 </details>
 
 ## How it works
 
-The app runs in your menu bar / system tray and supervises the bundled `edison-stdiod` daemon. On first launch a setup wizard walks you through signing in, connecting your installed AI clients, and setting up encryption. From then on it watches your clients' MCP configuration, surfaces changes for review, and keeps the tunnel to the Edison Watch backend healthy.
+The app runs in your menu bar / system tray and supervises the bundled `sealgate-stdiod` daemon. On first launch a setup wizard walks you through signing in, connecting your installed AI clients, and setting up encryption. From then on it watches your clients' MCP configuration, surfaces changes for review, and keeps the tunnel to the SealGate backend healthy.
 
 ## Architecture
 
-TLDR: everything runs locally except the Edison Watch cloud; the desktop app and `edison-stdiod` reach it over two outbound-initiated but bidirectional links, and the backend pushes events (trifecta / pre-block approvals, quarantine) back to the app.
+TLDR: everything runs locally except the SealGate cloud; the desktop app and `sealgate-stdiod` reach it over two outbound-initiated but bidirectional links, and the backend pushes events (trifecta / pre-block approvals, quarantine) back to the app.
 
 <details>
 <summary>Expand</summary>
@@ -121,18 +121,18 @@ YOUR MACHINE (everything below runs locally)
 │  AI clients (Claude · Cursor · VS Code · …)                 │
 │       │  MCP configs watched on disk                        │
 │       ▼                                                     │
-│  Edison Watch Desktop app                                   │
+│  SealGate Desktop app                                       │
 │     Renderer UI  ◀─ IPC / preload bridge ─▶  Main process   │
 │       │  supervises                                         │
 │       ▼                                                     │
-│  edison-stdiod daemon  (bridges local stdio MCP servers)    │
+│  sealgate-stdiod daemon  (bridges local stdio MCP servers)  │
 └────────────────────────────────────────────────────────────┘
       ▲                                          ▲
       │ control plane (app ⇅ backend)            │ MCP bridge
       │ backend PUSHES events to app:            │ outbound-initiated
       ▼ trifecta / approvals / quarantine        ▼ tunnel, no inbound ports
 ┌────────────────────────────────────────────────────────────┐
-│  Edison Watch cloud  (remote · off your machine)            │
+│  SealGate cloud  (remote · off your machine)                │
 │  backend API   ·   MCP gateway                              │
 └────────────────────────────────────────────────────────────┘
 ```
@@ -160,20 +160,20 @@ Development / runtime toggles:
 
 | Variable | Description |
 |----------|-------------|
-| `EDISON_DRY_RUN` | Set to `1` to short-circuit the `edison-stdiod` daemon (used by Playwright/Storybook/tests) |
-| `EDISON_DEBUG_RENDERER` | Set to `true` to open the renderer DevTools on launch |
-| `EW_UPDATE_TEST` / `EW_UPDATE_FEED` | Point auto-update at a local feed for testing without publishing |
+| `SEALGATE_DRY_RUN` | Set to `1` to short-circuit the `sealgate-stdiod` daemon (used by Playwright/Storybook/tests) |
+| `SEALGATE_DEBUG_RENDERER` | Set to `true` to open the renderer DevTools on launch |
+| `SG_UPDATE_TEST` / `SG_UPDATE_FEED` | Point auto-update at a local feed for testing without publishing |
 
 </details>
 
 ## Related repositories
 
-- [**Edison-Watch/stdiod**](https://github.com/Edison-Watch/stdiod) - the `edison-stdiod` tunnel daemon bundled with this app.
-- [**Edison-Watch/shared**](https://github.com/Edison-Watch/shared) - shared React components, design tokens, and client utilities, consumed here as the [`@edison-watch/shared`](https://www.npmjs.com/package/@edison-watch/shared) npm package.
+- [**Edison-Watch/stdiod**](https://github.com/Edison-Watch/stdiod) - the `sealgate-stdiod` tunnel daemon bundled with this app.
+- [**Edison-Watch/shared**](https://github.com/Edison-Watch/shared) - shared React components, design tokens, and client utilities, consumed here as the [`@sealgate/shared`](https://www.npmjs.com/package/@sealgate/shared) npm package.
 
 ## Security
 
-Please **do not** report security issues through public GitHub issues or pull requests. Report privately via the repository's **Security** tab ("Report a vulnerability") or by emailing <security@edison.watch>.
+Please **do not** report security issues through public GitHub issues or pull requests. Report privately via the repository's **Security** tab ("Report a vulnerability") or by emailing <security@sealgate.ai>.
 
 ## Contributing
 
@@ -194,7 +194,7 @@ This software is built with:
 ## About the Core Contributors
 
 <a href="https://github.com/Edison-Watch/desktop/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=Edison-Watch/desktop" alt="Edison Watch Desktop contributors" />
+  <img src="https://contrib.rocks/image?repo=Edison-Watch/desktop" alt="SealGate Desktop contributors" />
 </a>
 
 Made with [contrib.rocks](https://contrib.rocks).

@@ -108,7 +108,7 @@ export default function ScanResultsPanel({
         {alreadyOnBackend.length > 0 && (
           <div className="mt-2 pt-2 border-t border-[var(--border)]/50">
             <p className="text-xs font-medium text-[var(--text-secondary)] mb-1.5">
-              Already on Edison Watch ({alreadyOnBackend.length})
+              Already on SealGate ({alreadyOnBackend.length})
             </p>
             <div className="flex flex-col gap-1">
               {alreadyOnBackend.map((f) => (

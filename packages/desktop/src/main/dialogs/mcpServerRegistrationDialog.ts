@@ -9,7 +9,7 @@
 
 import { BrowserWindow, dialog, ipcMain } from 'electron'
 import { join } from 'path'
-import { getClientDisplayName, filterOutEdisonWatchServers } from '../runtime/mcpConfigMonitor'
+import { getClientDisplayName, filterOutSealGateServers } from '../runtime/mcpConfigMonitor'
 import { showWhenReady } from './showWindow'
 import type { ServerActionResult } from './mcpServerActionDialog'
 import { discoverMcpServers, getServerFingerprint } from '../discovery/mcpDiscovery'
@@ -31,7 +31,7 @@ let serverRegistrationWindow: BrowserWindow | null = null
  * Unlike the quarantine dialog, this does NOT quarantine or disable any servers --
  * it simply lets users submit approval requests for their installed servers.
  *
- * When isAdminOrOwner is true, buttons say "Add to Edison" and auto-approve.
+ * When isAdminOrOwner is true, buttons say "Add to SealGate" and auto-approve.
  */
 export async function showServerRegistrationDialog(
   parentWindow?: BrowserWindow,
@@ -52,9 +52,9 @@ export async function showServerRegistrationDialog(
     const msgOpts = {
       type: 'warning' as const,
       title: 'Register MCP Servers',
-      message: "Edison Watch can't reach its detector daemon",
+      message: "SealGate can't reach its detector daemon",
       detail:
-        "Without it, Edison Watch can't tell which MCP servers are configured on this machine, " +
+        "Without it, SealGate can't tell which MCP servers are configured on this machine, " +
         'and new ones will not be detected or quarantined. ' +
         `Try again once it's running.\n\n${err instanceof Error ? err.message : String(err)}`
     }
@@ -65,14 +65,14 @@ export async function showServerRegistrationDialog(
     }
     return []
   }
-  const servers = filterOutEdisonWatchServers(allServers)
+  const servers = filterOutSealGateServers(allServers)
 
   if (servers.length === 0) {
     const msgOpts = {
       type: 'info' as const,
       title: 'Register MCP Servers',
       message:
-        'No new MCP servers found. All discovered servers are either already managed by Edison Watch or no MCP servers were detected on this machine.'
+        'No new MCP servers found. All discovered servers are either already managed by SealGate or no MCP servers were detected on this machine.'
     }
     if (parentWindow && !parentWindow.isDestroyed()) {
       await dialog.showMessageBox(parentWindow, msgOpts)
@@ -126,7 +126,7 @@ export async function showServerRegistrationDialog(
             </div>
             <div class="server-info">${serverInfo}</div>
             <div class="server-actions">
-              <button class="button button-request" data-action="${isAdminOrOwner ? 'registered' : 'requested'}" title="${isAdminOrOwner ? 'Add this server to Edison directly' : 'Submit request for IT admin approval'}">${isAdminOrOwner ? 'Add to Edison' : 'Request Approval'}</button>
+              <button class="button button-request" data-action="${isAdminOrOwner ? 'registered' : 'requested'}" title="${isAdminOrOwner ? 'Add this server to SealGate directly' : 'Submit request for IT admin approval'}">${isAdminOrOwner ? 'Add to SealGate' : 'Request Approval'}</button>
               <button class="button button-dismiss" data-action="skipped" title="Skip this server for now">Skip</button>
             </div>
           </div>
@@ -159,8 +159,8 @@ export async function showServerRegistrationDialog(
         </div>
         <div class="description">
           ${isAdminOrOwner
-            ? 'These MCP servers are installed on your machine. Add them to Edison to enable secure proxying.'
-            : 'These MCP servers are installed on your machine. Request approval so your IT team can add them to Edison.'}
+            ? 'These MCP servers are installed on your machine. Add them to SealGate to enable secure proxying.'
+            : 'These MCP servers are installed on your machine. Request approval so your IT team can add them to SealGate.'}
         </div>
         <div id="servers">${serversHtml}</div>
         <script>

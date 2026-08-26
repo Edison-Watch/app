@@ -266,25 +266,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "edison-detectord"
-version = "0.1.0"
-dependencies = [
- "dirs",
- "notify",
- "notify-debouncer-full",
- "rusqlite",
- "serde",
- "serde_json",
- "serde_json_lenient",
- "sha2",
- "tempfile",
- "thiserror",
- "toml",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "equivalent"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -850,10 +831,10 @@ dependencies = [
 
 [[package]]
 name = "mcp_backend"
-version = "0.1.0"
+version = "0.6.7"
 dependencies = [
- "edison-detectord",
  "reqwest",
+ "sealgate-detectord",
  "serde",
  "serde_json",
  "sha2",
@@ -863,17 +844,17 @@ dependencies = [
 
 [[package]]
 name = "mcp_detector_daemon"
-version = "0.1.0"
+version = "0.6.7"
 dependencies = [
  "anyhow",
  "clap",
  "dirs",
- "edison-detectord",
  "libc",
  "mcp_backend",
  "mcp_quarantine",
  "notify",
  "notify-debouncer-full",
+ "sealgate-detectord",
  "serde",
  "serde_json",
  "tempfile",
@@ -886,11 +867,11 @@ dependencies = [
 
 [[package]]
 name = "mcp_quarantine"
-version = "0.1.0"
+version = "0.6.7"
 dependencies = [
- "edison-detectord",
  "regex",
  "rusqlite",
+ "sealgate-detectord",
  "serde",
  "serde_json",
  "serde_json_lenient",
@@ -1347,6 +1328,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "93fc1dc3aaa9bfed95e02e6eadabb4baf7e3078b0bd1b4d7b6b0b68378900502"
 dependencies = [
  "winapi-util",
+]
+
+[[package]]
+name = "sealgate-detectord"
+version = "0.6.7"
+dependencies = [
+ "dirs",
+ "notify",
+ "notify-debouncer-full",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "serde_json_lenient",
+ "sha2",
+ "tempfile",
+ "thiserror",
+ "toml",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

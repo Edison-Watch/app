@@ -22,7 +22,7 @@ const SRC = join(__dirname, '..', '..')
 /** Modules allowed to touch the filesystem, and why. All app-owned paths. */
 const FS_ALLOWLIST: Record<string, string> = {
   'main/index.ts': "the app's own single-instance lock + startup log",
-  'main/infra/fsAudit.ts': 'the EDISON_FS_AUDIT harness: patches fs to police this very boundary',
+  'main/infra/fsAudit.ts': 'the SEALGATE_FS_AUDIT harness: patches fs to police this very boundary',
   'main/infra/setupConfig.ts': "the app's own setup/accounts JSON in userData",
   'main/infra/updateSettings.ts': "the app's own update settings in userData",
   'main/ipc/ipcHandlers.ts': "the app's own safeStorage-encrypted key blob",
@@ -31,11 +31,11 @@ const FS_ALLOWLIST: Record<string, string> = {
   'main/runtime/pythonBinary.ts': "the app's own bundled Python runtime",
   'main/runtime/stdiodBinary.ts': "the app's own bundled stdiod binary (staging + hash)",
   'main/detectord/binary.ts': "the app's own bundled detectord binary (staging + hash)",
-  'main/stdiod/controller.ts': "/dev/fd probe + Edison's own stdiod state",
-  'main/stdiod/state.ts': "Edison's own stdiod state file",
-  'main/stdiod/installStamp.ts': "Edison's own stdiod install stamp in userData",
-  'main/stdiod/installRefresh.ts': "Edison's own stdiod LaunchAgent plist",
-  'main/stdiod/stdiodLog.ts': "Edison's own stdiod log file"
+  'main/stdiod/controller.ts': "/dev/fd probe + SealGate's own stdiod state",
+  'main/stdiod/state.ts': "SealGate's own stdiod state file",
+  'main/stdiod/installStamp.ts': "SealGate's own stdiod install stamp in userData",
+  'main/stdiod/installRefresh.ts': "SealGate's own stdiod LaunchAgent plist",
+  'main/stdiod/stdiodLog.ts': "SealGate's own stdiod log file"
 }
 
 /**
@@ -44,8 +44,8 @@ const FS_ALLOWLIST: Record<string, string> = {
  */
 const SUBPROCESS_ALLOWLIST: Record<string, string> = {
   'main/infra/setupConfig.ts': "`claude mcp list` - asks Claude Code for its own runtime MCP status; reads nothing itself",
-  'main/detectord/controller.ts': 'runs the edison-detectord binary (service install/status)',
-  'main/stdiod/controller.ts': 'runs the edison-stdiod binary + launchctl/schtasks/systemctl'
+  'main/detectord/controller.ts': 'runs the sealgate-detectord binary (service install/status)',
+  'main/stdiod/controller.ts': 'runs the sealgate-stdiod binary + launchctl/schtasks/systemctl'
 }
 
 const FS_IMPORT = /(?:from\s+['"](?:node:)?fs(?:\/promises)?['"]|require\(\s*['"](?:node:)?fs(?:\/promises)?['"]\s*\))/

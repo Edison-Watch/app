@@ -48,7 +48,7 @@ vi.mock('../detectord/lifecycle', () => ({
 
 import { getHookStatus } from '../runtime/hookStatus'
 
-const EXPECTED_URL = 'https://mcp.edison.watch/mcp'
+const EXPECTED_URL = 'https://mcp.sealgate.ai/mcp'
 
 function agent(over: Partial<AgentFacts> = {}): AgentFacts {
   return {
@@ -57,7 +57,7 @@ function agent(over: Partial<AgentFacts> = {}): AgentFacts {
     hooksTotal: 0,
     workspaceHooksInstalled: 0,
     workspaceHooksTotal: 0,
-    edisonUrl: null,
+    sealgateUrl: null,
     configPath: null,
     manageable: true,
     ...over
@@ -87,7 +87,7 @@ describe('unmanageable clients', () => {
 
   it('leaves manageable clients scored as before', async () => {
     facts = new Map([
-      ['cursor' as McpClientId, agent({ edisonUrl: EXPECTED_URL, hooksTotal: 4, hooksInstalled: 4 })]
+      ['cursor' as McpClientId, agent({ sealgateUrl: EXPECTED_URL, hooksTotal: 4, hooksInstalled: 4 })]
     ])
     const entry = (await getHookStatus(EXPECTED_URL, true)).find((s) => s.client === 'cursor')
     expect(entry?.manageable).toBe(true)
@@ -162,6 +162,42 @@ describe('mcp:readConfig', () => {
       throw new Error('permission denied')
     }
     const { content, error } = await readConfig(null, 'cursor')
+    expect(content).toBeNull()
+    expect(error).toBe('permission denied')
+  })
+
+  it('does not claim an account holds the servers of a manageable client with no config yet', async () => {
+    // JetBrains reports zero install targets when no IDE is installed, so it
+    // has no config path and is still perfectly manageable the moment one
+    // appears. Keyed on the path alone, this branch told those users their
+    // servers live in an account, which is the opposite of true. `configPath`
+    // is also optional on the wire, so an older daemon omitting it must not be
+    // enough on its own either.
+    facts = new Map([['intellij' as McpClientId, agent({ manageable: true, configPath: null })]])
+    readConfigResult = async () => {
+      throw new Error('permission denied')
+    }
+    const { content, error } = await readConfig(null, 'intellij')
+    expect(content).toBeNull()
+    expect(error).toBe('permission denied')
+  })
+
+  it('does not claim the config is missing for an unmanageable client that has one', async () => {
+    // The Claude hosts are unmanageable - SealGate cannot write a gateway URL
+    // into a stdio-only file - and their config still exists and is parsed on
+    // every scan. Keyed on `manageable`, this branch told those users the file
+    // did not exist and there was nothing to protect. It keys on the path now,
+    // which is the question it was always asking.
+    facts = new Map([
+      [
+        'claude-desktop' as McpClientId,
+        agent({ manageable: false, configPath: '/home/u/claude_desktop_config.json' })
+      ]
+    ])
+    readConfigResult = async () => {
+      throw new Error('permission denied')
+    }
+    const { content, error } = await readConfig(null, 'claude-desktop')
     expect(content).toBeNull()
     expect(error).toBe('permission denied')
   })

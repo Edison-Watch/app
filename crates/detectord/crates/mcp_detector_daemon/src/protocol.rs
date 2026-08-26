@@ -6,7 +6,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use edison_detectord::ServerConfig;
+use sealgate_detectord::ServerConfig;
 
 fn default_true() -> bool {
     true
@@ -28,7 +28,7 @@ pub enum Request {
         /// `None` keeps the previous secret.
         #[serde(default)]
         secret: Option<String>,
-        /// Apply the edison-watch install + hooks (default). Set false for a
+        /// Apply the sealgate install + hooks (default). Set false for a
         /// detect-only enrollment (caller does its own install).
         #[serde(default = "default_true")]
         install: bool,
@@ -71,7 +71,7 @@ pub enum Request {
         #[serde(default)]
         register: Option<bool>,
     },
-    /// Install the `edison-watch` entry + session hooks for these agents, and
+    /// Install the `sealgate` entry + session hooks for these agents, and
     /// only these agents. Additive: they join the enrolled selection, so a
     /// later self-heal keeps them installed.
     ///
@@ -81,10 +81,10 @@ pub enum Request {
     ///
     /// The daemon is the only component that writes agent configs.
     ApplyIntegrations { agents: Vec<String> },
-    /// Remove the `edison-watch` entry for these agents and drop them from the
+    /// Remove the `sealgate` entry for these agents and drop them from the
     /// enrolled selection.
     ///
-    /// Session hooks are deliberately left in place: they are how Edison
+    /// Session hooks are deliberately left in place: they are how SealGate
     /// observes an agent's activity and are not tied to gateway registration.
     /// `unenroll` is what tears them down.
     RevertIntegrations { agents: Vec<String> },
@@ -113,7 +113,7 @@ pub enum Request {
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Choice {
-    /// Submit to Edison Watch (register/request) + remove locally.
+    /// Submit to SealGate (register/request) + remove locally.
     SendToEw,
     /// Leave quarantined; don't re-prompt.
     Skip,
@@ -150,7 +150,7 @@ pub enum Reply {
     },
 }
 
-/// The outcome of installing or removing the `edison-watch` entry for one agent.
+/// The outcome of installing or removing the `sealgate` entry for one agent.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IntegrationChange {
     pub agent: String,
@@ -188,6 +188,18 @@ pub struct Status {
     /// Whether automatic quarantine enforcement is armed (onboarding complete).
     #[serde(default)]
     pub armed: bool,
+    /// Whether the daemon holds macOS Full Disk Access; `None` off macOS (and
+    /// on an older daemon that predates the field, hence `serde(default)`).
+    ///
+    /// DIAGNOSTIC ONLY - nothing depends on it. The daemon no longer needs the
+    /// grant: it never watches `$HOME` or the protected folders, so there is
+    /// nothing for FDA to unlock (see `sealgate_detectord::tcc`). Kept because
+    /// it is genuinely useful in a bug report, and because only the daemon can
+    /// answer it for the daemon - TCC decides per-binary, and the app is a
+    /// different binary with a different signature.
+    /// See [`crate::platform::has_full_disk_access`].
+    #[serde(default)]
+    pub full_disk_access: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -201,17 +213,17 @@ pub struct AgentInfo {
     pub hooks_total: u32,
     #[serde(default)]
     pub hooks_installed: u32,
-    /// The URL of the installed `edison-watch` entry, or `None` when the agent
+    /// The URL of the installed `sealgate` entry, or `None` when the agent
     /// has no entry. The UI compares it with the URL it expects instead of
     /// reading and parsing the agent's config itself.
     #[serde(default)]
-    pub edison_url: Option<String>,
+    pub sealgate_url: Option<String>,
     /// The agent's user-scope config file, so the UI can name it (and ask for
     /// its contents via `read_config`) without resolving paths of its own.
     #[serde(default)]
     pub config_path: Option<String>,
     /// Workspace-level hook targets this agent has (e.g. one `.vscode/tasks.json`
-    /// per enumerated VSCode workspace), and how many already carry the Edison
+    /// per enumerated VSCode workspace), and how many already carry the SealGate
     /// Watch task. The UI renders hook coverage from these instead of walking
     /// the user's project directories itself. Zero for agents with no
     /// workspace hook surface.
@@ -219,7 +231,7 @@ pub struct AgentInfo {
     pub workspace_hooks_total: u32,
     #[serde(default)]
     pub workspace_hooks_installed: u32,
-    /// Whether Edison can manage this agent at all, or only report that it is
+    /// Whether SealGate can manage this agent at all, or only report that it is
     /// there. False for hosts whose MCP servers are Connectors in the vendor's
     /// account (ChatGPT), where there is no local config to read or write.
     ///
@@ -237,7 +249,7 @@ pub struct ServerView {
     pub agent: String,
     /// `stdio` | `http` | `opaque`.
     pub kind: String,
-    /// `edison` | `known` | `new` | `opaque` | `report`.
+    /// `sealgate` | `known` | `new` | `opaque` | `report`.
     pub state: String,
     pub fingerprint: Option<String>,
     pub path: String,

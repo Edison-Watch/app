@@ -1,0 +1,11 @@
+[package]
+name = "sealgate-tunnel-protocol"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Wire types for the SealGate stdiod ↔ backend WebSocket tunnel."
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }

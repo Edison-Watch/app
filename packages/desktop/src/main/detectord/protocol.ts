@@ -12,7 +12,7 @@ export type Request =
       mcp_url?: string
       agents?: string[]
       secret?: string
-      /** false = detect-only (no edison-watch install / hooks). Defaults true. */
+      /** false = detect-only (no sealgate install / hooks). Defaults true. */
       install?: boolean
       /** Arm auto-quarantine. Set true only once onboarding completes. */
       armed?: boolean
@@ -33,9 +33,9 @@ export type Request =
        *  let the daemon decide from the user's role. */
       register?: boolean
     }
-  /** Install the edison-watch entry + session hooks for these agents only. */
+  /** Install the sealgate entry + session hooks for these agents only. */
   | { op: 'apply_integrations'; agents: string[] }
-  /** Remove the edison-watch entry for these agents. */
+  /** Remove the sealgate entry for these agents. */
   | { op: 'revert_integrations'; agents: string[] }
   /** An agent's user-scope config file (path + contents), for display. */
   | { op: 'read_config'; agent: string }
@@ -56,6 +56,17 @@ export interface Status {
   quarantine: boolean
   quarantined_count: number
   armed?: boolean
+  /**
+   * Whether the DAEMON holds macOS Full Disk Access. `null` off macOS,
+   * `undefined` from a daemon predating the field.
+   *
+   * DIAGNOSTIC ONLY - nothing in the app reads it. The daemon does not need the
+   * grant: it never watches `$HOME` or the protected folders, so there is
+   * nothing for FDA to unlock. Kept on the wire because it is useful in a bug
+   * report and only the daemon can answer it for the daemon (TCC grants are
+   * per-binary, and the app is a separate binary with its own signature).
+   */
+  full_disk_access?: boolean | null
 }
 
 export interface AgentInfo {
@@ -68,21 +79,21 @@ export interface AgentInfo {
    */
   hooks_total?: number
   hooks_installed?: number
-  /** URL of the installed edison-watch entry, or null when there isn't one. */
-  edison_url?: string | null
+  /** URL of the installed sealgate entry, or null when there isn't one. */
+  sealgate_url?: string | null
   /** The agent's user-scope config file, for display and `read_config`. */
   config_path?: string | null
   /**
    * Workspace-level hook targets the daemon found for this agent (one
    * `.vscode/tasks.json` per enumerated VSCode workspace) and how many already
-   * carry the Edison Watch task. The daemon counts these because the targets
+   * carry the SealGate task. The daemon counts these because the targets
    * live in the user's project directories - the app deliberately never opens
    * those. Absent from pre-0.6 daemons, hence optional.
    */
   workspace_hooks_total?: number
   workspace_hooks_installed?: number
   /**
-   * Whether Edison can manage this agent at all, or only report that it's
+   * Whether SealGate can manage this agent at all, or only report that it's
    * there. False for hosts whose MCP servers are Connectors in the vendor's
    * account (ChatGPT) - nothing local to read, write, hook, or proxy.
    *
@@ -93,7 +104,7 @@ export interface AgentInfo {
   manageable?: boolean
 }
 
-/** One discovered server instance. `state`: edison | known | new | opaque | report. */
+/** One discovered server instance. `state`: sealgate | known | new | opaque | report. */
 // Mirrors the daemon's externally-tagged mcp_detector_lib::ServerConfig.
 export type HttpKind = 'Http' | 'Sse' | 'StreamableHttp'
 export type OpaqueReason = 'ExtensionProvider' | 'ExtensionServer' | 'CursorPlugin'
@@ -112,7 +123,7 @@ export interface ServerView {
   config?: ServerConfig | null
 }
 
-/** What installing or removing the edison-watch entry did for one agent. */
+/** What installing or removing the sealgate entry did for one agent. */
 export interface IntegrationChange {
   agent: string
   /** The config file written; null when the agent's own CLI owns the path. */

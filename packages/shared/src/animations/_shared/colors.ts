@@ -7,7 +7,7 @@
  * override.
  */
 
-/** Brand orange used for "before Edison" / unencrypted / pre-trifecta state. */
+/** Brand orange used for "before SealGate" / unencrypted / pre-trifecta state. */
 export const ORANGE = '#da7756'
 /** Saturated red used for attacker / corrupted-robot / unsafe visuals. */
 export const RED = '#d94040'

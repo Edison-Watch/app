@@ -2,15 +2,15 @@
  * Admin Fleet "Governed" animation for documentation.
  *
  * Standalone slice of the second half of {@link AdminFleetAnimation}: every
- * employee laptop routes through a central Edison Watch gateway. The admin has
- * FULL visibility, each laptop carries a local Edison wrapper, and the gateway
+ * employee laptop routes through a central SealGate gateway. The admin has
+ * FULL visibility, each laptop carries a local SealGate wrapper, and the gateway
  * approves two requests and blocks one - staggered verdict badges make the
  * accept/deny decisions legible.
  *
  * Pure SVG + CSS. Respects `prefers-reduced-motion`.
  *
  * Reusable building blocks (routed lines, full-visibility overlay, local
- * Edison wrappers, policy icon) are exported so the full
+ * SealGate wrappers, policy icon) are exported so the full
  * {@link AdminFleetAnimation} can re-use them for its Phase 2 frames.
  */
 import { useId } from 'react'
@@ -18,8 +18,8 @@ import { AGENT_REGISTRY } from '../../agent-registry/index'
 import {
   AdminFigure,
   DANGER,
-  EdisonGateway,
-  EdisonLogo,
+  BrandGateway,
+  SealGateLogo,
   EYE_PATH,
   FlowLine,
   McpPacket,
@@ -49,7 +49,7 @@ const CSS = `
 
 @keyframes afg-lf { to { stroke-dashoffset: -12; } }
 
-/* ── pkt1: L1 → Edison → GitHub (allowed) ── */
+/* ── pkt1: L1 → SealGate → GitHub (allowed) ── */
 @keyframes afg-pkt1 {
   0%,4%   { opacity:0; }
   5%      { transform:translate(120px,33px);  opacity:.8; color:${O}; }
@@ -61,7 +61,7 @@ const CSS = `
   33%,100%{ opacity:0; }
 }
 
-/* ── pkt2: L2 → Edison → Slack (allowed) ── */
+/* ── pkt2: L2 → SealGate → Slack (allowed) ── */
 @keyframes afg-pkt2 {
   0%,28%  { opacity:0; }
   29%     { transform:translate(120px,133px); opacity:.8; color:${O}; }
@@ -73,7 +73,7 @@ const CSS = `
   57%,100%{ opacity:0; }
 }
 
-/* ── pkt3: L3 → Edison → BLOCKED ── */
+/* ── pkt3: L3 → SealGate → BLOCKED ── */
 @keyframes afg-pkt3 {
   0%,52%  { opacity:0; }
   53%     { transform:translate(120px,233px); opacity:.8; color:${O}; }
@@ -158,12 +158,12 @@ export function AdminFullVisibilityOverlay(): React.ReactNode {
   )
 }
 
-/** Routed connection lines: laptops → Edison (muted) and Edison → servers
+/** Routed connection lines: laptops → SealGate (muted) and SealGate → servers
  *  (accent). Phase 2 counterpart of {@link FleetDirectLines}. */
 export function FleetRoutedLines({ lineClassName }: { lineClassName?: string }): React.ReactNode {
   return (
     <>
-      {/* Laptops → Edison */}
+      {/* Laptops → SealGate */}
       <FlowLine
         className={lineClassName}
         x1={120}
@@ -188,7 +188,7 @@ export function FleetRoutedLines({ lineClassName }: { lineClassName?: string }):
         y2={130}
         stroke="var(--text-muted)"
       />
-      {/* Edison → servers (accent) */}
+      {/* SealGate → servers (accent) */}
       <FlowLine
         className={lineClassName}
         x1={370}
@@ -217,7 +217,7 @@ export function FleetRoutedLines({ lineClassName }: { lineClassName?: string }):
   )
 }
 
-/** Local Edison wrapper + shield badge on each laptop. */
+/** Local SealGate wrapper + shield badge on each laptop. */
 export function FleetLocalWrappers(): React.ReactNode {
   return (
     <>
@@ -235,7 +235,7 @@ export function FleetLocalWrappers(): React.ReactNode {
             strokeOpacity="0.5"
             strokeWidth="1.5"
           />
-          <EdisonLogo x={10} y={ly + 24} w={16} h={15.5} />
+          <SealGateLogo x={10} y={ly + 24} w={16} h={15.5} />
           <svg x={100} y={ly + 33} width={14} height={14} viewBox="0 0 256 256">
             <path d={SHIELD_CHECK_PATH} fill="var(--accent)" fillOpacity="0.7" />
           </svg>
@@ -245,7 +245,7 @@ export function FleetLocalWrappers(): React.ReactNode {
   )
 }
 
-/** Policy shield glyph beneath the Edison gateway. */
+/** Policy shield glyph beneath the SealGate gateway. */
 export function FleetPolicyIcon(): React.ReactNode {
   return (
     <svg x={355} y={155} width={18} height={18} viewBox="0 0 256 256">
@@ -273,14 +273,14 @@ export default function AdminFleetGovernedAnimation(): React.ReactNode {
         <AdminFigure cx={340} y={2} size={26} />
         <AdminFullVisibilityOverlay />
 
-        {/* ══ Edison gateway ══ */}
-        <EdisonGateway
+        {/* ══ SealGate gateway ══ */}
+        <BrandGateway
           cx={340}
           cy={130}
           r={30}
           logoW={54}
           pulseClassName="afg-pulse"
-          label="Edison Watch"
+          label="SealGate"
         />
 
         {/* ══ Routed connection lines ══ */}
@@ -291,10 +291,10 @@ export default function AdminFleetGovernedAnimation(): React.ReactNode {
         <Laptop y={105} agents={[CODEX]} />
         <Laptop y={205} agents={[CURSOR]} />
 
-        {/* ══ Local Edison wrapper + shield on each laptop ══ */}
+        {/* ══ Local SealGate wrapper + shield on each laptop ══ */}
         <FleetLocalWrappers />
 
-        {/* ══ Policy verdicts near Edison (staggered) ══ */}
+        {/* ══ Policy verdicts near SealGate (staggered) ══ */}
         <VerdictBadge className="afg-v1" cx={290} cy={108} r={9} variant="allow" />
         <VerdictBadge className="afg-v2" cx={290} cy={130} r={9} variant="allow" />
         <VerdictBadge className="afg-v3" cx={290} cy={152} r={9} variant="deny" />

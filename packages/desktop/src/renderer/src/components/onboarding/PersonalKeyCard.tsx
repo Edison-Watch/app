@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
-import { Button, Card, Input } from "@edison-watch/shared/ui";
+import { Button, Card, Input } from "@sealgate/shared/ui";
 import {
   generateSecretKey,
   hashSecretKey,
   buildCompositeKey,
   cacheSecretKey,
   parseCompositeKey,
-} from "@edison-watch/shared/crypto";
+} from "@sealgate/shared/crypto";
 
 /**
  * Personal-key sub-step of the onboarding wizard.
@@ -395,7 +395,7 @@ export default function PersonalKeyCard({
           <div>
             <p className="text-sm font-medium text-[var(--text-primary)]">Personal Encryption Key</p>
             <p className="text-xs text-[var(--text-muted)] mt-0.5">
-              Edison encrypts your credentials with a personal key that only you control. We never store or see this key.
+              SealGate encrypts your credentials with a personal key that only you control. We never store or see this key.
             </p>
           </div>
 
@@ -475,7 +475,7 @@ export default function PersonalKeyCard({
               <Input
                 type="password"
                 label="Existing Key"
-                placeholder="Paste your edison_secret_key"
+                placeholder="Paste your sealgate_secret_key"
                 value={userKey}
                 onChange={(e) => setUserKey(e.target.value)}
               />

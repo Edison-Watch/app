@@ -2,7 +2,7 @@
  * Shadow-connector discovery (illumination) animation.
  *
  * Dramatises how unapproved "shadow" connectors sit invisible in a
- * client's config until Edison sweeps a beam of light across them and
+ * client's config until SealGate sweeps a beam of light across them and
  * brings each into the inventory with a verdict.
  *
  * Three acts (12s loop), narration carried by visual cues alone:
@@ -11,7 +11,7 @@
  *      The admin is blind: eye-slash, "No visibility", and red dashed
  *      blind rays reach toward the unseen connectors (metaphor E, lifted
  *      from admin/AdminFleetBlindAnimation#AdminNoVisibilityOverlay).
- *   2. Ignite: the Edison light source switches on; an ambient glow grows
+ *   2. Ignite: the SealGate light source switches on; an ambient glow grows
  *      out from the logo and the admin's eye opens ("Full visibility").
  *   3. Sweep: a bright light beam travels left -> right. As the wavefront
  *      reaches each column, those connectors light up - icon brightens to
@@ -27,7 +27,7 @@ import {
   DANGER,
   EYE_PATH,
   EYE_SLASH_PATH,
-  EdisonLogo,
+  SealGateLogo,
   McpIcon,
   ProgressBar,
   VerdictBadge
@@ -40,13 +40,13 @@ const accent = 'var(--accent)'
 const CSS = `
 .smd-anim { color: ${fg}; }
 
-/* Edison light source: only visible once it switches on */
-.smd-anim .smd-edison { animation: smd-edison 12s ease-in-out infinite; }
+/* SealGate light source: only visible once it switches on */
+.smd-anim .smd-sealgate { animation: smd-sealgate 12s ease-in-out infinite; }
 
-/* Edison light source: continuous soft pulse ring */
+/* SealGate light source: continuous soft pulse ring */
 .smd-anim .smd-pulse { transform-origin: 58px 100px; animation: smd-pulse 1.8s cubic-bezier(.2,.8,.4,1) infinite; }
 
-/* Ambient illumination that grows out from Edison */
+/* Ambient illumination that grows out from SealGate */
 .smd-anim .smd-glow  { transform-origin: 58px 100px; animation: smd-glow 12s ease-in-out infinite; }
 
 /* Sweeping light beam */
@@ -68,7 +68,7 @@ const CSS = `
 
 /* ----- keyframes ----- */
 
-@keyframes smd-edison {
+@keyframes smd-sealgate {
   0%,16% { opacity: 0; }
   26%    { opacity: 1; }
   96%    { opacity: 1; }
@@ -113,10 +113,10 @@ const CSS = `
 @keyframes smd-prog { 0% { transform: scaleX(0); } 100% { transform: scaleX(1); } }
 
 @media (prefers-reduced-motion: reduce) {
-  .smd-anim .smd-edison, .smd-anim .smd-pulse, .smd-anim .smd-glow, .smd-anim .smd-beam,
+  .smd-anim .smd-sealgate, .smd-anim .smd-pulse, .smd-anim .smd-glow, .smd-anim .smd-beam,
   .smd-anim .smd-d1, .smd-anim .smd-r1, .smd-anim .smd-d2, .smd-anim .smd-r2,
   .smd-anim .smd-d3, .smd-anim .smd-r3, .smd-anim .smd-eslash, .smd-anim .smd-eye { animation: none; }
-  .smd-anim .smd-edison { opacity: 1; }
+  .smd-anim .smd-sealgate { opacity: 1; }
   .smd-anim .smd-pulse { opacity: 0; }
   .smd-anim .smd-glow  { opacity: .4; transform: scale(1); }
   .smd-anim .smd-beam  { opacity: 0; }
@@ -126,13 +126,13 @@ const CSS = `
   .smd-anim .smd-eye { opacity: 1; }
   .smd-anim .smd-progress { animation: none; transform: scaleX(1); }
 }
-.smd-anim.anim-static .smd-edison, .smd-anim.anim-static .smd-pulse, .smd-anim.anim-static .smd-glow, .smd-anim.anim-static .smd-beam,
+.smd-anim.anim-static .smd-sealgate, .smd-anim.anim-static .smd-pulse, .smd-anim.anim-static .smd-glow, .smd-anim.anim-static .smd-beam,
 .smd-anim.anim-static .smd-d1, .smd-anim.anim-static .smd-r1, .smd-anim.anim-static .smd-d2, .smd-anim.anim-static .smd-r2,
 .smd-anim.anim-static .smd-d3, .smd-anim.anim-static .smd-r3, .smd-anim.anim-static .smd-eslash, .smd-anim.anim-static .smd-eye { animation: none; }
 /* Thumbnail frame = mid-sweep: column 1 discovered, columns 2-3 still dark
    with "?" badges (fog of war), beam crossing. The prefers-reduced-motion
    block above still resolves to the fully-illuminated end-state. */
-.smd-anim.anim-static .smd-edison { opacity: 1; }
+.smd-anim.anim-static .smd-sealgate { opacity: 1; }
 .smd-anim.anim-static .smd-pulse { opacity: 0; }
 .smd-anim.anim-static .smd-glow  { opacity: .4; transform: scale(1); }
 .smd-anim.anim-static .smd-beam  { opacity: .9; transform: translateX(250px); }
@@ -294,7 +294,7 @@ export default function ShadowMCPDiscoveryAnimation(): React.ReactNode {
           Connector inventory
         </text>
 
-        {/* Ambient illumination from Edison */}
+        {/* Ambient illumination from SealGate */}
         <circle className="smd-glow" cx={58} cy={100} r={300} fill="url(#smd-glow-grad)" />
 
         {/* Admin persona (always present, watching the fleet) */}
@@ -354,7 +354,7 @@ export default function ShadowMCPDiscoveryAnimation(): React.ReactNode {
           ))}
         </g>
 
-        {/* AFTER: Edison restores sight - eye opens, "Full visibility" */}
+        {/* AFTER: SealGate restores sight - eye opens, "Full visibility" */}
         <g className="smd-eye">
           <svg x={75} y={12} width={24} height={24} viewBox="0 0 256 256">
             <path d={EYE_PATH} fill={accent} fillOpacity="0.8" />
@@ -373,8 +373,8 @@ export default function ShadowMCPDiscoveryAnimation(): React.ReactNode {
           </text>
         </g>
 
-        {/* Edison light source (left) - only appears once it switches on */}
-        <g className="smd-edison">
+        {/* SealGate light source (left) - only appears once it switches on */}
+        <g className="smd-sealgate">
           <g className="smd-pulse">
             <circle
               cx={58}
@@ -386,7 +386,7 @@ export default function ShadowMCPDiscoveryAnimation(): React.ReactNode {
               strokeWidth="1.5"
             />
           </g>
-          <EdisonLogo x={44} y={86} w={28} h={27} />
+          <SealGateLogo x={44} y={86} w={28} h={27} />
           <text
             x={58}
             y={134}
@@ -396,7 +396,7 @@ export default function ShadowMCPDiscoveryAnimation(): React.ReactNode {
             fontWeight="bold"
             fontFamily="system-ui,sans-serif"
           >
-            Edison
+            SealGate
           </text>
         </g>
 

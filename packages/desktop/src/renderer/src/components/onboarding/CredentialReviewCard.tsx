@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Card, Button } from "@edison-watch/shared/ui";
+import { Card, Button } from "@sealgate/shared/ui";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 

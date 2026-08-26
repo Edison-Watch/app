@@ -1,4 +1,4 @@
-//! Edison Watch backend REST client.
+//! SealGate backend REST client.
 //!
 //! Thin async wrapper over the three endpoints the daemon needs, all
 //! authenticated with a bearer API key (the same key the desktop app uses; the
@@ -15,7 +15,7 @@
 
 use serde::Deserialize;
 
-use edison_detectord::{HttpKind, ServerConfig};
+use sealgate_detectord::{HttpKind, ServerConfig};
 
 const DOMAIN_CONFIG_PATH: &str = "/api/v1/user/domain-config";
 const FINGERPRINTS_PATH: &str = "/api/v1/servers/fingerprints";
@@ -48,9 +48,13 @@ pub enum Error {
 pub type Result<T> = std::result::Result<T, Error>;
 
 /// The org policy flag governing quarantine.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Policy {
     pub quarantine: bool,
+    /// The org the backend attributes this policy to. Lets a caller verify the
+    /// answer came from the tenant it is enrolled in before acting on it.
+    /// `None` when the backend is too old to report one.
+    pub org_id: Option<String>,
 }
 
 /// Lifecycle status of a known server in the caller's org.
@@ -195,7 +199,7 @@ impl BackendClient {
     ///
     /// Registers the SHA-256 hash of the key's **user part** (the base64 without
     /// the `user:` prefix) so the MCP gateway can validate the
-    /// `X-Edison-Secret-Key` header the daemon installs. Call whenever the key
+    /// `X-SealGate-Secret-Key` header the daemon installs. Call whenever the key
     /// is set or rotated. The raw key never leaves the machine.
     pub async fn register_secret_key(&self, composite_key: &str) -> Result<()> {
         let body = serde_json::json!({ "user_key_hash": user_part_hash(composite_key) });
@@ -343,6 +347,8 @@ pub fn user_part_hash(composite_key: &str) -> String {
 struct DomainConfigDto {
     #[serde(default)]
     auto_quarantine_other_mcp_servers: bool,
+    #[serde(default)]
+    org_id: Option<String>,
 }
 
 /// Parse the domain-config body into a [`Policy`].
@@ -350,6 +356,7 @@ pub fn parse_policy(body: &str) -> std::result::Result<Policy, String> {
     let dto: DomainConfigDto = serde_json::from_str(body).map_err(|e| e.to_string())?;
     Ok(Policy {
         quarantine: dto.auto_quarantine_other_mcp_servers,
+        org_id: dto.org_id.filter(|s| !s.is_empty()),
     })
 }
 
@@ -469,6 +476,21 @@ mod tests {
         );
         // Missing flag defaults to false (fail-closed caching is the daemon's job).
         assert!(!parse_policy(r#"{}"#).unwrap().quarantine);
+    }
+
+    #[test]
+    fn policy_carries_org_id_when_present() {
+        assert_eq!(
+            parse_policy(r#"{"org_id":"org-a","auto_quarantine_other_mcp_servers":true}"#)
+                .unwrap()
+                .org_id
+                .as_deref(),
+            Some("org-a")
+        );
+        // Absent or blank both mean "backend did not tell us", so callers can
+        // treat the tenant as unverifiable with one check.
+        assert!(parse_policy(r#"{}"#).unwrap().org_id.is_none());
+        assert!(parse_policy(r#"{"org_id":""}"#).unwrap().org_id.is_none());
     }
 
     #[test]

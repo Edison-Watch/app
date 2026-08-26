@@ -7,10 +7,10 @@
 //! inherently tamper-resistant — a restored server simply reappears in
 //! `observed` next pass and is actioned again (design §8).
 
-use edison_detectord::{DiscoveredServer, ServerConfig, fingerprint};
+use sealgate_detectord::{DiscoveredServer, ServerConfig, fingerprint};
 
 /// Our own injected entry — never quarantine it.
-const EDISON_SERVER_NAME: &str = "edison-watch";
+const SEALGATE_SERVER_NAME: &str = "sealgate";
 
 /// Org policy governing the reconcile loop.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -36,13 +36,13 @@ pub enum Action {
         fingerprint: String,
     },
     /// Unknown → quarantine **first** (neutralise now), then prompt the user
-    /// for disposition (send-to-EW / skip).
+    /// for disposition (send-to-SG / skip).
     QuarantineAndPrompt {
         server: DiscoveredServer,
         fingerprint: String,
     },
     /// Opaque but **removable** — remove it locally. It has no launch config,
-    /// so it can't be fingerprinted or sent to EW; there's no disposition, just
+    /// so it can't be fingerprinted or sent to SG; there's no disposition, just
     /// neutralisation (Cursor plugins, VSCode extension entries).
     RemoveOpaque { server: DiscoveredServer },
 }
@@ -76,11 +76,11 @@ pub fn plan(
 
     let mut actions = Vec::new();
     for server in observed {
-        if is_edison_entry(server) {
+        if is_sealgate_entry(server) {
             continue;
         }
         match &server.config {
-            // Removable-locally-only: remove, no EW disposition.
+            // Removable-locally-only: remove, no SG disposition.
             ServerConfig::Opaque {
                 removable: true, ..
             } => actions.push(Action::RemoveOpaque {
@@ -112,9 +112,9 @@ pub fn plan(
     actions
 }
 
-/// Whether this is our own injected `edison-watch` entry (never quarantined).
-pub fn is_edison_entry(server: &DiscoveredServer) -> bool {
-    server.name == EDISON_SERVER_NAME
+/// Whether this is our own injected `sealgate` entry (never quarantined).
+pub fn is_sealgate_entry(server: &DiscoveredServer) -> bool {
+    server.name == SEALGATE_SERVER_NAME
 }
 
 #[cfg(test)]
@@ -124,7 +124,7 @@ mod tests {
     use std::collections::HashSet;
     use std::path::PathBuf;
 
-    use edison_detectord::{
+    use sealgate_detectord::{
         ConfigLocation, LocationExtra, OpaqueReason, Scope, ServerConfig, SourceKind, Transport,
     };
 
@@ -196,8 +196,8 @@ mod tests {
     }
 
     #[test]
-    fn edison_entry_is_skipped() {
-        let obs = vec![server("edison-watch", stdio("x", &[]))];
+    fn sealgate_entry_is_skipped() {
+        let obs = vec![server("sealgate", stdio("x", &[]))];
         assert!(plan(&obs, &known(&[]), ON).is_empty());
     }
 

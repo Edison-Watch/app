@@ -1,5 +1,5 @@
-import { Button, Badge } from "@edison-watch/shared/ui";
-import { clearCachedSecretKey } from "@edison-watch/shared/crypto";
+import { Button, Badge } from "@sealgate/shared/ui";
+import { clearCachedSecretKey } from "@sealgate/shared/crypto";
 import PromptInjectionAnimation from "../animations/PromptInjectionAnimation";
 import CustomServerConnect from "./CustomServerConnect";
 import type { AuthState } from "../../hooks/useAuth";
@@ -39,7 +39,7 @@ export default function WelcomeStep({ auth, onNext }: WelcomeStepProps): React.R
       <div className="text-center">
         <h2 className="text-lg font-semibold text-[var(--text-primary)]">Protect your data handled by AI Agents</h2>
         <p className="mt-1 text-sm text-[var(--text-secondary)]">
-          AI agents with access to your tools are vulnerable to prompt injection attacks that can exfiltrate sensitive data. Edison watches your agent actions and analyses each action, to protect your data.
+          AI agents with access to your tools are vulnerable to prompt injection attacks that can exfiltrate sensitive data. SealGate watches your agent actions and analyses each action, to protect your data.
         </p>
       </div>
       <PromptInjectionAnimation />
@@ -103,7 +103,7 @@ export default function WelcomeStep({ auth, onNext }: WelcomeStepProps): React.R
     </div>
   );
 
-  // Sign-in card: one path - approve this device from the Edison dashboard.
+  // Sign-in card: one path - approve this device from the SealGate dashboard.
   return (
     <div className="flex flex-col gap-5">
       {hero}
@@ -159,7 +159,7 @@ export default function WelcomeStep({ auth, onNext }: WelcomeStepProps): React.R
               Sign in with your browser
             </button>
             <p className="text-center text-xs text-[var(--text-secondary)]">
-              Your browser opens the Edison dashboard, where you sign in as usual
+              Your browser opens the SealGate dashboard, where you sign in as usual
               (Google, Microsoft, SSO, or email) and approve this device.
             </p>
             {errorBox}
@@ -167,7 +167,7 @@ export default function WelcomeStep({ auth, onNext }: WelcomeStepProps): React.R
         )}
       </div>
 
-      {/* Self-hosted deployments: connect to any Edison backend by URL. */}
+      {/* Self-hosted deployments: connect to any SealGate backend by URL. */}
       {!auth.awaitingBrowserCallback && <CustomServerConnect />}
     </div>
   );

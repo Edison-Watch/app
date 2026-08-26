@@ -1,15 +1,17 @@
 name: Build Windows (desktop, unsigned demo)
 
 # Windows demo build, ported from the private monorepo's build-client-upstream
-# windows job: stages the bundled Python + npx/uvx runtimes, natively builds
-# edison-stdiod for both Windows arches from crates/stdiod, packages an
-# unsigned NSIS installer versioned <base>-demo.<run>, sanity-checks the
-# auto-update manifest, and uploads the installers as a workflow artifact.
+# windows job. One job per arch: stages that arch's bundled Python + npx/uvx
+# runtimes, natively builds sealgate-stdiod + sealgate-detectord for it from
+# crates/, packages an unsigned single-arch NSIS installer versioned
+# <base>-demo.<run>, sanity-checks the auto-update manifest, and uploads the
+# installer as a per-arch workflow artifact.
 #
-# No publish step: this repo's auto-update rides the GitHub provider baked into
-# electron-builder.yml (the monorepo's Cloudflare R2 generic feed does not
-# apply here). Windows releases will join the GitHub-release flow alongside
-# the macOS release workflows when Windows release jobs are added.
+# No publish step: this workflow is the per-push CI gate + test-artifact
+# builder only. Published Windows releases come from the windows jobs in
+# desktop-release.yml (stable) and desktop-release-demo.yml (demo), which
+# mirror these build steps and upload into the shared GitHub Release that
+# auto-update rides (the GitHub provider baked into electron-builder.yml).
 #
 # Unsigned on purpose: NSIS auto-update verifies the package via the sha512 in
 # latest.yml (not Authenticode), so updates apply unsigned - users only see a
@@ -24,6 +26,7 @@ on:
       - 'packages/desktop/**'
       - 'packages/shared/**'
       - 'crates/stdiod/**'
+      - 'crates/detectord/**'
       - '.github/workflows/desktop-build-windows.yml'
 
 concurrency:
@@ -35,11 +38,28 @@ permissions:
 
 jobs:
   build-windows-demo:
-    name: Build Windows (Unsigned, demo)
+    name: Build Windows ${{ matrix.arch }} (Unsigned, demo)
     runs-on: windows-latest
-    # This natively builds edison-stdiod for both arches (release `ring`
-    # C-crypto compile) and stages the npx/uvx runtimes.
+    # Each leg natively builds sealgate-stdiod + sealgate-detectord for its own arch
+    # (release `ring` C-crypto compile) and stages that arch's npx/uvx runtimes.
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        # `channel` mirrors desktop-release.yml's windows job so this gate
+        # produces the same manifest layout a release would - electron-builder
+        # does not arch-suffix Windows manifests, so arm64 rides its own channel.
+        include:
+          - arch: x64
+            target: x86_64-pc-windows-msvc
+            channel: latest
+            manifest: latest.yml
+            unpacked: win-unpacked
+          - arch: arm64
+            target: aarch64-pc-windows-msvc
+            channel: latest-arm64
+            manifest: latest-arm64.yml
+            unpacked: win-arm64-unpacked
     # Git Bash for the scripted steps. The Python/runtime staging steps run
     # via npm scripts (-> pwsh).
     defaults:
@@ -66,93 +86,114 @@ jobs:
         run: npm ci
         working-directory: .
 
-      - name: Build @edison-watch/shared
+      - name: Build @sealgate/shared
         run: npm run build -w packages/shared
         working-directory: .
 
-      - name: Stage bundled Python (x64 + arm64)
+      - name: Stage bundled Python (${{ matrix.arch }})
         # Downloads + SHA256-verifies the embeddable interpreter into
         # bin/python/<arch>/; win.extraResources copies the matching arch into
         # resources/python/. The session hooks need a Python runtime Windows
         # does not reliably provide. Runs via npm script (-> pwsh).
-        run: npm run stage:python
+        run: npm run stage:python -- -Arch ${{ matrix.arch }}
 
-      - name: Build edison-stdiod (x64 + arm64)
-        # Native per-arch cargo build on the Windows runner. Staged into
-        # packages/desktop/bin/stdiod/<arch>/ so win.extraResources copies the
-        # matching-arch edison-stdiod.exe into resources/bin/. Without this the
-        # packaged app ships with no stdio daemon.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          # Same per-arch cache as the windows legs in desktop-release.yml and
+          # desktop-release-demo.yml - see the note there. This per-push job is
+          # the one that keeps it warm on main for the release workflows.
+          shared-key: windows-daemons-${{ matrix.arch }}
+          workspaces: |
+            crates/detectord
+            crates/stdiod
+
+      - name: Build sealgate-stdiod (${{ matrix.arch }})
+        # Native cargo build on the Windows runner, this leg's arch only. Staged
+        # into packages/desktop/bin/stdiod/<arch>/ so win.extraResources copies
+        # the matching-arch sealgate-stdiod.exe into resources/bin/. Without this
+        # the packaged app ships with no stdio daemon.
         working-directory: crates/stdiod
         run: |
           set -euo pipefail
-          rustup target add x86_64-pc-windows-msvc aarch64-pc-windows-msvc
-          for spec in "x64:x86_64-pc-windows-msvc" "arm64:aarch64-pc-windows-msvc"; do
-            arch="${spec%%:*}"
-            target="${spec##*:}"
-            echo "Building edison-stdiod for $target ..."
-            cargo build --release --target "$target" --bin edison-stdiod
-            mkdir -p "../../packages/desktop/bin/stdiod/$arch"
-            cp "target/$target/release/edison-stdiod.exe" "../../packages/desktop/bin/stdiod/$arch/edison-stdiod.exe"
-          done
+          rustup target add ${{ matrix.target }}
+          echo "Building sealgate-stdiod for ${{ matrix.target }} ..."
+          cargo build --release --target "${{ matrix.target }}" --bin sealgate-stdiod
+          mkdir -p "../../packages/desktop/bin/stdiod/${{ matrix.arch }}"
+          cp "target/${{ matrix.target }}/release/sealgate-stdiod.exe" \
+            "../../packages/desktop/bin/stdiod/${{ matrix.arch }}/sealgate-stdiod.exe"
 
-      - name: Build edison-detectord (x64 + arm64)
-        # Same native per-arch pattern as stdiod above. The cargo binary is
+      - name: Build sealgate-detectord (${{ matrix.arch }})
+        # Same native pattern as stdiod above. The cargo binary is
         # mcp_detector_daemon; win.extraResources expects it staged as
-        # bin/detectord/<arch>/edison-detectord.exe. Without this the packaged
+        # bin/detectord/<arch>/sealgate-detectord.exe. Without this the packaged
         # app ships without the detector daemon (electron-builder only warns).
         working-directory: crates/detectord
         run: |
           set -euo pipefail
-          rustup target add x86_64-pc-windows-msvc aarch64-pc-windows-msvc
-          for spec in "x64:x86_64-pc-windows-msvc" "arm64:aarch64-pc-windows-msvc"; do
-            arch="${spec%%:*}"
-            target="${spec##*:}"
-            echo "Building mcp_detector_daemon for $target ..."
-            cargo build --release --target "$target" --bin mcp_detector_daemon
-            mkdir -p "../../packages/desktop/bin/detectord/$arch"
-            cp "target/$target/release/mcp_detector_daemon.exe" "../../packages/desktop/bin/detectord/$arch/edison-detectord.exe"
-          done
+          rustup target add ${{ matrix.target }}
+          echo "Building mcp_detector_daemon for ${{ matrix.target }} ..."
+          cargo build --release --target "${{ matrix.target }}" --bin mcp_detector_daemon
+          mkdir -p "../../packages/desktop/bin/detectord/${{ matrix.arch }}"
+          cp "target/${{ matrix.target }}/release/mcp_detector_daemon.exe" \
+            "../../packages/desktop/bin/detectord/${{ matrix.arch }}/sealgate-detectord.exe"
 
-      - name: Stage bundled runtimes (npx/uvx, x64 + arm64)
+      - name: Stage bundled runtimes (npx/uvx, ${{ matrix.arch }})
         # Downloads Node (npx) + uv (uvx) into bin/runtimes/<arch>/;
         # win.extraResources copies the matching arch into resources/runtimes/.
         # The stdiod daemon spawns child MCP servers via npx/uvx, which Windows
-        # users often lack. Runs via the npm script (-> pwsh). Mirrors `build:win`.
-        run: npm run stage:runtimes
+        # users often lack. Runs via the npm script (-> pwsh). Mirrors
+        # `build:win:${{ matrix.arch }}`.
+        run: npm run stage:runtimes -- -Arch ${{ matrix.arch }}
 
       - name: Build Electron app (unsigned, demo)
         # Version is <base>-demo.<run> so the demo feed advances per run.
         run: |
           BASE=$(node -p "require('./package.json').version")
           VERSION="${BASE}-demo.${GITHUB_RUN_NUMBER}"
-          echo "Building demo version $VERSION"
+          echo "Building demo version $VERSION (${{ matrix.arch }})"
           npm run build:demo
-          npx electron-builder --win --publish never \
-            -c.extraMetadata.version="$VERSION"
+          npx electron-builder --win --${{ matrix.arch }} --publish never \
+            -c.win.target=nsis \
+            -c.extraMetadata.version="$VERSION" \
+            -c.publish.channel=${{ matrix.channel }}
+
+      - name: Verify bundled daemons
+        # electron-builder treats a missing extraResources source as a warning,
+        # so assert both daemons actually made it into the packaged app.
+        run: |
+          set -euo pipefail
+          for bin in sealgate-stdiod.exe sealgate-detectord.exe; do
+            found="dist/${{ matrix.unpacked }}/resources/bin/$bin"
+            test -f "$found" || { echo "::error::$bin missing from $found"; exit 1; }
+            echo "bundled: $found"
+          done
 
       - name: Verify update artifacts (auto-update sanity)
-        # Fail BEFORE publishing a broken build: a wrong version in latest.yml or
-        # a missing installer silently breaks electron-updater on Windows.
+        # Fail BEFORE publishing a broken build: a wrong version in the manifest
+        # or a missing installer silently breaks electron-updater on Windows.
         run: |
           set -euo pipefail
           BASE=$(node -p "require('./package.json').version")
           VERSION="${BASE}-demo.${GITHUB_RUN_NUMBER}"
-          YML="dist/latest.yml"
-          test -f "$YML" || { echo "::error::dist/latest.yml missing"; exit 1; }
+          YML="dist/${{ matrix.manifest }}"
+          test -f "$YML" || { echo "::error::$YML missing"; exit 1; }
           MVER=$(grep -m1 '^version:' "$YML" | awk '{print $2}' | tr -d '\r')
           [ "$MVER" = "$VERSION" ] || { echo "::error::manifest version '$MVER' != build version '$VERSION'"; exit 1; }
-          ls dist/*.exe >/dev/null 2>&1 || { echo "::error::no NSIS installer (.exe) produced"; exit 1; }
+          ls dist/*-${{ matrix.arch }}-setup.exe >/dev/null 2>&1 || {
+            echo "::error::no ${{ matrix.arch }} NSIS installer produced"; exit 1; }
           echo "manifest version: $MVER"
-          for f in dist/*.exe; do
+          for f in dist/*-${{ matrix.arch }}-setup.exe; do
             SIZE_MB=$(( $(wc -c < "$f") / 1024 / 1024 )); echo "installer: $(basename "$f") (${SIZE_MB} MB)"
           done
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v7
         with:
-          name: edison-watch-windows-demo
+          # Per-arch name: two legs uploading the same artifact name would
+          # collide (upload-artifact v4+ rejects duplicates).
+          name: sealgate-windows-demo-${{ matrix.arch }}
           path: |
-            packages/desktop/dist/*.exe
-            packages/desktop/dist/latest.yml
+            packages/desktop/dist/*-${{ matrix.arch }}-setup.exe
+            packages/desktop/dist/${{ matrix.manifest }}
           if-no-files-found: error
           retention-days: 14

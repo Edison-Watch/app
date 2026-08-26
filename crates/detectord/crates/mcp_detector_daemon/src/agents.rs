@@ -2,8 +2,8 @@
 
 use std::sync::Arc;
 
-use edison_detectord::Agent;
-use edison_detectord::clients::{
+use sealgate_detectord::Agent;
+use sealgate_detectord::clients::{
     ChatGpt, ClaudeCode, ClaudeCowork, ClaudeDesktop, Codex, Cursor, JetBrains, VsCode, Windsurf,
     Zed,
 };
@@ -31,7 +31,7 @@ pub fn build() -> Vec<Arc<dyn Agent>> {
     add!(Zed::discover(), "zed");
     add!(Codex::discover(), "codex");
     // Detect-only: reports whether the ChatGPT desktop app is installed so the
-    // app can warn that its Connectors are outside Edison's reach. It
+    // app can warn that its Connectors are outside SealGate's reach. It
     // contributes no servers and is never an install target.
     add!(ChatGpt::discover(), "chatgpt");
     add!(JetBrains::intellij(), "intellij");
@@ -43,7 +43,7 @@ pub fn build() -> Vec<Arc<dyn Agent>> {
 
 /// One reconcile-pass discovery across all agents, flattening per-agent errors
 /// to a logged warning (one broken config can't stop the rest).
-pub fn discover_all(agents: &[Arc<dyn Agent>]) -> Vec<edison_detectord::DiscoveredServer> {
+pub fn discover_all(agents: &[Arc<dyn Agent>]) -> Vec<sealgate_detectord::DiscoveredServer> {
     let mut out = Vec::new();
     for a in agents {
         match a.discover() {

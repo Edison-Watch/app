@@ -1,9 +1,9 @@
 /**
  * SIEM Integration animation for documentation.
  *
- * Shows Edison Watch deployed on-prem/VPC with SIEM (Splunk) integration.
- * AI agents make tool calls through Edison (inside VPC boundary), while
- * security events simultaneously stream from Edison to Splunk.
+ * Shows SealGate deployed on-prem/VPC with SIEM (Splunk) integration.
+ * AI agents make tool calls through SealGate (inside VPC boundary), while
+ * security events simultaneously stream from SealGate to Splunk.
  *
  * 10s loop. Pure SVG + CSS. Respects `prefers-reduced-motion`.
  */
@@ -12,7 +12,7 @@ import { AGENT_REGISTRY, type AgentIconEntry } from '../../agent-registry/index'
 import {
   AgentIcon,
   DANGER,
-  EdisonLogo,
+  SealGateLogo,
   McpIcon,
   McpPacket,
   ORANGE as O,
@@ -73,7 +73,7 @@ const CSS = `
 .siem .siem-v2 { animation: siem-v2 10s ease-in-out infinite; }
 .siem .siem-v3 { animation: siem-v3 10s ease-in-out infinite; }
 
-/* Edison pulse */
+/* SealGate pulse */
 .siem .siem-pulse { transform-origin:220px 120px; animation: siem-pulse 1.5s cubic-bezier(.2,.8,.4,1) infinite; }
 
 /* ───── keyframes ───── */
@@ -86,7 +86,7 @@ const CSS = `
   100% { transform:scale(1.5); opacity:0; }
 }
 
-/* verdict badges pop in when packets hit Edison */
+/* verdict badges pop in when packets hit SealGate */
 @keyframes siem-v1 {
   0%,14% { opacity:0; transform:scale(0.5); }
   17%    { opacity:1; transform:scale(1); }
@@ -106,7 +106,7 @@ const CSS = `
   95%,100% { opacity:0; transform:scale(0.5); }
 }
 
-/* ── Tool call pkt1: Agent1 → Edison → GitLab ── */
+/* ── Tool call pkt1: Agent1 → SealGate → GitLab ── */
 @keyframes siem-pkt1 {
   0%,4%   { opacity:0; }
   5%      { transform:translate(90px,55px);   opacity:.8; color:${O}; }
@@ -118,7 +118,7 @@ const CSS = `
   32%,100%{ opacity:0; }
 }
 
-/* ── Tool call pkt2: Agent2 → Edison → PostgreSQL ── */
+/* ── Tool call pkt2: Agent2 → SealGate → PostgreSQL ── */
 @keyframes siem-pkt2 {
   0%,30%  { opacity:0; }
   31%     { transform:translate(90px,120px);  opacity:.8; color:${O}; }
@@ -130,7 +130,7 @@ const CSS = `
   58%,100%{ opacity:0; }
 }
 
-/* ── Tool call pkt3: Agent3 → Edison → DENIED ── */
+/* ── Tool call pkt3: Agent3 → SealGate → DENIED ── */
 @keyframes siem-pkt3 {
   0%,56%  { opacity:0; }
   57%     { transform:translate(90px,185px);  opacity:.8; color:${O}; }
@@ -140,7 +140,7 @@ const CSS = `
   71%,100%{ opacity:0; }
 }
 
-/* ── Event stream evt1: Edison → Splunk ── */
+/* ── Event stream evt1: SealGate → Splunk ── */
 @keyframes siem-evt1 {
   0%,16%  { opacity:0; }
   17%     { transform:translate(220px,155px); opacity:.8; color:${SPLUNK_GREEN}; }
@@ -149,7 +149,7 @@ const CSS = `
   32%,100%{ opacity:0; }
 }
 
-/* ── Event stream evt2: Edison → Splunk ── */
+/* ── Event stream evt2: SealGate → Splunk ── */
 @keyframes siem-evt2 {
   0%,42%  { opacity:0; }
   43%     { transform:translate(220px,155px); opacity:.8; color:${SPLUNK_GREEN}; }
@@ -158,7 +158,7 @@ const CSS = `
   58%,100%{ opacity:0; }
 }
 
-/* ── Event stream evt3: Edison → Splunk ── */
+/* ── Event stream evt3: SealGate → Splunk ── */
 @keyframes siem-evt3 {
   0%,68%  { opacity:0; }
   69%     { transform:translate(220px,155px); opacity:.8; color:${SPLUNK_GREEN}; }
@@ -359,7 +359,7 @@ export default function SIEMIntegrationAnimation(): React.ReactNode {
         <Laptop y={103} agent={CODEX} />
         <Laptop y={168} agent={CURSOR} />
 
-        {/* ══ Connection lines: Agents → Edison (crossing boundary) ══ */}
+        {/* ══ Connection lines: Agents → SealGate (crossing boundary) ══ */}
         <line
           className="siem-line"
           x1="100"
@@ -394,7 +394,7 @@ export default function SIEMIntegrationAnimation(): React.ReactNode {
           strokeDasharray="3 3"
         />
 
-        {/* ══ VPC / On-Prem boundary (Edison is the gateway at edge) ══ */}
+        {/* ══ VPC / On-Prem boundary (SealGate is the gateway at edge) ══ */}
         <rect
           x={155}
           y={4}
@@ -420,7 +420,7 @@ export default function SIEMIntegrationAnimation(): React.ReactNode {
           Your Infrastructure (VPC / On-Prem)
         </text>
 
-        {/* ══ Edison Watch (gateway at left edge of boundary) ══ */}
+        {/* ══ SealGate (gateway at left edge of boundary) ══ */}
         <circle
           className="siem-pulse"
           cx="220"
@@ -431,7 +431,7 @@ export default function SIEMIntegrationAnimation(): React.ReactNode {
           strokeOpacity="0.4"
           strokeWidth="1.5"
         />
-        <EdisonLogo x={194} y={95} w={52} h={50} />
+        <SealGateLogo x={194} y={95} w={52} h={50} />
         <text
           x="220"
           y="163"
@@ -441,10 +441,10 @@ export default function SIEMIntegrationAnimation(): React.ReactNode {
           fontWeight="bold"
           fontFamily="system-ui,sans-serif"
         >
-          Edison Gateway
+          SealGate Gateway
         </text>
 
-        {/* ══ Connection lines: Edison → Services ══ */}
+        {/* ══ Connection lines: SealGate → Services ══ */}
         <line
           className="siem-line"
           x1="250"
@@ -484,7 +484,7 @@ export default function SIEMIntegrationAnimation(): React.ReactNode {
         <McpServer x={435} y={100} iconSvg={POSTGRESQL_SVG} iconViewBox="0 0 432.071 445.383" />
         <McpServer x={435} y={165} iconSvg={grafanaSvg(id)} iconViewBox="0 0 256 279" />
 
-        {/* ══ Event stream line: Edison → Splunk ══ */}
+        {/* ══ Event stream line: SealGate → Splunk ══ */}
         <line
           className="siem-line"
           x1="220"
@@ -617,7 +617,7 @@ export default function SIEMIntegrationAnimation(): React.ReactNode {
           </text>
         </g>
 
-        {/* ══ Policy verdict badges (left side of Edison, facing clients) ══ */}
+        {/* ══ Policy verdict badges (left side of SealGate, facing clients) ══ */}
         <VerdictBadge className="siem-v1" cx={185} cy={102} r={9} variant="allow" />
         <VerdictBadge className="siem-v2" cx={185} cy={122} r={9} variant="allow" />
         <VerdictBadge className="siem-v3" cx={185} cy={142} r={9} variant="deny" />

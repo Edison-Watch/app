@@ -1,7 +1,7 @@
 /**
  * Display metadata (name + brand color) for every supported client.
  *
- * `name` and `brandColor` mirror `@edison-watch/shared/agent-registry`; `configLabel`
+ * `name` and `brandColor` mirror `@sealgate/shared/agent-registry`; `configLabel`
  * is app-local copy with no counterpart there. Duplicated here so
  * main-process code can build ClientIntegration objects without dragging the
  * shared package into test module graphs (vitest can't resolve subpath
@@ -18,7 +18,7 @@ export interface ClientDisplay {
    * line under the app name reads as "we couldn't find it" rather than "there
    * is nothing to find".
    *
-   * Display copy only - whether Edison can manage a client is the daemon's
+   * Display copy only - whether SealGate can manage a client is the daemon's
    * `manageable`, never the presence of this string.
    */
   configLabel?: string

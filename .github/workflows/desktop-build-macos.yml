@@ -1,9 +1,9 @@
 name: Build macOS (desktop)
 
 # Upstream TEST build - NOT a release.
-# Pulls the latest published edison-stdiod universal binary from the stdiod
-# releases, bundles it, and produces a universal .dmg/.zip uploaded as an
-# Actions artifact.
+# Builds both daemons (sealgate-stdiod, sealgate-detectord) from source out of
+# crates/, bundles them, and produces a .dmg/.zip uploaded as an Actions
+# artifact.
 #
 # Signing depends on the trigger:
 #   - pull_request: UNSIGNED. Code signing is the slow part of the build and
@@ -26,12 +26,18 @@ on:
     branches: [main]
     paths:
       - 'packages/**'
+      # Both daemons are built from source here, so their crates gate this too.
+      - 'crates/stdiod/**'
+      - 'crates/detectord/**'
       - 'package-lock.json'
       - '.github/workflows/desktop-build-macos.yml'
   push:
     branches: [main]
     paths:
       - 'packages/**'
+      # Both daemons are built from source here, so their crates gate this too.
+      - 'crates/stdiod/**'
+      - 'crates/detectord/**'
       - 'package-lock.json'
       - '.github/workflows/desktop-build-macos.yml'
 
@@ -44,22 +50,24 @@ permissions:
 
 jobs:
   build:
-    name: Build (universal)
-    runs-on: macos-latest # arm64; builds the universal target for both arches
+    name: Build (arm64)
+    runs-on: macos-latest # arm64; the only macOS arch shipped
     defaults:
       run:
         working-directory: packages/desktop
     env:
-      # Sign only on post-merge push to main; PR builds stay unsigned (see header).
-      # On pull_request these resolve to empty / false so electron-builder skips
-      # signing entirely instead of erroring on a missing certificate.
-      CSC_LINK: ${{ github.event_name == 'push' && secrets.CSC_LINK || '' }}
-      CSC_KEY_PASSWORD: ${{ github.event_name == 'push' && secrets.CSC_KEY_PASSWORD || '' }}
+      # Sign on post-merge push to main and on manual dispatch; PR builds stay
+      # unsigned (see header). On pull_request these resolve to empty / false so
+      # electron-builder skips signing entirely instead of erroring on a missing
+      # certificate.
+      # Allow-list, not `!= 'pull_request'`: any trigger added later must opt in
+      # to the signing cert deliberately. A deny-list would hand it to, say, a
+      # future pull_request_target run, which builds fork-authored code.
+      CSC_LINK: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && secrets.CSC_LINK || '' }}
+      CSC_KEY_PASSWORD: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && secrets.CSC_KEY_PASSWORD || '' }}
       # false => electron-builder produces an unsigned build without probing the
       # keychain for a Developer ID identity (none exists on PR runs).
-      CSC_IDENTITY_AUTO_DISCOVERY: ${{ github.event_name == 'push' && secrets.CSC_LINK != '' }}
-      # gh CLI auth for cross-repo public release download.
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      CSC_IDENTITY_AUTO_DISCOVERY: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && secrets.CSC_LINK != '' }}
       # Demo backend config. Vite's loadEnv() also reads matching keys from the
       # environment, so these flow into the bundle even without ../frontend-v2.
       # Set the DEMO_VITE_* repository variables (Settings > Variables).
@@ -100,9 +108,9 @@ jobs:
         run: npm ci
         working-directory: .
 
-      # The app consumes the workspace-linked @edison-watch/shared, whose
+      # The app consumes the workspace-linked @sealgate/shared, whose
       # package entry points live in dist/ - build it first.
-      - name: Build @edison-watch/shared
+      - name: Build @sealgate/shared
         run: npm run build -w packages/shared
         working-directory: .
 
@@ -110,40 +118,38 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: crates/detectord
+          # Shared with the macOS jobs in desktop-release.yml and
+          # desktop-release-demo.yml: all three compile the same two crates for
+          # the same two Darwin targets, so without this they would each keep a
+          # separate cache (rust-cache folds the job name into the key by
+          # default) and a release build could never reuse the cache this
+          # per-push job keeps warm on main.
+          shared-key: macos-daemons
+          workspaces: |
+            crates/detectord
+            crates/stdiod
 
-      - name: Build edison-detectord from source
-        # Stages crates/detectord's daemon into bin/edison-detectord (arm64).
+      - name: Build sealgate-detectord from source
+        # Stages crates/detectord's daemon into bin/sealgate-detectord (arm64).
         # mac.extraResources expects it; electron-builder only WARNS when the
         # file is missing, which is how releases shipped without the detector
         # daemon until 0.6.0.
         run: npm run build:detectord
 
-      - name: Pull latest edison-stdiod (universal) from stdiod releases
-        run: |
-          mkdir -p stdiod-dl bin
-          # Releases in this repo are mixed (desktop v*, stdiod stdiod-v*), so
-          # "latest" must be resolved per component, not taken from GitHub's
-          # repo-wide latest.
-          TAG=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 100 \
-            --json tagName --jq '[.[] | select(.tagName | startswith("stdiod-v"))][0].tagName')
-          [ -n "$TAG" ] || { echo "::error::no stdiod-v* release found in $GITHUB_REPOSITORY"; exit 1; }
-          echo "Bundling stdiod release: $TAG"
-          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
-            --pattern 'edison-stdiod-macos-universal' \
-            --pattern 'SHA256SUMS' \
-            --dir stdiod-dl --clobber
-          # Verify integrity against the published checksum before trusting it.
-          ( cd stdiod-dl && grep 'edison-stdiod-macos-universal' SHA256SUMS | shasum -a 256 -c - )
-          cp stdiod-dl/edison-stdiod-macos-universal bin/edison-stdiod
-          chmod +x bin/edison-stdiod
-          xattr -c bin/edison-stdiod || true
-          lipo -info bin/edison-stdiod
+      - name: Build sealgate-stdiod from source (arm64)
+        # Built from the checkout, same as detectord - so this gate actually
+        # tests the stdiod source at this commit instead of the last published
+        # binary. The script stages a thin arm64 binary at bin/sealgate-stdiod
+        # for mac.extraResources.
+        run: npm run build:stdiod
+
+      - name: Report bundled stdiod architecture
+        run: lipo -info bin/sealgate-stdiod
 
       - name: Build renderer/main/preload bundles
         run: npm run build:demo
 
-      - name: Package (universal, no notarization, no publish)
+      - name: Package (arm64, no notarization, no publish)
         # A defined-but-empty CSC_LINK is treated as a certificate *path* by
         # electron-builder (>= 26.x) and resolved to the project dir -> "not a
         # file". Unset the signing vars entirely when there's nothing in them.
@@ -153,19 +159,44 @@ jobs:
 
       - name: Verify bundled daemons
         # electron-builder treats a missing extraResources source as a warning,
-        # so assert both daemons actually made it into the packaged .app.
+        # so assert both daemons made it into the bundle.
+        #
+        # The arch check is inverted from what it used to be: these MUST be thin
+        # arm64, never `lipo`-merged. A merged Mach-O carries an unsigned x86_64
+        # slice, which leaves the whole file with no designated requirement -
+        # tccd then writes permission grants it can never re-verify, and the user
+        # gets the same folder-access dialog forever.
         run: |
           set -euo pipefail
-          for bin in edison-stdiod edison-detectord; do
-            found=$(find dist -path "*Contents/Resources/bin/$bin" | head -1)
-            [ -n "$found" ] || { echo "::error::$bin missing from packaged app"; exit 1; }
-            echo "bundled: $found"
+          shopt -s nullglob
+          apps=(dist/mac-arm64/*.app)
+          [ ${#apps[@]} -eq 1 ] || {
+            echo "::error::expected 1 arm64 .app bundle, found ${#apps[@]}"; exit 1; }
+          for app in "${apps[@]}"; do
+            for bin in sealgate-stdiod sealgate-detectord; do
+              f="$app/Contents/Resources/bin/$bin"
+              test -f "$f" || { echo "::error::$bin missing from $app"; exit 1; }
+              info=$(lipo -info "$f")
+              case "$info" in
+                *x86_64*) echo "::error::$f must be thin arm64, got: $info"; exit 1 ;;
+                *arm64*) ;;
+                *) echo "::error::$f is not arm64: $info"; exit 1 ;;
+              esac
+              # `#?` is load-bearing: codesign comments out a synthesised
+              # requirement (ad-hoc) and prints a stored one bare (Developer ID).
+              # This job signs on push/dispatch and not on PRs, so it sees BOTH
+              # forms. See the longer note in scripts/build-detectord.sh.
+              codesign -d -r- "$f" 2>&1 | grep -qE '^#?[[:space:]]*designated[[:space:]]*=>' || {
+                echo "::error::$f has no designated requirement; TCC grants will not stick"
+                exit 1; }
+              echo "bundled: $f -> $info"
+            done
           done
 
       - name: Upload app artifact
         uses: actions/upload-artifact@v7
         with:
-          name: edison-watch-macos
+          name: sealgate-macos
           path: |
             packages/desktop/dist/*.dmg
             packages/desktop/dist/*.zip

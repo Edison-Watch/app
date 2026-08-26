@@ -15,7 +15,7 @@ type Story = StoryObj<typeof meta>;
 const BASE_PROPS = {
   mcpBaseUrl: 'https://mcp.demo.example.com',
   apiBaseUrl: 'https://api.demo.example.com',
-  apiKey: 'edison_demo_apikey_abc123',
+  apiKey: 'sealgate_demo_apikey_abc123',
   userId: 'demo-user-1',
   selectedApps: ['cursor', 'claude-code'],
   discoveredServers: [

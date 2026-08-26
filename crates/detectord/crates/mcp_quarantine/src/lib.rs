@@ -14,13 +14,13 @@ pub mod seen_store;
 mod statedb;
 
 pub use configstore::{
-    ConfigStore, FileConfigStore, QuarantineRecord, backup_path, edison_url, install_edison,
-    uninstall_edison,
+    ConfigStore, FileConfigStore, QuarantineRecord, backup_path, install_sealgate, sealgate_url,
+    uninstall_sealgate,
 };
 pub use error::{Error, Result};
 pub use hooks::{
     HookScripts, ensure_scripts, hooks_status, inject_hooks, inject_workspace_task, remove_hooks,
     remove_workspace_task, workspace_task_installed,
 };
-pub use reconcile::{Action as ReconcileAction, KnownOracle, Policy, is_edison_entry, plan};
+pub use reconcile::{Action as ReconcileAction, KnownOracle, Policy, is_sealgate_entry, plan};
 pub use seen_store::{Action, SeenStore};

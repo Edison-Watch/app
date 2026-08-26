@@ -1,7 +1,7 @@
 {
-  "name": "@edison-watch/shared",
+  "name": "@sealgate/shared",
   "version": "0.1.2",
-  "description": "Shared React components, design tokens, and client utilities for Edison Watch.",
+  "description": "Shared React components, design tokens, and client utilities for SealGate.",
   "license": "AGPL-3.0-only",
   "repository": {
     "type": "git",
@@ -12,7 +12,7 @@
     "url": "https://github.com/Edison-Watch/shared/issues"
   },
   "keywords": [
-    "edison-watch",
+    "sealgate",
     "react",
     "design-system",
     "mcp",
@@ -147,12 +147,12 @@
     "test:visual:update": "npx playwright test --config playwright.config.ts --update-snapshots"
   },
   "devDependencies": {
-    "@chromatic-com/storybook": "^5.0.1",
+    "@chromatic-com/storybook": "^5.3.0",
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.61.1",
-    "@storybook/addon-docs": "^10.2.12",
-    "@storybook/addon-onboarding": "^10.2.12",
-    "@storybook/react-vite": "^10.2.12",
+    "@storybook/addon-docs": "^10.5.7",
+    "@storybook/addon-onboarding": "^10.5.7",
+    "@storybook/react-vite": "^10.5.7",
     "@testing-library/jest-dom": "^7.0.0",
     "@testing-library/react": "^16.3.2",
     "@types/react": "^19.2.14",

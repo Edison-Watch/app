@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build edison-stdiod for Linux (x64 + arm64) and stage it into
+# Build sealgate-stdiod for Linux (x64 + arm64) and stage it into
 # client_2/bin/stdiod/<arch>/ so a (future) linux.extraResources rule can copy
 # the matching-arch binary into the packaged app - and so the binary can be
 # shipped standalone (the CLI-first Linux story).
@@ -35,6 +35,14 @@ else
 fi
 OUT_ROOT="$CLIENT_DIR/bin/stdiod"
 
+# Stamp the daemon's reported version from this app's package.json - the single
+# source of truth for the shipped release. build.rs reads this env var; without
+# it the daemon would fall back to the pinned 0.0.1 Rust workspace version. A
+# value already set in the environment wins, matching build.rs's precedence.
+SEALGATE_DAEMON_VERSION="${SEALGATE_DAEMON_VERSION:-$(node -p "require('$CLIENT_DIR/package.json').version")}"
+export SEALGATE_DAEMON_VERSION
+echo "Stamping daemon version $SEALGATE_DAEMON_VERSION"
+
 command -v zig >/dev/null 2>&1 || {
   echo "build-stdiod-linux.sh: zig required (brew install zig / see ziglang.org)" >&2; exit 1; }
 command -v cargo-zigbuild >/dev/null 2>&1 || {
@@ -51,7 +59,8 @@ WANT="${TARGET_ARCHES:-x64 arm64}"
 # whitespace-only TARGET_ARCHES (which ${:-} does NOT default, since it is not
 # empty) collapses to zero tokens and is rejected here rather than silently
 # building nothing.
-read -ra WANT_ARCHES <<< "$WANT"
+# Tabs/newlines folded to spaces first - see build-stdiod-win.sh for why.
+read -ra WANT_ARCHES <<< "${WANT//[$'\t\n']/ }"
 if [ ${#WANT_ARCHES[@]} -eq 0 ]; then
   echo "build-stdiod-linux.sh: TARGET_ARCHES requests no architectures" >&2; exit 1
 fi
@@ -64,21 +73,31 @@ for arch in "${WANT_ARCHES[@]}"; do
   esac
 done
 
+# Match the PARSED tokens, not a glob over the raw $WANT - see build-stdiod-win.sh
+# for why the two tokenizations disagreeing silently stages nothing.
+wants_arch() {
+  local want
+  for want in "${WANT_ARCHES[@]}"; do
+    if [[ "$want" == "$1" ]]; then return 0; fi
+  done
+  return 1
+}
+
 for spec in "${ALL_SPECS[@]}"; do
   arch="${spec%%:*}"
   target="${spec##*:}"
-  case " $WANT " in *" $arch "*) ;; *) continue ;; esac
+  wants_arch "$arch" || continue
 
   if ! rustup target list --installed | grep -q "^${target}\$"; then
     echo "Installing rustup target $target ..."
     rustup target add "$target"
   fi
-  echo "Building edison-stdiod for $target ..."
-  ( cd "$STDIOD_DIR" && cargo zigbuild --release --target "$target" --bin edison-stdiod )
+  echo "Building sealgate-stdiod for $target ..."
+  ( cd "$STDIOD_DIR" && cargo zigbuild --release --target "$target" --bin sealgate-stdiod )
   mkdir -p "$OUT_ROOT/$arch"
-  cp "$STDIOD_DIR/target/$target/release/edison-stdiod" "$OUT_ROOT/$arch/edison-stdiod"
-  chmod +x "$OUT_ROOT/$arch/edison-stdiod"
-  echo "Staged -> $OUT_ROOT/$arch/edison-stdiod"
+  cp "$STDIOD_DIR/target/$target/release/sealgate-stdiod" "$OUT_ROOT/$arch/sealgate-stdiod"
+  chmod +x "$OUT_ROOT/$arch/sealgate-stdiod"
+  echo "Staged -> $OUT_ROOT/$arch/sealgate-stdiod"
 done
 
 echo "Done. Linux daemon binaries staged under $OUT_ROOT/<arch>/"

@@ -19,7 +19,7 @@ import { installMonitorTee } from './runtime/monitorLog'
 installMonitorTee()
 
 // os.tmpdir() = %TEMP% on Windows, /tmp on Unix (a hardcoded '/tmp' silently no-ops on Windows).
-const LOG_FILE = join(tmpdir(), 'ew-startup.log')
+const LOG_FILE = join(tmpdir(), 'sg-startup.log')
 function slog(msg: string) {
   const line = `[${new Date().toISOString()}] ${msg}\n`
   try {
@@ -91,7 +91,7 @@ import { onDetectordHealthChange } from './detectord/health'
 import { installFsAudit } from './infra/fsAudit'
 
 // Baked at build time by electron.vite.config.ts (define). true = compact Linux
-// tray menu; false = full menu. Default build is compact; EDISON_TRAY_COMPACT=0
+// tray menu; false = full menu. Default build is compact; SEALGATE_TRAY_COMPACT=0
 // produces the full-menu variant.
 declare const __TRAY_COMPACT__: boolean
 
@@ -132,7 +132,7 @@ function refreshAndSetLinuxTrayMenu(): void {
 function createTray(): void {
   // Guard against duplicate trays: sign-out re-runs the wizard, which fires
   // `setup:reached-final` and calls createTray() again. Without this check the
-  // previous Tray stays alive, leaving two Edison icons in the menu bar / system tray.
+  // previous Tray stays alive, leaving two SealGate icons in the menu bar / system tray.
   if (tray) {
     updateTrayMenu()
     return
@@ -145,7 +145,7 @@ function createTray(): void {
     trayIconToUse = img.resize({ width: 16, height: 16 })
   }
   tray = new Tray(trayIconToUse)
-  tray.setToolTip('Edison Watch')
+  tray.setToolTip('SealGate')
 
   const showMenu = (): void => {
     if (!tray) return
@@ -250,7 +250,7 @@ const CLEAR_DATA_FILES = [
   'setup.json',
   'accounts.json',
   '.personal-key.enc',
-  'edison_debug_env.json',
+  'sealgate_debug_env.json',
   'seen-servers.json'
 ]
 async function handleClearDataAndRestart(): Promise<void> {
@@ -364,7 +364,7 @@ function createWindow(): void {
   mainWindow.webContents.on('render-process-gone', (_e, d) =>
     slog(`render-process-gone reason=${d.reason} code=${d.exitCode}`)
   )
-  if (process.env.EDISON_DEBUG_RENDERER === 'true') {
+  if (process.env.SEALGATE_DEBUG_RENDERER === 'true') {
     mainWindow.webContents.on('console-message', (_e, level, message) => {
       slog(`[renderer:${level}] ${message}`)
     })
@@ -402,7 +402,7 @@ function showMainWindow(): void {
   }
 }
 
-// Single-instance lock + edison-watch:// deep-link callback wiring (see deepLinkAuth).
+// Single-instance lock + sealgate:// deep-link callback wiring (see deepLinkAuth).
 // Returns false for a doomed second instance - whenReady early-returns on it below.
 const gotSingleInstanceLock = initDeepLinkAuth({
   getMainWindow: () => mainWindow,
@@ -436,7 +436,7 @@ initApprovalsHandler(
   updateTrayMenu
 )
 
-// EDISON_FS_AUDIT=1 patches fs to report any read outside the app's own
+// SEALGATE_FS_AUDIT=1 patches fs to report any read outside the app's own
 // territory. Installed before anything else runs so nothing escapes it.
 installFsAudit()
 
@@ -445,7 +445,7 @@ app.whenReady().then(async () => {
   // quitting; never build a window.
   if (!gotSingleInstanceLock) return
   slog('app.whenReady fired')
-  electronApp.setAppUserModelId('com.edisonwatch.desktop')
+  electronApp.setAppUserModelId('com.sealgate.desktop')
   // macOS: ask for confirmation on quit (registered after the single-instance
   // check so a doomed second instance can still quit silently).
   initQuitConfirmation()
@@ -460,15 +460,15 @@ app.whenReady().then(async () => {
   stageDetectordBinary()
 
   // Linux/AppImage: self-install a .desktop entry + icon so the dock/taskbar
-  // shows the Edison icon and the app is pinnable. No-op on mac/win/dev and for
+  // shows the SealGate icon and the app is pinnable. No-op on mac/win/dev and for
   // non-AppImage runs. See runtime/desktopIntegration.ts.
   integrateDesktopEntry(appIconPath)
 
   // Loopback auth-callback server - started in dev AND packaged builds. Chrome
-  // silently blocks gesture-less redirects to custom protocols (edison-watch://),
+  // silently blocks gesture-less redirects to custom protocols (sealgate://),
   // but a plain http://127.0.0.1 navigation has no such gate, so we prefer the
   // loopback for the SSO/OAuth callback (getRedirectTo picks it up automatically).
-  // edison-watch:// stays registered as a fallback if the server can't start.
+  // sealgate:// stays registered as a fallback if the server can't start.
   // See login_sso_chrome_issue.md.
   try {
     await Promise.race([
@@ -479,7 +479,7 @@ app.whenReady().then(async () => {
     ])
     slog(`auth loopback server listening at ${getAuthLoopbackUrl() ?? '(unknown)'}`)
   } catch (err) {
-    slog(`auth loopback server failed to start; falling back to edison-watch://: ${err}`)
+    slog(`auth loopback server failed to start; falling back to sealgate://: ${err}`)
     console.error('[App] Auth loopback server failed to start, falling back to protocol:', err)
   }
 

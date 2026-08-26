@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { Button, Card, Input } from "@edison-watch/shared/ui";
+import { Button, Card, Input } from "@sealgate/shared/ui";
 import {
   buildCompositeKey,
   parseCompositeKey,
   cacheSecretKey,
-} from "@edison-watch/shared/crypto";
+} from "@sealgate/shared/crypto";
 
 function Chevron({ open }: { open: boolean }) {
   return (
@@ -29,7 +29,7 @@ function Chevron({ open }: { open: boolean }) {
  * Flow: reattach the org key to the user's existing personal key, validate the
  * resulting composite against the backend (/secret-key/verify -> domain_valid),
  * persist it to setup.json, and re-apply app integrations so MCP clients send
- * the new X-Edison-Secret-Key header.
+ * the new X-SealGate-Secret-Key header.
  */
 interface OrgKeyCardProps {
   /** Raw personal key (user-part) loaded from the OS keychain. */
@@ -145,7 +145,7 @@ export default function OrgKeyCard({
         // Nothing persisted: keep the form open with a warning so the user can
         // retry. The card will not show "active" until configs are rewritten.
         setWarning(
-          "Couldn't apply the organisation key to your apps. Make sure Edison Watch can update your client configs, then click Save to retry.",
+          "Couldn't apply the organisation key to your apps. Make sure SealGate can update your client configs, then click Save to retry.",
         );
         return;
       }
@@ -155,7 +155,7 @@ export default function OrgKeyCard({
       // key as part of applying it (main verifies + adopts before it writes
       // anything), so there is nothing to enroll here.
       cacheSecretKey(composite);
-      await window.api.setup.update({ edisonSecretKey: composite });
+      await window.api.setup.update({ sealgateSecretKey: composite });
 
       setSaved(true);
       setEditing(false);

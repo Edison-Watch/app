@@ -1,9 +1,33 @@
-name: Release macOS (desktop, stable)
+name: Release desktop (stable)
 
 # Manually-triggered STABLE release to GitHub Releases (channel: latest).
-# Builds a signed + NOTARIZED universal macOS app and publishes it as a normal
-# (non-prerelease) GitHub Release. electron-updater on the 'latest' channel picks
-# it up.
+# One shared draft release (tag v<version>) collects assets from five build jobs
+# (macOS, plus x64/arm64 legs for Windows and Linux), and a final gate job flips
+# it public only after ALL of them uploaded their installers + update manifests -
+# so electron-updater can never see a half-uploaded release. Every manifest
+# filename is distinct on the tag: latest-mac.yml, latest-linux.yml,
+# latest-linux-arm64.yml, latest-x64.yml and latest-arm64.yml (the two Windows
+# legs - see the PER-ARCH UPDATE CHANNELS note on the windows job).
+# `latest.yml` - the manifest every Windows install actually polls - is written
+# by NO build job: the windows-manifest job assembles it from the two Windows
+# manifests, so it only ever exists listing BOTH installers.
+#
+# Both daemons (sealgate-stdiod, sealgate-detectord) are built FROM SOURCE out of
+# crates/ in every job, so a release always matches the checked-out commit.
+#
+#   - macos:   signed + NOTARIZED .dmg/.zip for arm64 ONLY - Intel Macs are not
+#              supported. The bundled daemons are thin arm64 binaries; they must
+#              not go back to being `lipo`-merged, since a merged Mach-O whose
+#              x86_64 slice is unsigned has no designated requirement and TCC
+#              can then never remember a permission grant against it.
+#   - windows: UNSIGNED NSIS installer, one job per arch. NSIS auto-update
+#              verifies packages via the sha512 in the manifest, not
+#              Authenticode, so updates apply unsigned - users only see a
+#              SmartScreen prompt on first install. Authenticode signing is
+#              deferred until before public release (same stance as
+#              desktop-build-windows.yml).
+#   - linux:   unsigned AppImage, one job per arch, on the static AppImage
+#              runtime.
 #
 # VERSIONING INVARIANT (keeps demo installs on demo, never pulled onto stable):
 #   packages/desktop/package.json `version` is the in-development NEXT stable (e.g.
@@ -14,6 +38,29 @@ name: Release macOS (desktop, stable)
 #      next patch so the demo channel immediately leads the just-shipped stable
 #      again. Until that bump lands, do NOT cut a demo prerelease at the old
 #      base version.
+#   => EVERY bump of that version must be followed by `npm run version:sync`,
+#      which propagates it into crates/*/Cargo.toml and both Cargo.lock files,
+#      and by committing what it writes. The Rust workspaces are no longer pinned
+#      at their own numbers (stdiod 0.0.1 / detectord 0.1.0); they follow the app,
+#      so a released daemon's crate version, its reported --version, and the tag
+#      it was published under all agree. The version-sync workflow fails the
+#      build on drift.
+#
+# DAEMON ASSETS (why there is no separate stdiod-v* release any more):
+#   Each build leg uploads its sealgate-stdiod binary + a checksum file onto THIS
+#   release, alongside the installers. Two reasons it lives here rather than on
+#   its own tag:
+#     1. Versions align by construction - the binary is published under the same
+#        tag whose version it reports.
+#     2. A separate stdiod-v* GitHub Release would steal GitHub's "Latest"
+#        pointer, and electron-updater resolves the stable channel through
+#        `releases/latest` (GitHubProvider.getLatestTagName) - so every stable
+#        client's update check would 404 looking for latest-mac.yml on a stdiod
+#        tag. (The beta channel is unaffected: it walks releases.atom and skips
+#        tags that are not valid semver.)
+#   Asset names are <bin>-<platform>-<arch>, with a per-leg SHA256SUMS-<platform>-<arch>
+#   so the five jobs never race on a shared checksums file.
+#   crates/stdiod/scripts/install-beeper.sh downloads these.
 
 on:
   workflow_dispatch:
@@ -22,21 +69,60 @@ on:
         description: 'Publish immediately (true) or upload into a draft to publish manually (false)'
         type: boolean
         default: false
-      stdiod_tag:
-        description: 'edison-stdiod release tag in this repo to bundle (pin for reproducible stable builds)'
-        type: string
-        default: stdiod-v0.0.1
 
 concurrency:
-  group: release-macos-stable
+  group: release-desktop-stable
   cancel-in-progress: false
 
 permissions:
   contents: write # create / publish the GitHub Release
 
 jobs:
-  release:
-    name: Build, sign, notarize & publish (stable)
+  draft:
+    name: Pre-create draft release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Compute release version
+        id: ver
+        run: |
+          VERSION=$(node -p "require('./packages/desktop/package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Stable release version: $VERSION"
+
+      - name: Pre-create draft release
+        # electron-builder races itself creating the GitHub release (multiple
+        # publisher instances per job, and now three OS jobs - see
+        # desktop-release-demo.yml for the 422 details). Pre-create the release
+        # as a draft so every publisher instance finds and reuses it; the
+        # publish job flips it public once all assets (incl. the per-platform
+        # update manifests) are uploaded.
+        # An existing release is only reused if it is still a DRAFT: on a rerun
+        # after v$VERSION was published, blindly reusing it would let the build
+        # jobs upload straight into the public release.
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+          EXISTING_DRAFT=$(gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" \
+            --json isDraft --jq '.isDraft' 2>/dev/null || true)
+          if [ "$EXISTING_DRAFT" = "false" ]; then
+            echo "::error::release v$VERSION already exists and is not a draft - bump packages/desktop/package.json instead of re-releasing"
+            exit 1
+          elif [ -z "$EXISTING_DRAFT" ]; then
+            gh release create "v$VERSION" --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" \
+              --title "$VERSION" \
+              --draft \
+              --notes "SealGate $VERSION"
+          fi
+
+  macos:
+    name: Build, sign, notarize & upload macOS
+    needs: draft
     runs-on: macos-latest
     defaults:
       run:
@@ -79,9 +165,9 @@ jobs:
         run: npm ci
         working-directory: .
 
-      # The app consumes the workspace-linked @edison-watch/shared, whose
+      # The app consumes the workspace-linked @sealgate/shared, whose
       # package entry points live in dist/ - build it first.
-      - name: Build @edison-watch/shared
+      - name: Build @sealgate/shared
         run: npm run build -w packages/shared
         working-directory: .
 
@@ -89,50 +175,35 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: crates/detectord
+          # Same cache as desktop-build-macos.yml / desktop-release-demo.yml -
+          # identical crates and Darwin targets. See the note there.
+          shared-key: macos-daemons
+          workspaces: |
+            crates/detectord
+            crates/stdiod
 
-      - name: Build edison-detectord from source
-        # Stages crates/detectord's daemon into bin/edison-detectord (arm64).
+      - name: Build sealgate-detectord from source
+        # Stages crates/detectord's daemon into bin/sealgate-detectord (arm64).
         # mac.extraResources expects it; electron-builder only WARNS when the
         # file is missing, which is how releases shipped without the detector
         # daemon until 0.6.0.
         run: npm run build:detectord
 
-      - name: Pull pinned edison-stdiod (universal) from stdiod releases
-        run: |
-          mkdir -p stdiod-dl bin
-          # Pinned to a specific tag so a stable release is reproducible.
-          gh release download "${{ inputs.stdiod_tag }}" --repo "$GITHUB_REPOSITORY" \
-            --pattern 'edison-stdiod-macos-universal' \
-            --pattern 'SHA256SUMS' \
-            --dir stdiod-dl --clobber
-          ( cd stdiod-dl && grep 'edison-stdiod-macos-universal' SHA256SUMS | shasum -a 256 -c - )
-          cp stdiod-dl/edison-stdiod-macos-universal bin/edison-stdiod
-          chmod +x bin/edison-stdiod
-          xattr -c bin/edison-stdiod || true
+      - name: Build sealgate-stdiod from source (arm64)
+        # Built from the checkout, same as detectord - no downloading a pinned
+        # published binary, so the release always matches crates/stdiod at this
+        # commit. The script stages a thin arm64 binary at bin/sealgate-stdiod
+        # for mac.extraResources.
+        run: npm run build:stdiod
 
       - name: Build renderer/main/preload bundles (release mode)
         run: npm run build:release
 
-      - name: Pre-create draft release
-        # electron-builder races itself creating the GitHub release (two
-        # publisher instances, both POST /releases, loser 422s - see
-        # desktop-release-demo.yml for details). Pre-create the release as a draft so
-        # every publisher instance finds and reuses it; the last step publishes
-        # it once all assets (incl. latest.yml) are uploaded.
-        run: |
-          VERSION=$(node -p "require('./package.json').version")
-          gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
-            gh release create "v$VERSION" --repo "$GITHUB_REPOSITORY" \
-              --target "$GITHUB_SHA" \
-              --title "$VERSION" \
-              --draft \
-              --notes "Edison Watch $VERSION"
-
       - name: Package, sign, notarize & upload to GitHub Releases
         # Tag = v${version} from package.json. Assets upload into the draft
-        # pre-created above; the next step publishes it (or leaves it a draft
-        # to publish manually in the UI when the publish input is false).
+        # pre-created by the draft job; the publish job flips it public (or
+        # leaves it a draft to publish manually in the UI when the publish
+        # input is false).
         run: |
           echo "Releasing $(node -p "require('./package.json').version")"
           npx electron-builder --mac --publish always \
@@ -142,20 +213,538 @@ jobs:
 
       - name: Verify bundled daemons
         # electron-builder treats a missing extraResources source as a warning,
-        # so assert both daemons actually made it into the packaged .app.
+        # so assert both daemons made it into the bundle.
+        #
+        # The arch check is inverted from what it used to be: these MUST be thin
+        # arm64, never `lipo`-merged. A merged Mach-O carries an unsigned x86_64
+        # slice (the linker ad-hoc-signs only the native arch), which leaves the
+        # whole file with no designated requirement - tccd then writes permission
+        # grants it can never re-verify, and the user gets the same folder-access
+        # dialog forever. Also assert each daemon has a designated requirement,
+        # which is the property that actually has to hold.
         run: |
           set -euo pipefail
-          for bin in edison-stdiod edison-detectord; do
-            found=$(find dist -path "*Contents/Resources/bin/$bin" | head -1)
-            [ -n "$found" ] || { echo "::error::$bin missing from packaged app"; exit 1; }
+          shopt -s nullglob
+          apps=(dist/mac-arm64/*.app)
+          [ ${#apps[@]} -eq 1 ] || {
+            echo "::error::expected 1 arm64 .app bundle, found ${#apps[@]}"; exit 1; }
+          for app in "${apps[@]}"; do
+            for bin in sealgate-stdiod sealgate-detectord; do
+              f="$app/Contents/Resources/bin/$bin"
+              test -f "$f" || { echo "::error::$bin missing from $app"; exit 1; }
+              info=$(lipo -info "$f")
+              case "$info" in
+                *x86_64*) echo "::error::$f must be thin arm64, got: $info"; exit 1 ;;
+                *arm64*) ;;
+                *) echo "::error::$f is not arm64: $info"; exit 1 ;;
+              esac
+              # `#?` is load-bearing: codesign comments out a requirement it had
+              # to SYNTHESISE (ad-hoc) and prints a stored one bare (Developer
+              # ID). Matching only `^# ` passes locally and fails every signed
+              # build - see the longer note in scripts/build-detectord.sh.
+              codesign -d -r- "$f" 2>&1 | grep -qE '^#?[[:space:]]*designated[[:space:]]*=>' || {
+                echo "::error::$f has no designated requirement; TCC grants will not stick"
+                exit 1; }
+              echo "bundled: $f -> $info"
+            done
+          done
+
+      - name: Publish standalone sealgate-stdiod (macos-arm64)
+        # The one-liner installer (crates/stdiod/scripts/install-beeper.sh)
+        # downloads this instead of building from source, so it needs no Rust
+        # toolchain and no checkout.
+        #
+        # Taken from INSIDE the packaged .app, not from bin/: the staged copy is
+        # only ad-hoc signed (build-stdiod.sh signs with '-' unless
+        # CODESIGN_IDENTITY is set, which it is not here), while electron-builder
+        # re-signs the nested binary with the Developer ID and notarization
+        # covers it as part of the bundle. Extracting that copy gives downloaders
+        # a signature Gatekeeper will actually accept. The step above has already
+        # asserted its arch and designated requirement.
+        #
+        # Uploaded onto the app's own draft release rather than a separate
+        # stdiod-v* tag ON PURPOSE - see the DAEMON ASSETS note at the top.
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          apps=(dist/mac-arm64/*.app)
+          src="${apps[0]}/Contents/Resources/bin/sealgate-stdiod"
+          out="$RUNNER_TEMP/assets"
+          mkdir -p "$out"
+          cp "$src" "$out/sealgate-stdiod-macos-arm64"
+          chmod +x "$out/sealgate-stdiod-macos-arm64"
+          ( cd "$out" && shasum -a 256 sealgate-stdiod-macos-arm64 > SHA256SUMS-macos-arm64 )
+          gh release upload "v${{ needs.draft.outputs.version }}" --repo "$GITHUB_REPOSITORY" --clobber \
+            "$out/sealgate-stdiod-macos-arm64" "$out/SHA256SUMS-macos-arm64"
+          cat "$out/SHA256SUMS-macos-arm64"
+
+      - name: Verify update artifacts (auto-update sanity)
+        # Same gate as the Windows/Linux jobs: latest-mac.yml must exist and
+        # carry the release version, or electron-updater silently breaks on
+        # macOS once the publish job flips the draft public.
+        #
+        # arm64 is the only mac arch shipped (see mac.target in
+        # electron-builder.yml), so it is the only one asserted here. Keep this
+        # list in step with mac.target: macOS manifests are NOT arch-suffixed -
+        # every arch shares latest-mac.yml and electron-updater picks the zip
+        # whose URL matches process.arch - so an arch that is built but missing
+        # from the manifest silently updates users to the other one.
+        run: |
+          set -euo pipefail
+          VERSION="${{ needs.draft.outputs.version }}"
+          YML="dist/latest-mac.yml"
+          test -f "$YML" || { echo "::error::dist/latest-mac.yml missing"; exit 1; }
+          MVER=$(grep -m1 '^version:' "$YML" | awk '{print $2}' | tr -d '\r')
+          [ "$MVER" = "$VERSION" ] || { echo "::error::manifest version '$MVER' != release version '$VERSION'"; exit 1; }
+          for a in arm64; do
+            ls dist/*-mac-$a.dmg >/dev/null 2>&1 || { echo "::error::no $a .dmg produced"; exit 1; }
+            ls dist/*-$a.zip >/dev/null 2>&1 || { echo "::error::no $a .zip produced"; exit 1; }
+            grep -q -- "-$a.zip" "$YML" || {
+              echo "::error::latest-mac.yml does not list the $a zip - that arch would update to the wrong build"; exit 1; }
+          done
+          echo "manifest version: $MVER"
+
+  windows:
+    name: Build & upload Windows ${{ matrix.arch }} (unsigned)
+    needs: draft
+    runs-on: windows-latest
+    # One job per arch: each leg natively builds sealgate-stdiod + sealgate-detectord
+    # for its own arch only (release `ring` C-crypto compile), stages the
+    # matching Python + npx/uvx runtimes, and packages a single-arch installer.
+    # Mirrors desktop-build-windows.yml, which stays the per-push CI gate.
+    #
+    # PER-ARCH UPDATE CHANNELS: unlike Linux, electron-builder never arch-suffixes
+    # the Windows update manifest (getArchPrefixForUpdateFile is LINUX-only), so
+    # both legs would emit `latest.yml` and the second upload would clobber the
+    # first. Giving each leg its own CHANNEL sidesteps that: `latest-x64` /
+    # `latest-arm64` make electron-builder write latest-x64.yml /
+    # latest-arm64.yml (electron-updater's getCustomChannelName appends no arch
+    # prefix on Windows, it just uses the channel name it was built with), so
+    # both legs upload non-colliding assets.
+    #
+    # NEITHER leg builds on plain `latest`, on purpose: no build job may ever put
+    # a single-arch latest.yml on the draft. That is the file every Windows
+    # install polls, and a draft is publishable from the GitHub UI at any moment
+    # - which is the NORMAL flow here (publish=false, a human hits "Publish
+    # release" later). So the instant an x64-only latest.yml exists on the draft,
+    # publishing it strands arm64 on the x64 installer, whether or not
+    # windows-manifest has run or succeeded. latest.yml is instead created only
+    # by windows-manifest, from both legs' manifests; publishing early (or after
+    # a failed merge) just leaves the release with no Windows manifest, which
+    # makes the update check a quiet no-op (updateManager.ts) rather than an
+    # offer of the wrong installer.
+    #
+    # Splitting the BUILD channels does NOT split what installed builds poll:
+    # updateManager.ts pins autoUpdater.channel to this build environment
+    # ('latest'), which GitHubProvider prefers over the channel baked into
+    # app-update.yml - so BOTH arches ask for latest.yml.
+    timeout-minutes: 45
+    strategy:
+      # Both arches are required for a complete release, but don't cancel a
+      # healthy leg on the other's failure - one rerun then shows both results.
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            target: x86_64-pc-windows-msvc
+            channel: latest-x64
+            manifest: latest-x64.yml
+            unpacked: win-unpacked
+          - arch: arm64
+            target: aarch64-pc-windows-msvc
+            channel: latest-arm64
+            manifest: latest-arm64.yml
+            unpacked: win-arm64-unpacked
+    # Git Bash for the scripted steps. The Python/runtime staging steps run
+    # via npm scripts (-> pwsh).
+    defaults:
+      run:
+        shell: bash
+        working-directory: packages/desktop
+    env:
+      # electron-builder reads GH_TOKEN to upload assets to the release.
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Stable backend config (RELEASE_VITE_* repository variables).
+      VITE_DEPLOY_ENV: ${{ vars.RELEASE_VITE_DEPLOY_ENV }}
+      VITE_API_BASE_URL: ${{ vars.RELEASE_VITE_API_BASE_URL }}
+      VITE_MCP_BASE_URL: ${{ vars.RELEASE_VITE_MCP_BASE_URL }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies (workspace root)
+        run: npm ci
+        working-directory: .
+
+      - name: Build @sealgate/shared
+        run: npm run build -w packages/shared
+        working-directory: .
+
+      - name: Stage bundled Python (${{ matrix.arch }})
+        # Downloads + SHA256-verifies the embeddable interpreter into
+        # bin/python/<arch>/; win.extraResources copies the matching arch into
+        # resources/python/. The session hooks need a Python runtime Windows
+        # does not reliably provide. Runs via npm script (-> pwsh).
+        run: npm run stage:python -- -Arch ${{ matrix.arch }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          # Shared with the windows legs of desktop-release-demo.yml and
+          # desktop-build-windows.yml for the SAME arch - all three compile the
+          # same two crates for the same *-pc-windows-msvc target. Arch stays in
+          # the key for the same reason as the linux legs: the matrix legs build
+          # different targets and cache entries are immutable per key.
+          # No toolchain step here on purpose - windows runners ship rustup, and
+          # the cargo steps below just `rustup target add` onto it.
+          shared-key: windows-daemons-${{ matrix.arch }}
+          workspaces: |
+            crates/detectord
+            crates/stdiod
+
+      - name: Build sealgate-stdiod (${{ matrix.arch }})
+        # Native cargo build on the Windows runner, this leg's arch only. Staged
+        # into packages/desktop/bin/stdiod/<arch>/ so win.extraResources copies
+        # the matching-arch sealgate-stdiod.exe into resources/bin/. Without this
+        # the packaged app ships with no stdio daemon.
+        working-directory: crates/stdiod
+        run: |
+          set -euo pipefail
+          rustup target add ${{ matrix.target }}
+          echo "Building sealgate-stdiod for ${{ matrix.target }} ..."
+          cargo build --release --target "${{ matrix.target }}" --bin sealgate-stdiod
+          mkdir -p "../../packages/desktop/bin/stdiod/${{ matrix.arch }}"
+          cp "target/${{ matrix.target }}/release/sealgate-stdiod.exe" \
+            "../../packages/desktop/bin/stdiod/${{ matrix.arch }}/sealgate-stdiod.exe"
+
+      - name: Build sealgate-detectord (${{ matrix.arch }})
+        # Same native pattern as stdiod above. The cargo binary is
+        # mcp_detector_daemon; win.extraResources expects it staged as
+        # bin/detectord/<arch>/sealgate-detectord.exe. Without this the packaged
+        # app ships without the detector daemon (electron-builder only warns).
+        working-directory: crates/detectord
+        run: |
+          set -euo pipefail
+          rustup target add ${{ matrix.target }}
+          echo "Building mcp_detector_daemon for ${{ matrix.target }} ..."
+          cargo build --release --target "${{ matrix.target }}" --bin mcp_detector_daemon
+          mkdir -p "../../packages/desktop/bin/detectord/${{ matrix.arch }}"
+          cp "target/${{ matrix.target }}/release/mcp_detector_daemon.exe" \
+            "../../packages/desktop/bin/detectord/${{ matrix.arch }}/sealgate-detectord.exe"
+
+      - name: Stage bundled runtimes (npx/uvx, ${{ matrix.arch }})
+        # Downloads Node (npx) + uv (uvx) into bin/runtimes/<arch>/;
+        # win.extraResources copies the matching arch into resources/runtimes/.
+        # The stdiod daemon spawns child MCP servers via npx/uvx, which Windows
+        # users often lack. Runs via the npm script (-> pwsh). Mirrors
+        # `build:win:${{ matrix.arch }}`.
+        run: npm run stage:runtimes -- -Arch ${{ matrix.arch }}
+
+      - name: Build renderer/main/preload bundles (release mode)
+        run: npm run build:release
+
+      - name: Package & upload to GitHub Releases (unsigned)
+        # Version = package.json, same as the macOS job. Assets upload into the
+        # shared draft; the publish job flips it public. Single-arch build, on
+        # this leg's own update channel (see the PER-ARCH UPDATE CHANNELS note
+        # at the top of this job).
+        #
+        # `-c.win.target=nsis` is LOAD-BEARING, not redundant with --${{ matrix.arch }}:
+        # electron-builder.yml's win.target lists BOTH arches, and when a target
+        # entry carries its own arch list the CLI --x64/--arm64 flag does NOT
+        # restrict it - the leg would build both arches, with the other arch's
+        # daemons unstaged (a WARNING only, so it would ship a daemon-less
+        # installer) and both legs racing to upload the same assets. Collapsing
+        # the target to its string form drops the arch list so the CLI flag
+        # governs. nsis.* options live under the top-level `nsis:` key, so
+        # artifactName and friends are unaffected.
+        run: |
+          echo "Releasing $(node -p "require('./package.json').version") (${{ matrix.arch }})"
+          npx electron-builder --win --${{ matrix.arch }} --publish always \
+            -c.win.target=nsis \
+            -c.publish.channel=${{ matrix.channel }} \
+            -c.publish.releaseType=draft
+
+      - name: Verify bundled daemons
+        # electron-builder treats a missing extraResources source as a warning,
+        # so assert both daemons actually made it into the packaged app.
+        run: |
+          set -euo pipefail
+          for bin in sealgate-stdiod.exe sealgate-detectord.exe; do
+            found="dist/${{ matrix.unpacked }}/resources/bin/$bin"
+            test -f "$found" || { echo "::error::$bin missing from $found"; exit 1; }
             echo "bundled: $found"
           done
 
-      - name: Publish release
-        # Only when publish=true; otherwise the draft stays for manual publish
-        # in the UI (safer once Windows/Linux jobs are added - publish once all
-        # are up).
-        if: ${{ inputs.publish }}
+      - name: Publish standalone sealgate-stdiod (windows-${{ matrix.arch }})
+        # Same rationale as the macOS leg: the daemon ships as a downloadable
+        # asset on the app's own release. Windows binaries are unsigned here
+        # (Authenticode is deferred, see the job header), so this is the same
+        # artifact the installer bundles.
+        shell: bash
         run: |
-          VERSION=$(node -p "require('./package.json').version")
-          gh release edit "v$VERSION" --repo "$GITHUB_REPOSITORY" --draft=false --latest
+          set -euo pipefail
+          out="$RUNNER_TEMP/assets"
+          mkdir -p "$out"
+          cp "dist/${{ matrix.unpacked }}/resources/bin/sealgate-stdiod.exe" \
+             "$out/sealgate-stdiod-windows-${{ matrix.arch }}.exe"
+          ( cd "$out" && sha256sum "sealgate-stdiod-windows-${{ matrix.arch }}.exe" \
+              > "SHA256SUMS-windows-${{ matrix.arch }}" )
+          gh release upload "v${{ needs.draft.outputs.version }}" --repo "$GITHUB_REPOSITORY" --clobber \
+            "$out/sealgate-stdiod-windows-${{ matrix.arch }}.exe" \
+            "$out/SHA256SUMS-windows-${{ matrix.arch }}"
+          cat "$out/SHA256SUMS-windows-${{ matrix.arch }}"
+
+      - name: Verify update artifacts (auto-update sanity)
+        # Fail BEFORE the publish job flips the draft public: a wrong version in
+        # the manifest or a missing installer silently breaks electron-updater on
+        # Windows. Each leg checks its OWN channel manifest.
+        run: |
+          set -euo pipefail
+          VERSION="${{ needs.draft.outputs.version }}"
+          YML="dist/${{ matrix.manifest }}"
+          test -f "$YML" || { echo "::error::$YML missing"; exit 1; }
+          MVER=$(grep -m1 '^version:' "$YML" | awk '{print $2}' | tr -d '\r')
+          [ "$MVER" = "$VERSION" ] || { echo "::error::manifest version '$MVER' != release version '$VERSION'"; exit 1; }
+          # The installer name carries the arch (nsis.artifactName), and
+          # electron-updater resolves the download by matching process.arch
+          # against the URL - so a manifest listing the wrong arch would hand
+          # users the other build.
+          ls dist/*-${{ matrix.arch }}-setup.exe >/dev/null 2>&1 || {
+            echo "::error::no ${{ matrix.arch }} NSIS installer produced"; exit 1; }
+          echo "manifest version: $MVER"
+          for f in dist/*-${{ matrix.arch }}-setup.exe; do
+            SIZE_MB=$(( $(wc -c < "$f") / 1024 / 1024 )); echo "installer: $(basename "$f") (${SIZE_MB} MB)"
+          done
+
+  windows-manifest:
+    name: Merge Windows update manifests
+    # Both Windows legs are done, so latest-x64.yml and latest-arm64.yml are on
+    # the draft. This job is the ONLY writer of latest.yml - the manifest every
+    # Windows install polls (see the PER-ARCH UPDATE CHANNELS note above) - and it
+    # writes it listing BOTH installers; electron-updater picks the download by
+    # matching process.arch against the file url, which nsis.artifactName carries.
+    #
+    # NOT gated on inputs.publish: the draft must be correct before anything makes
+    # it public, including a human hitting "Publish release" in the UI later. Note
+    # that running unconditionally is not on its own enough - a human can publish
+    # the draft before this job finishes or after it fails, which is exactly why
+    # no build job writes latest.yml.
+    needs: [draft, windows]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Build latest.yml from latest-x64.yml + latest-arm64.yml
+        # js-yaml goes into a temp dir (no workspace install needed - this job
+        # builds nothing) and the script is copied next to it so `require`
+        # resolves. The script validates versions + one installer per arch and
+        # fails the job rather than publishing a manifest that strands an arch.
+        run: |
+          set -euo pipefail
+          TAG="v${{ needs.draft.outputs.version }}"
+          WORK="$(mktemp -d)"
+          cp packages/desktop/scripts/merge-win-update-manifest.cjs "$WORK/"
+          cd "$WORK"
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern latest-x64.yml --pattern latest-arm64.yml
+          npm install --silent --no-save --no-package-lock --no-audit --no-fund js-yaml@4.1.0
+          node merge-win-update-manifest.cjs \
+            latest-x64.yml latest-arm64.yml merged/latest.yml "${{ needs.draft.outputs.version }}"
+          gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber merged/latest.yml
+          echo "--- published latest.yml ---"
+          cat merged/latest.yml
+
+  linux:
+    name: Build & upload Linux ${{ matrix.arch }} AppImage (unsigned)
+    needs: draft
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    # One job per arch. Unlike Windows, no channel gymnastics are needed here:
+    # electron-builder arch-suffixes the Linux update manifest natively
+    # (latest-linux.yml / latest-linux-arm64.yml), so the two legs publish
+    # non-colliding assets on the shared `latest` channel.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            # appimageArch: what ${arch} expands to in appImage.artifactName.
+            # electron-builder rewrites x64 -> x86_64 for AppImage/rpm/flatpak
+            # (builder-util getArtifactArchName); arm64 is left alone. NSIS .exe
+            # names get no such rewrite, which is why the windows job just uses
+            # matrix.arch.
+            appimageArch: x86_64
+            manifest: latest-linux.yml
+            unpacked: linux-unpacked
+          - arch: arm64
+            appimageArch: arm64
+            manifest: latest-linux-arm64.yml
+            unpacked: linux-arm64-unpacked
+    defaults:
+      run:
+        working-directory: packages/desktop
+    env:
+      # electron-builder asset upload.
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Stable backend config (RELEASE_VITE_* repository variables).
+      VITE_DEPLOY_ENV: ${{ vars.RELEASE_VITE_DEPLOY_ENV }}
+      VITE_API_BASE_URL: ${{ vars.RELEASE_VITE_API_BASE_URL }}
+      VITE_MCP_BASE_URL: ${{ vars.RELEASE_VITE_MCP_BASE_URL }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Cache electron-builder downloads
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cache/electron
+            ~/.cache/electron-builder
+          key: ${{ runner.os }}-electron-${{ hashFiles('package-lock.json') }}
+          restore-keys: ${{ runner.os }}-electron-
+
+      - name: Install dependencies (workspace root)
+        run: npm ci
+        working-directory: .
+
+      - name: Build @sealgate/shared
+        run: npm run build -w packages/shared
+        working-directory: .
+
+      # Static musl so one binary runs on any distro. zig + cargo-zigbuild supply
+      # the C cross-toolchain `ring` needs when this leg's arch differs from the
+      # runner's - the exact setup stdiod-build.yml's linux job uses.
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl, aarch64-unknown-linux-musl
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          # Shared with desktop-release-demo.yml's linux leg for the SAME arch.
+          # The arch MUST stay in the key: the two matrix legs compile different
+          # musl targets, and cache entries are immutable per key - one shared
+          # key would let whichever leg finished first win the save, leaving the
+          # other restoring a cache with none of its own target artifacts.
+          shared-key: linux-daemons-${{ matrix.arch }}
+          workspaces: |
+            crates/detectord
+            crates/stdiod
+
+      - uses: mlugg/setup-zig@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-zigbuild
+
+      - name: Build sealgate-detectord (static musl, ${{ matrix.arch }})
+        # No Linux detectord binaries are published, so build from the checkout.
+        # TARGET_ARCHES restricts the script to this leg's arch; it stages into
+        # bin/detectord/<arch>/sealgate-detectord for linux.extraResources.
+        run: npm run build:detectord:linux
+        env:
+          TARGET_ARCHES: ${{ matrix.arch }}
+
+      - name: Build sealgate-stdiod (static musl, ${{ matrix.arch }})
+        # Built from the checkout, same as detectord - no downloading a pinned
+        # published binary, so the release always matches crates/stdiod at this
+        # commit. Stages into bin/stdiod/<arch>/sealgate-stdiod for
+        # linux.extraResources.
+        run: npm run build:stdiod:linux
+        env:
+          TARGET_ARCHES: ${{ matrix.arch }}
+
+      - name: Build renderer/main/preload bundles (release mode)
+        run: npm run build:release
+
+      - name: Package & upload to GitHub Releases (unsigned)
+        # Single-arch AppImage on the static AppImage runtime (see
+        # electron-builder.yml). Asset + this arch's latest-linux*.yml upload
+        # into the shared draft; the publish job flips it public.
+        #
+        # `-c.linux.target=AppImage` is LOAD-BEARING - see the equivalent note on
+        # the windows job. Without it the config's arch list wins over
+        # --${{ matrix.arch }} and this leg builds both AppImages.
+        run: |
+          echo "Releasing $(node -p "require('./package.json').version") (${{ matrix.arch }})"
+          npx electron-builder --linux --${{ matrix.arch }} --publish always \
+            -c.linux.target=AppImage \
+            -c.publish.channel=latest \
+            -c.publish.releaseType=draft
+
+      - name: Verify bundled daemons
+        # electron-builder treats a missing extraResources source as a warning,
+        # so assert both daemons actually made it into the unpacked app.
+        run: |
+          set -euo pipefail
+          dir="dist/${{ matrix.unpacked }}"
+          for bin in sealgate-stdiod sealgate-detectord; do
+            test -f "$dir/resources/bin/$bin" || { echo "::error::$bin missing from $dir"; exit 1; }
+            echo "bundled: $dir/resources/bin/$bin"
+          done
+
+      - name: Publish standalone sealgate-stdiod (linux-${{ matrix.arch }})
+        # Same rationale as the macOS leg. These are the static-musl builds, so
+        # the published asset runs on any distro (including Alpine/containers)
+        # with no glibc dependency.
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/assets"
+          mkdir -p "$out"
+          cp "dist/${{ matrix.unpacked }}/resources/bin/sealgate-stdiod" \
+             "$out/sealgate-stdiod-linux-${{ matrix.arch }}"
+          chmod +x "$out/sealgate-stdiod-linux-${{ matrix.arch }}"
+          ( cd "$out" && sha256sum "sealgate-stdiod-linux-${{ matrix.arch }}" \
+              > "SHA256SUMS-linux-${{ matrix.arch }}" )
+          gh release upload "v${{ needs.draft.outputs.version }}" --repo "$GITHUB_REPOSITORY" --clobber \
+            "$out/sealgate-stdiod-linux-${{ matrix.arch }}" \
+            "$out/SHA256SUMS-linux-${{ matrix.arch }}"
+          cat "$out/SHA256SUMS-linux-${{ matrix.arch }}"
+
+      - name: Verify update artifacts (auto-update sanity)
+        # This leg's manifest (latest-linux.yml for x64, latest-linux-arm64.yml
+        # for arm64) must exist and carry the release version, or
+        # electron-updater silently breaks on Linux.
+        run: |
+          set -euo pipefail
+          VERSION="${{ needs.draft.outputs.version }}"
+          YML="dist/${{ matrix.manifest }}"
+          test -f "$YML" || { echo "::error::$YML missing"; exit 1; }
+          MVER=$(grep -m1 '^version:' "$YML" | awk '{print $2}' | tr -d '\r')
+          [ "$MVER" = "$VERSION" ] || { echo "::error::$YML version '$MVER' != release version '$VERSION'"; exit 1; }
+          echo "$YML version: $MVER"
+          ls dist/*-${{ matrix.appimageArch }}.AppImage >/dev/null 2>&1 || {
+            echo "::error::no ${{ matrix.arch }} AppImage produced"; exit 1; }
+
+  publish:
+    name: Publish release
+    # Only when publish=true; otherwise the draft (with every installer +
+    # manifest) stays for manual publish in the UI. `needs` lists the matrix
+    # jobs by name, so ALL legs of windows/linux must succeed first -
+    # windows-manifest included, or the release could go public with no Windows
+    # latest.yml at all.
+    if: ${{ inputs.publish }}
+    needs: [draft, macos, windows, windows-manifest, linux]
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Publish release
+        run: |
+          gh release edit "v${{ needs.draft.outputs.version }}" \
+            --repo "$GITHUB_REPOSITORY" --draft=false --latest

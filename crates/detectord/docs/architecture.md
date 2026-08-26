@@ -2,11 +2,11 @@
 
 > Status: **Design agreed**, pre-implementation. Date: 2026-06-30.
 > Scope: the Rust reimplementation of the MCP discovery + quarantine subsystem of
-> `client_2` (the Edison Watch Electron app) as a privileged system agent.
+> `client_2` (the SealGate Electron app) as a privileged system agent.
 
 This document captures the architecture decided for the Rust quarantine daemon and
 **the reasoning behind each decision** — especially the non-obvious ones. It is the
-source of truth for the design; the current code (`edison-detectord` read-only
+source of truth for the design; the current code (`sealgate-detectord` read-only
 watcher + `mcp_detector_daemon` FDA-gated per-user daemon) predates it and will be
 reshaped to match.
 
@@ -15,9 +15,9 @@ reshaped to match.
 ## 1. Problem & goals
 
 MCP servers are configured independently by each host app (Claude Code, VSCode,
-Cursor, Claude Desktop, …), often across several files per app. Edison Watch needs
+Cursor, Claude Desktop, …), often across several files per app. SealGate needs
 to **discover** those servers and, when an admin requires it, **quarantine** them —
-move them off the local config and onto the Edison Watch backend.
+move them off the local config and onto the SealGate backend.
 
 Today this lives in the `client_2` Electron app, where the app *itself* is the
 enforcer. That is the weakness we are fixing: enforcement runs as the user, in a
@@ -27,13 +27,13 @@ robust, and enforceable as a system agent**, because the functionality is
 
 Two operating modes (one policy switch):
 
-- **Quarantine OFF** — auto-discovery only; servers move to Edison Watch only when
+- **Quarantine OFF** — auto-discovery only; servers move to SealGate only when
   the user explicitly chooses to.
 - **Quarantine ON** — auto-discovery **plus** continuous enforcement: new servers
   are actively detected and removed.
 
 The only behavioural difference between the two modes is **what happens to a server
-the user does *not* send to Edison Watch**: OFF leaves it; ON removes it anyway.
+the user does *not* send to SealGate**: OFF leaves it; ON removes it anyway.
 
 ## 2. Posture & threat model (the reframe everything follows from)
 
@@ -54,8 +54,15 @@ Each is stated with its rationale; details follow in §4+.
 1. **Privileged, non-stoppable process.** A root `LaunchDaemon`
    (`/Library/LaunchDaemons`), not a per-user `LaunchAgent`. A user can
    `launchctl unload` their own agent, so the agent model cannot satisfy
-   "not stoppable by the user." Root ownership also dissolves the Full-Disk-Access
-   dance (the current FDA state machine goes away).
+   "not stoppable by the user."
+
+   This decision now rests on stoppability alone. It used to carry a second
+   argument about macOS permissions: the daemon needed Full Disk Access, which
+   only a human can grant, by hand, in System Settings — and can revoke at any
+   time. That requirement no longer exists. The daemon never watches `$HOME` or
+   the TCC-protected folders (Desktop, Documents, Downloads), so there is no
+   grant to obtain and nothing to revoke. See
+   [`tcc.rs`](../crates/sealgate-detectord/src/tcc.rs).
 
 2. **The daemon owns *all* detection — read *and* write.** Enforcement integrity
    requires the same privileged process that detects to also act. The Electron UI
@@ -107,7 +114,7 @@ Each is stated with its rationale; details follow in §4+.
 
 - **Root `LaunchDaemon`**, one per machine, serving every OS user.
 - **Identity via peer credentials.** A single root-owned socket
-  (e.g. `/var/run/edison-watch/daemon.sock`, permissive perms). On each connection
+  (e.g. `/var/run/sealgate/daemon.sock`, permissive perms). On each connection
   the daemon calls `getpeereid(fd) → uid`. That uid is the authz principal and maps
   to an enrollment. Authz is **kernel-enforced**, not asserted by the UI, so it
   cannot be spoofed. An un-enrolled uid may only call `Enroll`.
@@ -121,7 +128,7 @@ Each is stated with its rationale; details follow in §4+.
 
 ## 5. Enrollment, policy & state ownership
 
-**Root-owned enrollment store** — `/Library/Application Support/Edison Watch/daemon/
+**Root-owned enrollment store** — `/Library/Application Support/sealgate-detectord/
 enrollments.json`, `root:wheel`, `0600` — keyed by OS user:
 
 ```jsonc
@@ -129,8 +136,8 @@ enrollments.json`, `root:wheel`, `0600` — keyed by OS user:
   "enrollments": {
     "alice": {
       "env": "prod",
-      "api_base_url": "https://api.edison.watch",
-      "api_key": "ew_live_…",            // alice's bearer — same key the app uses
+      "api_base_url": "https://dashboard.sealgate.ai",
+      "api_key": "sg_live_…",            // alice's bearer — same key the app uses
       "org_id": "org_…",
       "policy":     { "auto_quarantine": true, "fetched_at": "…" },  // last-known-good
       "allow_list": [ { "name": "…", "fingerprint": "…", "status": "registered" } ],
@@ -283,7 +290,7 @@ reconcile(user):                          # serialized; coalesce triggers (dirty
 
   observed = discover_all(user)           # every agent, raw config + locator
   for srv in observed:
-      if is_edison_entry(srv): continue   # never touch our own injected server
+      if is_sealgate_entry(srv): continue   # never touch our own injected server
       fp = fingerprint(srv)               # ported detectSecrets + sha256
       if fp is None: continue             # unsupported → skip
       if known.contains(fp):              # seen-store oracle
@@ -304,7 +311,7 @@ reconcile(user):                          # serialized; coalesce triggers (dirty
 - **Concurrency**: one serialized reconcile worker per user with a coalescing
   dirty-flag (mirrors `client_2`'s `isCheckingForChanges`/`pendingRescan`).
 - **OFF mode** is inert — pure discovery/reporting; mutation only on an explicit
-  user "send to EW." The same engine with the worker *disarmed*.
+  user "send to SG." The same engine with the worker *disarmed*.
 
 ## 9. The "known" oracle & mutation
 
@@ -339,9 +346,9 @@ pub trait ConfigStore: Send + Sync {
   (JSONC surgical edit preserving comments) / SQLite mutation / `claude mcp remove` /
   plugin-dir rename → rollback on failure.
 - **Quarantine-first shrinks the surface.** `client_2` needed two write paths —
-  `removeServerFromConfig` (delete, for "Add to Edison") and `quarantineServer`
+  `removeServerFromConfig` (delete, for "Add to SealGate") and `quarantineServer`
   (sidecar, for skip). Here *every* detection goes to the sidecar first, so
-  disposition needs no separate delete path: "send to EW" = submit to backend
+  disposition needs no separate delete path: "send to SG" = submit to backend
   (+ optionally purge the now-redundant sidecar entry); "skip" = leave in sidecar.
   The irreversible delete disappears — safer.
 - **Writers are privilege-free file ops** (testable in a tempdir). Privilege-drop is
@@ -399,11 +406,11 @@ struct StatusReply {                                 // stdio-d-style flat statu
 are root-owned):
 
 ```
-edison-watchd install
-edison-watchd uninstall [--purge]     # tear down LaunchDaemon; --purge wipes enrollments/state
-edison-watchd unenroll <user>         # drop one enrollment, keep the daemon
-edison-watchd enroll --user <u> --key <k>   # debug convenience
-edison-watchd status                  # same flat status as GetStatus, from a written state.json
+sealgated install
+sealgated uninstall [--purge]     # tear down LaunchDaemon; --purge wipes enrollments/state
+sealgated unenroll <user>         # drop one enrollment, keep the daemon
+sealgated enroll --user <u> --key <k>   # debug convenience
+sealgated status                  # same flat status as GetStatus, from a written state.json
 ```
 
 Over the socket, admin ops are gated by `peer_uid == 0`. The UI never gets
@@ -417,7 +424,7 @@ Organizing principle: **isolate by trust/privilege so each boundary is auditable
 
 ```
 crates/
-  edison-detectord/      READ-ONLY engine. Cross-platform, no root, no network, publishable.
+  sealgate-detectord/      READ-ONLY engine. Cross-platform, no root, no network, publishable.
     agent.rs             trait Agent (was Client)
     agents/{claude_code,vscode}.rs   parsers → DiscoveredServer
     types.rs             DiscoveredServer, ServerConfig, ConfigLocation, SourceKind, Scope, Transport
@@ -430,11 +437,11 @@ crates/
     writers/{json,jsonc,sqlite,claude_cli,plugin_dir}.rs
     seen_store.rs        persistent known-oracle (path injected)
     reconcile.rs         pure planner: plan(observed, oracle, policy) -> Vec<Action>
-    # depends on: edison-detectord
+    # depends on: sealgate-detectord
 
   mcp_backend/           Backend REST client (reqwest). No privilege.
     lib.rs, types.rs     domain_config / server_fingerprints / submit_request
-    # depends on: edison-detectord
+    # depends on: sealgate-detectord
 
   mcp_detector_daemon/   THE binary. All privilege + all wiring.
     main.rs              operator CLI
@@ -451,7 +458,7 @@ crates/
 **Dependency DAG (strict, acyclic):**
 
 ```
-              edison-detectord
+              sealgate-detectord
               ▲       ▲       ▲
      mcp_quarantine   │   mcp_backend          (siblings; no edge between them)
               ▲       │       ▲
@@ -479,7 +486,7 @@ privilege-drop, root socket, launchd, operator CLI — collapses into the binary
 
 | Crate | Status | Work |
 |---|---|---|
-| `edison-detectord` | exists, reshape | `Client→Agent`; `parse_all→discover` (raw config + locator); add `fingerprint`/`secret_detection`; `watch_paths→watch_targets` |
+| `sealgate-detectord` | exists, reshape | `Client→Agent`; `parse_all→discover` (raw config + locator); add `fingerprint`/`secret_detection`; `watch_paths→watch_targets` |
 | `mcp_quarantine` | new | configstore + writers, seen_store, reconcile planner |
 | `mcp_backend` | new | thin reqwest client over 3 endpoints |
 | `mcp_detector_daemon` | exists, heavy rework | drop FDA + `permission.rs`; add root socket + uid scoping + multi-user workers + enrollment + policy refresh + operator CLI + privilege-drop + launchd |

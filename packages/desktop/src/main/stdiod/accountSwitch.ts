@@ -22,7 +22,7 @@ export async function teardownStdiodForSignOut(): Promise<void> {
 // credentials.
 export async function reprovisionStdiodForActiveAccount(): Promise<void> {
   // Don't probe launchctl in tests.
-  if (process.env.EDISON_DRY_RUN === '1') return
+  if (process.env.SEALGATE_DRY_RUN === '1') return
 
   let installed = false
   try {
@@ -45,7 +45,7 @@ export async function reprovisionStdiodForActiveAccount(): Promise<void> {
     const result = await resetStdiod({
       backend,
       apiKey: creds.apiKey,
-      edisonSecretKey: creds.edisonSecretKey
+      sealgateSecretKey: creds.sealgateSecretKey
     })
     if (!result.ok) {
       stdiodLog(

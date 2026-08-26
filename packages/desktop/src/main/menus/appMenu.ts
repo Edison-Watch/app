@@ -54,7 +54,7 @@ export function buildAppMenu(deps: AppMenuDeps): Menu {
       deps.getMainWindow()?.webContents.send('env:changed', name)
 
       // Re-point the agents at the new env: re-enrolling hands the daemon the
-      // env's credentials, and its install step rewrites the edison-watch entry
+      // env's credentials, and its install step rewrites the sealgate entry
       // with the new URL. The daemon owns those config writes.
       const creds = getCredentialsForEnv(name)
       if (getMcpBaseUrl() && creds?.apiKey) {

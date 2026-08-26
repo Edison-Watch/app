@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "EdisonStdiodTunnelProtocol",
+  "title": "SealGateStdiodTunnelProtocol",
   "description": "Wire protocol for the stdiod ↔ backend WebSocket tunnel. Symmetric mcp_frame envelope; opaque to the transport layer. See stdiod/ARCHITECTURE.md.",
   "definitions": {
     "ClientHello": {

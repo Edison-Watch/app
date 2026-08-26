@@ -1,12 +1,12 @@
 /**
  * User Accountability animation for documentation.
  *
- * Shows two modes of Edison policy enforcement:
+ * Shows two modes of SealGate policy enforcement:
  *
  * Phase 1 – "Auto-deny": An agent action matches an admin-defined
- *           policy rule and is automatically blocked by Edison.
+ *           policy rule and is automatically blocked by SealGate.
  * Phase 2 – "Human-in-the-loop": An agent action requires human
- *           judgment. Edison routes the approval request back to the
+ *           judgment. SealGate routes the approval request back to the
  *           user at their laptop. The user approves, the action
  *           proceeds, and the user is accountable.
  *
@@ -17,7 +17,7 @@ import {
   ADMIN_PATH,
   AgentIcon,
   DANGER,
-  EdisonLogo,
+  SealGateLogo,
   McpIcon,
   McpPacket,
   ORANGE as O,
@@ -45,7 +45,7 @@ const POLICY_D =
  *   User icon ─── centre (58, 53)
  *   Laptop ────── x 10–126, y 80–158,  centre (68, 119)
  *   Admin ─────── centre (302, 16)
- *   Edison ────── x 224–356, y 54–224,  centre (290, 139)
+ *   SealGate ────── x 224–356, y 54–224,  centre (290, 139)
  *   MCP Server ── x 446–530, y 100–166, centre (488, 133)
  *   Flow arrows   y = 130
  */
@@ -80,7 +80,7 @@ const CSS = `
 .ua .ua-user-prompt { animation: ua-user-prompt 10s ease-in-out infinite; }
 .ua .ua-mcp-glow    { animation: ua-mcp-glow 10s ease-in-out infinite; }
 
-/* Edison pulse ring */
+/* SealGate pulse ring */
 .ua .ua-pulse { transform-origin:290px 139px; animation: ua-pulse 1.5s cubic-bezier(.2,.8,.4,1) infinite; }
 
 /* ═══════════ KEYFRAMES ═══════════ */
@@ -99,7 +99,7 @@ const CSS = `
   100%    { opacity:0; }
 }
 
-/* ── Phase 1 packet: laptop → Edison ── */
+/* ── Phase 1 packet: laptop → SealGate ── */
 @keyframes ua-pkt1 {
   0%,4%   { opacity:0; }
   5%      { transform:translate(132px,130px); opacity:0; }
@@ -135,7 +135,7 @@ const CSS = `
   100%    { opacity:0; }
 }
 
-/* ── Phase 2 packet A: laptop → Edison ── */
+/* ── Phase 2 packet A: laptop → SealGate ── */
 @keyframes ua-pkt2a {
   0%,52%  { opacity:0; }
   53%     { transform:translate(132px,130px); opacity:0; }
@@ -154,7 +154,7 @@ const CSS = `
   100%    { fill-opacity:0; }
 }
 
-/* ── Phase 2: Edison → User ask arrow (fades in, no packet) ── */
+/* ── Phase 2: SealGate → User ask arrow (fades in, no packet) ── */
 @keyframes ua-ask-arrow {
   0%,63%  { opacity:0; }
   67%     { opacity:1; }
@@ -180,7 +180,7 @@ const CSS = `
   100%    { opacity:0; }
 }
 
-/* ── Phase 2 packet C: Edison → MCP ── */
+/* ── Phase 2 packet C: SealGate → MCP ── */
 @keyframes ua-pkt2c {
   0%,79%  { opacity:0; }
   80%     { transform:translate(358px,130px); opacity:0; color:var(--accent); }
@@ -367,7 +367,7 @@ export default function UserAccountabilityAnimation(): React.ReactNode {
         </g>
 
         {/* ══════════════════════════════════════════════════════════
-         *  EDISON GATEWAY - centre, with policy panel.
+         *  SEALGATE GATEWAY - centre, with policy panel.
          *  Container: x 224–356, y 54–224.  Centre (290, 139).
          * ══════════════════════════════════════════════════════════ */}
         <g>
@@ -395,7 +395,7 @@ export default function UserAccountabilityAnimation(): React.ReactNode {
             strokeWidth="1.5"
           />
 
-          <EdisonLogo x={263} y={60} w={54} h={32} />
+          <SealGateLogo x={263} y={60} w={54} h={32} />
           <text
             x="290"
             y="104"
@@ -405,7 +405,7 @@ export default function UserAccountabilityAnimation(): React.ReactNode {
             fontWeight="bold"
             fontFamily="system-ui,sans-serif"
           >
-            Edison Watch
+            SealGate
           </text>
 
           {/* ── Policy panel ──

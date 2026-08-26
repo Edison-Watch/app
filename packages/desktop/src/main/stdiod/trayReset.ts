@@ -24,7 +24,7 @@ export interface StdiodResetDeps {
 function notify(body: string, trayIconPath: string): void {
   if (!Notification.isSupported()) return
   new Notification({
-    title: 'Edison Watch',
+    title: 'SealGate',
     body,
     ...(process.platform !== 'darwin' && { icon: trayIconPath })
   }).show()
@@ -58,7 +58,7 @@ export async function handleStdiodReset(deps: StdiodResetDeps): Promise<void> {
   const apiBaseUrl = getApiBaseUrl()
   const creds = getCredentialsForEnv()
   if (!apiBaseUrl || !creds?.apiKey) {
-    notify('Sign in to Edison Watch before resetting the local tunnel.', trayIconPath)
+    notify('Sign in to SealGate before resetting the local tunnel.', trayIconPath)
     return
   }
 
@@ -85,7 +85,7 @@ export async function handleStdiodReset(deps: StdiodResetDeps): Promise<void> {
     const result = await resetStdiod({
       backend: apiBaseUrl,
       apiKey: creds.apiKey,
-      edisonSecretKey: creds.edisonSecretKey
+      sealgateSecretKey: creds.sealgateSecretKey
     })
     await refreshStdiodStatusCache().catch(() => {})
     deps.updateTrayMenu()

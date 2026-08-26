@@ -36,8 +36,8 @@ pub async fn run(enforce: bool, socket: PathBuf, hook_consumer: bool) -> anyhow:
 
     // Drain the hook scripts' pending/errors output (phase 2b). Skipped in
     // detect-only mode so we don't fight the client's own hook monitor over
-    // ~/.edison-watch/pending.
-    if hook_consumer && let Some(dir) = crate::paths::edison_watch_dir() {
+    // ~/.sealgate/pending.
+    if hook_consumer && let Some(dir) = crate::paths::sealgate_dir() {
         tokio::spawn(crate::hook_consumer::run(dir));
     }
 

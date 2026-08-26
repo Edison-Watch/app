@@ -2,13 +2,13 @@ import { test, expect } from "./fixtures";
 
 /**
  * Live end-to-end test of the device-authorization login against a real
- * Edison backend (the same grant the dashboard's /device page approves).
+ * SealGate backend (the same grant the dashboard's /device page approves).
  *
  * Opt-in: requires a running backend with a seeded admin key, e.g. the
- * cloud-sandbox / goose-e2e stack from the edison-watch repo:
+ * cloud-sandbox / goose-e2e stack from the sealgate repo:
  *
- *   EDISON_E2E_BACKEND=http://127.0.0.1:3001 \
- *   EDISON_E2E_ADMIN_KEY=edison_local_admin_key \
+ *   SEALGATE_E2E_BACKEND=http://127.0.0.1:3001 \
+ *   SEALGATE_E2E_ADMIN_KEY=sealgate_local_admin_key \
  *   npx playwright test e2e/device-login.spec.ts
  *
  * The test clicks "Sign in with your browser", reads the user code from the
@@ -17,11 +17,11 @@ import { test, expect } from "./fixtures";
  * signed-in state with a working API key.
  */
 
-const BACKEND = process.env.EDISON_E2E_BACKEND ?? "";
-const ADMIN_KEY = process.env.EDISON_E2E_ADMIN_KEY ?? "edison_local_admin_key";
+const BACKEND = process.env.SEALGATE_E2E_BACKEND ?? "";
+const ADMIN_KEY = process.env.SEALGATE_E2E_ADMIN_KEY ?? "sealgate_local_admin_key";
 
 test.describe("Device-authorization login (live backend)", () => {
-  test.skip(!BACKEND, "EDISON_E2E_BACKEND not set - skipping live login test");
+  test.skip(!BACKEND, "SEALGATE_E2E_BACKEND not set - skipping live login test");
 
   test("full sign-in via device grant approval", async ({ firstWindow }) => {
     const signInButton = firstWindow.getByRole("button", { name: "Sign in with your browser" });
@@ -52,7 +52,7 @@ test.describe("Device-authorization login (live backend)", () => {
     const stored = await firstWindow.evaluate(() => {
       for (let i = 0; i < localStorage.length; i += 1) {
         const key = localStorage.key(i);
-        if (key?.startsWith("edison_device_session:")) {
+        if (key?.startsWith("sealgate_device_session:")) {
           return JSON.parse(localStorage.getItem(key) ?? "null");
         }
       }
