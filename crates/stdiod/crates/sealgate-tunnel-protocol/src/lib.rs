@@ -28,6 +28,9 @@ pub enum Os {
     Macos,
     Linux,
     Windows,
+    /// Sent by the Mobile-Stdiod Android client (Edison-Watch/mobile); the
+    /// desktop daemon never reports it but must still parse it.
+    Android,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -11,7 +11,7 @@
         "device_id": { "type": "string" },
         "hostname": { "type": "string" },
         "label": { "type": "string" },
-        "os": { "type": "string", "enum": ["macos", "linux", "windows"] },
+        "os": { "type": "string", "enum": ["macos", "linux", "windows", "android"] },
         "client_version": { "type": "string" },
         "currently_running": {
           "type": "array",
