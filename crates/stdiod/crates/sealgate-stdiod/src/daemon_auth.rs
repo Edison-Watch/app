@@ -258,9 +258,10 @@ mod tests {
         assert!(is_auth_rejection(&revoked));
         assert!(!is_auth_rejection(&other_policy));
 
-        let mismatch = anyhow::Error::new(tunnel::SessionCloseError::ProtocolVersionMismatch {
-            reason: "protocol_version mismatch".into(),
+        let rejected = anyhow::Error::new(tunnel::SessionCloseError::ProtocolVersionRejected {
+            reason: "protocol_version out of supported range [2, 2] (client=3)".into(),
         });
-        assert!(is_protocol_rejection(&mismatch));
+        assert!(is_protocol_rejection(&rejected));
+        assert!(!is_protocol_rejection(&other_policy));
     }
 }

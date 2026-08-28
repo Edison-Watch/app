@@ -400,11 +400,17 @@ async fn drain_incoming(
                     server_count = servers.len(),
                     "received server_hello"
                 );
+                // The backend is the source of truth on version compatibility:
+                // it accepts a client_hello whose protocol_version falls inside
+                // its supported window and closes with 1008 otherwise. Reaching
+                // server_hello means the pair was judged compatible, so a
+                // differing value here is informational and MUST NOT end the
+                // session (PROTOCOL.md T-09, T-13).
                 if protocol_version != PROTOCOL_VERSION {
-                    warn!(
+                    info!(
                         backend_version = protocol_version,
                         local_version = PROTOCOL_VERSION,
-                        "protocol version mismatch; continuing in v1 MVP"
+                        "backend speaks a different protocol_version; it accepted our handshake, continuing"
                     );
                 }
                 sup.apply_snapshot(servers).await;

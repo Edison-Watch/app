@@ -19,6 +19,42 @@ use crate::proc::ChildServer;
 use crate::state::{ServerEntry, ServerStatus, StateWriter};
 use crate::tunnel::OutgoingHandle;
 
+/// One `state.json` entry for a supervised child, derived from what the
+/// daemon can actually observe about the process.
+///
+/// Only two of [`ServerStatus`]'s three values are reachable here:
+///
+/// - `crashed` - the process was seen to exit
+///   ([`ChildServer::has_observed_exit`]). The child stays in the map until
+///   the next reconciliation respawns or drops it, so this is what the tray
+///   sees in the meantime.
+/// - `running` - the process was spawned and has not been seen to exit.
+///
+/// The mapping keys off the observed exit rather than
+/// [`ChildServer::has_exited`], which is the wider "terminal for MCP" latch
+/// and also covers a child whose stdin broke while the process is still
+/// alive. Reporting that child as `crashed` beside its own live PID would be
+/// a claim the daemon cannot support; it stays `running` until the supervisor
+/// kills and respawns it, which the same latch makes it do on the next
+/// reconciliation.
+///
+/// `starting` has no observable trigger. A stdio MCP server writes nothing
+/// until the backend opens a session against it, which can be minutes or
+/// hours after the spawn, so treating "no output yet" as `starting` would pin
+/// healthy idle children there indefinitely. The daemon would need a health
+/// signal it does not have. See PROTOCOL.md T-69.
+fn child_entry(name: &str, child: &ChildServer) -> ServerEntry {
+    ServerEntry {
+        name: name.to_string(),
+        state: if child.has_observed_exit() {
+            ServerStatus::Crashed
+        } else {
+            ServerStatus::Running
+        },
+        pid: child.pid,
+    }
+}
+
 /// Reconciles desired-state announcements against running children.
 pub(crate) struct Supervisor {
     pub(crate) children: HashMap<String, ChildServer>,
@@ -75,11 +111,7 @@ impl Supervisor {
     fn snapshot_entries(&self) -> Vec<ServerEntry> {
         self.children
             .iter()
-            .map(|(name, child)| ServerEntry {
-                name: name.clone(),
-                state: ServerStatus::Running,
-                pid: child.pid,
-            })
+            .map(|(name, child)| child_entry(name, child))
             .collect()
     }
 
@@ -143,6 +175,7 @@ impl Supervisor {
             &enriched,
             self.tunnel_outgoing.clone(),
             sensitive_arg_values,
+            Some(self.state.clone()),
         ) {
             Ok(child) => {
                 self.children.insert(server_id.clone(), child);
@@ -273,3 +306,7 @@ impl Supervisor {
         self.publish_state().await;
     }
 }
+
+#[cfg(all(test, unix))]
+#[path = "supervisor_tests.rs"]
+mod tests;
