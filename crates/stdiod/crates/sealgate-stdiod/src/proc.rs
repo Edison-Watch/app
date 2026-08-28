@@ -32,6 +32,16 @@ use crate::child_diagnostics::ChildDiagnostics;
 use crate::state::StateWriter;
 use crate::tunnel::OutgoingHandle;
 
+/// How long [`ChildServer::shutdown`] waits for the frame pumps to finish
+/// their terminal report before falling back to aborting them. Shared by both
+/// joins. See the comment at the join site for why this is a join rather than
+/// an abort.
+const PUMP_JOIN_TIMEOUT: Duration = Duration::from_secs(2);
+
+/// How long [`ChildServer::shutdown`] waits for an aborted pump to actually
+/// stop before deciding whether it has to send the terminal report itself.
+const PUMP_ABORT_GRACE: Duration = Duration::from_millis(200);
+
 /// Build the base `Command` for a child MCP server.
 ///
 /// On Unix this is just `Command::new(program).args(args)` - the inherited PATH
@@ -352,6 +362,9 @@ pub struct ChildServer {
     /// behind an async lock.
     pub pid: Option<u32>,
     pub outbound_tx: mpsc::Sender<serde_json::Value>,
+    /// Kept so [`shutdown`](Self::shutdown) can emit the terminal report
+    /// itself when it has to abort the pump that would have sent it.
+    tunnel_outgoing: OutgoingHandle,
     pub stdin_pump: JoinHandle<()>,
     pub stdout_pump: JoinHandle<()>,
     stderr_pump: JoinHandle<()>,
@@ -427,7 +440,7 @@ impl ChildServer {
         let stdout_pump = tokio::spawn(stdout_pump(
             enriched.server_id.clone(),
             stdout,
-            tunnel_outgoing,
+            tunnel_outgoing.clone(),
             diagnostics.clone(),
             Some(child.clone()),
         ));
@@ -451,6 +464,7 @@ impl ChildServer {
             child,
             pid,
             outbound_tx,
+            tunnel_outgoing,
             stdin_pump,
             stdout_pump,
             stderr_pump,
@@ -485,34 +499,121 @@ impl ChildServer {
         self.diagnostics.has_observed_exit()
     }
 
-    /// Kill the child and abort the pumps.
+    /// Kill the child and wind the pumps down.
+    ///
+    /// Returns only once the child's terminal `server_offline` has been queued
+    /// on the outbound channel, so a caller that respawns the same `server_id`
+    /// cannot enqueue the new child's `server_spawn_result` ahead of it - see
+    /// PROTOCOL.md T-74 and `supervisor.rs::Supervisor::try_spawn`. Both frame
+    /// pumps are joined under one budget, because either of them can be the
+    /// one holding the terminal report. If the budget runs out, the report is
+    /// sent from here instead so that aborting a wedged pump cannot swallow it
+    /// (the exact hang T-42 exists to prevent).
     pub async fn shutdown(self) {
-        let mut child = self.child.lock().await;
-        if let Some(pid) = child.id() {
-            #[cfg(unix)]
-            {
-                let _ = Command::new("kill")
-                    .args(["-KILL", "--", &format!("-{pid}")])
-                    .status()
-                    .await;
+        let Self {
+            server_id,
+            child,
+            outbound_tx,
+            mut stdin_pump,
+            mut stdout_pump,
+            stderr_pump,
+            tunnel_outgoing,
+            diagnostics,
+            ..
+        } = self;
+        let status = {
+            let mut guard = child.lock().await;
+            if let Some(pid) = guard.id() {
+                #[cfg(unix)]
+                {
+                    let _ = Command::new("kill")
+                        .args(["-KILL", "--", &format!("-{pid}")])
+                        .status()
+                        .await;
+                }
+                #[cfg(windows)]
+                {
+                    let _ = Command::new("taskkill")
+                        .args(["/PID", &pid.to_string(), "/T", "/F"])
+                        .status()
+                        .await;
+                }
             }
-            #[cfg(windows)]
+            let _ = guard.start_kill();
+            let status = guard.wait().await.ok();
+            // Released before joining the pumps: a terminal report reads the
+            // exit status through this same lock and would otherwise deadlock
+            // until the budget below runs out.
+            status
+        };
+        // Reaped just above, so the process is observably gone even if no pump
+        // ever managed to read an exit status for it.
+        diagnostics.mark_observed_exit();
+
+        // Closing the frame channel ends the stdin pump at its `recv`, so the
+        // common case is a clean exit rather than a cancellation.
+        drop(outbound_tx);
+
+        // Join, don't abort: a pump's last act is the terminal
+        // `server_offline` report, and aborting it mid-flight is what made the
+        // ordering against a subsequent respawn a coin flip. Both pumps are
+        // joined because either can own that report - stdout on EOF, stdin on
+        // a failed write - and a one-shot latch means the one that got there
+        // first is the only one that will ever send it. The dead child's pipes
+        // are already at EOF, so the work left is `report_terminal`: at most
+        // ~100ms waiting for stderr to drain, ~100ms polling for the exit
+        // status, then one channel send. The budget is shared by both joins
+        // and bounds the pathological case where the send blocks because the
+        // outbound channel is full and the WS writer is wedged.
+        let deadline = tokio::time::Instant::now() + PUMP_JOIN_TIMEOUT;
+        let mut report_was_cancelled = false;
+        for (which, pump) in [("stdout", &mut stdout_pump), ("stdin", &mut stdin_pump)] {
+            if tokio::time::timeout_at(deadline, &mut *pump).await.is_ok() {
+                continue;
+            }
+            warn!(
+                server_id = %server_id,
+                pump = which,
+                "pump did not finish within the shutdown budget; aborting it",
+            );
+            pump.abort();
+            // `abort` only requests cancellation, which lands at the task's
+            // next await point. Wait for it: if the pump were still runnable
+            // it could complete a send between the check below and the
+            // fallback, and the backend would see two terminal errors for one
+            // child. When cancellation does not land in the grace period we
+            // leave the report alone rather than risk that duplicate - the
+            // backend's staleness teardown fails the calls either way.
+            if tokio::time::timeout(PUMP_ABORT_GRACE, &mut *pump)
+                .await
+                .is_ok()
             {
-                let _ = Command::new("taskkill")
-                    .args(["/PID", &pid.to_string(), "/T", "/F"])
-                    .status()
-                    .await;
+                report_was_cancelled = true;
             }
         }
-        let _ = child.start_kill();
-        let _ = child.wait().await;
-        // Reaped here, so the process is observably gone even if no pump
-        // ever managed to read an exit status for it.
-        self.diagnostics.mark_observed_exit();
-        drop(child);
-        self.stdin_pump.abort();
-        self.stdout_pump.abort();
-        self.stderr_pump.abort();
+        stderr_pump.abort();
+
+        // The pump that owned the report was cancelled before it queued one,
+        // so send it from here. `reported` is consumed by whichever path took
+        // the error and `report_sent` only flips once a send has completed, so
+        // between them they say exactly what still has to go out: nothing when
+        // a send got through, a fresh error when no path ever took one, and a
+        // reconstruction when a path took one and died before sending it.
+        // Non-blocking on purpose - shutdown must not block on a wedged
+        // channel, and a full channel means the session is being torn down
+        // anyway.
+        if report_was_cancelled && !diagnostics.report_sent() {
+            let error = diagnostics
+                .take_terminal_error(&server_id, status.as_ref())
+                .unwrap_or_else(|| diagnostics.terminal_error(&server_id, status.as_ref()));
+            if !tunnel_outgoing.try_send(TunnelFrame::TunnelError(error)) {
+                warn!(
+                    server_id = %server_id,
+                    "could not queue the terminal report during shutdown; the backend will \
+                     fail in-flight calls when the session goes stale",
+                );
+            }
+        }
     }
 }
 
@@ -591,7 +692,13 @@ async fn report_terminal(
     let error = diagnostics.take_terminal_error(server_id, status.as_ref());
     diagnostics.publish_crashed(server_id).await;
     if let Some(error) = error {
-        tunnel_outgoing.send(TunnelFrame::TunnelError(error)).await;
+        if tunnel_outgoing.send(TunnelFrame::TunnelError(error)).await {
+            // No await between the send completing and this store, so a pump
+            // cancelled at any point either queued the frame and recorded it
+            // or did neither. `shutdown` relies on that to avoid both a lost
+            // report and a duplicate one.
+            diagnostics.report_sent.store(true, Ordering::Release);
+        }
     }
 }
 

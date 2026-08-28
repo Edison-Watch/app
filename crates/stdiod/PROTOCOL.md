@@ -306,6 +306,30 @@ pump EOF, input pump write error, a frame addressed to an exited child). The
 reference client uses a one-shot latch.
 *Source: `proc.rs::ChildDiagnostics::take_terminal_error` (`reported.swap`).*
 
+**T-74** When a client stops a child and then reports a spawn result for the
+same `server_id` (a kill-and-respawn: env update, spec update, a changed
+desired spec, or a restart of an unresponsive child), the terminal
+`server_offline` for the old child MUST be sent before the new
+`server_spawn_result`. Receivers MAY therefore treat
+`server_spawn_result{ok:true}` as clearing any terminal error they hold for
+that `server_id`. See T-42.
+
+This is an ordering requirement, not a delivery guarantee. A client whose
+outbound channel cannot accept the report (full, or disconnected mid-shutdown)
+MAY drop it, in which case the backend sees no `server_offline` at all and
+falls back to its own staleness handling (T-50); what a client MUST NOT do is
+let the report arrive after the ack. The reference client bounds its own
+shutdown: it joins both frame pumps under one budget, since either may hold the
+one-shot report, and if it has to abort a pump that has taken the report it
+sends the report itself, non-blocking, before returning. T-43 still holds
+across that fallback: the latch that hands out the report and the flag that
+records a completed send are updated without an await between them, so an
+aborted pump has either sent the report or left it unsent, never both.
+*Source: `proc.rs::ChildServer::shutdown` (joins both pumps, with a fallback
+send after an abort); `daemon.rs::Supervisor::try_spawn`
+(every respawn path awaits `shutdown` first); `registry.py::_dispatch_inbound`
+(`ServerSpawnResult` arm clears `last_error_by_server`).*
+
 **T-44** A spawn failure MUST produce **both** `server_spawn_result{ok:false}`
 and `tunnel_error{code:"spawn_failed", server_id}`, in that order. The backend
 treats `spawn_failed` and `server_offline` as terminal for the current child:
@@ -361,7 +385,7 @@ carry on) rather than failing the frame.
 
 | Code | Direction | Meaning | Governed by |
 |------|-----------|---------|-------------|
-| `server_offline` | client → backend | The child for `server_id` is gone: its output pump hit EOF or errored, its input pump failed to write, or a frame arrived for a child already known dead. Terminal for that child, and emitted at most once per child lifetime | T-42, T-43, T-47 |
+| `server_offline` | client → backend | The child for `server_id` is gone: its output pump hit EOF or errored, its input pump failed to write, or a frame arrived for a child already known dead. Terminal for that child, and emitted at most once per child lifetime | T-42, T-43, T-47, T-74 |
 | `spawn_failed` | client → backend | The client tried to start `server_id` and could not (binary missing, exec refused, module URI unrecognised). Always accompanies a `server_spawn_result{ok:false}` and follows it | T-44 |
 | `server_unresponsive` | client → backend | The child for `server_id` stopped consuming its input: the per-child queue filled, so this request could not be delivered. The client then kills and respawns the child | T-51 |
 | `stdio_tunnel_disabled` | backend → client | Device-wide (`server_id` null): the org has the `stdio_tunnel_enabled` feature flag off. The backend closes with 1008 straight after | T-07, T-49 |
