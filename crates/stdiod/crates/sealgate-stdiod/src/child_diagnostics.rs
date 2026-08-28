@@ -36,6 +36,13 @@ pub(crate) struct ChildDiagnostics {
     /// as crashed next to its own live PID.
     observed_exit: Arc<AtomicBool>,
     reported: Arc<AtomicBool>,
+    /// Set once a terminal report has actually been queued on the outbound
+    /// channel. `reported` says a path took ownership of the report;
+    /// this says the wire has it. Nothing awaits between the send completing
+    /// and this store, so a cancelled pump can never leave the pair
+    /// disagreeing, which is what lets `shutdown` decide whether it has to
+    /// send the report itself.
+    pub(crate) report_sent: Arc<AtomicBool>,
     /// One-shot guard so a single death produces a single `crashed` write,
     /// whichever pump gets there first.
     crash_published: Arc<AtomicBool>,
@@ -85,6 +92,11 @@ impl ChildDiagnostics {
 
     pub(crate) fn has_observed_exit(&self) -> bool {
         self.observed_exit.load(Ordering::Acquire)
+    }
+
+    /// Whether a terminal report has reached the outbound channel.
+    pub(crate) fn report_sent(&self) -> bool {
+        self.report_sent.load(Ordering::Acquire)
     }
 
     /// Flip this child's `state.json` entry to `crashed`, once, and only for

@@ -28,8 +28,16 @@ fn env_store_for(test: &str) -> EnvStore {
 }
 
 fn supervisor_with(test: &str, children: HashMap<String, ChildServer>) -> Supervisor {
+    supervisor_with_outgoing(test, children, OutgoingHandle::new())
+}
+
+fn supervisor_with_outgoing(
+    test: &str,
+    children: HashMap<String, ChildServer>,
+    outgoing: OutgoingHandle,
+) -> Supervisor {
     let mut supervisor = Supervisor::new(
-        OutgoingHandle::new(),
+        outgoing,
         StateWriter::new(State::default()),
         env_store_for(test),
     );
@@ -94,6 +102,50 @@ async fn snapshot_reports_an_exited_child_as_crashed() {
     assert_eq!(entries[0].name, "fetch");
     assert_eq!(entries[0].pid, pid, "a crashed entry keeps its PID");
     assert!(matches!(entries[0].state, ServerStatus::Crashed));
+}
+
+/// PROTOCOL.md T-74: a kill-and-respawn MUST put the old child's terminal
+/// `server_offline` on the outbound channel before the replacement's
+/// `server_spawn_result`, so the backend can treat a successful ack as
+/// clearing the stored error. The outbound channel is the observation point
+/// the WS writer drains in order, so frame order here is wire order.
+///
+/// Both frames are read with `try_recv`: they must already be queued by the
+/// time the respawn path returns, not merely arrive eventually.
+#[tokio::test]
+async fn respawn_queues_terminal_offline_before_the_spawn_ack() {
+    let spec = desired("filesystem", "sleep 30");
+    let outgoing = OutgoingHandle::new();
+    let (wire_tx, mut wire_rx) = mpsc::channel(8);
+    outgoing.set(wire_tx);
+    let child = ChildServer::spawn(&spec, &spec, outgoing.clone(), Vec::new(), None).unwrap();
+    let mut supervisor = supervisor_with_outgoing(
+        "respawn-order",
+        HashMap::from([("filesystem".to_string(), child)]),
+        outgoing,
+    );
+
+    supervisor.restart_unresponsive("filesystem").await;
+
+    let TunnelFrame::TunnelError(error) = wire_rx
+        .try_recv()
+        .expect("the old child's terminal error should already be queued")
+    else {
+        panic!("first frame should be the old child's terminal tunnel_error");
+    };
+    assert_eq!(error.code, "server_offline");
+    assert_eq!(error.server_id.as_deref(), Some("filesystem"));
+
+    let TunnelFrame::ServerSpawnResult(result) = wire_rx
+        .try_recv()
+        .expect("the replacement's spawn ack should follow it")
+    else {
+        panic!("second frame should be the replacement's server_spawn_result");
+    };
+    assert!(result.ok, "the replacement should have spawned");
+    assert_eq!(result.server_id, "filesystem");
+
+    supervisor.shutdown_children().await;
 }
 
 /// A child whose stdin has broken is terminal for MCP - the backend gets its
