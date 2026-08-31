@@ -99,6 +99,7 @@ VERBOSE=0
 NO_COLOR_FLAG=0
 NO_OPEN=0            # pass through to `sealgate-stdiod login --no-open` for headless auth
 RELOGIN=0           # force a fresh `sealgate-stdiod login` even if already authorized
+NEW_DEVICE=0        # register as a new device instead of re-binding to this machine's record
 NO_PREAUTH=0        # skip the OAuth-grant priming step during install
 BEEPER_READY=0      # set by ensure_beeper_desktop when Beeper's client API answers
 STDIOD_CONNECTED=0  # set by ensure_stdiod_supervised once the daemon registers
@@ -198,6 +199,8 @@ parse_flags() {
       --beeper-wait)  needval $# "$1" "${2:-}"; BEEPER_WAIT="$2"; shift 2;;
       --no-open)      NO_OPEN=1; shift;;
       --relogin)      RELOGIN=1; shift;;
+      # Implies --relogin: a new device record is pointless without a new login.
+      --new-device)   NEW_DEVICE=1; RELOGIN=1; shift;;
       --no-preauth)   NO_PREAUTH=1; shift;;
       --stdiod-tag)   needval $# "$1" "${2:-}"; STDIOD_TAG="$2"; shift 2;;
       --stdiod-prerelease) STDIOD_PRERELEASE=1; STDIOD_CHANNEL_SET=1; shift;;
@@ -889,8 +892,13 @@ resolve_stdiod_channel() {
 
 ensure_stdiod_auth() {
   step "SealGate device authorization (browser)"
+  # Built once so the --dry-run preview is the command that would actually run,
+  # flags included.
+  local args=(login --backend "$SG_BACKEND")
+  [ "$NO_OPEN" -eq 1 ] && args+=(--no-open)
+  [ "$NEW_DEVICE" -eq 1 ] && args+=(--new-device)
   if [ "$DRY_RUN" -eq 1 ]; then
-    run sealgate-stdiod login --backend "$SG_BACKEND"
+    run sealgate-stdiod "${args[@]}"
     return 0
   fi
   # `dead` falls through to the login below rather than short-circuiting: a
@@ -932,8 +940,6 @@ ensure_stdiod_auth() {
   # `sealgate-stdiod login` runs the OAuth device flow: it prints a URL to approve
   # (and opens a browser unless --no-open), then stores a scoped client
   # credential. No API key, no step-up token.
-  local args=(login --backend "$SG_BACKEND")
-  [ "$NO_OPEN" -eq 1 ] && args+=(--no-open)
   info "a browser opens to approve this device; on a headless box pass --no-open and open the printed URL elsewhere"
   if ! run sealgate-stdiod "${args[@]}"; then
     die "sealgate-stdiod login failed" "check --sg-backend (${SG_BACKEND}) and complete the browser approval, then re-run: $PROG install"
@@ -1345,6 +1351,10 @@ Common flags (also settable as UPPER_SNAKE env vars):
   --no-preauth         Skip OAuth priming during install (prompt then fires at first spawn)
   --no-open            Headless device auth: print the approval URL, do not open a browser
   --relogin            Force a fresh device authorization even if already authorized
+  --new-device         Register as a NEW device instead of re-binding to the one
+                       this machine already has. Implies --relogin. Its servers
+                       stay with the old device, so use it when handing the
+                       machine over, not to fix a bad login.
   --install-deps       Consent to auto-install missing deps: npx (brew),
                        sealgate-stdiod (prebuilt release download - no Rust
                        needed), and on macOS Beeper Desktop itself (brew cask).
