@@ -36,7 +36,11 @@ pub struct LoginArgs {
     /// Register as a NEW device instead of re-binding to the one this machine
     /// already has. Use after handing the machine to someone else, or to
     /// recover from a device record that is wedged on the backend.
-    #[arg(long)]
+    ///
+    /// Rejected with --api-key: that path returns before this flag is read, and
+    /// legacy auth has no device record to replace - its identity is the
+    /// hostname. Accepting it would silently do nothing.
+    #[arg(long, conflicts_with = "api_key")]
     pub new_device: bool,
 }
 
@@ -257,6 +261,24 @@ mod tests {
     use std::sync::atomic::{AtomicBool, Ordering};
 
     use super::*;
+
+    /// --new-device is only meaningful on the device-authorization path. The
+    /// legacy branch returns before the flag is read, so accepting the pair
+    /// would silently do nothing.
+    #[test]
+    fn new_device_is_rejected_with_api_key() {
+        use clap::Parser;
+        #[derive(Parser, Debug)]
+        struct Cli {
+            #[command(flatten)]
+            login: LoginArgs,
+        }
+        assert!(Cli::try_parse_from(["x", "--new-device"]).is_ok());
+        assert!(Cli::try_parse_from(["x", "--api-key", "k"]).is_ok());
+        let err = Cli::try_parse_from(["x", "--api-key", "k", "--new-device"])
+            .expect_err("--api-key with --new-device must be rejected");
+        assert_eq!(err.kind(), clap::error::ErrorKind::ArgumentConflict);
+    }
 
     #[test]
     fn no_open_does_not_invoke_browser() {

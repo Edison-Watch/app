@@ -348,9 +348,13 @@ impl Resolved {
 }
 
 impl PersistedConfig {
+    /// True when the config still holds something the saved backend issued.
+    ///
+    /// Not client_installation_id: logout keeps that, so counting it would make
+    /// a logged-out config reject `--backend <other>`. It never crosses
+    /// backends - reusable_installation replays it only when the issuer matches.
     fn has_issuer_bound_values(&self) -> bool {
         self.usable_credential().is_some()
-            || nonempty(self.client_installation_id.as_deref()).is_some()
             || nonempty(self.authenticated_user_id.as_deref()).is_some()
             || nonempty(self.authenticated_org_id.as_deref()).is_some()
             || nonempty(self.sealgate_secret_key.as_deref()).is_some()

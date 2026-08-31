@@ -97,3 +97,30 @@ fn explicit_legacy_backend_replacement_ignores_invalid_saved_backend() {
     assert!(merged.client_access_token.is_none());
     assert!(merged.client_installation_id.is_none());
 }
+
+/// `logout` keeps client_installation_id so a later login re-binds to the same
+/// device record. That must not turn into a backend binding: with no credential
+/// left there is nothing bound, and config.rs's own comment says a saved backend
+/// URL after logout is not a binding.
+#[test]
+fn backend_override_is_allowed_after_logout_left_an_installation_id() {
+    let persisted = PersistedConfig {
+        backend_url: Some("https://saved.test".into()),
+        client_installation_id: Some("install-1".into()),
+        ..Default::default()
+    };
+    let merged = Resolved::merge(
+        persisted,
+        Resolved {
+            backend_url: Some("https://other.test".into()),
+            api_key: None,
+            client_access_token: None,
+            client_installation_id: None,
+            sealgate_secret_key: None,
+            device_id: None,
+            device_label: None,
+        },
+    )
+    .expect("a retained installation id alone must not block a backend override");
+    assert_eq!(merged.backend_url.as_deref(), Some("https://other.test"));
+}
