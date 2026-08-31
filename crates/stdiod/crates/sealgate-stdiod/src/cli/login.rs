@@ -33,6 +33,11 @@ pub struct LoginArgs {
     /// Human-readable label shown in the admin Devices page.
     #[arg(long)]
     pub device_label: Option<String>,
+    /// Register as a NEW device instead of re-binding to the one this machine
+    /// already has. Use after handing the machine to someone else, or to
+    /// recover from a device record that is wedged on the backend.
+    #[arg(long)]
+    pub new_device: bool,
 }
 
 pub async fn run(args: LoginArgs) -> Result<()> {
@@ -58,16 +63,22 @@ pub async fn run(args: LoginArgs) -> Result<()> {
     let auth = AuthClient::new(backend.clone())?;
     let label = args.device_label.as_deref().or(cfg.device_label.as_deref());
     // Prefer the id already on disk. With none - a first install, or a wiped
-    // config - fall back to a machine-derived one.
+    // config - fall back to a machine-derived one. --new-device sends neither,
+    // so the backend mints a fresh device record.
     let derived;
-    let existing_installation = match reusable_installation(&cfg, same_issuer) {
-        Some(id) => Some(id),
-        None => {
-            derived = crate::machine_id::installation_id();
-            if derived.is_some() {
-                debug!("no installation id on disk; using the machine-derived one");
+    let existing_installation = if args.new_device {
+        info!("--new-device: requesting a new device record");
+        None
+    } else {
+        match reusable_installation(&cfg, same_issuer) {
+            Some(id) => Some(id),
+            None => {
+                derived = crate::machine_id::installation_id();
+                if derived.is_some() {
+                    debug!("no installation id on disk; using the machine-derived one");
+                }
+                derived.as_deref()
             }
-            derived.as_deref()
         }
     };
     let code = auth
@@ -342,6 +353,7 @@ mod tests {
                 sealgate_secret_key: None,
                 device_id: None,
                 device_label: None,
+                new_device: false,
             },
         )
         .unwrap();
@@ -373,6 +385,7 @@ mod tests {
                 sealgate_secret_key: Some("new-secret".into()),
                 device_id: Some("new-device".into()),
                 device_label: None,
+                new_device: false,
             },
         )
         .unwrap();

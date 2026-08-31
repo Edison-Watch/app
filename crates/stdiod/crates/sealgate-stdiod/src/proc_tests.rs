@@ -1,4 +1,7 @@
 use super::*;
+// Only the #[cfg(unix)] tests below construct a Ping; without the gate this is
+// an unused import on Windows.
+#[cfg(unix)]
 use sealgate_tunnel_protocol::Ping;
 use serde_json::json;
 use tokio::io::duplex;
