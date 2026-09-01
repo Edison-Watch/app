@@ -1,6 +1,10 @@
 name: Release desktop (demo prerelease)
 
-# Manually-triggered DEMO prerelease to GitHub Releases (channel: beta).
+# DEMO prerelease to GitHub Releases (channel: beta). Runs automatically on
+# every push to main that touches shippable paths (plus manual dispatch), so
+# the demo channel always tracks main - the demo dashboard resolves its
+# download buttons from the newest published prerelease, and installed demo
+# apps auto-update to it via electron-updater.
 # One shared draft prerelease collects assets from five build jobs - macOS
 # (signed + notarized), plus x64/arm64 legs for Windows and Linux (unsigned -
 # see desktop-release.yml for the signing rationale) - and a final gate job
@@ -41,6 +45,16 @@ name: Release desktop (demo prerelease)
 # `--stdiod-tag v<version>-beta.<n>`.
 
 on:
+  push:
+    branches: [main]
+    # Same shippable-path filter as desktop-build-macos.yml: docs/CI-only
+    # commits must not burn a five-job notarized build.
+    paths:
+      - 'packages/**'
+      - 'crates/stdiod/**'
+      - 'crates/detectord/**'
+      - 'package-lock.json'
+      - '.github/workflows/desktop-release-demo.yml'
   workflow_dispatch:
     inputs:
       notarize:
@@ -49,6 +63,12 @@ on:
         default: true
 
 concurrency:
+  # cancel-in-progress stays false on purpose, and it is what keeps per-commit
+  # triggering affordable: GitHub holds at most one PENDING run per group
+  # (newer pushes replace the queued one), so a burst of commits coalesces
+  # into "the run in flight + one run for the newest commit" instead of a
+  # queue of notarized builds. Cancelling in-progress runs instead would leave
+  # orphaned draft releases behind.
   group: release-desktop-demo
   cancel-in-progress: false
 
@@ -73,6 +93,35 @@ jobs:
           DEMO="${BASE}-beta.${{ github.run_number }}"
           echo "version=$DEMO" >> "$GITHUB_OUTPUT"
           echo "Demo prerelease version: $DEMO (leads stable, beta channel)"
+
+      - name: Guard the versioning invariant (base must lead the shipped stable)
+        # Demo builds are only safe while <package.json version> is
+        # semver-GREATER than the newest published stable: that is what keeps
+        # demo installs on the beta channel and stable installs off it (see the
+        # VERSIONING INVARIANT note in desktop-release.yml). With per-commit
+        # triggering, a push landing in the window between a stable release and
+        # its post-release version bump would otherwise publish a beta at or
+        # below the shipped stable. Fail fast instead; the bump commit itself
+        # touches packages/desktop/package.json, so it re-triggers this
+        # workflow and demo builds resume on their own.
+        run: |
+          set -euo pipefail
+          BASE=$(node -p "require('./packages/desktop/package.json').version")
+          STABLE=$(gh release list --repo "$GITHUB_REPOSITORY" \
+            --exclude-drafts --exclude-pre-releases --limit 100 \
+            --json tagName --jq '[.[] | select(.tagName | test("^v[0-9]"))][0].tagName // ""' \
+            | sed 's/^v//')
+          if [ -z "$STABLE" ]; then
+            echo "No published stable release yet; invariant holds trivially."
+            exit 0
+          fi
+          HIGHEST=$(printf '%s\n%s\n' "$STABLE" "$BASE" | sort -V | tail -1)
+          if [ "$BASE" = "$STABLE" ] || [ "$HIGHEST" != "$BASE" ]; then
+            echo "::error::packages/desktop/package.json version ($BASE) does not lead the newest published stable ($STABLE)."
+            echo "::error::Land the post-stable-release patch bump first (see desktop-release.yml's VERSIONING INVARIANT), or demo installs could be pulled onto stable."
+            exit 1
+          fi
+          echo "Invariant OK: $BASE leads stable $STABLE"
 
       - name: Pre-create draft prerelease
         # electron-builder races itself creating the GitHub release: artifacts
@@ -113,9 +162,10 @@ jobs:
     env:
       CSC_LINK: ${{ secrets.CSC_LINK }}
       CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-      # Notarized so demo testers don't hit the Gatekeeper prompt. Demo is
-      # manual/infrequent, so the notarization round-trip is acceptable here
-      # (unlike the fast per-commit desktop-build-macos.yml, which stays un-notarized).
+      # Notarized so demo testers don't hit the Gatekeeper prompt. The Apple
+      # round-trip makes this the slowest leg, but the concurrency group
+      # coalesces commit bursts, so per-commit triggering stays affordable
+      # (unlike the fast desktop-build-macos.yml, which stays un-notarized).
       # APPLE_ID / APPLE_TEAM_ID are non-sensitive repo Variables; the
       # app-specific password is a Secret.
       APPLE_ID: ${{ vars.APPLE_ID }}
@@ -197,10 +247,16 @@ jobs:
         # for the GitHub provider to resolve the demo channel correctly).
         # Assets go into the draft pre-created by the draft job; the publish
         # job flips it public.
+        # `inputs.notarize` only exists on workflow_dispatch; on a push event it
+        # is null. The comparison goes through toJSON because GitHub expressions
+        # coerce null and false to the same value (`null != false` is FALSE), so
+        # a plain `!= false` would silently skip notarization on every push run.
+        # 'null'/'true' -> true, 'false' -> false: push-triggered runs always
+        # notarize and dispatch keeps its opt-out.
         run: |
           npx electron-builder --mac --publish always \
             -c.extraMetadata.version="${{ needs.draft.outputs.version }}" \
-            -c.mac.notarize=${{ inputs.notarize }} \
+            -c.mac.notarize=${{ toJSON(inputs.notarize) != 'false' }} \
             -c.publish.channel=beta \
             -c.publish.releaseType=prerelease
 
@@ -681,7 +737,95 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
+      - uses: actions/checkout@v7
+
+      - name: Re-check the versioning invariant before going public
+        # The draft job's guard closes the window at the START of the run, but
+        # the build fan-out takes a while: a stable release published at the
+        # same base version mid-run would only be caught here. Same check as
+        # the draft job; on failure the draft stays unpublished (the sweep in
+        # prune collects it after a day).
+        run: |
+          set -euo pipefail
+          BASE=$(node -p "require('./packages/desktop/package.json').version")
+          STABLE=$(gh release list --repo "$GITHUB_REPOSITORY" \
+            --exclude-drafts --exclude-pre-releases --limit 100 \
+            --json tagName --jq '[.[] | select(.tagName | test("^v[0-9]"))][0].tagName // ""' \
+            | sed 's/^v//')
+          if [ -z "$STABLE" ]; then
+            echo "No published stable release yet; invariant holds trivially."
+            exit 0
+          fi
+          HIGHEST=$(printf '%s\n%s\n' "$STABLE" "$BASE" | sort -V | tail -1)
+          if [ "$BASE" = "$STABLE" ] || [ "$HIGHEST" != "$BASE" ]; then
+            echo "::error::a stable release at $STABLE landed while this run was building; not publishing beta ${{ needs.draft.outputs.version }}."
+            exit 1
+          fi
+          echo "Invariant still OK: $BASE leads stable $STABLE"
+
       - name: Publish prerelease
         run: |
           gh release edit "v${{ needs.draft.outputs.version }}" \
             --repo "$GITHUB_REPOSITORY" --draft=false --prerelease
+
+  prune:
+    name: Prune old demo prereleases
+    # LOAD-BEARING with per-commit builds, not housekeeping: the dashboard
+    # resolves download buttons by scanning ONE releases page
+    # (frontend-v2/src/shared/lib/releases.ts in edison-watch/edison-watch),
+    # and the stable channel takes the newest NON-prerelease on it. Left
+    # unpruned, a prerelease per commit pushes every stable release off that
+    # page within days and the production dashboard's download buttons
+    # silently die. Old betas are also dead weight for auto-update:
+    # electron-updater's beta channel only ever wants the newest prerelease.
+    needs: [draft, publish]
+    # !cancelled() so cleanup still runs when a build leg fails and publish is
+    # skipped - the stale-draft sweep exists precisely for those runs. Both
+    # steps are safe without a published run: they only ever touch old betas
+    # and day-old drafts.
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Delete beta prereleases beyond the newest 5
+        # Only `v*-beta.*` PRErelease tags are candidates - stable releases and
+        # stdiod-v* daemon tags are never touched. --cleanup-tag removes the
+        # git tag with the release so pruned builds don't linger as bare tags.
+        # Ordered by published_at: a release's created_at tracks the TARGET
+        # COMMIT's date, so a beta cut from an older commit could sort as older
+        # than betas it superseded and survive pruning in their place.
+        run: |
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" --paginate \
+            --jq '.[] | select(.prerelease and (.draft | not))
+                      | select(.tag_name | test("^v[0-9][^ ]*-beta\\.[0-9]+$"))
+                      | [.published_at, .tag_name] | @tsv' \
+            | sort -r | awk -F'\t' 'NR > 5 { print $2 }' \
+            | while read -r tag; do
+                echo "Pruning $tag"
+                gh release delete "$tag" --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes
+              done
+
+      - name: Sweep stale beta draft releases
+        # A failed run can leave its draft behind (a rerun reuses it, but a
+        # superseded commit never reruns). Drafts have no git tag yet, so they
+        # are deleted by release id. Anything younger than a day is left alone
+        # in case a rerun of a recent failure still wants it.
+        # created_at is the only timestamp a draft has (no published_at). It
+        # tracks the target commit's date, which for these drafts is the commit
+        # just pushed to main, so it approximates draft age closely enough for
+        # a one-day cutoff.
+        run: |
+          set -euo pipefail
+          CUTOFF=$(date -u -d '1 day ago' +%Y-%m-%dT%H:%M:%SZ)
+          gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" --paginate \
+            --jq ".[] | select(.draft)
+                      | select(.tag_name | test(\"^v[0-9][^ ]*-beta\\\\.[0-9]+$\"))
+                      | select(.created_at < \"$CUTOFF\")
+                      | .id" \
+            | while read -r id; do
+                echo "Deleting stale draft release id $id"
+                gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/$id"
+              done
