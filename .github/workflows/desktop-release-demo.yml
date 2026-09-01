@@ -109,7 +109,7 @@ jobs:
           BASE=$(node -p "require('./packages/desktop/package.json').version")
           STABLE=$(gh release list --repo "$GITHUB_REPOSITORY" \
             --exclude-drafts --exclude-pre-releases --limit 100 \
-            --json tagName --jq '[.[] | select(.tagName | test("^v[0-9]"))][0].tagName' \
+            --json tagName --jq '[.[] | select(.tagName | test("^v[0-9]"))][0].tagName // ""' \
             | sed 's/^v//')
           if [ -z "$STABLE" ]; then
             echo "No published stable release yet; invariant holds trivially."
@@ -248,13 +248,15 @@ jobs:
         # Assets go into the draft pre-created by the draft job; the publish
         # job flips it public.
         # `inputs.notarize` only exists on workflow_dispatch; on a push event it
-        # is null and would render as an empty string, producing a broken
-        # `-c.mac.notarize=` flag. `!= false` maps null -> true, so push-
-        # triggered runs always notarize and dispatch keeps its opt-out.
+        # is null. The comparison goes through toJSON because GitHub expressions
+        # coerce null and false to the same value (`null != false` is FALSE), so
+        # a plain `!= false` would silently skip notarization on every push run.
+        # 'null'/'true' -> true, 'false' -> false: push-triggered runs always
+        # notarize and dispatch keeps its opt-out.
         run: |
           npx electron-builder --mac --publish always \
             -c.extraMetadata.version="${{ needs.draft.outputs.version }}" \
-            -c.mac.notarize=${{ inputs.notarize != false }} \
+            -c.mac.notarize=${{ toJSON(inputs.notarize) != 'false' }} \
             -c.publish.channel=beta \
             -c.publish.releaseType=prerelease
 
@@ -735,6 +737,32 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
+      - uses: actions/checkout@v7
+
+      - name: Re-check the versioning invariant before going public
+        # The draft job's guard closes the window at the START of the run, but
+        # the build fan-out takes a while: a stable release published at the
+        # same base version mid-run would only be caught here. Same check as
+        # the draft job; on failure the draft stays unpublished (the sweep in
+        # prune collects it after a day).
+        run: |
+          set -euo pipefail
+          BASE=$(node -p "require('./packages/desktop/package.json').version")
+          STABLE=$(gh release list --repo "$GITHUB_REPOSITORY" \
+            --exclude-drafts --exclude-pre-releases --limit 100 \
+            --json tagName --jq '[.[] | select(.tagName | test("^v[0-9]"))][0].tagName // ""' \
+            | sed 's/^v//')
+          if [ -z "$STABLE" ]; then
+            echo "No published stable release yet; invariant holds trivially."
+            exit 0
+          fi
+          HIGHEST=$(printf '%s\n%s\n' "$STABLE" "$BASE" | sort -V | tail -1)
+          if [ "$BASE" = "$STABLE" ] || [ "$HIGHEST" != "$BASE" ]; then
+            echo "::error::a stable release at $STABLE landed while this run was building; not publishing beta ${{ needs.draft.outputs.version }}."
+            exit 1
+          fi
+          echo "Invariant still OK: $BASE leads stable $STABLE"
+
       - name: Publish prerelease
         run: |
           gh release edit "v${{ needs.draft.outputs.version }}" \
@@ -751,6 +779,11 @@ jobs:
     # silently die. Old betas are also dead weight for auto-update:
     # electron-updater's beta channel only ever wants the newest prerelease.
     needs: [draft, publish]
+    # !cancelled() so cleanup still runs when a build leg fails and publish is
+    # skipped - the stale-draft sweep exists precisely for those runs. Both
+    # steps are safe without a published run: they only ever touch old betas
+    # and day-old drafts.
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
@@ -760,12 +793,15 @@ jobs:
         # Only `v*-beta.*` PRErelease tags are candidates - stable releases and
         # stdiod-v* daemon tags are never touched. --cleanup-tag removes the
         # git tag with the release so pruned builds don't linger as bare tags.
+        # Ordered by published_at: a release's created_at tracks the TARGET
+        # COMMIT's date, so a beta cut from an older commit could sort as older
+        # than betas it superseded and survive pruning in their place.
         run: |
           set -euo pipefail
           gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" --paginate \
             --jq '.[] | select(.prerelease and (.draft | not))
                       | select(.tag_name | test("^v[0-9][^ ]*-beta\\.[0-9]+$"))
-                      | [.created_at, .tag_name] | @tsv' \
+                      | [.published_at, .tag_name] | @tsv' \
             | sort -r | awk -F'\t' 'NR > 5 { print $2 }' \
             | while read -r tag; do
                 echo "Pruning $tag"
@@ -777,6 +813,10 @@ jobs:
         # superseded commit never reruns). Drafts have no git tag yet, so they
         # are deleted by release id. Anything younger than a day is left alone
         # in case a rerun of a recent failure still wants it.
+        # created_at is the only timestamp a draft has (no published_at). It
+        # tracks the target commit's date, which for these drafts is the commit
+        # just pushed to main, so it approximates draft age closely enough for
+        # a one-day cutoff.
         run: |
           set -euo pipefail
           CUTOFF=$(date -u -d '1 day ago' +%Y-%m-%dT%H:%M:%SZ)
