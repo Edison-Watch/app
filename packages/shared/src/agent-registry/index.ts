@@ -208,21 +208,28 @@ export const AGENT_REGISTRY: Record<AgentId, AgentIconEntry> = {
   },
 
   // OpenCode (opencode.ai) - the open-source terminal coding agent. Official
-  // two-tone brand mark (supplied by Eito): a dark #211E1E surround with the
-  // interior window knocked out (nonzero winding) plus a light-grey #CFCECD block
-  // filling the lower half of that window. Multiple paths and a hole, so it's a
-  // self-contained customSvg rather than a single svgPath. It is a light-ground
-  // asset - the dark #211E1E surround IS the logo - so brandColor is white (same
-  // pattern as m365-copilot): on a dark tile the surround would dissolve into the
-  // background and only the inner grey block would show. White reads on both
-  // themes; the explicit fills also render it in the Electron dialog icons.
+  // two-tone brand mark (supplied by Eito): a surround with the interior window
+  // knocked out (nonzero winding) plus a block filling the lower half of that
+  // window. Multiple paths and a hole, so it's a self-contained customSvg rather
+  // than a single svgPath.
+  //
+  // Theme-adaptive: the three colours are driven by CSS variables so each theme
+  // shows the chip orientation that reads best, matching how OpenCode presents on
+  // light vs dark. Dark theme -> black tile + light #DEE1E1 surround + dark #303132
+  // screen (the "dark chip"); light theme -> white tile + dark #211E1E surround +
+  // light #CFCECD screen (the "light chip"). The consumers define --oc-tile /
+  // --oc-frame / --oc-screen per [data-theme] (dashboard + desktop renderer);
+  // the var() fallbacks below are the light chip, which reads on any ground for
+  // consumers without the tokens. Fills use inline `style` (not the `fill`
+  // attribute) so the var() actually resolves. The Electron native-dialog icons
+  // build their own static SVG in dialogIcons.ts and are unaffected.
   opencode: {
     displayName: 'OpenCode',
-    brandColor: '#FFFFFF',
+    brandColor: 'var(--oc-tile, #FFFFFF)',
     customViewBox: '0 0 240 300',
     customSvg: [
-      '<path fill="#CFCECD" d="M180 240H60V120H180V240Z"/>',
-      '<path fill="#211E1E" d="M180 60H60V240H180V60ZM240 300H0V0H240V300Z"/>'
+      '<path style="fill:var(--oc-screen,#CFCECD)" d="M180 240H60V120H180V240Z"/>',
+      '<path style="fill:var(--oc-frame,#211E1E)" d="M180 60H60V240H180V60ZM240 300H0V0H240V300Z"/>'
     ].join('')
   },
 
