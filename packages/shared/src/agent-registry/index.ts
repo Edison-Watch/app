@@ -28,6 +28,7 @@ export type AgentId =
   | 'copilot'
   | 'devin'
   | 'aider'
+  | 'opencode'
   | 'm365-copilot'
   | 'chatgpt'
   | 'oai-workspace-agents'
@@ -204,6 +205,34 @@ export const AGENT_REGISTRY: Record<AgentId, AgentIconEntry> = {
   aider: {
     displayName: 'Aider',
     brandColor: '#E11D48'
+  },
+
+  // OpenCode (opencode.ai) - the open-source terminal coding agent. Official
+  // two-tone brand mark (supplied by Eito): a surround with the interior window
+  // knocked out (nonzero winding) plus a block filling the lower half of that
+  // window. Multiple paths and a hole, so it's a self-contained customSvg rather
+  // than a single svgPath.
+  //
+  // Theme-adaptive: the three colours are driven by CSS variables so each theme
+  // shows the chip orientation that reads best, matching how OpenCode presents on
+  // light vs dark. Dark theme -> black tile + light #DEE1E1 surround + dark #303132
+  // screen (the "dark chip"); light theme -> white tile + dark #211E1E surround +
+  // light #CFCECD screen (the "light chip"). The consumers define --oc-tile /
+  // --oc-frame / --oc-screen per [data-theme] (dashboard + desktop renderer);
+  // the var() fallbacks below are the light chip, which reads on any ground for
+  // consumers without the tokens. Fills use inline `style` (not the `fill`
+  // attribute) so the var() actually resolves. The Electron native dialogs
+  // render this same customSvg (via getClientIcon) inside a bare, tile-less svg
+  // on an always-dark ground, so they define --oc-* (dark-chip values) in their
+  // own BASE_CSS (dialogStyles.ts) for the fills to resolve there too.
+  opencode: {
+    displayName: 'OpenCode',
+    brandColor: 'var(--oc-tile, #FFFFFF)',
+    customViewBox: '0 0 240 300',
+    customSvg: [
+      '<path style="fill:var(--oc-screen,#CFCECD)" d="M180 240H60V120H180V240Z"/>',
+      '<path style="fill:var(--oc-frame,#211E1E)" d="M180 60H60V240H180V60ZM240 300H0V0H240V300Z"/>'
+    ].join('')
   },
 
   'm365-copilot': {
