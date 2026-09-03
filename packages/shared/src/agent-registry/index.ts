@@ -207,21 +207,21 @@ export const AGENT_REGISTRY: Record<AgentId, AgentIconEntry> = {
     brandColor: '#E11D48'
   },
 
-  // OpenCode (opencode.ai) - the open-source terminal coding agent. Its mark is
-  // two even-odd paths (an outer frame with the interior knocked out, plus an
-  // inner block), so it can't collapse into a single svgPath - it's a
-  // self-contained customSvg like grok/codex: a near-black rounded tile with the
-  // glyph in white, so it renders correctly on any surface including the
-  // background-less Electron dialog icons. Native viewBox 0 0 512 512; brand mark
-  // supplied by Eito.
+  // OpenCode (opencode.ai) - the open-source terminal coding agent. Official
+  // two-tone brand mark (supplied by Eito): a dark #211E1E surround with the
+  // interior window knocked out (nonzero winding) plus a light-grey #CFCECD block
+  // filling the lower half of that window. Multiple paths and a hole, so it's a
+  // self-contained customSvg rather than a single svgPath. brandColor matches the
+  // dark surround so the portrait (240x300) artwork sits seamlessly on the square
+  // tile and reads the same in light and dark themes; the explicit fills also
+  // render it in the background-less Electron dialog icons.
   opencode: {
     displayName: 'OpenCode',
-    brandColor: '#0A0A0A',
-    customViewBox: '0 0 512 512',
+    brandColor: '#211E1E',
+    customViewBox: '0 0 240 300',
     customSvg: [
-      '<rect x="0" y="0" width="512" height="512" rx="56" ry="56" fill="#0A0A0A"/>',
-      '<path fill="#FFFFFF" d="M320 224V352H192V224H320Z"/>',
-      '<path fill="#FFFFFF" fill-rule="evenodd" clip-rule="evenodd" d="M384 416H128V96H384V416ZM320 160H192V352H320V160Z"/>'
+      '<path fill="#CFCECD" d="M180 240H60V120H180V240Z"/>',
+      '<path fill="#211E1E" d="M180 60H60V240H180V60ZM240 300H0V0H240V300Z"/>'
     ].join('')
   },
 
