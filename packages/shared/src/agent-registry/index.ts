@@ -221,8 +221,10 @@ export const AGENT_REGISTRY: Record<AgentId, AgentIconEntry> = {
   // --oc-frame / --oc-screen per [data-theme] (dashboard + desktop renderer);
   // the var() fallbacks below are the light chip, which reads on any ground for
   // consumers without the tokens. Fills use inline `style` (not the `fill`
-  // attribute) so the var() actually resolves. The Electron native-dialog icons
-  // build their own static SVG in dialogIcons.ts and are unaffected.
+  // attribute) so the var() actually resolves. The Electron native dialogs
+  // render this same customSvg (via getClientIcon) inside a bare, tile-less svg
+  // on an always-dark ground, so they define --oc-* (dark-chip values) in their
+  // own BASE_CSS (dialogStyles.ts) for the fills to resolve there too.
   opencode: {
     displayName: 'OpenCode',
     brandColor: 'var(--oc-tile, #FFFFFF)',

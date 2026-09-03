@@ -28,6 +28,14 @@ export const BASE_CSS = `
     --success: #34D399;
     --warning: #FBBF24;
     --danger: #F87171;
+    /* OpenCode agent icon. These dialogs render the shared customSvg (via
+       getClientIcon) without a brandColor tile wrapper, and they are always
+       dark, so define the "dark chip" values: a light frame reads on the dark
+       ground and the untiled upper window blends as the intended black tile.
+       Keep in sync with packages/shared/src/theme/tokens.css. */
+    --oc-tile: #000000;
+    --oc-frame: #DEE1E1;
+    --oc-screen: #303132;
   }
 
   body {
