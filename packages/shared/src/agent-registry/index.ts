@@ -211,13 +211,14 @@ export const AGENT_REGISTRY: Record<AgentId, AgentIconEntry> = {
   // two-tone brand mark (supplied by Eito): a dark #211E1E surround with the
   // interior window knocked out (nonzero winding) plus a light-grey #CFCECD block
   // filling the lower half of that window. Multiple paths and a hole, so it's a
-  // self-contained customSvg rather than a single svgPath. brandColor matches the
-  // dark surround so the portrait (240x300) artwork sits seamlessly on the square
-  // tile and reads the same in light and dark themes; the explicit fills also
-  // render it in the background-less Electron dialog icons.
+  // self-contained customSvg rather than a single svgPath. It is a light-ground
+  // asset - the dark #211E1E surround IS the logo - so brandColor is white (same
+  // pattern as m365-copilot): on a dark tile the surround would dissolve into the
+  // background and only the inner grey block would show. White reads on both
+  // themes; the explicit fills also render it in the Electron dialog icons.
   opencode: {
     displayName: 'OpenCode',
-    brandColor: '#211E1E',
+    brandColor: '#FFFFFF',
     customViewBox: '0 0 240 300',
     customSvg: [
       '<path fill="#CFCECD" d="M180 240H60V120H180V240Z"/>',
