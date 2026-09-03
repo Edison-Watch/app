@@ -28,6 +28,7 @@ export type AgentId =
   | 'copilot'
   | 'devin'
   | 'aider'
+  | 'opencode'
   | 'm365-copilot'
   | 'chatgpt'
   | 'oai-workspace-agents'
@@ -204,6 +205,24 @@ export const AGENT_REGISTRY: Record<AgentId, AgentIconEntry> = {
   aider: {
     displayName: 'Aider',
     brandColor: '#E11D48'
+  },
+
+  // OpenCode (opencode.ai) - the open-source terminal coding agent. Its mark is
+  // two even-odd paths (an outer frame with the interior knocked out, plus an
+  // inner block), so it can't collapse into a single svgPath - it's a
+  // self-contained customSvg like grok/codex: a near-black rounded tile with the
+  // glyph in white, so it renders correctly on any surface including the
+  // background-less Electron dialog icons. Native viewBox 0 0 512 512; brand mark
+  // supplied by Eito.
+  opencode: {
+    displayName: 'OpenCode',
+    brandColor: '#0A0A0A',
+    customViewBox: '0 0 512 512',
+    customSvg: [
+      '<rect x="0" y="0" width="512" height="512" rx="56" ry="56" fill="#0A0A0A"/>',
+      '<path fill="#FFFFFF" d="M320 224V352H192V224H320Z"/>',
+      '<path fill="#FFFFFF" fill-rule="evenodd" clip-rule="evenodd" d="M384 416H128V96H384V416ZM320 160H192V352H320V160Z"/>'
+    ].join('')
   },
 
   'm365-copilot': {
