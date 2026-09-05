@@ -254,6 +254,57 @@ ensure_tool() {
   ok "installed '$cmd'"
 }
 
+# Homebrew is the package manager this script installs macOS deps through (node
+# for npx, the Beeper cask), but macOS does not ship it, so a missing brew used
+# to dead-end the run with "brew install node" advice you cannot follow without
+# brew. Bootstrap it under the same consent model as the other deps, mirroring
+# ensure_rust:
+#   - a brew already sitting in the standard prefix but not yet on this shell's
+#     PATH counts as present (common in a non-login shell) - just add it;
+#   - otherwise offer the official installer, gated on --install-deps or
+#     --interactive and confirmed unless --yes.
+# NON-FATAL by contract: it returns non-zero instead of dying so callers can
+# fall back to a manual action (install node from nodejs.org, or Beeper from a
+# .dmg) rather than aborting the whole run.
+ensure_homebrew() {
+  command -v brew >/dev/null 2>&1 && return 0
+  # Apple silicon installs to /opt/homebrew, Intel to /usr/local; either may hold
+  # a brew the current (non-login) shell just has not put on PATH yet.
+  local b
+  for b in /opt/homebrew/bin/brew /usr/local/bin/brew; do
+    if [ -x "$b" ]; then
+      PATH="$(dirname "$b"):$PATH"
+      command -v brew >/dev/null 2>&1 \
+        && { ok "found Homebrew at $b (added to PATH for this run)"; return 0; }
+    fi
+  done
+  # Homebrew is macOS-first here; on Linux the caller's manual-fix path is better
+  # than pulling in linuxbrew, so do not offer to install it there.
+  [ "$(uname -s)" = "Darwin" ] || return 1
+  if [ "$DRY_RUN" -eq 1 ]; then
+    info "Homebrew missing; would install it via the official installer (https://brew.sh)"
+    return 0
+  fi
+  if [ "$INSTALL_DEPS" -eq 0 ] && [ "$INTERACTIVE" -eq 0 ]; then
+    return 1
+  fi
+  confirm "Homebrew is missing. Install it now via the official installer (https://brew.sh)?" \
+    || return 1
+  step "installing Homebrew (https://brew.sh)"
+  # NONINTERACTIVE keeps the installer from blocking on its "press RETURN" prompt
+  # so an agent run does not hang; it may still need a usable sudo (cached or
+  # passwordless) to create its prefix, and fails cleanly if it cannot.
+  NONINTERACTIVE=1 /bin/bash -c \
+    "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" \
+    || { warn "Homebrew install failed"; return 1; }
+  for b in /opt/homebrew/bin/brew /usr/local/bin/brew; do
+    [ -x "$b" ] && { PATH="$(dirname "$b"):$PATH"; break; }
+  done
+  command -v brew >/dev/null 2>&1 || { warn "Homebrew still not on PATH after install"; return 1; }
+  ok "installed Homebrew"
+  return 0
+}
+
 # Rust toolchain, needed only to build sealgate-stdiod. rustup is the
 # canonical installer; --no-modify-path leaves the user's shell files alone
 # and we extend PATH for this process ourselves. Same consent model as
@@ -497,8 +548,15 @@ ensure_stdiod_bin() {
 ensure_deps() {
   step "Checking prerequisites"
   require_supported_platform
+  # node/npx is installed via Homebrew below, so bootstrap brew first when it is
+  # missing - otherwise ensure_tool would die telling you to "brew install node"
+  # on a machine that has no brew. Non-fatal: if brew cannot be obtained,
+  # ensure_tool still fails, but now with an actionable message.
+  if ! command -v npx >/dev/null 2>&1; then
+    ensure_homebrew || true
+  fi
   ensure_tool npx \
-    "install Node (brew install node) or re-run with --install-deps" \
+    "install Node from https://nodejs.org, or install Homebrew (https://brew.sh) then 'brew install node'; then re-run with --install-deps" \
     brew install --quiet node
   # No Deno: @beeper/mcp-remote only proxies to Beeper's built-in MCP server.
   # The Deno sandbox was a @beeper/desktop-mcp `execute` tool requirement.
@@ -592,8 +650,10 @@ install_beeper_desktop() {
   fi
   confirm "Beeper Desktop is not installed. Install it now via: brew install --cask beeper" \
     || { todo "$fix, then re-run: $PROG install"; return 1; }
-  command -v brew >/dev/null 2>&1 \
-    || { warn "brew not found; cannot auto-install Beeper Desktop"; todo "$fix"; return 1; }
+  # Bootstrap Homebrew if it is missing (macOS), so a machine without brew can
+  # still auto-install the cask instead of stopping here.
+  ensure_homebrew \
+    || { warn "Homebrew not available; cannot auto-install Beeper Desktop"; todo "$fix"; return 1; }
   step "installing Beeper Desktop via: brew install --cask beeper"
   if ! brew install --quiet --cask beeper; then
     warn "brew install --cask beeper failed (the cask needs macOS 12+)"
@@ -1355,10 +1415,11 @@ Common flags (also settable as UPPER_SNAKE env vars):
                        this machine already has. Implies --relogin. Its servers
                        stay with the old device, so use it when handing the
                        machine over, not to fix a bad login.
-  --install-deps       Consent to auto-install missing deps: npx (brew),
-                       sealgate-stdiod (prebuilt release download - no Rust
-                       needed), and on macOS Beeper Desktop itself (brew cask).
-                       Confirms first unless --yes.
+  --install-deps       Consent to auto-install missing deps: Homebrew itself if
+                       absent (macOS, via https://brew.sh), npx (brew install
+                       node), sealgate-stdiod (prebuilt release download - no
+                       Rust needed), and on macOS Beeper Desktop itself (brew
+                       cask). Confirms first unless --yes.
   --stdiod-tag TAG     Pin the release the sealgate-stdiod binary comes from,
                        e.g. v0.6.6 (default: the newest published app release;
                        the daemon version follows the app version). Env:
