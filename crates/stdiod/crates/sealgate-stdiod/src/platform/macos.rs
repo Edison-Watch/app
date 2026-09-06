@@ -108,21 +108,31 @@ fn all_domains() -> [String; 2] {
     [gui_domain(), user_bg_domain()]
 }
 
-/// The full service target (`<domain>/com.sealgate.stdiod`) actually loaded in
-/// launchd, if any. Probes both candidate domains so status/restart/kickstart
-/// find the agent wherever a prior install put it - `gui/<uid>` or `user/<uid>`
-/// - independent of the session we run from now. A single resolved target would
-/// be wrong after a headless (`user/<uid>`) install followed by a GUI login:
+/// Every service target (`<domain>/com.sealgate.stdiod`) currently loaded in
+/// launchd. Probes both candidate domains so status/restart/kickstart find the
+/// agent wherever a prior install put it - `gui/<uid>` or `user/<uid>` -
+/// independent of the session we run from now. A single resolved target would be
+/// wrong after a headless (`user/<uid>`) install followed by a GUI login:
 /// `resolve_domain()` would then point at `gui/<uid>` and miss the agent still
-/// living in `user/<uid>`.
+/// living in `user/<uid>`. Normally one domain; both only in the abnormal state
+/// `install()` prevents by booting out both before it bootstraps.
+fn loaded_service_targets() -> Vec<String> {
+    all_domains()
+        .into_iter()
+        .map(|domain| format!("{domain}/{LABEL}"))
+        .filter(|target| {
+            launchctl(&["print", target])
+                .map(|o| o.status.success())
+                .unwrap_or(false)
+        })
+        .collect()
+}
+
+/// The first domain the agent is loaded in, for probes that only need "is it
+/// loaded / running somewhere" ([`is_loaded`], [`is_running`]). [`restart`] uses
+/// [`loaded_service_targets`] instead so it acts on every loaded domain.
 fn loaded_service_target() -> Option<String> {
-    all_domains().into_iter().find_map(|domain| {
-        let target = format!("{domain}/{LABEL}");
-        launchctl(&["print", &target])
-            .map(|o| o.status.success())
-            .unwrap_or(false)
-            .then_some(target)
-    })
+    loaded_service_targets().into_iter().next()
 }
 
 fn render_plist(binary: &Path, log_path: &Path) -> String {
@@ -451,20 +461,27 @@ pub fn is_loaded() -> Result<bool> {
 /// requires credentials on disk, which is more than "restart" should ever
 /// silently do. The error names it instead.
 pub fn restart() -> Result<()> {
-    // Kickstart the domain the agent is actually loaded in, so a headless
-    // (user/<uid>) install still restarts even if a GUI session now exists.
-    let Some(target) = loaded_service_target() else {
+    // Kickstart every domain the agent is loaded in, so a headless (user/<uid>)
+    // install still restarts after a later GUI login, and the abnormal
+    // both-domains case restarts each instance rather than silently leaving one.
+    let targets = loaded_service_targets();
+    if targets.is_empty() {
         return Err(anyhow!(
             "the LaunchAgent is not loaded, so there is nothing to restart\n\
              hint: run `sealgate-stdiod install` to (re)load it"
         ));
-    };
-    let out = launchctl(&["kickstart", "-k", &target])?;
-    if !out.status.success() {
-        let stderr = String::from_utf8_lossy(&out.stderr);
-        return Err(anyhow!("launchctl kickstart failed: {}", stderr.trim()));
     }
-    info!(label = LABEL, "LaunchAgent restarted");
+    for target in &targets {
+        let out = launchctl(&["kickstart", "-k", target])?;
+        if !out.status.success() {
+            let stderr = String::from_utf8_lossy(&out.stderr);
+            return Err(anyhow!(
+                "launchctl kickstart failed for {target}: {}",
+                stderr.trim()
+            ));
+        }
+        info!(label = LABEL, target = %target, "LaunchAgent restarted");
+    }
     println!("Restarted {LABEL}. Tail logs with `sealgate-stdiod logs --follow`.");
     Ok(())
 }
