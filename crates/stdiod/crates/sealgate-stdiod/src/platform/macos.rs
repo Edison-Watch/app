@@ -108,10 +108,21 @@ fn all_domains() -> [String; 2] {
     [gui_domain(), user_bg_domain()]
 }
 
-/// `<domain>/com.sealgate.stdiod` - full service target in the resolved domain,
-/// for `launchctl print` / `launchctl kickstart` / `launchctl bootout`.
-fn service_target() -> String {
-    format!("{}/{}", resolve_domain(), LABEL)
+/// The full service target (`<domain>/com.sealgate.stdiod`) actually loaded in
+/// launchd, if any. Probes both candidate domains so status/restart/kickstart
+/// find the agent wherever a prior install put it - `gui/<uid>` or `user/<uid>`
+/// - independent of the session we run from now. A single resolved target would
+/// be wrong after a headless (`user/<uid>`) install followed by a GUI login:
+/// `resolve_domain()` would then point at `gui/<uid>` and miss the agent still
+/// living in `user/<uid>`.
+fn loaded_service_target() -> Option<String> {
+    all_domains().into_iter().find_map(|domain| {
+        let target = format!("{domain}/{LABEL}");
+        launchctl(&["print", &target])
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+            .then_some(target)
+    })
 }
 
 fn render_plist(binary: &Path, log_path: &Path) -> String {
@@ -199,15 +210,18 @@ fn launchctl(args: &[&str]) -> Result<std::process::Output> {
 /// a re-install picks up and replaces a unit a previous run left in the other
 /// domain - e.g. installed at the screen (gui/), later re-run over SSH (user/).
 ///
-/// Returns `true` when a unit was actually torn down somewhere, so the caller
-/// knows it has to wait for launchd to finish before bootstrapping again.
-fn bootout_quiet() -> Result<bool> {
-    let mut tore_down = false;
+/// Returns the domains a unit was actually torn down in, so the caller waits for
+/// EACH teardown to settle before bootstrapping - not just the one it is about
+/// to bootstrap into. With a unit in both gui/ and user/, waiting only for the
+/// target domain would let install bootstrap while the other domain's daemon is
+/// still winding down, briefly running two instances.
+fn bootout_quiet() -> Result<Vec<String>> {
+    let mut torn = Vec::new();
     for domain in all_domains() {
         let target = format!("{domain}/{LABEL}");
         let out = launchctl(&["bootout", &target])?;
         if out.status.success() {
-            tore_down = true;
+            torn.push(domain);
             continue;
         }
         // Benign misses, not errors: nothing loaded there (113 / "Could not
@@ -225,7 +239,7 @@ fn bootout_quiet() -> Result<bool> {
             warn!(domain = %domain, stderr = %stderr, "launchctl bootout reported an error; continuing");
         }
     }
-    Ok(tore_down)
+    Ok(torn)
 }
 
 /// Wait until `launchctl print` stops reporting the service.
@@ -236,14 +250,15 @@ fn bootout_quiet() -> Result<bool> {
 /// registered in the domain. Polling for the service to disappear closes the
 /// window without a blind sleep on the common path, where the unit is already
 /// gone on the first check.
-fn wait_for_bootout(timeout: std::time::Duration) {
+fn wait_for_bootout_in(domain: &str, timeout: std::time::Duration) {
     let start = std::time::Instant::now();
-    let target = service_target();
+    let target = format!("{domain}/{LABEL}");
     while start.elapsed() < timeout {
         match launchctl(&["print", &target]) {
             // Non-zero means launchd no longer knows the label: teardown done.
             Ok(out) if !out.status.success() => {
                 debug!(
+                    domain = %domain,
                     waited_ms = start.elapsed().as_millis() as u64,
                     "bootout settled"
                 );
@@ -261,6 +276,7 @@ fn wait_for_bootout(timeout: std::time::Duration) {
         std::thread::sleep(std::time::Duration::from_millis(100));
     }
     warn!(
+        domain = %domain,
         timeout_ms = timeout.as_millis() as u64,
         "service still registered after bootout; bootstrapping anyway"
     );
@@ -325,8 +341,8 @@ pub fn install() -> Result<()> {
     // window fails with EIO - the "Bootstrap failed: 5: Input/output error"
     // seen on fresh installs. Retries below cover the residual race (and a
     // domain busy for other reasons); the wait is what makes them rare.
-    if bootout_quiet()? {
-        wait_for_bootout(std::time::Duration::from_secs(5));
+    for torn_domain in bootout_quiet()? {
+        wait_for_bootout_in(&torn_domain, std::time::Duration::from_secs(5));
     }
 
     // Resolve once: gui/<uid> if a GUI session exists, else user/<uid> (SSH /
@@ -407,8 +423,8 @@ pub fn is_installed() -> Result<bool> {
     Ok(plist_path()?.exists())
 }
 
-/// True iff launchd currently knows the label in the resolved per-user domain
-/// (gui/<uid> when logged in at the screen, else user/<uid>).
+/// True iff launchd currently knows the label in either candidate domain
+/// (gui/<uid> or user/<uid>).
 ///
 /// Distinct from [`is_installed`], which only checks the filesystem. A plist
 /// that was written but never successfully bootstrapped - the EIO failure this
@@ -417,7 +433,7 @@ pub fn is_installed() -> Result<bool> {
 /// daemon started and died" look identical from disk alone but need completely
 /// different fixes.
 pub fn is_loaded() -> Result<bool> {
-    Ok(launchctl(&["print", &service_target()])?.status.success())
+    Ok(loaded_service_target().is_some())
 }
 
 /// Restart the daemon in place with `launchctl kickstart -k`.
@@ -428,13 +444,15 @@ pub fn is_loaded() -> Result<bool> {
 /// requires credentials on disk, which is more than "restart" should ever
 /// silently do. The error names it instead.
 pub fn restart() -> Result<()> {
-    if !is_loaded()? {
+    // Kickstart the domain the agent is actually loaded in, so a headless
+    // (user/<uid>) install still restarts even if a GUI session now exists.
+    let Some(target) = loaded_service_target() else {
         return Err(anyhow!(
             "the LaunchAgent is not loaded, so there is nothing to restart\n\
              hint: run `sealgate-stdiod install` to (re)load it"
         ));
-    }
-    let out = launchctl(&["kickstart", "-k", &service_target()])?;
+    };
+    let out = launchctl(&["kickstart", "-k", &target])?;
     if !out.status.success() {
         let stderr = String::from_utf8_lossy(&out.stderr);
         return Err(anyhow!("launchctl kickstart failed: {}", stderr.trim()));
@@ -449,7 +467,10 @@ pub fn restart() -> Result<()> {
 /// running" from "running healthily".
 #[allow(dead_code)] // wired up by the `status` subcommand (next commit)
 pub fn is_running() -> Result<bool> {
-    let out = launchctl(&["print", &service_target()])?;
+    let Some(target) = loaded_service_target() else {
+        return Ok(false);
+    };
+    let out = launchctl(&["print", &target])?;
     if !out.status.success() {
         return Ok(false);
     }
@@ -483,8 +504,9 @@ mod tests {
         let both = all_domains();
         assert!(both[0].starts_with("gui/"));
         assert!(both[1].starts_with("user/"));
-        // The service target is the label under whichever domain resolves.
-        assert!(service_target().ends_with(&format!("/{LABEL}")));
+        // The install target resolves to one of the two candidate domains.
+        let resolved = resolve_domain();
+        assert!(resolved.starts_with("gui/") || resolved.starts_with("user/"));
     }
 
     #[test]
