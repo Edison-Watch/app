@@ -1174,14 +1174,14 @@ ensure_stdiod_supervised() {
   # on start; `sealgate-stdiod uninstall` removes it for the same reason.
   [ "$DRY_RUN" -eq 0 ] && rm -f "${SEALGATE_STDIOD_STATE:-$HOME/.config/sealgate-stdiod/state.json}"
   if ! run sealgate-stdiod install; then
-    # The most common non-obvious cause on macOS is a non-GUI shell: the daemon
-    # loads via 'launchctl bootstrap gui/$UID', and that domain only exists in a
-    # full desktop (Aqua) login, so a bare SSH session fails it with error 125
-    # ("Domain does not support specified action"). No privileges are needed -
-    # a GUI session is.
+    # The usual cause on macOS is the launchd session domain. The daemon loads
+    # into gui/$UID when there is a desktop (Aqua) login and, on recent builds,
+    # falls back to user/$UID otherwise so SSH works too. Older builds only try
+    # gui/$UID and fail over SSH with error 125 ("Domain does not support
+    # specified action"). Either way, having a login session available is the fix.
     local supervisor_fix
     case "$(uname -s)" in
-      Darwin) supervisor_fix="run this from a desktop login session, not a bare SSH one: 'launchctl bootstrap gui/\$UID' (how the daemon loads) needs a full Aqua login, so an SSH shell fails it with error 125. Open Terminal at the Mac's screen or over Screen Sharing/VNC, then re-run: $PROG install";;
+      Darwin) supervisor_fix="the daemon registers with launchd in your login session. Recent builds handle a bare SSH session (they fall back to the user/\$UID domain); if this is an older build, run it from a desktop login instead - open Terminal at the Mac's screen or over Screen Sharing/VNC - then re-run: $PROG install";;
       Linux)  supervisor_fix="Linux needs a logged-in systemd --user session (a bare SSH login often lacks one; try 'loginctl enable-linger \$USER' or log in at the desktop), then re-run: $PROG install";;
       *)      supervisor_fix="ensure the platform's user-level service manager is available, then re-run: $PROG install";;
     esac
