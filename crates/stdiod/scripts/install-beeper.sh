@@ -298,7 +298,9 @@ install_node_userspace() {
     warn "could not extract $tarball"; rm -rf "$dir"; return 1
   fi
   mkdir -p "$libdir" "$bindir"
-  rm -rf "$libdir/$name"
+  # ${name:?} guards against a wipe of the whole nodejs dir if name ever resolved
+  # empty (it never should - ver has a non-empty fallback - but rm -rf earns the belt).
+  rm -rf "${libdir:?}/${name:?}"
   mv "$dir/$name" "$libdir/$name"
   rm -rf "$dir"
   # Link the entry points into ~/.local/bin (already this script's PATH dir for
