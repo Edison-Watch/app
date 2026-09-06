@@ -137,20 +137,27 @@ fn render_plist(binary: &Path, log_path: &Path) -> String {
     // ``/opt/homebrew/bin``, many node tools live at ``/usr/local/bin``, and a
     // sudo-free userspace Node install lands in ``~/.local/bin`` (the
     // install-beeper.sh default). launchd does NOT expand ``~`` or ``$HOME`` in
-    // this string, so the absolute ``<home>/.local/bin`` is baked in here. That
-    // dir goes FIRST so a userspace ``npx`` resolves, and its
-    // ``#!/usr/bin/env node`` shebang finds the matching ``node`` beside it.
-    // Without these entries the spawn fails with "command not found" and the
-    // backend's ``import_server`` hangs on the missing child until it 60s-times
-    // out. The remaining order matches Homebrew's own LaunchAgents - Homebrew
-    // before system so user-installed tools shadow the macOS-provided ones.
+    // this string, so the absolute ``<home>/.local/bin`` is baked in here.
+    //
+    // Order: the Homebrew/`/usr/local` prefixes stay FIRST so that when both a
+    // Homebrew and a userspace copy of a tool exist, the daemon's children pick
+    // the same one the user's interactive shell does (Homebrew's own zprofile
+    // puts its dirs first too). ``~/.local/bin`` follows them but stays ahead of
+    // the base system dirs, so a userspace ``node``/``npx`` still resolves when
+    // it is the only one - and its ``#!/usr/bin/env node`` shebang finds the
+    // matching ``node`` beside it. Without these entries the spawn fails with
+    // "command not found" and the backend's ``import_server`` hangs on the
+    // missing child until it 60s-times out.
     let bin = binary.display();
     let log = log_path.display();
-    const SYSTEM_PATH: &str =
-        "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/local/sbin:/usr/bin:/bin:/usr/sbin:/sbin";
+    const BREW_PATH: &str = "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/local/sbin";
+    const SYSTEM_PATH: &str = "/usr/bin:/bin:/usr/sbin:/sbin";
     let path_env = match dirs::home_dir() {
-        Some(home) => format!("{}:{SYSTEM_PATH}", home.join(".local/bin").display()),
-        None => SYSTEM_PATH.to_string(),
+        Some(home) => format!(
+            "{BREW_PATH}:{}:{SYSTEM_PATH}",
+            home.join(".local/bin").display()
+        ),
+        None => format!("{BREW_PATH}:{SYSTEM_PATH}"),
     };
     format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>
