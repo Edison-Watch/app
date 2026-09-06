@@ -72,6 +72,10 @@ if [ -n "${SG_BACKEND:-}" ]; then SG_BACKEND_SET=1; else SG_BACKEND_SET=0; fi
 SG_BACKEND="${SG_BACKEND:-https://dashboard.sealgate.ai}"  # --sg-backend/--demo/--release also set SG_BACKEND_SET
 SG_API_KEY="${SG_API_KEY:-}"                       # only for the mcp-url client snippet
 SERVER_NAME="${SERVER_NAME:-beeper}"               # tunnel server name / gateway prefix
+# What the dashboard shows for the server. The signup template passes the
+# network ("WhatsApp") with --server-name whatsapp, so the user sees the app
+# they connected and Beeper stays the bridge under the hood.
+DISPLAY_NAME="${DISPLAY_NAME:-Beeper}"
 # Display label for this script's own output only. It does NOT set the stdiod
 # device record: `sealgate-stdiod login` issues the device identity server-side.
 DEVICE_LABEL="${DEVICE_LABEL:-$(hostname -s 2>/dev/null || echo my-mac)}"
@@ -194,6 +198,7 @@ parse_flags() {
       --release)      SG_BACKEND="https://dashboard.sealgate.ai"; SG_BACKEND_SET=1; shift;;
       --sg-api-key)   needval $# "$1" "${2:-}"; SG_API_KEY="$2"; shift 2;;
       --server-name)  needval $# "$1" "${2:-}"; SERVER_NAME="$2"; shift 2;;
+      --display-name) needval $# "$1" "${2:-}"; DISPLAY_NAME="$2"; shift 2;;
       --device-label) needval $# "$1" "${2:-}"; DEVICE_LABEL="$2"; shift 2;;
       --oauth-wait)   needval $# "$1" "${2:-}"; OAUTH_WAIT="$2"; shift 2;;
       --beeper-wait)  needval $# "$1" "${2:-}"; BEEPER_WAIT="$2"; shift 2;;
@@ -1014,7 +1019,7 @@ stdiod_uid_suffix() {
 
 # Submit one server by name. Echoes the CLI output; returns its exit code.
 server_add() {
-  sealgate-stdiod server add "$1" --display-name "Beeper" \
+  sealgate-stdiod server add "$1" --display-name "$DISPLAY_NAME" \
     --command npx --arg=-y --arg="$MCP_PKG" ${MCP_ENDPOINT:+--arg="$MCP_ENDPOINT"} 2>&1
 }
 
@@ -1032,7 +1037,7 @@ submit_beeper_server() {
   resolve_mcp_endpoint
   [ -n "$MCP_ENDPOINT" ] && info "Beeper answers on a non-default port; the server command includes $MCP_ENDPOINT"
   if [ "$DRY_RUN" -eq 1 ]; then
-    run sealgate-stdiod server add "$SERVER_NAME" --display-name "Beeper" \
+    run sealgate-stdiod server add "$SERVER_NAME" --display-name "$DISPLAY_NAME" \
       --command npx --arg=-y --arg="$MCP_PKG" ${MCP_ENDPOINT:+--arg="$MCP_ENDPOINT"}
     return 0
   fi
@@ -1103,8 +1108,10 @@ print_result() {
   printf '%sserver:%s  %s (gateway prefix: %s_*)\n' "$b" "$r" "$SERVER_NAME" "$SERVER_NAME"
   printf '%sdevice:%s  %s (display label)\n' "$b" "$r" "$DEVICE_LABEL"
   if [ -n "$SG_API_KEY" ]; then
+    # The gateway reads the key from the URL path, never from a header
+    # (dev-docs/architecture/mcp_gateway_auth.md); bare /mcp is the OAuth route.
     printf '\n%s# add to Claude Code (gateway auth uses your SealGate API key):%s\n' "$d" "$r"
-    printf 'claude mcp add sealgate %s -t http -H "Authorization: Bearer %s" -s user\n' "$mcp_url" "$SG_API_KEY"
+    printf 'claude mcp add --transport http --scope user sealgate "%s/%s/?client=claude-code"\n' "$mcp_url" "$SG_API_KEY"
   else
     printf '\n%s# the AI client authenticates to the gateway with your SealGate API key or OAuth;%s\n' "$d" "$r"
     printf '%s# pass --sg-api-key to print a ready-to-run claude-mcp-add snippet.%s\n' "$d" "$r"
@@ -1338,8 +1345,13 @@ Common flags (also settable as UPPER_SNAKE env vars):
                        with --stdiod-tag / --stdiod-release / --stdiod-prerelease.
   --sg-api-key KEY     SealGate API key for the client snippet only (SG_API_KEY)
   --server-name NAME   Tunnel server name, and the gateway tool prefix
-                       (SERVER_NAME, default beeper). Change it to wire a second
-                       Beeper account alongside the first.
+                       (SERVER_NAME, default beeper). The dashboard's messaging
+                       template passes the network here (e.g. whatsapp) so the
+                       gateway exposes whatsapp_* tools; also lets you wire a
+                       second Beeper account alongside the first.
+  --display-name TEXT  Name the dashboard shows for the server (DISPLAY_NAME,
+                       default Beeper). Pair with --server-name, e.g.
+                       --server-name whatsapp --display-name WhatsApp.
   --device-label TEXT  Label for this script's own output only (DEVICE_LABEL,
                        default this host's short name). It does NOT name the
                        stdiod device record - 'sealgate-stdiod login' issues the
