@@ -263,6 +263,14 @@ ensure_tool() {
 #     PATH counts as present (common in a non-login shell) - just add it;
 #   - otherwise offer the official installer, gated on --install-deps or
 #     --interactive and confirmed unless --yes.
+#
+# The catch that rustup does not have: the Homebrew installer runs `sudo` to
+# create its prefix and, on a fresh Mac, to install the Command Line Tools, so
+# it needs an admin PASSWORD entered at a terminal. That shapes the two paths
+# below - an --interactive human answers the prompts, while a --yes agent run
+# has nobody to type a password, so it only proceeds when sudo is already usable
+# without one (cached or passwordless) and otherwise stops with the manual step.
+#
 # NON-FATAL by contract: it returns non-zero instead of dying so callers can
 # fall back to a manual action (install node from nodejs.org, or Beeper from a
 # .dmg) rather than aborting the whole run.
@@ -281,22 +289,41 @@ ensure_homebrew() {
   # Homebrew is macOS-first here; on Linux the caller's manual-fix path is better
   # than pulling in linuxbrew, so do not offer to install it there.
   [ "$(uname -s)" = "Darwin" ] || return 1
+  local manual="install Homebrew yourself from https://brew.sh (it asks for your macOS admin password), then re-run: $PROG install"
   if [ "$DRY_RUN" -eq 1 ]; then
-    info "Homebrew missing; would install it via the official installer (https://brew.sh)"
+    info "Homebrew missing; would offer the official installer (https://brew.sh), which needs your macOS admin password"
     return 0
   fi
   if [ "$INSTALL_DEPS" -eq 0 ] && [ "$INTERACTIVE" -eq 0 ]; then
     return 1
   fi
+  warn "the Homebrew installer needs your macOS admin password (it runs sudo to create its prefix)"
   confirm "Homebrew is missing. Install it now via the official installer (https://brew.sh)?" \
-    || return 1
-  step "installing Homebrew (https://brew.sh)"
-  # NONINTERACTIVE keeps the installer from blocking on its "press RETURN" prompt
-  # so an agent run does not hang; it may still need a usable sudo (cached or
-  # passwordless) to create its prefix, and fails cleanly if it cannot.
-  NONINTERACTIVE=1 /bin/bash -c \
-    "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" \
-    || { warn "Homebrew install failed"; return 1; }
+    || { todo "$manual"; return 1; }
+  local installer="https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh"
+  if [ "$INTERACTIVE" -eq 1 ]; then
+    # A human is watching: let the installer prompt for RETURN and the sudo
+    # password on the terminal, and let them answer.
+    step "installing Homebrew (https://brew.sh; enter your password when asked)"
+    /bin/bash -c "$(curl -fsSL "$installer")" \
+      || { warn "Homebrew install failed"; todo "$manual"; return 1; }
+  else
+    # Agent flow (--yes with no --interactive): nobody can type a password, so
+    # the install can only work if sudo is already usable without one. Probe for
+    # that first (`sudo -n` never prompts) and stop with the manual step when it
+    # is not, instead of letting the installer stall or die deep in its run.
+    if ! sudo -n true 2>/dev/null; then
+      warn "cannot auto-install Homebrew non-interactively: sudo needs a password and none can be entered here"
+      todo "$manual"
+      todo "or, at a terminal, re-run with --interactive so you can enter the password"
+      return 1
+    fi
+    step "installing Homebrew (https://brew.sh; non-interactive)"
+    # NONINTERACTIVE skips the installer's "press RETURN" gate; sudo is already
+    # usable per the probe above.
+    NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL "$installer")" \
+      || { warn "Homebrew install failed"; todo "$manual"; return 1; }
+  fi
   for b in /opt/homebrew/bin/brew /usr/local/bin/brew; do
     [ -x "$b" ] && { PATH="$(dirname "$b"):$PATH"; break; }
   done
@@ -1416,10 +1443,13 @@ Common flags (also settable as UPPER_SNAKE env vars):
                        stay with the old device, so use it when handing the
                        machine over, not to fix a bad login.
   --install-deps       Consent to auto-install missing deps: Homebrew itself if
-                       absent (macOS, via https://brew.sh), npx (brew install
-                       node), sealgate-stdiod (prebuilt release download - no
-                       Rust needed), and on macOS Beeper Desktop itself (brew
-                       cask). Confirms first unless --yes.
+                       absent (macOS, via https://brew.sh; needs your admin
+                       password, so a --yes run installs it only when sudo is
+                       already usable without one - otherwise it prints the
+                       manual step), npx (brew install node), sealgate-stdiod
+                       (prebuilt release download - no Rust needed), and on macOS
+                       Beeper Desktop itself (brew cask). Confirms first unless
+                       --yes.
   --stdiod-tag TAG     Pin the release the sealgate-stdiod binary comes from,
                        e.g. v0.6.6 (default: the newest published app release;
                        the daemon version follows the app version). Env:
