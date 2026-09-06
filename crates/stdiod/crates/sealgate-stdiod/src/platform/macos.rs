@@ -1,10 +1,22 @@
 //! macOS LaunchAgent integration.
 //!
 //! Writes a plist to `~/Library/LaunchAgents/com.sealgate.stdiod.plist` and
-//! loads it via the modern `launchctl bootstrap gui/$UID …` flow (not the
-//! deprecated `launchctl load`). All operations are per-user - no `sudo`,
-//! no system-level LaunchDaemon - so the daemon runs as the logged-in user
-//! and has access to the user's keychain and HOME.
+//! loads it via the modern `launchctl bootstrap` flow (not the deprecated
+//! `launchctl load`). It bootstraps into `gui/$UID` when the user has a GUI
+//! (Aqua) login session, and falls back to `user/$UID` otherwise - so a
+//! headless machine driven over SSH, where the `gui/$UID` domain does not
+//! exist, still loads the agent instead of failing with launchd error 125
+//! ("Domain does not support specified action"). The daemon is a background
+//! network process (its plist sets `ProcessType=Background`) with no window
+//! server needs, so it is valid in either domain. All operations are per-user:
+//! no `sudo`, no system-level LaunchDaemon, so the daemon runs as the invoking
+//! user with its HOME and `~/.config/sealgate-stdiod`.
+//!
+//! Persistence caveat for the headless `user/$UID` path: that domain lives only
+//! while the user has an active session, so on a truly unattended box the agent
+//! survives across reboots only if the user is kept logged in (auto-login). A
+//! login-independent daemon would need a system LaunchDaemon (root), which is a
+//! larger change and out of scope here.
 //!
 //! The bundled plist sets:
 //!
@@ -37,25 +49,69 @@ fn plist_path() -> Result<PathBuf> {
     Ok(dir.join(PLIST_FILENAME))
 }
 
-/// `gui/<uid>` - the modern launchctl domain target for per-user agents.
-fn user_domain() -> String {
-    // SAFETY: getuid is always available on macOS via libc::getuid; but to
-    // avoid pulling libc just for this we shell out to `id -u`. The
-    // overhead (one fork) only happens at install/uninstall/status time,
-    // never on the hot path.
-    let out = Command::new("id").arg("-u").output();
-    let uid = out
+/// The current user's numeric uid, as a string. Shelling out to `id -u` keeps
+/// libc out of the dependency tree; the one fork only happens at
+/// install/uninstall/status/restart time, never on the hot path.
+fn current_uid() -> String {
+    Command::new("id")
+        .arg("-u")
+        .output()
         .ok()
         .and_then(|o| String::from_utf8(o.stdout).ok())
         .map(|s| s.trim().to_string())
-        .unwrap_or_else(|| "0".to_string());
-    format!("gui/{uid}")
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "0".to_string())
 }
 
-/// `gui/<uid>/com.sealgate.stdiod` - full service target for
-/// `launchctl print` / `launchctl kickstart`.
+/// `gui/<uid>` - the Aqua (GUI login session) launchd domain. Exists only while
+/// the user is logged in at the screen (locally or via Screen Sharing).
+fn gui_domain() -> String {
+    format!("gui/{}", current_uid())
+}
+
+/// `user/<uid>` - the per-user background launchd domain. Present for any active
+/// session INCLUDING a bare SSH login, and the functionally-correct home for a
+/// background agent (this daemon needs no window server). Used as the fallback
+/// when there is no GUI session to bootstrap into.
+fn user_bg_domain() -> String {
+    format!("user/{}", current_uid())
+}
+
+/// True when `domain` currently exists (launchctl can print it). Lets us choose
+/// gui/ vs user/ by fact rather than by guessing the session type.
+fn domain_exists(domain: &str) -> bool {
+    launchctl(&["print", domain])
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+/// The launchd domain to load the agent into.
+///
+/// Prefer `gui/<uid>` when a GUI login session exists: that is where the daemon
+/// has always run on a desktop Mac, it restarts at each login, and keeping it
+/// there leaves existing installs untouched. Fall back to `user/<uid>` when
+/// there is no Aqua session (a headless box driven over SSH) so the agent loads
+/// there instead of failing with launchd error 125.
+fn resolve_domain() -> String {
+    let gui = gui_domain();
+    if domain_exists(&gui) {
+        gui
+    } else {
+        user_bg_domain()
+    }
+}
+
+/// Both domains the agent might live in, so teardown clears a stale unit
+/// wherever a previous run put it (e.g. installed at the screen, later re-run
+/// over SSH).
+fn all_domains() -> [String; 2] {
+    [gui_domain(), user_bg_domain()]
+}
+
+/// `<domain>/com.sealgate.stdiod` - full service target in the resolved domain,
+/// for `launchctl print` / `launchctl kickstart` / `launchctl bootout`.
 fn service_target() -> String {
-    format!("{}/{}", user_domain(), LABEL)
+    format!("{}/{}", resolve_domain(), LABEL)
 }
 
 fn render_plist(binary: &Path, log_path: &Path) -> String {
@@ -126,27 +182,41 @@ fn launchctl(args: &[&str]) -> Result<std::process::Output> {
     Ok(out)
 }
 
-/// `bootout` the current unit if loaded. Ignores "not loaded" / "not
-/// found" so the call is safe pre-install.
+/// `bootout` the unit from BOTH candidate domains if loaded. Ignores "not
+/// loaded" / "not found" and "domain does not exist" so the call is safe
+/// pre-install and in whichever session type we are run from.
 ///
-/// Returns `true` when a unit was actually torn down, so the caller knows it
-/// has to wait for launchd to finish before bootstrapping again.
+/// Booting out both gui/ and user/ (rather than only the resolved domain) means
+/// a re-install picks up and replaces a unit a previous run left in the other
+/// domain - e.g. installed at the screen (gui/), later re-run over SSH (user/).
+///
+/// Returns `true` when a unit was actually torn down somewhere, so the caller
+/// knows it has to wait for launchd to finish before bootstrapping again.
 fn bootout_quiet() -> Result<bool> {
-    let out = launchctl(&["bootout", &service_target()])?;
-    if out.status.success() {
-        return Ok(true);
+    let mut tore_down = false;
+    for domain in all_domains() {
+        let target = format!("{domain}/{LABEL}");
+        let out = launchctl(&["bootout", &target])?;
+        if out.status.success() {
+            tore_down = true;
+            continue;
+        }
+        // Benign misses, not errors: nothing loaded there (113 / "Could not
+        // find specified service" / "No such process"), or the domain itself
+        // does not exist in this session (125 / "Domain does not support
+        // specified action" - e.g. gui/<uid> when we are over SSH).
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        let code = out.status.code();
+        let benign = stderr.contains("Could not find specified service")
+            || stderr.contains("No such process")
+            || stderr.contains("Domain does not support specified action")
+            || code == Some(113)
+            || code == Some(125);
+        if !benign {
+            warn!(domain = %domain, stderr = %stderr, "launchctl bootout reported an error; continuing");
+        }
     }
-    // Common case: nothing is loaded yet. launchctl returns 113 /
-    // "Could not find specified service". Don't surface that as an
-    // error.
-    let stderr = String::from_utf8_lossy(&out.stderr);
-    let benign = stderr.contains("Could not find specified service")
-        || stderr.contains("No such process")
-        || out.status.code() == Some(113);
-    if !benign {
-        warn!(stderr = %stderr, "launchctl bootout reported an error; continuing");
-    }
-    Ok(!benign)
+    Ok(tore_down)
 }
 
 /// Wait until `launchctl print` stops reporting the service.
@@ -250,6 +320,10 @@ pub fn install() -> Result<()> {
         wait_for_bootout(std::time::Duration::from_secs(5));
     }
 
+    // Resolve once: gui/<uid> if a GUI session exists, else user/<uid> (SSH /
+    // headless). Reused for the log + success line so they name where it landed.
+    let domain = resolve_domain();
+
     const BOOTSTRAP_ATTEMPTS: u32 = 4;
     // Success is tracked by its own flag, NOT by whether `last_err` is empty.
     // Overloading the message as the sentinel meant a failure that produced no
@@ -260,11 +334,7 @@ pub fn install() -> Result<()> {
     let mut bootstrapped = false;
     let mut last_err = String::new();
     for attempt in 1..=BOOTSTRAP_ATTEMPTS {
-        let out = launchctl(&[
-            "bootstrap",
-            &user_domain(),
-            plist.to_string_lossy().as_ref(),
-        ])?;
+        let out = launchctl(&["bootstrap", &domain, plist.to_string_lossy().as_ref()])?;
         if out.status.success() {
             bootstrapped = true;
             break;
@@ -288,14 +358,17 @@ pub fn install() -> Result<()> {
     }
     if !bootstrapped {
         return Err(anyhow!(
-            "launchctl bootstrap failed after {BOOTSTRAP_ATTEMPTS} attempts: {last_err}\n\
-             hint: this is usually a launchd domain that is still busy. If it persists, \
-             check that you are in a GUI login session (bootstrapping gui/$UID from a bare \
-             SSH session cannot work), then retry `sealgate-stdiod install`."
+            "launchctl bootstrap into {domain} failed after {BOOTSTRAP_ATTEMPTS} attempts: {last_err}\n\
+             hint: this is usually a launchd domain that is still busy - retry \
+             `sealgate-stdiod install`. If it persists, make sure your user has an \
+             active login session on this machine."
         ));
     }
-    info!(label = LABEL, "LaunchAgent loaded");
-    println!("Installed LaunchAgent: {}", plist.display());
+    info!(label = LABEL, domain = %domain, "LaunchAgent loaded");
+    println!(
+        "Installed LaunchAgent: {} (launchd domain {domain})",
+        plist.display()
+    );
     println!("Daemon is running. Tail logs with `sealgate-stdiod logs --follow`.");
     Ok(())
 }
@@ -325,7 +398,8 @@ pub fn is_installed() -> Result<bool> {
     Ok(plist_path()?.exists())
 }
 
-/// True iff launchd currently knows the label in the user's GUI domain.
+/// True iff launchd currently knows the label in the resolved per-user domain
+/// (gui/<uid> when logged in at the screen, else user/<uid>).
 ///
 /// Distinct from [`is_installed`], which only checks the filesystem. A plist
 /// that was written but never successfully bootstrapped - the EIO failure this
@@ -389,6 +463,20 @@ pub fn is_running() -> Result<bool> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn domain_helpers_wrap_the_uid() {
+        let uid = current_uid();
+        assert!(!uid.is_empty());
+        assert_eq!(gui_domain(), format!("gui/{uid}"));
+        assert_eq!(user_bg_domain(), format!("user/{uid}"));
+        // Teardown always considers both domains, gui first.
+        let both = all_domains();
+        assert!(both[0].starts_with("gui/"));
+        assert!(both[1].starts_with("user/"));
+        // The service target is the label under whichever domain resolves.
+        assert!(service_target().ends_with(&format!("/{LABEL}")));
+    }
 
     #[test]
     fn render_plist_includes_label_and_paths() {
