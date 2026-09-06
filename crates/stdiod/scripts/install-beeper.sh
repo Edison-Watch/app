@@ -273,7 +273,9 @@ install_node_userspace() {
   plat="$(node_dist_platform)" \
     || { info "no official Node.js build for $(uname -s)/$(uname -m)"; return 1; }
   os="${plat%% *}"; arch="${plat##* }"
-  ver="${NODE_VERSION:-$(latest_node_lts)}"; [ -n "$ver" ] || ver="$NODE_VERSION_FALLBACK"
+  # || true: under `set -e` a failed command substitution (latest_node_lts when
+  # nodejs.org is unreachable) would abort here, before the fallback below.
+  ver="${NODE_VERSION:-$(latest_node_lts || true)}"; [ -n "$ver" ] || ver="$NODE_VERSION_FALLBACK"
   name="node-${ver}-${os}-${arch}"
   tarball="${name}.tar.gz"
   base="https://nodejs.org/dist/${ver}"
@@ -287,7 +289,9 @@ install_node_userspace() {
     warn "could not download Node's SHASUMS256.txt; refusing the unverified tarball"
     rm -rf "$dir"; return 1
   fi
-  want="$(grep -E "[[:space:]]\*?${tarball}\$" "$dir/SHASUMS256.txt" | awk '{print $1}' | head -n1)"
+  # || true: a no-match grep exits 1, which under `set -e` + pipefail would abort
+  # here before the empty-`want` check below turns it into the checksum die.
+  want="$(grep -E "[[:space:]]\*?${tarball}\$" "$dir/SHASUMS256.txt" | awk '{print $1}' | head -n1 || true)"
   got="$(sha256_of "$dir/$tarball")"
   if [ -z "$want" ] || [ "$want" != "$got" ]; then
     rm -rf "$dir"
