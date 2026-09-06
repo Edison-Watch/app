@@ -76,6 +76,8 @@ SERVER_NAME="${SERVER_NAME:-beeper}"               # tunnel server name / gatewa
 # device record: `sealgate-stdiod login` issues the device identity server-side.
 DEVICE_LABEL="${DEVICE_LABEL:-$(hostname -s 2>/dev/null || echo my-mac)}"
 MCP_PKG="${MCP_PKG:-@beeper/mcp-remote}"           # the stdio->HTTP OAuth proxy npx package
+NODE_VERSION="${NODE_VERSION:-}"                   # pin the userspace Node build, e.g. v24.20.0 (default: newest LTS)
+NODE_VERSION_FALLBACK="v24.20.0"                   # used when nodejs.org's version listing is unreachable
 OAUTH_WAIT="${OAUTH_WAIT:-120}"                    # seconds to wait for the Beeper OAuth approval
 BEEPER_WAIT="${BEEPER_WAIT:-30}"                   # seconds to wait for Beeper's client API after opening the app (0 = skip)
 CONNECT_WAIT="${CONNECT_WAIT:-45}"                 # seconds to wait for the daemon to register with the backend
@@ -195,6 +197,7 @@ parse_flags() {
       --sg-api-key)   needval $# "$1" "${2:-}"; SG_API_KEY="$2"; shift 2;;
       --server-name)  needval $# "$1" "${2:-}"; SERVER_NAME="$2"; shift 2;;
       --device-label) needval $# "$1" "${2:-}"; DEVICE_LABEL="$2"; shift 2;;
+      --node-version) needval $# "$1" "${2:-}"; NODE_VERSION="$2"; shift 2;;
       --oauth-wait)   needval $# "$1" "${2:-}"; OAUTH_WAIT="$2"; shift 2;;
       --beeper-wait)  needval $# "$1" "${2:-}"; BEEPER_WAIT="$2"; shift 2;;
       --no-open)      NO_OPEN=1; shift;;
@@ -227,38 +230,133 @@ parse_flags() {
 # Step 1: prerequisites
 # ---------------------------------------------------------------------------
 #
-# ensure_tool <cmd> <human-fix> <install-cmd...>
-#   - already present            -> no-op
-#   - --dry-run                  -> preview the install command, never fail
-#   - no consent to auto-install -> fail fast with <human-fix>
-#     (consent = --install-deps, or an --interactive session)
-#   - consent given              -> confirm (auto-passed by --yes), run the
-#     installer, then VALIDATE the command actually landed on PATH
-ensure_tool() {
-  local cmd="$1" fix="$2"; shift 2
-  command -v "$cmd" >/dev/null 2>&1 && return 0
+# node/npx is installed WITHOUT a package manager or sudo: the official Node.js
+# prebuilt tarball is downloaded into ~/.local and its binaries linked onto PATH.
+# This is deliberate - it keeps the common "no Homebrew" macOS case off the
+# admin-password path entirely (node lands in the user's home, nothing touches
+# /opt or /usr/local), so an agent run needs no interactive password. Homebrew
+# is only a fallback here, and stays required just for the Beeper cask later.
 
+# Map this machine to the Node.js dist os/arch tokens. Echoes "<os> <arch>",
+# or returns 1 when nodejs.org publishes no build for it.
+node_dist_platform() {
+  local os arch
+  case "$(uname -s)" in
+    Darwin) os="darwin";;
+    Linux)  os="linux";;
+    *) return 1;;
+  esac
+  case "$(uname -m)" in
+    arm64|aarch64) arch="arm64";;
+    x86_64|amd64)  arch="x64";;
+    *) return 1;;
+  esac
+  printf '%s %s' "$os" "$arch"
+}
+
+# Newest Node.js LTS version tag (e.g. v24.20.0), from the dist listing. The tab
+# table is one release per line, newest first; column 10 is the LTS codename
+# ("-" for non-LTS lines), so the first row whose column 10 is not "-" is the
+# current LTS. Empty on any failure; the caller falls back to a pinned version.
+latest_node_lts() {
+  curl -fsSL -m 15 "https://nodejs.org/dist/index.tab" 2>/dev/null \
+    | awk -F'\t' 'NR>1 && $10 != "-" && $10 != "" { print $1; exit }'
+}
+
+# Download + verify + link the official Node.js build into ~/.local. Returns 1 on
+# any recoverable miss (unsupported platform, download/listing failure) so the
+# caller can fall back to Homebrew or a manual step. A checksum MISMATCH is never
+# recoverable and dies on the spot, matching install_stdiod_prebuilt.
+install_node_userspace() {
+  local plat os arch ver dir base tarball want got name
+  local libdir="$HOME/.local/lib/nodejs" bindir="$HOME/.local/bin"
+  plat="$(node_dist_platform)" \
+    || { info "no official Node.js build for $(uname -s)/$(uname -m)"; return 1; }
+  os="${plat%% *}"; arch="${plat##* }"
+  ver="${NODE_VERSION:-$(latest_node_lts)}"; [ -n "$ver" ] || ver="$NODE_VERSION_FALLBACK"
+  name="node-${ver}-${os}-${arch}"
+  tarball="${name}.tar.gz"
+  base="https://nodejs.org/dist/${ver}"
+  step "downloading Node.js ${ver} (${os}-${arch}, userspace - no sudo)"
+  dir="$(mktemp -d)"
+  if ! curl_quiet -m 300 -o "$dir/$tarball" "$base/$tarball"; then
+    warn "could not download $tarball from nodejs.org"
+    rm -rf "$dir"; return 1
+  fi
+  if ! curl_quiet -m 60 -o "$dir/SHASUMS256.txt" "$base/SHASUMS256.txt"; then
+    warn "could not download Node's SHASUMS256.txt; refusing the unverified tarball"
+    rm -rf "$dir"; return 1
+  fi
+  want="$(grep -E "[[:space:]]\*?${tarball}\$" "$dir/SHASUMS256.txt" | awk '{print $1}' | head -n1)"
+  got="$(sha256_of "$dir/$tarball")"
+  if [ -z "$want" ] || [ "$want" != "$got" ]; then
+    rm -rf "$dir"
+    die "checksum mismatch for $tarball (expected ${want:-<absent>}, got $got)" \
+      "retry, or install Node yourself from https://nodejs.org and re-run: $PROG install"
+  fi
+  if ! tar -xzf "$dir/$tarball" -C "$dir" 2>/dev/null; then
+    warn "could not extract $tarball"; rm -rf "$dir"; return 1
+  fi
+  mkdir -p "$libdir" "$bindir"
+  rm -rf "$libdir/$name"
+  mv "$dir/$name" "$libdir/$name"
+  rm -rf "$dir"
+  # Link the entry points into ~/.local/bin (already this script's PATH dir for
+  # stdiod). npm/npx in the dist are symlinks to ../lib/node_modules/... resolved
+  # from the dist's own bin/, so linking the dist bin/ files keeps them working,
+  # and their `#!/usr/bin/env node` shebang finds the node we just linked.
+  local f
+  for f in node npm npx; do
+    ln -sf "$libdir/$name/bin/$f" "$bindir/$f"
+  done
+  PATH="$bindir:$PATH"
+  command -v npx >/dev/null 2>&1 || { warn "Node linked but npx is still not on PATH"; return 1; }
+  ok "installed Node.js ${ver} -> $libdir/$name (node/npm/npx linked into $bindir)"
+  case ":$PATH_AT_LAUNCH:" in
+    *":$bindir:"*) ;;
+    *) todo "add $bindir to your PATH (e.g. append 'export PATH=\"\$HOME/.local/bin:\$PATH\"' to your shell profile)";;
+  esac
+  return 0
+}
+
+# One entry point for getting node/npx, honoring the shared consent model
+# (--install-deps or --interactive to attempt, confirmed unless --yes; --dry-run
+# previews). Userspace download first; an existing Homebrew is only a fallback.
+ensure_node() {
+  command -v npx >/dev/null 2>&1 && return 0
+  # A node we linked on a previous run that just fell off this shell's PATH.
+  if [ -x "$HOME/.local/bin/npx" ]; then
+    PATH="$HOME/.local/bin:$PATH"
+    command -v npx >/dev/null 2>&1 \
+      && { ok "found npx in ~/.local/bin (added to PATH for this run)"; return 0; }
+  fi
+  local fix="install Node from https://nodejs.org (userspace, no sudo), then re-run: $PROG install"
   if [ "$DRY_RUN" -eq 1 ]; then
-    info "dep '$cmd' missing; would install via: $*"
+    info "dep 'npx' missing; would download the official Node.js LTS build into ~/.local (userspace, no sudo)"
     return 0
   fi
   if [ "$INSTALL_DEPS" -eq 0 ] && [ "$INTERACTIVE" -eq 0 ]; then
-    die "'$cmd' is not installed" "$fix"
+    die "'npx' is not installed" "$fix, or re-run with --install-deps to fetch a userspace Node automatically"
   fi
-  confirm "'$cmd' is missing. Install it now via: $*" \
-    || die "declined; '$cmd' not installed" "$fix"
-  command -v "$1" >/dev/null 2>&1 || die "cannot auto-install '$cmd': '$1' not found" "$fix"
-  step "installing '$cmd' via: $*"
-  "$@" || die "auto-install of '$cmd' failed" "$fix"
-  command -v "$cmd" >/dev/null 2>&1 || die "'$cmd' still not on PATH after install" "$fix"
-  ok "installed '$cmd'"
+  confirm "Node (npx) is missing. Download the official Node.js LTS build into ~/.local now (no sudo)?" \
+    || die "declined; 'npx' not installed" "$fix"
+  install_node_userspace && return 0
+  # Only if the download could not be had: an existing brew can still provide
+  # node. Never bootstrap brew for this - that would reintroduce the password
+  # gate the userspace path exists to avoid.
+  if command -v brew >/dev/null 2>&1; then
+    warn "userspace Node download failed; falling back to 'brew install node'"
+    step "installing node via: brew install --quiet node"
+    brew install --quiet node && command -v npx >/dev/null 2>&1 \
+      && { ok "installed node via Homebrew"; return 0; }
+  fi
+  die "could not install Node (npx)" \
+    "$fix, or pin a version with NODE_VERSION=vX.Y.Z (e.g. $NODE_VERSION_FALLBACK) and re-run"
 }
 
-# Homebrew is the package manager this script installs macOS deps through (node
-# for npx, the Beeper cask), but macOS does not ship it, so a missing brew used
-# to dead-end the run with "brew install node" advice you cannot follow without
-# brew. Bootstrap it under the same consent model as the other deps, mirroring
-# ensure_rust:
+# Homebrew is needed only for the Beeper Desktop cask now (node/npx comes from a
+# userspace download, see ensure_node), but macOS does not ship brew. Bootstrap
+# it under the shared consent model, mirroring ensure_rust:
 #   - a brew already sitting in the standard prefix but not yet on this shell's
 #     PATH counts as present (common in a non-login shell) - just add it;
 #   - otherwise offer the official installer, gated on --install-deps or
@@ -271,9 +369,9 @@ ensure_tool() {
 # has nobody to type a password, so it only proceeds when sudo is already usable
 # without one (cached or passwordless) and otherwise stops with the manual step.
 #
-# NON-FATAL by contract: it returns non-zero instead of dying so callers can
-# fall back to a manual action (install node from nodejs.org, or Beeper from a
-# .dmg) rather than aborting the whole run.
+# NON-FATAL by contract: it returns non-zero instead of dying so the caller can
+# fall back to a manual action (install Beeper from https://www.beeper.com/download)
+# rather than aborting the whole run.
 ensure_homebrew() {
   command -v brew >/dev/null 2>&1 && return 0
   # Apple silicon installs to /opt/homebrew, Intel to /usr/local; either may hold
@@ -324,19 +422,29 @@ ensure_homebrew() {
     NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL "$installer")" \
       || { warn "Homebrew install failed"; todo "$manual"; return 1; }
   fi
+  # The installer does not touch this shell's PATH (and, unless the user opts in,
+  # not their profile either), so a freshly installed brew is on disk but not yet
+  # resolvable. Find it in the standard prefixes and add it for this run, then
+  # tell the user how to make future shells see it.
+  local bdir=""
   for b in /opt/homebrew/bin/brew /usr/local/bin/brew; do
-    [ -x "$b" ] && { PATH="$(dirname "$b"):$PATH"; break; }
+    [ -x "$b" ] && { bdir="$(dirname "$b")"; PATH="$bdir:$PATH"; break; }
   done
-  command -v brew >/dev/null 2>&1 || { warn "Homebrew still not on PATH after install"; return 1; }
-  ok "installed Homebrew"
+  command -v brew >/dev/null 2>&1 || { warn "Homebrew installed but 'brew' is still not on PATH"; return 1; }
+  ok "installed Homebrew (${bdir}/brew, added to PATH for this run)"
+  case ":$PATH_AT_LAUNCH:" in
+    *":$bdir:"*) ;;
+    *) todo "add Homebrew to future shells: append 'eval \"\$(${bdir}/brew shellenv)\"' to your shell profile";;
+  esac
   return 0
 }
 
 # Rust toolchain, needed only to build sealgate-stdiod. rustup is the
 # canonical installer; --no-modify-path leaves the user's shell files alone
-# and we extend PATH for this process ourselves. Same consent model as
-# ensure_tool, with one extra grace: a rustup already sitting in ~/.cargo/bin
-# that just is not on PATH counts as installed.
+# and we extend PATH for this process ourselves. Same shared consent model
+# (--install-deps or --interactive, confirmed unless --yes), with one extra
+# grace: a rustup already sitting in ~/.cargo/bin that just is not on PATH
+# counts as installed.
 ensure_rust() {
   command -v cargo >/dev/null 2>&1 && return 0
   if [ -x "$HOME/.cargo/bin/cargo" ]; then
@@ -575,16 +683,11 @@ ensure_stdiod_bin() {
 ensure_deps() {
   step "Checking prerequisites"
   require_supported_platform
-  # node/npx is installed via Homebrew below, so bootstrap brew first when it is
-  # missing - otherwise ensure_tool would die telling you to "brew install node"
-  # on a machine that has no brew. Non-fatal: if brew cannot be obtained,
-  # ensure_tool still fails, but now with an actionable message.
-  if ! command -v npx >/dev/null 2>&1; then
-    ensure_homebrew || true
-  fi
-  ensure_tool npx \
-    "install Node from https://nodejs.org, or install Homebrew (https://brew.sh) then 'brew install node'; then re-run with --install-deps" \
-    brew install --quiet node
+  # node/npx comes from a userspace Node.js download (no brew, no sudo, no
+  # password), so a machine without Homebrew still gets the whole SealGate side
+  # wired without a single admin prompt. brew is bootstrapped later only for the
+  # Beeper cask, next to the Beeper steps that need a human anyway.
+  ensure_node
   # No Deno: @beeper/mcp-remote only proxies to Beeper's built-in MCP server.
   # The Deno sandbox was a @beeper/desktop-mcp `execute` tool requirement.
   ensure_stdiod_bin
@@ -664,8 +767,8 @@ beeper_desktop_app() {
 }
 
 # Offer to install Beeper Desktop via the Homebrew cask (macOS only; the cask
-# needs macOS 12+). Consent model matches ensure_tool (--install-deps or
-# --interactive to attempt, confirmed unless --yes), but NON-FATAL throughout:
+# needs macOS 12+). Shared consent model (--install-deps or --interactive to
+# attempt, confirmed unless --yes), but NON-FATAL throughout:
 # install can still wire the whole SealGate side with Beeper absent, so every
 # failure path prints the manual action and returns 1 instead of dying.
 install_beeper_desktop() {
@@ -1442,14 +1545,17 @@ Common flags (also settable as UPPER_SNAKE env vars):
                        this machine already has. Implies --relogin. Its servers
                        stay with the old device, so use it when handing the
                        machine over, not to fix a bad login.
-  --install-deps       Consent to auto-install missing deps: Homebrew itself if
-                       absent (macOS, via https://brew.sh; needs your admin
-                       password, so a --yes run installs it only when sudo is
-                       already usable without one - otherwise it prints the
-                       manual step), npx (brew install node), sealgate-stdiod
-                       (prebuilt release download - no Rust needed), and on macOS
-                       Beeper Desktop itself (brew cask). Confirms first unless
+  --install-deps       Consent to auto-install missing deps: node/npx (official
+                       Node.js download into ~/.local - no sudo, no password),
+                       sealgate-stdiod (prebuilt release download - no Rust
+                       needed), and on macOS Beeper Desktop itself via the
+                       Homebrew cask (Homebrew is bootstrapped first if absent;
+                       that install needs your admin password, so a --yes run
+                       does it only when sudo is already usable without one and
+                       otherwise prints the manual step). Confirms first unless
                        --yes.
+  --node-version VER   Pin the userspace Node.js build, e.g. v24.20.0 (NODE_VERSION,
+                       default: newest LTS from nodejs.org).
   --stdiod-tag TAG     Pin the release the sealgate-stdiod binary comes from,
                        e.g. v0.6.6 (default: the newest published app release;
                        the daemon version follows the app version). Env:
