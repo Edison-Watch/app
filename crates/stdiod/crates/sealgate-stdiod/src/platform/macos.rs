@@ -123,15 +123,24 @@ fn render_plist(binary: &Path, log_path: &Path) -> String {
     // ``/usr/bin:/bin:/usr/sbin:/sbin``, which is fine for the daemon's
     // own runtime but breaks every child it spawns (railway CLI, uvx,
     // npx-wrapped MCP servers, etc.) because Homebrew lives at
-    // ``/opt/homebrew/bin`` and many node tools live at
-    // ``/usr/local/bin``. Without this override every ``Command::new("railway")``
-    // -style spawn fails with "command not found" and the backend's
-    // ``import_server`` hangs on the missing child until it 60s-times out.
-    // Order matches Homebrew's own LaunchAgents - Homebrew dirs first so
-    // user-installed tools shadow system equivalents (e.g. brew's python3
-    // over the macOS-provided one).
+    // ``/opt/homebrew/bin``, many node tools live at ``/usr/local/bin``, and a
+    // sudo-free userspace Node install lands in ``~/.local/bin`` (the
+    // install-beeper.sh default). launchd does NOT expand ``~`` or ``$HOME`` in
+    // this string, so the absolute ``<home>/.local/bin`` is baked in here. That
+    // dir goes FIRST so a userspace ``npx`` resolves, and its
+    // ``#!/usr/bin/env node`` shebang finds the matching ``node`` beside it.
+    // Without these entries the spawn fails with "command not found" and the
+    // backend's ``import_server`` hangs on the missing child until it 60s-times
+    // out. The remaining order matches Homebrew's own LaunchAgents - Homebrew
+    // before system so user-installed tools shadow the macOS-provided ones.
     let bin = binary.display();
     let log = log_path.display();
+    const SYSTEM_PATH: &str =
+        "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/local/sbin:/usr/bin:/bin:/usr/sbin:/sbin";
+    let path_env = match dirs::home_dir() {
+        Some(home) => format!("{}:{SYSTEM_PATH}", home.join(".local/bin").display()),
+        None => SYSTEM_PATH.to_string(),
+    };
     format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
@@ -154,7 +163,7 @@ fn render_plist(binary: &Path, log_path: &Path) -> String {
   <key>EnvironmentVariables</key>
   <dict>
     <key>PATH</key>
-    <string>/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/local/sbin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <string>{path_env}</string>
   </dict>
   <key>StandardOutPath</key>
   <string>{log}</string>
@@ -498,6 +507,12 @@ mod tests {
         assert!(body.contains("<key>EnvironmentVariables</key>"));
         assert!(body.contains("/opt/homebrew/bin"));
         assert!(body.contains("/usr/local/bin"));
+        // A userspace Node install lands in ~/.local/bin; the agent PATH must
+        // carry its absolute form so spawned npx (and its env-node shebang) resolve.
+        if let Some(home) = dirs::home_dir() {
+            let local_bin = home.join(".local/bin");
+            assert!(body.contains(&local_bin.display().to_string()));
+        }
     }
 
     #[test]
