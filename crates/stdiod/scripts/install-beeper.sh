@@ -1174,8 +1174,18 @@ ensure_stdiod_supervised() {
   # on start; `sealgate-stdiod uninstall` removes it for the same reason.
   [ "$DRY_RUN" -eq 0 ] && rm -f "${SEALGATE_STDIOD_STATE:-$HOME/.config/sealgate-stdiod/state.json}"
   if ! run sealgate-stdiod install; then
-    die "sealgate-stdiod install could not register the supervisor unit" \
-      "macOS needs no privileges; Linux needs a logged-in systemd --user session. Fix that, then re-run: $PROG install"
+    # The most common non-obvious cause on macOS is a non-GUI shell: the daemon
+    # loads via 'launchctl bootstrap gui/$UID', and that domain only exists in a
+    # full desktop (Aqua) login, so a bare SSH session fails it with error 125
+    # ("Domain does not support specified action"). No privileges are needed -
+    # a GUI session is.
+    local supervisor_fix
+    case "$(uname -s)" in
+      Darwin) supervisor_fix="run this from a desktop login session, not a bare SSH one: 'launchctl bootstrap gui/\$UID' (how the daemon loads) needs a full Aqua login, so an SSH shell fails it with error 125. Open Terminal at the Mac's screen or over Screen Sharing/VNC, then re-run: $PROG install";;
+      Linux)  supervisor_fix="Linux needs a logged-in systemd --user session (a bare SSH login often lacks one; try 'loginctl enable-linger \$USER' or log in at the desktop), then re-run: $PROG install";;
+      *)      supervisor_fix="ensure the platform's user-level service manager is available, then re-run: $PROG install";;
+    esac
+    die "sealgate-stdiod install could not register the supervisor unit" "$supervisor_fix"
   fi
   ok "daemon installed and supervised"
   [ "$DRY_RUN" -eq 1 ] && return 0
