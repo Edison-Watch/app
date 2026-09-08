@@ -507,6 +507,8 @@ mod tests {
         assert!(body.get("working_dir").is_none());
     }
 
+    /// install-beeper.sh greps this output to decide whether to tell the user
+    /// to approve the server. Rewording either substring breaks that branch.
     #[test]
     fn create_result_distinguishes_pending_and_auto_approved() {
         let pending = format_create_result(
