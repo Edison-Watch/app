@@ -94,14 +94,19 @@ if [ -n "${STDIOD_PRERELEASE:-}" ]; then STDIOD_CHANNEL_SET=1; else STDIOD_CHANN
 STDIOD_PRERELEASE="${STDIOD_PRERELEASE:-0}"        # 1 = demo channel (-beta tags), 0 = stable
 
 DRY_RUN=0
-# Installing prerequisites and not prompting are the default: this is delivered
-# as a curl|bash one-liner, so the gates only ever fired after the user had
-# already committed, and every extra flag is one an agent can drop. Invert with
-# --no-install-deps and --interactive; --dry-run still previews without acting.
-ASSUME_YES=1
+# Installing prerequisites is the default: this is delivered as a curl|bash
+# one-liner, so the gate only ever fired after the user had already committed,
+# and every extra flag is one an agent can drop. Only cmd_install reaches
+# ensure_deps, so this cannot act anywhere else. Invert with --no-install-deps;
+# --dry-run still previews without acting.
+INSTALL_DEPS=1
+# Not prompting is defaulted by cmd_install, NOT here: confirm() is also what
+# guards `uninstall`, which withdraws the server and removes the supervisor
+# unit. A global default would auto-approve that too.
+ASSUME_YES=0
+YES_SET=0        # 1 once --yes or --interactive has spoken for it
 INTERACTIVE=0
 JSON=0
-INSTALL_DEPS=1
 VERBOSE=0
 NO_COLOR_FLAG=0
 NO_OPEN=0            # pass through to `sealgate-stdiod login --no-open` for headless auth
@@ -217,11 +222,10 @@ parse_flags() {
       # invocations and docs do not break.
       --from-source|--build-from-source) FROM_SOURCE=1; shift;;
       --dry-run)      DRY_RUN=1; shift;;
-      -y|--yes)       ASSUME_YES=1; shift;;
-      --interactive)  INTERACTIVE=1; ASSUME_YES=0; shift;;
+      -y|--yes)       ASSUME_YES=1; YES_SET=1; shift;;
+      --interactive)  INTERACTIVE=1; ASSUME_YES=0; YES_SET=1; shift;;
       --install-deps) INSTALL_DEPS=1; shift;;
       --no-install-deps) INSTALL_DEPS=0; shift;;
-      --no-yes)       ASSUME_YES=0; shift;;
       --no-color)     NO_COLOR_FLAG=1; shift;;
       --json)         JSON=1; shift;;
       --verbose)      VERBOSE=1; shift;;
@@ -1343,6 +1347,10 @@ print_result() {
 # Subcommands
 # ===========================================================================
 cmd_install() {
+  # Assume yes for this command only, unless --yes or --interactive already
+  # spoke. Every confirm() on this path installs something; the one on
+  # `uninstall` removes things and keeps refusing non-interactively.
+  [ "$YES_SET" -eq 0 ] && ASSUME_YES=1
   # The daemon is installed and authorized regardless of Beeper: it is useful on
   # its own, and Beeper can be down for reasons that have nothing to do with
   # this machine. Registering the Beeper SERVER is different - that is the step
@@ -1584,7 +1592,10 @@ Common flags (also settable as UPPER_SNAKE env vars):
                        stay with the old device, so use it when handing the
                        machine over, not to fix a bad login.
   --no-install-deps    Do not install missing deps; print the manual step instead.
-  --no-yes             Confirm before each action (--interactive implies this).
+  --interactive        Prompt before each action instead of assuming yes. Needs a
+                       terminal, so not usable through 'curl | bash'. Only
+                       'install' assumes yes; 'uninstall' always needs --yes or
+                       --interactive.
   --install-deps       On by default. Auto-install missing deps: node/npx (official
                        Node.js download into ~/.local - no sudo, no password),
                        sealgate-stdiod (prebuilt release download - no Rust
@@ -1620,8 +1631,8 @@ Common flags (also settable as UPPER_SNAKE env vars):
                        so it is never entered automatically. Without it, a
                        failed download is an error, not a silent build.
   --dry-run            Print what would run; change nothing
-  --yes                Skip confirmations (agents pass this)
-  --interactive        Allow interactive prompts as a fallback
+  --yes                Skip confirmations. 'install' already does; 'uninstall'
+                       needs this (or --interactive) to run at all.
   --json               Machine-readable output where supported
   --no-color           Disable colored output (also honors NO_COLOR)
   --verbose            Debug logging on stderr
