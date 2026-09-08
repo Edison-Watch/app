@@ -36,7 +36,8 @@
 # What still needs a human (each one printed with the exact action):
 #   A. Sign in to Beeper, enable MCP (Settings > Developers > MCP) so :23373
 #      answers, and link WhatsApp / Telegram / etc. in the Beeper app.
-#   B. Approve the submitted `beeper` server once in the SealGate dashboard.
+#   B. Approve the submitted `beeper` server in the SealGate dashboard, if the
+#      deployment queues submissions. One that auto-approves says so instead.
 #   C. Approve the Beeper OAuth prompt when step 5 raises it.
 #
 # End-to-end topology once those are done:
@@ -93,10 +94,14 @@ if [ -n "${STDIOD_PRERELEASE:-}" ]; then STDIOD_CHANNEL_SET=1; else STDIOD_CHANN
 STDIOD_PRERELEASE="${STDIOD_PRERELEASE:-0}"        # 1 = demo channel (-beta tags), 0 = stable
 
 DRY_RUN=0
-ASSUME_YES=0
+# Installing prerequisites and not prompting are the default: this is delivered
+# as a curl|bash one-liner, so the gates only ever fired after the user had
+# already committed, and every extra flag is one an agent can drop. Invert with
+# --no-install-deps and --interactive; --dry-run still previews without acting.
+ASSUME_YES=1
 INTERACTIVE=0
 JSON=0
-INSTALL_DEPS=0
+INSTALL_DEPS=1
 VERBOSE=0
 NO_COLOR_FLAG=0
 NO_OPEN=0            # pass through to `sealgate-stdiod login --no-open` for headless auth
@@ -213,8 +218,10 @@ parse_flags() {
       --from-source|--build-from-source) FROM_SOURCE=1; shift;;
       --dry-run)      DRY_RUN=1; shift;;
       -y|--yes)       ASSUME_YES=1; shift;;
-      --interactive)  INTERACTIVE=1; shift;;
+      --interactive)  INTERACTIVE=1; ASSUME_YES=0; shift;;
       --install-deps) INSTALL_DEPS=1; shift;;
+      --no-install-deps) INSTALL_DEPS=0; shift;;
+      --no-yes)       ASSUME_YES=0; shift;;
       --no-color)     NO_COLOR_FLAG=1; shift;;
       --json)         JSON=1; shift;;
       --verbose)      VERBOSE=1; shift;;
@@ -1231,6 +1238,15 @@ name_taken() {
   printf '%s' "$1" | grep -qiE 'HTTP 409'
 }
 
+# True when the backend approved the server on submission instead of queueing
+# it. Whether a device-bound server needs a human is per-deployment, so read the
+# backend's answer (`auto_approved` in the response, rendered by the CLI) rather
+# than configuring it here. cli/server.rs pins this substring in
+# create_result_distinguishes_pending_and_auto_approved.
+auto_approved() {
+  printf '%s' "$1" | grep -qi 'auto-approved'
+}
+
 submit_beeper_server() {
   step "Submitting the Beeper server"
   # The submitted command must carry the endpoint when Beeper sits on a
@@ -1279,7 +1295,8 @@ submit_beeper_server() {
 
   if [ "$rc" -ne 0 ]; then
     if name_taken "$out"; then
-      ok "a request for '$tried' already exists on the backend; approve it in the dashboard"
+      ok "a request for '$tried' already exists on the backend"
+      info "approve it in the dashboard if it is still pending"
       info "if that request predates this script version its command may be stale; run 'sealgate-stdiod server remove $tried' and re-run install to resubmit"
       return 0
     fi
@@ -1287,9 +1304,14 @@ submit_beeper_server() {
       "check 'sealgate-stdiod status' shows the daemon connected, then re-run: $PROG install"
   fi
   SERVER_NAME="$tried"
-  ok "submitted '$SERVER_NAME' (npx $MCP_PKG) for approval"
-  todo "approve '$SERVER_NAME' as an admin: ${SG_BACKEND%/}  ->  Servers page (pending requests), or Overview"
-  info "a 'not verified' badge before the first successful spawn is expected and does not block approval"
+  if auto_approved "$out"; then
+    ok "'$SERVER_NAME' (npx $MCP_PKG) is registered; no dashboard approval needed"
+    info "Beeper is wired up - nothing further is required here. To check the daemon's connection, run 'sealgate-stdiod status'."
+  else
+    ok "submitted '$SERVER_NAME' (npx $MCP_PKG) for approval"
+    todo "approve '$SERVER_NAME' as an admin: ${SG_BACKEND%/}  ->  Servers page (pending requests), or Overview"
+    info "a 'not verified' badge before the first successful spawn is expected and does not block approval"
+  fi
 }
 
 # ---------------------------------------------------------------------------
@@ -1359,7 +1381,7 @@ cmd_install() {
   fi
 
   printf '\n%s%s== SealGate side wired ==%s\n' "$C_BOLD" "$C_GREEN" "$C_RESET" >&2
-  log "remaining human steps are printed above as 'action:' lines (approve the server in the dashboard)."
+  log "remaining human steps are printed above as 'action:' lines."
   print_result
 }
 
@@ -1408,7 +1430,7 @@ cmd_doctor() {
   # approve something that is already approved.
   if [ "$cred" = "live" ]; then
     if server_registered; then
-      ok "server '$SERVER_NAME' approved on this device"; else warn "server '$SERVER_NAME' not approved yet (submit + approve in dashboard)"; fi
+      ok "server '$SERVER_NAME' approved on this device"; else warn "server '$SERVER_NAME' is not bound to this device yet (run '$PROG install'; approve in the dashboard if submissions are queued)"; fi
   else
     info "skipped the '$SERVER_NAME' server check: it needs a working credential"
   fi
@@ -1521,7 +1543,7 @@ Beeper only serves MCP from the Desktop app, so this automates the SealGate side
 and prints the exact human steps Beeper and the dashboard still require.
 
 Usage:
-  $PROG <command> [flags]
+  $PROG [command] [flags]        (no command runs 'install')
 
 Commands:
   install     Deps, Beeper check, device auth, supervise daemon, submit Beeper server, prime OAuth
@@ -1561,15 +1583,16 @@ Common flags (also settable as UPPER_SNAKE env vars):
                        this machine already has. Implies --relogin. Its servers
                        stay with the old device, so use it when handing the
                        machine over, not to fix a bad login.
-  --install-deps       Consent to auto-install missing deps: node/npx (official
+  --no-install-deps    Do not install missing deps; print the manual step instead.
+  --no-yes             Confirm before each action (--interactive implies this).
+  --install-deps       On by default. Auto-install missing deps: node/npx (official
                        Node.js download into ~/.local - no sudo, no password),
                        sealgate-stdiod (prebuilt release download - no Rust
                        needed), and on macOS Beeper Desktop itself via the
                        Homebrew cask (Homebrew is bootstrapped first if absent;
-                       that install needs your admin password, so a --yes run
-                       does it only when sudo is already usable without one and
-                       otherwise prints the manual step). Confirms first unless
-                       --yes.
+                       that install needs your admin password, so it runs only
+                       when sudo is already usable without one and otherwise
+                       prints the manual step).
   --node-version VER   Pin the userspace Node.js build, e.g. v24.20.0 (NODE_VERSION,
                        default: newest LTS from nodejs.org).
   --stdiod-tag TAG     Pin the release the sealgate-stdiod binary comes from,
@@ -1639,7 +1662,14 @@ subcmd_help() {
 # Dispatch
 # ===========================================================================
 main() {
-  local cmd="${1:-}"; shift || true
+  # Only consume $1 as the command when it is one - otherwise the flag-only
+  # form (`... | bash -s -- --sg-backend URL`) loses its first flag and dies
+  # with "unknown command: --sg-backend".
+  local cmd=""
+  case "${1:-}" in
+    -*|"") ;;
+    *) cmd="$1"; shift;;
+  esac
   ARGS=()
   parse_flags "$@" || { init_colors; subcmd_help "$cmd"; exit 0; }
   init_colors
@@ -1666,7 +1696,8 @@ main() {
     mcp-url)    cmd_mcp_url;;
     uninstall)  cmd_uninstall;;
     tags)       cmd_tags;;
-    ""|help|-h|--help) usage;;
+    "")         cmd_install;;
+    help|-h|--help) usage;;
     *) die "unknown command: $cmd" "run '$PROG --help' for the command list";;
   esac
 }
