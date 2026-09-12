@@ -39,11 +39,27 @@ jobs:
           - shell: pwsh
     steps:
       - uses: actions/checkout@v7
-      - name: Shell version
-        shell: ${{ matrix.shell }}
+      # The shell: key takes no expressions, so each shell gets its own
+      # pair of steps and the matrix picks which pair runs.
+      - name: Shell version (Windows PowerShell 5.1)
+        if: matrix.shell == 'powershell'
+        shell: powershell
         run: $PSVersionTable.PSVersion.ToString()
-      - name: Run installer checks
-        shell: ${{ matrix.shell }}
+      - name: Run installer checks (Windows PowerShell 5.1)
+        if: matrix.shell == 'powershell'
+        shell: powershell
+        env:
+          NO_COLOR: '1'
+        run: |
+          & "${{ github.workspace }}\crates\stdiod\scripts\test-install-beeper-windows.ps1"
+          exit $LASTEXITCODE
+      - name: Shell version (PowerShell 7)
+        if: matrix.shell == 'pwsh'
+        shell: pwsh
+        run: $PSVersionTable.PSVersion.ToString()
+      - name: Run installer checks (PowerShell 7)
+        if: matrix.shell == 'pwsh'
+        shell: pwsh
         env:
           NO_COLOR: '1'
         run: |
