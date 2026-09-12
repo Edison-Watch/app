@@ -250,6 +250,150 @@ if ($SkipWinget) {
 }
 
 Write-Host ''
+Write-Host '== 6. past the human edge: login start, stub credential, supervisor, full install, OAuth plumbing'
+# The device login needs a person to approve in a browser, so it cannot finish
+# here. Everything around it can run for real: the login is started and killed
+# once it prints its approval URL, then a stub credential lets 'sealgate-stdiod
+# install' register the Scheduled Task and the daemon report its reauth state,
+# and a full 'install' run goes through every step past login against a
+# backend that answers nothing.
+$cfgDir = Join-Path $env:USERPROFILE '.config\sealgate-stdiod'
+$cfgFile = Join-Path $cfgDir 'config.toml'
+$demo = 'https://demo-dashboard.sealgate.ai'
+$sid = ((Invoke-Native 'whoami' @('/user', '/fo', 'csv', '/nh')) -split ',')[-1].Trim().Trim('"')
+$taskName = "SealGate stdiod $sid"
+Write-Host "  task name: $taskName"
+
+Check 'sealgate-stdiod login --no-open prints the approval URL and user code, then is killed' {
+    $outF = Join-Path $env:TEMP 'sg-login-out.txt'
+    $errF = Join-Path $env:TEMP 'sg-login-err.txt'
+    Remove-Item $outF, $errF -Force -ErrorAction SilentlyContinue
+    $p = Start-Process -FilePath 'sealgate-stdiod' -ArgumentList @('login', '--backend', $demo, '--no-open') `
+        -RedirectStandardOutput $outF -RedirectStandardError $errF -NoNewWindow -PassThru
+    $deadline = (Get-Date).AddSeconds(45)
+    $text = ''
+    while ((Get-Date) -lt $deadline) {
+        $text = Read-SharedFile $outF
+        if ($text -match 'Waiting for authorization') { break }
+        if ($p.HasExited) { break }
+        Start-Sleep -Seconds 1
+    }
+    if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force }
+    $errText = Read-SharedFile $errF
+    Assert ($text -match 'Open this URL to authorize') "no approval URL. stdout: $text stderr: $errText"
+    Assert ($text -match 'https://demo-dashboard\.sealgate\.ai/\S+') "URL not on the demo backend: $text"
+    Assert ($text -match 'User code:\s*\S+') "no user code: $text"
+    Assert ($text -match 'Waiting for authorization') "did not reach polling: $text"
+    Write-Host "       $((($text -split "`n") | Where-Object { $_ -match 'User code' }) -join ' ')"
+    Assert (-not (Test-Path $cfgFile)) 'a config.toml appeared without an approval'
+}
+
+Check 'stub credential: the backend rejects it and the installer reads that state' {
+    New-Item -ItemType Directory -Path $cfgDir -Force | Out-Null
+    @"
+backend_url = "$demo"
+client_access_token = "ci-invalid-token"
+client_installation_id = "ci-test-installation"
+device_id = "ci-runner-device"
+"@ | Set-Content -Path $cfgFile -Encoding ASCII
+    $script:STDIOD_CRED_STATE = ''
+    $out = Invoke-Native 'sealgate-stdiod' @('server', 'list', '--json')
+    Write-Host "       server list rc=$($script:LastRc): $((($out -split "`n") | Select-Object -Last 1))"
+    $state = Get-StdiodCredentialState
+    Write-Host "       credential state: $state"
+    Assert ($state -in @('dead', 'unknown')) "state=$state"
+    if ($state -eq 'dead') {
+        $r = Run @('doctor')
+        Assert ($r.Out -match 'expired or revoked') $r.Out
+        Assert ($r.Out -match '--relogin') $r.Out
+    }
+}
+
+Check 'Ensure-StdiodSupervised registers the Scheduled Task; the daemon runs and reports its state' {
+    $script:CONNECT_WAIT = 20
+    $script:STDIOD_CONNECTED = $false
+    Ensure-StdiodSupervised
+    $null = Invoke-Native 'schtasks' @('/query', '/tn', $taskName)
+    Assert ($script:LastRc -eq 0) "task '$taskName' not registered"
+    $st = Get-StdiodConnectionState
+    Write-Host "       connection_state after $($script:CONNECT_WAIT)s: [$st]"
+    $null = Invoke-Native 'sealgate-stdiod' @('status')
+    Write-Host "       status exit code: $($script:LastRc) (0 running, 3 installed but not running)"
+    $logs = Invoke-Native 'sealgate-stdiod' @('logs', '-n', '8')
+    Write-Host '       daemon log tail:'
+    foreach ($l in (($logs -split "`n") | Select-Object -Last 6)) { Write-Host "         $l" }
+    Assert (-not $script:STDIOD_CONNECTED) 'a stub token must not reach connected'
+    Assert ($st -ne 'connected') "state=$st with a stub token"
+}
+
+Check 'sealgate-stdiod uninstall removes the task' {
+    $null = Invoke-Native 'sealgate-stdiod' @('uninstall')
+    Assert ($script:LastRc -eq 0) 'uninstall failed'
+    $null = Invoke-Native 'schtasks' @('/query', '/tn', $taskName)
+    Assert ($script:LastRc -ne 0) 'task still registered after uninstall'
+}
+
+Check 'full install run: every step past login, against a backend that answers nothing' {
+    # The saved session points at a closed port, so the credential reads as
+    # unknown (kept, not re-logged) and the run proceeds through supervisor,
+    # connection wait, the Beeper launch and the final summary.
+    (Get-Content -Path $cfgFile -Raw) -replace [regex]::Escape($demo), 'https://127.0.0.1:9' | Set-Content -Path $cfgFile -Encoding ASCII
+    $env:CONNECT_WAIT = '10'
+    $env:BEEPER_WAIT = '3'
+    try { $r = Run @('install', '--no-open') } finally { Remove-Item Env:CONNECT_WAIT, Env:BEEPER_WAIT -ErrorAction SilentlyContinue }
+    foreach ($l in ($r.Out -split "`n")) { if ($l -match '^\s*(>>|\+|!|-|action:|x error|fix:)') { Write-Host "       $l" } }
+    Assert ($r.Rc -eq 0) "rc=$($r.Rc)"
+    foreach ($needle in @(
+            'using the backend this device is authorized to: https://127.0.0.1:9',
+            'could not verify the saved credential',
+            'daemon installed and supervised',
+            'has not connected yet',
+            "not registering the 'beeper' server",
+            'SealGate side wired',
+            'mcp_url: https://127.0.0.1:9/mcp')) {
+        Assert ($r.Out -match [regex]::Escape($needle)) "missing '$needle'"
+    }
+    $null = Invoke-Native 'sealgate-stdiod' @('uninstall')
+    Get-Process -Name 'Beeper*' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+}
+
+Check 'OAuth priming against a fake Beeper listener ends within its wait and leaves no node behind' {
+    $listener = Start-Job -ScriptBlock {
+        $l = New-Object System.Net.HttpListener
+        $l.Prefixes.Add('http://127.0.0.1:23373/')
+        $l.Start()
+        $end = (Get-Date).AddSeconds(120)
+        while ((Get-Date) -lt $end) {
+            $ar = $l.BeginGetContext($null, $null)
+            if (-not $ar.AsyncWaitHandle.WaitOne(1000)) { continue }
+            $ctx = $l.EndGetContext($ar)
+            $ctx.Response.StatusCode = 404
+            $ctx.Response.Close()
+        }
+        $l.Stop()
+    }
+    try {
+        $deadline = (Get-Date).AddSeconds(20)
+        $base = ''
+        while ((Get-Date) -lt $deadline -and -not $base) { $base = Get-BeeperApiBase; if (-not $base) { Start-Sleep -Seconds 1 } }
+        Assert ($base -eq 'http://127.0.0.1:23373') "probe found [$base]"
+        $before = @(Get-Process -Name 'node' -ErrorAction SilentlyContinue | ForEach-Object Id)
+        $script:OAUTH_WAIT = 30
+        $sw = [Diagnostics.Stopwatch]::StartNew()
+        Invoke-PrimeOauthGrant
+        $sw.Stop()
+        Write-Host "       priming took $([int]$sw.Elapsed.TotalSeconds)s (wait was $($script:OAUTH_WAIT)s)"
+        Assert ($sw.Elapsed.TotalSeconds -lt 60) 'priming overran its wait'
+        Start-Sleep -Seconds 2
+        $after = @(Get-Process -Name 'node' -ErrorAction SilentlyContinue | Where-Object { $before -notcontains $_.Id })
+        Assert ($after.Count -eq 0) "node processes left behind: $($after.Count)"
+    } finally {
+        Stop-Job $listener -ErrorAction SilentlyContinue
+        Remove-Job $listener -Force -ErrorAction SilentlyContinue
+    }
+}
+
+Write-Host ''
 Write-Host "passed: $passes  failed: $($failures.Count)"
 if ($failures.Count -gt 0) {
     Write-Host ('failed: ' + ($failures -join ' | '))
