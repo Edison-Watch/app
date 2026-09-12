@@ -284,7 +284,8 @@ Check 'sealgate-stdiod login --no-open prints the approval URL and user code, th
     Assert ($text -match 'https://demo-dashboard\.sealgate\.ai/\S+') "URL not on the demo backend: $text"
     Assert ($text -match 'User code:\s*\S+') "no user code: $text"
     Assert ($text -match 'Waiting for authorization') "did not reach polling: $text"
-    Write-Host "       $((($text -split "`n") | Where-Object { $_ -match 'User code' }) -join ' ')"
+    # Not echoed: the code is unapproved and expires, but the log is public.
+    Write-Host '       approval URL and user code printed by the daemon (not echoed here)'
     Assert (-not (Test-Path $cfgFile)) 'a config.toml appeared without an approval'
 }
 
