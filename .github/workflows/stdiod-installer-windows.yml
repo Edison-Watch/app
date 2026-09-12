@@ -1,0 +1,51 @@
+name: stdiod installer (Windows)
+
+# Runs crates/stdiod/scripts/install-beeper.ps1 on a real Windows runner under
+# both Windows PowerShell 5.1 (what every Windows 10/11 ships) and PowerShell 7.
+# The checks live in test-install-beeper-windows.ps1: static analysis, the CLI
+# surface, a full --dry-run, a real download + verification of Node and the
+# daemon exe, and the clean refusal of 'sealgate-stdiod install' without a
+# credential. The device login and the Beeper OAuth prompt need a human, so
+# they are out of reach here by design.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'crates/stdiod/scripts/install-beeper.ps1'
+      - 'crates/stdiod/scripts/test-install-beeper-windows.ps1'
+      - '.github/workflows/stdiod-installer-windows.yml'
+  pull_request:
+    paths:
+      - 'crates/stdiod/scripts/install-beeper.ps1'
+      - 'crates/stdiod/scripts/test-install-beeper-windows.ps1'
+      - '.github/workflows/stdiod-installer-windows.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: ${{ matrix.shell }}
+    runs-on: windows-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - shell: powershell
+          - shell: pwsh
+    steps:
+      - uses: actions/checkout@v7
+      - name: Shell version
+        shell: ${{ matrix.shell }}
+        run: $PSVersionTable.PSVersion.ToString()
+      - name: Run installer checks
+        shell: ${{ matrix.shell }}
+        env:
+          NO_COLOR: '1'
+        run: |
+          & "${{ github.workspace }}\crates\stdiod\scripts\test-install-beeper-windows.ps1"
+          exit $LASTEXITCODE
