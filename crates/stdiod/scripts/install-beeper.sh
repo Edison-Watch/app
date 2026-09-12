@@ -2,6 +2,11 @@
 #
 # install-beeper.sh - wire Beeper into the SealGate MCP gateway on macOS.
 #
+# Windows has a sibling with the same commands, flags and env vars:
+# install-beeper.ps1 (PowerShell 5.1+, no admin). This script detects a Windows
+# shell (Git Bash, MSYS, Cygwin, WSL) and points at it; see
+# require_supported_platform.
+#
 # Reality check (2026-08): Beeper's local Client API (127.0.0.1:23373-23378)
 # now ships a built-in Streamable HTTP MCP server, and `@beeper/mcp-remote` is
 # a thin stdio proxy to it. That API is served by either the Beeper Desktop app
@@ -172,14 +177,27 @@ confirm() {
   printf '%s [y/N] ' "$1" >&2; read -r ans; [ "$ans" = "y" ] || [ "$ans" = "Y" ]
 }
 
-# macOS is the supported target because Beeper's MCP endpoint lives in the macOS
-# Desktop app. stdiod also carries a Linux (systemd --user) supervisor path, so
-# we allow Linux with a warning and let `sealgate-stdiod install` report any gap.
+# macOS is the primary target. stdiod also carries a Linux (systemd --user)
+# supervisor path, so we allow Linux with a warning and let `sealgate-stdiod
+# install` report any gap. Windows has its own installer: this script cannot
+# work there even under Git Bash (no launchd/systemd, no ~/.local/bin on the
+# daemon's PATH, and the release exe is a different asset), and under WSL the
+# daemon would land inside the VM where Beeper's loopback API on the Windows
+# side is out of reach. Both cases hand over to install-beeper.ps1.
+WINDOWS_ONE_LINER='powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/Edison-Watch/app/main/crates/stdiod/scripts/install-beeper.ps1 | iex"'
 require_supported_platform() {
   case "$(uname -s)" in
     Darwin) ;;
-    Linux)  warn "Linux is experimental: the stdiod supervisor needs a systemd --user session, and Beeper's MCP is macOS-Desktop-only, so the child will have nothing to reach";;
-    *)      die "unsupported platform: $(uname -s)" "macOS is supported; see stdiod/README.md";;
+    Linux)
+      if grep -qiE 'microsoft|wsl' /proc/version 2>/dev/null; then
+        die "this looks like WSL: the daemon would run inside the Linux VM, where Beeper's local API on the Windows side is not reachable" \
+          "run the Windows installer from PowerShell instead: $WINDOWS_ONE_LINER"
+      fi
+      warn "Linux is experimental: the stdiod supervisor needs a systemd --user session, and Beeper's MCP endpoint comes from the Desktop app, so the child has nothing to reach without one";;
+    MINGW*|MSYS*|CYGWIN*|Windows_NT)
+      die "this is the macOS/Linux installer; on Windows use the PowerShell one" \
+        "open PowerShell and run: $WINDOWS_ONE_LINER";;
+    *)      die "unsupported platform: $(uname -s)" "macOS, Linux and Windows (install-beeper.ps1) are supported; see stdiod/README.md";;
   esac
 }
 
@@ -1545,10 +1563,12 @@ usage() {
   # SUBSTITUTION, not quoting - a `sealgate-stdiod login` in the prose runs and
   # is replaced by its (empty) output. Quote command names with 'single quotes'.
   cat >&2 <<EOF
-$PROG - wire Beeper into the SealGate MCP gateway (macOS)
+$PROG - wire Beeper into the SealGate MCP gateway (macOS; Linux experimental)
 
 Beeper only serves MCP from the Desktop app, so this automates the SealGate side
 and prints the exact human steps Beeper and the dashboard still require.
+On Windows use install-beeper.ps1 instead (same commands and flags):
+  $WINDOWS_ONE_LINER
 
 Usage:
   $PROG [command] [flags]        (no command runs 'install')
