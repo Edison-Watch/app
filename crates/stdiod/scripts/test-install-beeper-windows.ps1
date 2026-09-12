@@ -130,14 +130,9 @@ Check 'scriptblock one-liner form propagates a failure exit code' {
     $null = & $shell -NoProfile -ExecutionPolicy Bypass -Command "& ([scriptblock]::Create((Get-Content -Raw '$Script'))) bogus" 2>&1
     Assert ($LASTEXITCODE -ne 0) "rc=$LASTEXITCODE"
 }
-Check 'piped iex form (no args) starts install' {
-    # The daemon binary is absent at this point and downloads are consent
-    # gated by --dry-run only, so run with INSTALL_DEPS off: the installer
-    # must stop at the first missing dep with the documented message.
-    $out = & $shell -NoProfile -ExecutionPolicy Bypass -Command "`$env:NO_COLOR='1'; Get-Content -Raw '$Script' | iex" 2>&1 | ForEach-Object { "$_" }
-    $text = $out -join "`n"
-    Assert ($text -match 'Checking prerequisites') $text
-}
+# The piped form ('irm URL | iex') takes no arguments and so runs a real
+# install, which blocks at the browser login on a runner. Its parse path is the
+# same [scriptblock]::Create(text) the scriptblock form above exercises.
 
 Write-Host ''
 Write-Host '== 3. dry run'
