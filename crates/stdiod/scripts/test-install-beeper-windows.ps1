@@ -62,8 +62,12 @@ Check 'parses without errors' {
     Assert (-not $e) (($e | ForEach-Object { "$($_.Extent.StartLineNumber): $($_.Message)" }) -join '; ')
 }
 Check 'no PowerShell 7-only syntax' {
+    # Tokenize so block and line comments (which mention these constructs by
+    # name) are not scanned, only code.
     $src = Get-Content -Path $Script -Raw
-    $code = ($src -split "`n" | Where-Object { $_ -notmatch '^\s*#' }) -join "`n"
+    $err = $null
+    $tokens = [System.Management.Automation.PSParser]::Tokenize($src, [ref]$err)
+    $code = ($tokens | Where-Object { $_.Type -ne 'Comment' } | ForEach-Object { $_.Content }) -join "`n"
     foreach ($bad in @('\?\?', '-SkipHttpErrorCheck', '-AsHashtable', 'Join-String', '-Parallel', '\$PSStyle')) {
         Assert (-not ($code -match $bad)) "found 7-only construct: $bad"
     }
@@ -164,6 +168,11 @@ $script:INSTALL_DEPS = $true
 $installDir = Join-Path $env:LOCALAPPDATA 'Programs\sealgate-stdiod'
 
 Check 'Ensure-Deps downloads and verifies Node and sealgate-stdiod' {
+    # Hosted runners ship Node, and a system npx wins over a download (same as
+    # the bash script). Hide it from this process so the real download path
+    # runs, which is the one a fresh Windows box takes.
+    $env:Path = (($env:Path -split ';') | Where-Object { $_ -and -not (Test-Path (Join-Path $_ 'npx.cmd')) }) -join ';'
+    Assert (-not (Test-Command 'npx.cmd')) 'could not hide the runner Node from PATH'
     Ensure-Deps
     Assert (Test-Path (Join-Path $installDir 'sealgate-stdiod.exe')) 'sealgate-stdiod.exe missing'
     Assert (Test-Path (Join-Path $installDir 'runtimes\node\npx.cmd')) 'runtimes\node\npx.cmd missing'
