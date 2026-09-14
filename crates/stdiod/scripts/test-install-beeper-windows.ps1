@@ -374,10 +374,19 @@ Check 'OAuth priming against a fake Beeper listener ends within its wait and lea
         $l.Stop()
     }
     try {
-        $deadline = (Get-Date).AddSeconds(20)
+        # Start-Job spawns a whole new PowerShell process before the listener
+        # binds, which on a loaded runner can take well over 20s.
+        $deadline = (Get-Date).AddSeconds(90)
         $base = ''
-        while ((Get-Date) -lt $deadline -and -not $base) { $base = Get-BeeperApiBase; if (-not $base) { Start-Sleep -Seconds 1 } }
-        Assert ($base -eq 'http://127.0.0.1:23373') "probe found [$base]"
+        while ((Get-Date) -lt $deadline -and -not $base) {
+            if ($listener.State -eq 'Failed' -or $listener.State -eq 'Completed') { break }
+            $base = Get-BeeperApiBase
+            if (-not $base) { Start-Sleep -Seconds 1 }
+        }
+        if ($base -ne 'http://127.0.0.1:23373') {
+            $jobOut = (Receive-Job $listener -ErrorAction SilentlyContinue 2>&1 | ForEach-Object { "$_" }) -join ' | '
+            throw "probe found [$base]; listener job state=$($listener.State) output=$jobOut"
+        }
         $before = @(Get-Process -Name 'node' -ErrorAction SilentlyContinue | ForEach-Object Id)
         $script:OAUTH_WAIT = 30
         $sw = [Diagnostics.Stopwatch]::StartNew()
