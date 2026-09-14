@@ -18,6 +18,8 @@ jobs:
   demo:
     runs-on: windows-latest
     timeout-minutes: 20
+    permissions:
+      contents: write
     steps:
       - name: Install Beeper Desktop via winget
         shell: pwsh
@@ -81,6 +83,28 @@ jobs:
           Write-Host "== beeper processes =="
           Get-Process *beeper* -ErrorAction SilentlyContinue |
             Format-Table Name, Id, MainWindowTitle -AutoSize | Out-String | Write-Host
+
+      - name: Publish screenshots to the beeper-shot branch
+        # The artifact blob host is not reachable from the environment that
+        # collects these, but github.com git is, so mirror the PNGs to a branch.
+        if: always()
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $d = Join-Path $env:RUNNER_TEMP 'shotrepo'
+          New-Item -ItemType Directory -Force $d | Out-Null
+          Copy-Item artifacts\*.png $d
+          Push-Location $d
+          git init -q
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add *.png
+          git commit -q -m "Beeper Desktop screenshots (run ${{ github.run_id }})"
+          git branch -M beeper-shot
+          git remote add origin "https://x-access-token:$env:GH_TOKEN@github.com/${{ github.repository }}.git"
+          git push -f origin beeper-shot
+          Pop-Location
 
       - name: Upload screenshots
         if: always()
