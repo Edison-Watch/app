@@ -222,6 +222,10 @@ parse_flags() {
       --sg-backend)   needval $# "$1" "${2:-}"; SG_BACKEND="$2"; SG_BACKEND_SET=1; shift 2;;
       --demo)         SG_BACKEND="https://demo-dashboard.sealgate.ai"; SG_BACKEND_SET=1; shift;;
       --release)      SG_BACKEND="https://dashboard.sealgate.ai"; SG_BACKEND_SET=1; shift;;
+      # A backend run from a checkout of the product repo (make dev / the
+      # cloud-sandbox skill) listens on 3001; the device login opens the
+      # approval page on that same localhost dashboard.
+      --local)        SG_BACKEND="http://127.0.0.1:3001"; SG_BACKEND_SET=1; shift;;
       --sg-api-key)   needval $# "$1" "${2:-}"; SG_API_KEY="$2"; shift 2;;
       --server-name)  needval $# "$1" "${2:-}"; SERVER_NAME="$2"; shift 2;;
       --device-label) needval $# "$1" "${2:-}"; DEVICE_LABEL="$2"; shift 2;;
@@ -1180,6 +1184,17 @@ stdiod_connection_state() {
   sed -n 's/.*"connection_state"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$f" | head -n1
 }
 
+# The daemon's last_error from state.json, or nothing. This is where the
+# backend's own explanation lands when a connect is refused (an org with stdio
+# servers switched off says "Stdio servers are not enabled for your
+# organisation. Contact your admin."), so a stalled connection can name its
+# cause instead of just its state.
+stdiod_last_error() {
+  local f="${SEALGATE_STDIOD_STATE:-$HOME/.config/sealgate-stdiod/state.json}"
+  [ -f "$f" ] || return 0
+  sed -n 's/.*"last_error"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$f" | head -n1
+}
+
 # Wait for the daemon to register with the backend. The backend refuses a
 # server request until the device has connected, and answers with a 409 that
 # looks exactly like a name conflict - so submitting before this is ready sends
@@ -1228,6 +1243,8 @@ ensure_stdiod_supervised() {
     STDIOD_CONNECTED=1
   else
     warn "the daemon has not connected yet (state: $(stdiod_connection_state))"
+    local last_err; last_err="$(stdiod_last_error)"
+    [ -n "$last_err" ] && warn "the daemon reports: $last_err"
   fi
 }
 
@@ -1588,6 +1605,9 @@ Common flags (also settable as UPPER_SNAKE env vars):
                        Also selects the DEMO daemon build (newest v*-beta.N).
   --release            Shortcut for --sg-backend https://dashboard.sealgate.ai (the default).
                        Also selects the STABLE daemon build.
+  --local              Shortcut for --sg-backend http://127.0.0.1:3001, a backend run from
+                       a checkout of the product repo; the device login then opens the
+                       approval page on that local dashboard.
                        With none of these set, commands follow the backend this device
                        is already authorized to (from stdiod config), and the daemon
                        channel follows that backend. Override the daemon side alone

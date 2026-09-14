@@ -261,6 +261,9 @@ function Parse-Flags([string[]]$List) {
             '--sg-backend' { $script:SG_BACKEND = Get-FlagValue $List $i $a; $script:SG_BACKEND_SET = $true; $i += 2; continue }
             '--demo' { $script:SG_BACKEND = 'https://demo-dashboard.sealgate.ai'; $script:SG_BACKEND_SET = $true; $i++; continue }
             '--release' { $script:SG_BACKEND = 'https://dashboard.sealgate.ai'; $script:SG_BACKEND_SET = $true; $i++; continue }
+            # A backend run from a checkout of the product repo listens on 3001;
+            # the device login opens the approval page on that local dashboard.
+            '--local' { $script:SG_BACKEND = 'http://127.0.0.1:3001'; $script:SG_BACKEND_SET = $true; $i++; continue }
             '--sg-api-key' { $script:SG_API_KEY = Get-FlagValue $List $i $a; $i += 2; continue }
             '--server-name' { $script:SERVER_NAME = Get-FlagValue $List $i $a; $i += 2; continue }
             '--device-label' { $script:DEVICE_LABEL = Get-FlagValue $List $i $a; $i += 2; continue }
@@ -1008,6 +1011,19 @@ function Get-StdiodConnectionState {
     } catch { return '' }
 }
 
+# The daemon's last_error from state.json, or ''. This is where the backend's
+# own explanation lands when a connect is refused (an org with stdio servers
+# switched off says "Stdio servers are not enabled for your organisation.
+# Contact your admin."), so a stalled connection can name its cause.
+function Get-StdiodLastError {
+    $f = Get-StdiodStatePath
+    if (-not (Test-Path $f)) { return '' }
+    try {
+        $st = (Get-Content -Path $f -Raw -ErrorAction SilentlyContinue) | ConvertFrom-Json
+        return [string]$st.last_error
+    } catch { return '' }
+}
+
 # Wait for the daemon to register with the backend. Submitting a server before
 # that answers with a 409 that looks exactly like a name conflict.
 function Wait-StdiodConnected([int]$Seconds) {
@@ -1040,6 +1056,8 @@ function Ensure-StdiodSupervised {
         $script:STDIOD_CONNECTED = $true
     } else {
         Warn "the daemon has not connected yet (state: $(Get-StdiodConnectionState))"
+        $lastErr = Get-StdiodLastError
+        if ($lastErr) { Warn "the daemon reports: $lastErr" }
     }
 }
 
@@ -1293,6 +1311,9 @@ one-liner takes options):
                        Also selects the DEMO daemon build (newest v*-beta.N).
   --release            Shortcut for --sg-backend https://dashboard.sealgate.ai (the default).
                        Also selects the STABLE daemon build.
+  --local              Shortcut for --sg-backend http://127.0.0.1:3001, a backend run from
+                       a checkout of the product repo; the device login then opens the
+                       approval page on that local dashboard.
   --sg-api-key KEY     SealGate API key for the client snippet only (SG_API_KEY)
   --server-name NAME   Tunnel server name, and the gateway tool prefix (SERVER_NAME, default beeper)
   --device-label TEXT  Label for this script's own output only (DEVICE_LABEL, default this PC's name)
