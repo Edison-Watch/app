@@ -1,0 +1,91 @@
+name: Beeper install demo (Windows)
+
+# One-off: prove the Windows installer's Beeper step on a real windows-latest
+# host by actually winget-installing Beeper Desktop, launching it, and
+# screenshotting the desktop. The screenshots upload as an artifact. Triggered
+# by pushing this branch (or manually); not wired into the normal CI.
+
+on:
+  push:
+    branches: [claude/dazzling-ritchie-rg27r7]
+  workflow_dispatch:
+
+concurrency:
+  group: beeper-demo-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  demo:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Install Beeper Desktop via winget
+        shell: pwsh
+        run: |
+          Write-Host "winget: $((winget --version) 2>&1)"
+          winget install --id Beeper.Beeper -e --silent `
+            --accept-package-agreements --accept-source-agreements --disable-interactivity
+          # 0 ok; 0x8A15002B (-1978335189) means already installed.
+          if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne -1978335189) {
+            throw "winget install exit $LASTEXITCODE"
+          }
+
+      - name: Resolve the installed exe and its version
+        shell: pwsh
+        run: |
+          $roots = @(
+            'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall',
+            'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall',
+            'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall'
+          )
+          $exe = ''
+          foreach ($r in $roots) {
+            foreach ($k in @(Get-ChildItem $r -ErrorAction SilentlyContinue)) {
+              $p = Get-ItemProperty $k.PSPath -ErrorAction SilentlyContinue
+              if ($p.DisplayName -notlike 'Beeper*') { continue }
+              Write-Host "registry: DisplayName=$($p.DisplayName)  Version=$($p.DisplayVersion)"
+              Write-Host "registry: DisplayIcon=$($p.DisplayIcon)"
+              $ic = ([string]$p.DisplayIcon) -replace ',\s*-?\d+$', ''
+              $ic = $ic.Trim('"')
+              if ($ic -like '*.exe' -and (Test-Path $ic)) { $exe = $ic }
+            }
+          }
+          if (-not $exe) { $exe = Join-Path $env:LOCALAPPDATA 'Programs\BeeperTexts\Beeper.exe' }
+          Write-Host "resolved exe: $exe (exists: $(Test-Path $exe))"
+          if (Test-Path $exe) { (Get-Item $exe).VersionInfo | Format-List ProductName,FileVersion,ProductVersion }
+          $exe | Out-File -Encoding ascii "$env:GITHUB_WORKSPACE\beeper-exe.txt"
+
+      - name: Launch Beeper and capture the desktop
+        shell: pwsh
+        run: |
+          $exe = (Get-Content "$env:GITHUB_WORKSPACE\beeper-exe.txt").Trim()
+          New-Item -ItemType Directory -Force artifacts | Out-Null
+          Start-Process -FilePath $exe
+          Add-Type -AssemblyName System.Windows.Forms
+          Add-Type -AssemblyName System.Drawing
+          function Save-Shot([string]$path) {
+            $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+            $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+            $g = [System.Drawing.Graphics]::FromImage($bmp)
+            $g.CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
+            $bmp.Save($path, [System.Drawing.Imaging.ImageFormat]::Png)
+            $g.Dispose(); $bmp.Dispose()
+          }
+          for ($i = 1; $i -le 12; $i++) {
+            Start-Sleep -Seconds 10
+            Save-Shot (Join-Path "artifacts" ("beeper-{0:d2}.png" -f $i))
+            $w = @(Get-Process | Where-Object { $_.MainWindowTitle } |
+                   ForEach-Object { "$($_.ProcessName): $($_.MainWindowTitle)" })
+            Write-Host "t=$([int]($i*10))s  windows onscreen: $($w -join ' | ')"
+          }
+          Write-Host "== beeper processes =="
+          Get-Process *beeper* -ErrorAction SilentlyContinue |
+            Format-Table Name, Id, MainWindowTitle -AutoSize | Out-String | Write-Host
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: beeper-desktop-screenshots
+          path: artifacts/*.png
+          if-no-files-found: warn
