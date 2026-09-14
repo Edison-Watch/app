@@ -234,8 +234,15 @@ stored map untouched, and a field that is present MUST be merged key-by-key.
 
 **T-32** After a `server_env_update` or `server_spec_update`, a client MUST
 restart that server if it is currently running, so the new values take effect
-without waiting for a desired-state push.
-*Source: `daemon.rs::apply_env_update` / `apply_spec_update`.*
+without waiting for a desired-state push. This holds when the frame carries an
+**empty** `env`: the backend sends `server_env_update{server_id, env: {}}` on
+purpose, as a respawn kick, when a child stays alive but repeatedly fails to
+answer MCP `initialize` (a stdio proxy stuck on an expired upstream OAuth
+grant, for example). Nothing else can restart such a child: it is neither
+dead (T-42) nor backed up (T-51). A client MUST NOT skip the restart because
+the merge changed nothing.
+*Source: `daemon.rs::apply_env_update` / `apply_spec_update`; backend
+`shared_client.py::_note_init_timeout`.*
 
 **T-33** A `server_env_update` or `server_spec_update` for a `server_id` the
 client does not yet know MUST be stored rather than dropped, and applied when
