@@ -30,7 +30,7 @@
 </p>
 
 > [!WARNING]
-> **Experimental (v0.0.1).** Early software under active development; expect bugs. It has **not** had an independent security audit. The wire protocol, CLI surface, and on-disk formats may change without notice before a 1.0 release. Today the daemon runs as a supervised service on **macOS only** - Linux and Windows support is on the roadmap, and the CLI will tell you when a step is unsupported on your platform.
+> **Experimental (v0.0.1).** Early software under active development; expect bugs. It has **not** had an independent security audit. The wire protocol, CLI surface, and on-disk formats may change without notice before a 1.0 release. The daemon runs as a supervised service on **macOS** (LaunchAgent) and **Windows** (per-user Scheduled Task); Linux (systemd `--user`) is experimental, and the CLI will tell you when a step is unsupported on your platform.
 
 ## How it works
 
@@ -42,6 +42,30 @@
 See [`ARCHITECTURE.md`](./ARCHITECTURE.md) for the full design and [`schema/tunnel-protocol.json`](./schema/tunnel-protocol.json) for the wire protocol - the single source of truth for the frame types.
 
 ## Install
+
+### One-liner (Beeper connector)
+
+The fastest path is the Beeper installer, which downloads a prebuilt, checksum-verified `sealgate-stdiod` from the app's GitHub release, authorizes the device, registers the supervisor unit and submits the Beeper connector. No Rust toolchain and no checkout needed. Both scripts take the same commands and flags (`install`, `doctor`, `status`, `preauth`, `uninstall`, `tags`; `--demo`, `--no-open`, `--dry-run`, ...).
+
+macOS (Linux experimental):
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Edison-Watch/app/main/crates/stdiod/scripts/install-beeper.sh | bash -s -- install --install-deps --yes
+```
+
+Windows (PowerShell 5.1+, no admin; Node and the daemon land under `%LOCALAPPDATA%\Programs\sealgate-stdiod`):
+
+```powershell
+powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/Edison-Watch/app/main/crates/stdiod/scripts/install-beeper.ps1 | iex"
+```
+
+To pass a command or flags on Windows, use the scriptblock form (or the matching `UPPER_SNAKE` environment variables):
+
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/Edison-Watch/app/main/crates/stdiod/scripts/install-beeper.ps1))) install --demo --no-open
+```
+
+### From source
 
 Requires a [Rust toolchain](https://rustup.rs/) (the pinned channel is in [`rust-toolchain.toml`](./rust-toolchain.toml)). Build and install the `sealgate-stdiod` binary straight from a checkout:
 
@@ -69,7 +93,7 @@ cargo build --release   # binary at target/release/sealgate-stdiod
 #    are stored in ~/.config/sealgate-stdiod/config.toml (mode 0600).
 sealgate-stdiod login --backend https://dashboard.sealgate.ai
 
-# 2. Register the OS supervisor unit (macOS LaunchAgent) so the daemon
+# 2. Register the OS supervisor unit (LaunchAgent / Scheduled Task) so the daemon
 #    starts at login and is restarted on crash. Requires `login` first.
 sealgate-stdiod install
 
@@ -117,7 +141,7 @@ TLDR: `sealgate-stdiod --help` (and `sealgate-stdiod <command> --help` for any s
 | --- | --- |
 | `login` | Start browser/device authorization and persist the resulting scoped client credential in `~/.config/sealgate-stdiod/config.toml` (mode `0600`). Use `--no-open` for headless login. The deprecated `--api-key` path remains for existing desktop clients. |
 | `logout` | Atomically remove local credentials and account/device bindings, then best-effort revoke the prior client credential. Retains the backend URL and unrelated preferences. |
-| `install` | Register the OS supervisor unit (macOS LaunchAgent) so the daemon starts at login and restarts on crash. Requires `login` first. |
+| `install` | Register the OS supervisor unit (macOS LaunchAgent, Windows per-user Scheduled Task, Linux systemd `--user` unit) so the daemon starts at login and restarts on crash. Requires `login` first. |
 | `uninstall` | Stop and remove the supervisor unit. Pass `--purge` to also delete the persisted config and logs. |
 | `run` | Run the daemon in the foreground (normally invoked by the service unit). Reads the client credential from config. `--backend` may only canonically match the saved credential's backend unless an explicit legacy `--api-key` is supplied. Legacy device/secret overrides are not inherited across that boundary. |
 | `status` | Print a one-shot summary of supervisor-unit status, connection state, and currently-running child servers. |

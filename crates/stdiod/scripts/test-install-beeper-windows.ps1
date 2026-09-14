@@ -1,0 +1,409 @@
+#Requires -Version 5.1
+<#
+.SYNOPSIS
+  CI checks for install-beeper.ps1 on a real Windows runner.
+
+.DESCRIPTION
+  Run by .github/workflows/stdiod-installer-windows.yml under BOTH Windows
+  PowerShell 5.1 and PowerShell 7, since the installer promises to work on
+  the 5.1 that every Windows box ships. Nothing here needs a SealGate account
+  or a browser: the device login and the Beeper OAuth prompt are human steps,
+  so the checks stop at the edge of what a runner can do and assert the exact
+  failure the installer must produce there.
+
+  Sections:
+    1. static: parse, PSScriptAnalyzer (errors only), 5.1-only syntax
+    2. CLI surface: help, mcp-url, flag errors, exit codes, one-liner forms
+    3. dry run: the full install preview must not touch the machine
+    4. real deps: Node + sealgate-stdiod downloaded, verified, on PATH, and
+       'sealgate-stdiod install' refuses cleanly without a credential
+    5. Beeper detection: absent -> '', then (when winget can) installed -> exe
+#>
+param(
+    [string] $Script = (Join-Path $PSScriptRoot 'install-beeper.ps1'),
+    # winget on hosted runners is sometimes unusable; the Beeper install check
+    # is then skipped rather than failed.
+    [switch] $SkipWinget
+)
+
+$ErrorActionPreference = 'Stop'
+$ProgressPreference = 'SilentlyContinue'
+$failures = New-Object System.Collections.Generic.List[string]
+$passes = 0
+
+function Check([string]$Name, [scriptblock]$Body) {
+    try {
+        & $Body
+        Write-Host "  ok   $Name"
+        $script:passes++
+    } catch {
+        Write-Host "  FAIL $Name : $($_.Exception.Message)"
+        $script:failures.Add($Name)
+    }
+}
+function Assert([bool]$Cond, [string]$Msg) { if (-not $Cond) { throw $Msg } }
+
+# The host running this test is the one under test (powershell.exe or pwsh).
+$shell = (Get-Process -Id $PID).Path
+Write-Host "shell: $shell ($($PSVersionTable.PSVersion))"
+Write-Host "script: $Script"
+
+# Run the installer in a child of the same shell, capturing output + exit code.
+function Run([string[]]$ScriptArgs) {
+    $out = & $shell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $Script @ScriptArgs 2>&1 | ForEach-Object { "$_" }
+    return @{ Out = ($out -join "`n"); Rc = $LASTEXITCODE }
+}
+
+Write-Host ''
+Write-Host '== 1. static'
+Check 'parses without errors' {
+    $t = $null; $e = $null
+    [void][System.Management.Automation.Language.Parser]::ParseFile($Script, [ref]$t, [ref]$e)
+    Assert (-not $e) (($e | ForEach-Object { "$($_.Extent.StartLineNumber): $($_.Message)" }) -join '; ')
+}
+Check 'no PowerShell 7-only syntax' {
+    # Tokenize so block and line comments (which mention these constructs by
+    # name) are not scanned, only code.
+    $src = Get-Content -Path $Script -Raw
+    $err = $null
+    $tokens = [System.Management.Automation.PSParser]::Tokenize($src, [ref]$err)
+    $code = ($tokens | Where-Object { $_.Type -ne 'Comment' } | ForEach-Object { $_.Content }) -join "`n"
+    foreach ($bad in @('\?\?', '-SkipHttpErrorCheck', '-AsHashtable', 'Join-String', '-Parallel', '\$PSStyle')) {
+        Assert (-not ($code -match $bad)) "found 7-only construct: $bad"
+    }
+}
+Check 'PSScriptAnalyzer reports no errors' {
+    if (-not (Get-Module -ListAvailable PSScriptAnalyzer)) {
+        Install-Module PSScriptAnalyzer -Scope CurrentUser -Force -AllowClobber
+    }
+    Import-Module PSScriptAnalyzer
+    $r = @(Invoke-ScriptAnalyzer -Path $Script -Severity Error)
+    Assert ($r.Count -eq 0) (($r | ForEach-Object { "$($_.Line): $($_.RuleName): $($_.Message)" }) -join '; ')
+    $warn = @(Invoke-ScriptAnalyzer -Path $Script -Severity Warning)
+    foreach ($w in $warn) { Write-Host "       warn $($w.Line): $($w.RuleName)" }
+}
+
+Write-Host ''
+Write-Host '== 2. CLI surface'
+Check '--help exits 0 and names both one-liner forms' {
+    $r = Run @('--help')
+    Assert ($r.Rc -eq 0) "rc=$($r.Rc)"
+    Assert ($r.Out -match 'irm https://raw\.githubusercontent\.com/.*install-beeper\.ps1 \| iex') 'one-liner missing'
+    Assert ($r.Out -match 'scriptblock') 'scriptblock form missing'
+}
+Check 'mcp-url --json --demo prints valid JSON with the demo backend' {
+    $r = Run @('mcp-url', '--json', '--demo')
+    Assert ($r.Rc -eq 0) "rc=$($r.Rc)"
+    $j = ($r.Out -split "`n" | Where-Object { $_ -like '{*' } | Select-Object -First 1) | ConvertFrom-Json
+    Assert ($j.mcp_url -eq 'https://demo-dashboard.sealgate.ai/mcp') "mcp_url=$($j.mcp_url)"
+    Assert ($j.server -eq 'beeper') "server=$($j.server)"
+}
+Check 'SG_BACKEND env var steers mcp-url like the flag' {
+    $env:SG_BACKEND = 'https://example.test/'
+    try { $r = Run @('mcp-url', '--json') } finally { Remove-Item Env:SG_BACKEND }
+    Assert ($r.Out -match '"mcp_url":"https://example\.test/mcp"') $r.Out
+}
+Check 'unknown flag exits 1 with a fix line' {
+    $r = Run @('install', '--bogus')
+    Assert ($r.Rc -eq 1) "rc=$($r.Rc)"
+    Assert ($r.Out -match 'unknown flag: --bogus') $r.Out
+    Assert ($r.Out -match 'fix:') 'no fix line'
+}
+Check 'flag without a value exits 1' {
+    $r = Run @('install', '--sg-backend', '--no-open')
+    Assert ($r.Rc -eq 1 -and $r.Out -match "needs a value") $r.Out
+}
+Check 'stray positional exits 1' {
+    $r = Run @('doctor', 'extra')
+    Assert ($r.Rc -eq 1 -and $r.Out -match 'unexpected argument: extra') $r.Out
+}
+Check 'unknown command exits 1' {
+    $r = Run @('bogus')
+    Assert ($r.Rc -eq 1 -and $r.Out -match 'unknown command: bogus') $r.Out
+}
+Check '--from-source is refused' {
+    $r = Run @('install', '--from-source')
+    Assert ($r.Rc -eq 1 -and $r.Out -match 'not supported by the Windows installer') $r.Out
+}
+Check 'scriptblock one-liner form passes command and flags' {
+    $out = & $shell -NoProfile -ExecutionPolicy Bypass -Command "& ([scriptblock]::Create((Get-Content -Raw '$Script'))) mcp-url --json --demo" 2>&1 | ForEach-Object { "$_" }
+    Assert ($LASTEXITCODE -eq 0) "rc=$LASTEXITCODE"
+    Assert (($out -join "`n") -match '"mcp_url":"https://demo-dashboard\.sealgate\.ai/mcp"') ($out -join "`n")
+}
+Check 'scriptblock one-liner form propagates a failure exit code' {
+    $null = & $shell -NoProfile -ExecutionPolicy Bypass -Command "& ([scriptblock]::Create((Get-Content -Raw '$Script'))) bogus" 2>&1
+    Assert ($LASTEXITCODE -ne 0) "rc=$LASTEXITCODE"
+}
+# The piped form ('irm URL | iex') takes no arguments and so runs a real
+# install, which blocks at the browser login on a runner. Its parse path is the
+# same [scriptblock]::Create(text) the scriptblock form above exercises.
+
+Write-Host ''
+Write-Host '== 3. dry run'
+Check 'install --dry-run previews every step and changes nothing' {
+    $before = Test-Path (Join-Path $env:LOCALAPPDATA 'Programs\sealgate-stdiod')
+    $r = Run @('install', '--dry-run', '--demo', '--no-open')
+    Assert ($r.Rc -eq 0) "rc=$($r.Rc)`n$($r.Out)"
+    foreach ($needle in @(
+            'Checking prerequisites', 'Beeper Desktop', 'would run: sealgate-stdiod login --backend https://demo-dashboard.sealgate.ai --no-open',
+            'would run: sealgate-stdiod install', 'would run: sealgate-stdiod server add beeper', '--arg=@beeper/mcp-remote',
+            'SealGate side wired', 'mcp_url: https://demo-dashboard.sealgate.ai/mcp')) {
+        Assert ($r.Out -match [regex]::Escape($needle)) "missing '$needle' in:`n$($r.Out)"
+    }
+    $after = Test-Path (Join-Path $env:LOCALAPPDATA 'Programs\sealgate-stdiod')
+    Assert ($before -eq $after) 'dry run created the install dir'
+}
+
+Write-Host ''
+Write-Host '== 4. real dependency install'
+# Dot-sourcing the installer defines its functions and returns before the
+# dispatch (its own guard), so the dependency step can be called for real.
+. $Script
+Initialize-Colors
+$script:ASSUME_YES = $true
+$script:INSTALL_DEPS = $true
+$installDir = Join-Path $env:LOCALAPPDATA 'Programs\sealgate-stdiod'
+
+Check 'Ensure-Deps downloads and verifies Node and sealgate-stdiod' {
+    # Hosted runners ship Node, and a system npx wins over a download (same as
+    # the bash script). Hide it from this process so the real download path
+    # runs, which is the one a fresh Windows box takes.
+    $env:Path = (($env:Path -split ';') | Where-Object { $_ -and -not (Test-Path (Join-Path $_ 'npx.cmd')) }) -join ';'
+    Assert (-not (Test-Command 'npx.cmd')) 'could not hide the runner Node from PATH'
+    Ensure-Deps
+    Assert (Test-Path (Join-Path $installDir 'sealgate-stdiod.exe')) 'sealgate-stdiod.exe missing'
+    Assert (Test-Path (Join-Path $installDir 'runtimes\node\npx.cmd')) 'runtimes\node\npx.cmd missing'
+    Assert (Test-Path (Join-Path $installDir 'runtimes\node\node.exe')) 'runtimes\node\node.exe missing'
+}
+Check 'installed binaries run' {
+    $v = Invoke-Native (Join-Path $installDir 'sealgate-stdiod.exe') @('--version')
+    Assert ($script:LastRc -eq 0 -and $v -match 'sealgate-stdiod') "rc=$($script:LastRc) out=$v"
+    Write-Host "       $v"
+    $n = Invoke-Native (Join-Path $installDir 'runtimes\node\node.exe') @('--version')
+    Assert ($script:LastRc -eq 0 -and $n -match '^v\d+') "rc=$($script:LastRc) out=$n"
+    Write-Host "       node $n"
+    $x = Invoke-Native 'cmd.exe' @('/d', '/s', '/c', "`"`"$installDir\runtimes\node\npx.cmd`" --version`"")
+    Assert ($script:LastRc -eq 0 -and $x -match '^\d+\.') "rc=$($script:LastRc) out=$x"
+    Write-Host "       npx $x"
+}
+Check 'both dirs are on the persisted user PATH and resolvable in this process' {
+    $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment')
+    $raw = [string]$key.GetValue('Path', '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+    $key.Close()
+    $entries = $raw -split ';'
+    Assert ($entries -contains $installDir) "user PATH lacks $installDir : $raw"
+    Assert ($entries -contains (Join-Path $installDir 'runtimes\node')) "user PATH lacks runtimes\node : $raw"
+    Assert (Test-Command 'sealgate-stdiod') 'sealgate-stdiod not resolvable'
+    Assert (Test-Command 'npx.cmd') 'npx.cmd not resolvable'
+}
+Check 'Ensure-Deps is idempotent (second run downloads nothing)' {
+    $stamp = (Get-Item (Join-Path $installDir 'sealgate-stdiod.exe')).LastWriteTimeUtc
+    Ensure-Deps
+    Assert ((Get-Item (Join-Path $installDir 'sealgate-stdiod.exe')).LastWriteTimeUtc -eq $stamp) 'binary was re-downloaded'
+}
+Check 'sealgate-stdiod install refuses without a credential (no task registered)' {
+    $out = Invoke-Native 'sealgate-stdiod' @('install')
+    Assert ($script:LastRc -ne 0) "install unexpectedly succeeded: $out"
+    Write-Host "       $((($out -split "`n") | Select-Object -Last 1))"
+    $null = Invoke-Native 'schtasks' @('/query', '/tn', 'SealGate stdiod')
+    Assert ($script:LastRc -ne 0) 'a SealGate stdiod task exists'
+}
+Check 'credential state reads absent, doctor exits 1 naming install' {
+    Assert ((Get-StdiodCredentialState) -eq 'absent') "state=$(Get-StdiodCredentialState)"
+    $r = Run @('doctor')
+    Assert ($r.Rc -eq 1) "rc=$($r.Rc)"
+    Assert ($r.Out -match 'not authorized') $r.Out
+    Assert ($r.Out -match 'Beeper Client API not reachable') $r.Out
+}
+Check 'status exit code 4 (no supervisor unit) is surfaced by doctor' {
+    $r = Run @('doctor')
+    Assert ($r.Out -match 'no Scheduled Task installed') $r.Out
+}
+
+Write-Host ''
+Write-Host '== 5. Beeper detection'
+Check 'Beeper absent: no exe, no API' {
+    Assert ((Get-BeeperDesktopExe) -eq '') "found: $(Get-BeeperDesktopExe)"
+    Assert ((Get-BeeperApiBase) -eq '') "found: $(Get-BeeperApiBase)"
+}
+if ($SkipWinget) {
+    Write-Host '  skip winget install of Beeper Desktop (-SkipWinget)'
+} elseif (-not (Test-Command 'winget')) {
+    Write-Host '  skip winget install of Beeper Desktop (winget not available on this runner)'
+} else {
+    Check 'Install-BeeperDesktop via winget, then detection finds the exe' {
+        $script:INSTALL_DEPS = $true; $script:ASSUME_YES = $true
+        $ok = Install-BeeperDesktop
+        if (-not $ok) {
+            # winget itself failing on a hosted runner is an environment
+            # problem, and the installer handled it with the manual step.
+            Write-Host '       winget could not install Beeper here; detection of an installed app not exercised'
+            return
+        }
+        $exe = Get-BeeperDesktopExe
+        Assert ($exe -ne '' -and (Test-Path $exe)) "exe not found after install"
+        Write-Host "       found $exe"
+    }
+}
+
+Write-Host ''
+Write-Host '== 6. past the human edge: login start, stub credential, supervisor, full install, OAuth plumbing'
+# The device login needs a person to approve in a browser, so it cannot finish
+# here. Everything around it can run for real: the login is started and killed
+# once it prints its approval URL, then a stub credential lets 'sealgate-stdiod
+# install' register the Scheduled Task and the daemon report its reauth state,
+# and a full 'install' run goes through every step past login against a
+# backend that answers nothing.
+$cfgDir = Join-Path $env:USERPROFILE '.config\sealgate-stdiod'
+$cfgFile = Join-Path $cfgDir 'config.toml'
+$demo = 'https://demo-dashboard.sealgate.ai'
+$sid = ((Invoke-Native 'whoami' @('/user', '/fo', 'csv', '/nh')) -split ',')[-1].Trim().Trim('"')
+$taskName = "SealGate stdiod $sid"
+Write-Host "  task name: $taskName"
+
+Check 'sealgate-stdiod login --no-open prints the approval URL and user code, then is killed' {
+    $outF = Join-Path $env:TEMP 'sg-login-out.txt'
+    $errF = Join-Path $env:TEMP 'sg-login-err.txt'
+    Remove-Item $outF, $errF -Force -ErrorAction SilentlyContinue
+    $p = Start-Process -FilePath 'sealgate-stdiod' -ArgumentList @('login', '--backend', $demo, '--no-open') `
+        -RedirectStandardOutput $outF -RedirectStandardError $errF -NoNewWindow -PassThru
+    $deadline = (Get-Date).AddSeconds(45)
+    $text = ''
+    while ((Get-Date) -lt $deadline) {
+        $text = Read-SharedFile $outF
+        if ($text -match 'Waiting for authorization') { break }
+        if ($p.HasExited) { break }
+        Start-Sleep -Seconds 1
+    }
+    if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force }
+    $errText = Read-SharedFile $errF
+    Assert ($text -match 'Open this URL to authorize') "no approval URL. stdout: $text stderr: $errText"
+    Assert ($text -match 'https://demo-dashboard\.sealgate\.ai/\S+') "URL not on the demo backend: $text"
+    Assert ($text -match 'User code:\s*\S+') "no user code: $text"
+    Assert ($text -match 'Waiting for authorization') "did not reach polling: $text"
+    # Not echoed: the code is unapproved and expires, but the log is public.
+    Write-Host '       approval URL and user code printed by the daemon (not echoed here)'
+    Assert (-not (Test-Path $cfgFile)) 'a config.toml appeared without an approval'
+}
+
+Check 'stub credential: the backend rejects it and the installer reads that state' {
+    New-Item -ItemType Directory -Path $cfgDir -Force | Out-Null
+    @"
+backend_url = "$demo"
+client_access_token = "ci-invalid-token"
+client_installation_id = "ci-test-installation"
+device_id = "ci-runner-device"
+"@ | Set-Content -Path $cfgFile -Encoding ASCII
+    $script:STDIOD_CRED_STATE = ''
+    $out = Invoke-Native 'sealgate-stdiod' @('server', 'list', '--json')
+    Write-Host "       server list rc=$($script:LastRc): $((($out -split "`n") | Select-Object -Last 1))"
+    $state = Get-StdiodCredentialState
+    Write-Host "       credential state: $state"
+    Assert ($state -in @('dead', 'unknown')) "state=$state"
+    if ($state -eq 'dead') {
+        $r = Run @('doctor')
+        Assert ($r.Out -match 'expired or revoked') $r.Out
+        Assert ($r.Out -match '--relogin') $r.Out
+    }
+}
+
+Check 'Ensure-StdiodSupervised registers the Scheduled Task; the daemon runs and reports its state' {
+    $script:CONNECT_WAIT = 20
+    $script:STDIOD_CONNECTED = $false
+    Ensure-StdiodSupervised
+    $null = Invoke-Native 'schtasks' @('/query', '/tn', $taskName)
+    Assert ($script:LastRc -eq 0) "task '$taskName' not registered"
+    $st = Get-StdiodStateField 'connection_state'
+    Write-Host "       connection_state after $($script:CONNECT_WAIT)s: [$st]"
+    $null = Invoke-Native 'sealgate-stdiod' @('status')
+    Write-Host "       status exit code: $($script:LastRc) (0 running, 3 installed but not running)"
+    $logs = Invoke-Native 'sealgate-stdiod' @('logs', '-n', '8')
+    Write-Host '       daemon log tail:'
+    foreach ($l in (($logs -split "`n") | Select-Object -Last 6)) { Write-Host "         $l" }
+    Assert (-not $script:STDIOD_CONNECTED) 'a stub token must not reach connected'
+    Assert ($st -ne 'connected') "state=$st with a stub token"
+}
+
+Check 'sealgate-stdiod uninstall removes the task' {
+    $null = Invoke-Native 'sealgate-stdiod' @('uninstall')
+    Assert ($script:LastRc -eq 0) 'uninstall failed'
+    $null = Invoke-Native 'schtasks' @('/query', '/tn', $taskName)
+    Assert ($script:LastRc -ne 0) 'task still registered after uninstall'
+}
+
+Check 'full install run: every step past login, against a backend that answers nothing' {
+    # The saved session points at a closed port, so the credential reads as
+    # unknown (kept, not re-logged) and the run proceeds through supervisor,
+    # connection wait, the Beeper launch and the final summary.
+    (Get-Content -Path $cfgFile -Raw) -replace [regex]::Escape($demo), 'https://127.0.0.1:9' | Set-Content -Path $cfgFile -Encoding ASCII
+    $env:CONNECT_WAIT = '10'
+    $env:BEEPER_WAIT = '3'
+    try { $r = Run @('install', '--no-open') } finally { Remove-Item Env:CONNECT_WAIT, Env:BEEPER_WAIT -ErrorAction SilentlyContinue }
+    foreach ($l in ($r.Out -split "`n")) { if ($l -match '^\s*(>>|\+|!|-|action:|x error|fix:)') { Write-Host "       $l" } }
+    Assert ($r.Rc -eq 0) "rc=$($r.Rc)"
+    foreach ($needle in @(
+            'using the backend this device is authorized to: https://127.0.0.1:9',
+            'could not verify the saved credential',
+            'daemon installed and supervised',
+            'has not connected yet',
+            "not registering the 'beeper' server",
+            'SealGate side wired',
+            'mcp_url: https://127.0.0.1:9/mcp')) {
+        Assert ($r.Out -match [regex]::Escape($needle)) "missing '$needle'"
+    }
+    $null = Invoke-Native 'sealgate-stdiod' @('uninstall')
+    Get-Process -Name 'Beeper*' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+}
+
+Check 'OAuth priming against a fake Beeper listener ends within its wait and leaves no node behind' {
+    $listener = Start-Job -ScriptBlock {
+        $l = New-Object System.Net.HttpListener
+        $l.Prefixes.Add('http://127.0.0.1:23373/')
+        $l.Start()
+        $end = (Get-Date).AddSeconds(120)
+        while ((Get-Date) -lt $end) {
+            $ar = $l.BeginGetContext($null, $null)
+            if (-not $ar.AsyncWaitHandle.WaitOne(1000)) { continue }
+            $ctx = $l.EndGetContext($ar)
+            $ctx.Response.StatusCode = 404
+            $ctx.Response.Close()
+        }
+        $l.Stop()
+    }
+    try {
+        # Start-Job spawns a whole new PowerShell process before the listener
+        # binds, which on a loaded runner can take well over 20s.
+        $deadline = (Get-Date).AddSeconds(90)
+        $base = ''
+        while ((Get-Date) -lt $deadline -and -not $base) {
+            if ($listener.State -eq 'Failed' -or $listener.State -eq 'Completed') { break }
+            $base = Get-BeeperApiBase
+            if (-not $base) { Start-Sleep -Seconds 1 }
+        }
+        if ($base -ne 'http://127.0.0.1:23373') {
+            $jobOut = (Receive-Job $listener -ErrorAction SilentlyContinue 2>&1 | ForEach-Object { "$_" }) -join ' | '
+            throw "probe found [$base]; listener job state=$($listener.State) output=$jobOut"
+        }
+        $before = @(Get-Process -Name 'node' -ErrorAction SilentlyContinue | ForEach-Object Id)
+        $script:OAUTH_WAIT = 30
+        $sw = [Diagnostics.Stopwatch]::StartNew()
+        Invoke-PrimeOauthGrant
+        $sw.Stop()
+        Write-Host "       priming took $([int]$sw.Elapsed.TotalSeconds)s (wait was $($script:OAUTH_WAIT)s)"
+        Assert ($sw.Elapsed.TotalSeconds -lt 60) 'priming overran its wait'
+        Start-Sleep -Seconds 2
+        $after = @(Get-Process -Name 'node' -ErrorAction SilentlyContinue | Where-Object { $before -notcontains $_.Id })
+        Assert ($after.Count -eq 0) "node processes left behind: $($after.Count)"
+    } finally {
+        Stop-Job $listener -ErrorAction SilentlyContinue
+        Remove-Job $listener -Force -ErrorAction SilentlyContinue
+    }
+}
+
+Write-Host ''
+Write-Host "passed: $passes  failed: $($failures.Count)"
+if ($failures.Count -gt 0) {
+    Write-Host ('failed: ' + ($failures -join ' | '))
+    exit 1
+}
+exit 0

@@ -300,14 +300,11 @@ async fn run_one_session(
         &args.device_id,
     )
     .await?;
-    // WS upgrade succeeded - we've passed auth + the org feature flag.
-    writer
-        .update(|s| {
-            s.connection_state = ConnectionState::Connected;
-            s.last_connected_at = Some(chrono::Utc::now());
-            s.last_error = None;
-        })
-        .await;
+    // The WS upgrade means auth + the org feature flag passed, but the state
+    // only flips to Connected on server_hello (see drain_incoming): the
+    // backend registers the device between the upgrade and that frame, and
+    // a client request submitted in that gap is refused as "device not
+    // registered".
 
     let (outgoing_tx, outgoing_rx) = mpsc::channel::<TunnelFrame>(64);
     let (incoming_tx, mut incoming_rx) = mpsc::channel::<TunnelFrame>(64);
@@ -350,7 +347,7 @@ async fn run_one_session(
 
     let result = tokio::select! {
         biased;
-        r = drain_incoming(supervisor.clone(), &mut incoming_rx, last_pong) => match r {
+        r = drain_incoming(supervisor.clone(), &mut incoming_rx, last_pong, writer) => match r {
             Ok(()) => websocket_task_result(&mut ws_task).await,
             Err(error) => Err(error),
         },
@@ -384,6 +381,7 @@ async fn drain_incoming(
     supervisor: Arc<Mutex<Supervisor>>,
     incoming_rx: &mut mpsc::Receiver<TunnelFrame>,
     last_pong: Arc<Mutex<Instant>>,
+    writer: &StateWriter,
 ) -> Result<()> {
     while let Some(frame) = incoming_rx.recv().await {
         // Any inbound traffic counts as liveness, not just pongs.
@@ -413,6 +411,17 @@ async fn drain_incoming(
                         "backend speaks a different protocol_version; it accepted our handshake, continuing"
                     );
                 }
+                // The backend has registered this device by the time it sends
+                // server_hello, so this is the point at which "connected"
+                // becomes true for anyone reading state.json (the installer
+                // waits on it before submitting a server request).
+                writer
+                    .update(|s| {
+                        s.connection_state = ConnectionState::Connected;
+                        s.last_connected_at = Some(chrono::Utc::now());
+                        s.last_error = None;
+                    })
+                    .await;
                 sup.apply_snapshot(servers).await;
             }
             TunnelFrame::DesiredStateUpdate(update) => sup.apply_delta(update).await,
