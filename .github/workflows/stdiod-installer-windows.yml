@@ -34,34 +34,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - shell: powershell
-          - shell: pwsh
+        shell: [powershell, pwsh]
     steps:
       - uses: actions/checkout@v7
-      # The shell: key takes no expressions, so each shell gets its own
-      # pair of steps and the matrix picks which pair runs.
-      - name: Shell version (Windows PowerShell 5.1)
-        if: matrix.shell == 'powershell'
-        shell: powershell
-        run: $PSVersionTable.PSVersion.ToString()
-      - name: Run installer checks (Windows PowerShell 5.1)
-        if: matrix.shell == 'powershell'
-        shell: powershell
-        env:
-          NO_COLOR: '1'
-        run: |
-          & "${{ github.workspace }}\crates\stdiod\scripts\test-install-beeper-windows.ps1"
-          exit $LASTEXITCODE
-      - name: Shell version (PowerShell 7)
-        if: matrix.shell == 'pwsh'
-        shell: pwsh
-        run: $PSVersionTable.PSVersion.ToString()
-      - name: Run installer checks (PowerShell 7)
-        if: matrix.shell == 'pwsh'
+      # The test treats the process running it as the shell under test (it
+      # spawns the installer from its own exe), so the matrix picks the exe
+      # here; the step's own shell is only a launcher.
+      - name: Run installer checks
         shell: pwsh
         env:
           NO_COLOR: '1'
         run: |
-          & "${{ github.workspace }}\crates\stdiod\scripts\test-install-beeper-windows.ps1"
+          & ${{ matrix.shell }} -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "${{ github.workspace }}\crates\stdiod\scripts\test-install-beeper-windows.ps1"
           exit $LASTEXITCODE

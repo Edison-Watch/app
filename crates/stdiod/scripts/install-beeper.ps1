@@ -149,19 +149,16 @@ function Warn([string]$Text) { Write-Diag "   ! $Text" 'Yellow' }
 function Todo([string]$Text) { Write-Diag "   action: $Text" 'Cyan' }
 function Vlog([string]$Text) { if ($script:VERBOSE_LOG) { Write-Diag "   debug: $Text" 'DarkGray' } }
 
-# Die: print the error + fix and unwind to Main, which turns it into the exit
-# code. A throw (not 'exit') so an interactive session that dot-sourced or
-# scriptblock-invoked the script is not closed on error. The fix and code ride
-# in script variables rather than a custom exception class: PowerShell classes
-# have version-specific quirks under Invoke-Expression, and a marked string
-# works the same on 5.1 and 7.
-$script:DIE_MARK = 'install-beeper-die:'
-$script:DIE_FIX = ''
-$script:DIE_CODE = 1
-function Die([string]$Message, [string]$Fix = '', [int]$Code = 1) {
-    $script:DIE_FIX = $Fix
-    $script:DIE_CODE = $Code
-    throw "$($script:DIE_MARK)$Message"
+# Die: print the error + fix and unwind to the dispatcher, which turns it into
+# exit code 1. A throw (not 'exit') so an interactive session that dot-sourced
+# or scriptblock-invoked the script is not closed on error. The fix rides in
+# Exception.Data rather than a custom exception class: PowerShell classes have
+# version-specific quirks under Invoke-Expression, and Data works the same on
+# 5.1 and 7.
+function Die([string]$Message, [string]$Fix = '') {
+    $e = New-Object System.Exception $Message
+    $e.Data['fix'] = $Fix
+    throw $e
 }
 
 # Run a native command, capturing stdout+stderr as text and the exit code in
@@ -257,47 +254,49 @@ function Parse-Flags([string[]]$List) {
     $i = 0
     while ($i -lt $List.Count) {
         $a = $List[$i]
+        # Tokens this flag consumes: 2 for the ones that take a value.
+        $n = 1
         switch ($a) {
-            '--sg-backend' { $script:SG_BACKEND = Get-FlagValue $List $i $a; $script:SG_BACKEND_SET = $true; $i += 2; continue }
-            '--demo' { $script:SG_BACKEND = 'https://demo-dashboard.sealgate.ai'; $script:SG_BACKEND_SET = $true; $i++; continue }
-            '--release' { $script:SG_BACKEND = 'https://dashboard.sealgate.ai'; $script:SG_BACKEND_SET = $true; $i++; continue }
+            '--sg-backend' { $script:SG_BACKEND = Get-FlagValue $List $i $a; $script:SG_BACKEND_SET = $true; $n = 2 }
+            '--demo' { $script:SG_BACKEND = 'https://demo-dashboard.sealgate.ai'; $script:SG_BACKEND_SET = $true }
+            '--release' { $script:SG_BACKEND = 'https://dashboard.sealgate.ai'; $script:SG_BACKEND_SET = $true }
             # A backend run from a checkout of the product repo listens on 3001;
             # the device login opens the approval page on that local dashboard.
-            '--local' { $script:SG_BACKEND = 'http://127.0.0.1:3001'; $script:SG_BACKEND_SET = $true; $i++; continue }
-            '--sg-api-key' { $script:SG_API_KEY = Get-FlagValue $List $i $a; $i += 2; continue }
-            '--server-name' { $script:SERVER_NAME = Get-FlagValue $List $i $a; $i += 2; continue }
-            '--device-label' { $script:DEVICE_LABEL = Get-FlagValue $List $i $a; $i += 2; continue }
-            '--node-version' { $script:NODE_VERSION = Get-FlagValue $List $i $a; $i += 2; continue }
-            '--oauth-wait' { $script:OAUTH_WAIT = [int](Get-FlagValue $List $i $a); $i += 2; continue }
-            '--beeper-wait' { $script:BEEPER_WAIT = [int](Get-FlagValue $List $i $a); $i += 2; continue }
-            '--no-open' { $script:NO_OPEN = $true; $i++; continue }
-            '--relogin' { $script:RELOGIN = $true; $i++; continue }
-            '--new-device' { $script:NEW_DEVICE = $true; $script:RELOGIN = $true; $i++; continue }
-            '--no-preauth' { $script:NO_PREAUTH = $true; $i++; continue }
-            '--stdiod-tag' { $script:STDIOD_TAG = Get-FlagValue $List $i $a; $i += 2; continue }
-            '--stdiod-prerelease' { $script:STDIOD_PRERELEASE = $true; $script:STDIOD_CHANNEL_SET = $true; $i++; continue }
-            '--stdiod-release' { $script:STDIOD_PRERELEASE = $false; $script:STDIOD_CHANNEL_SET = $true; $i++; continue }
-            '--dry-run' { $script:DRY_RUN = $true; $i++; continue }
-            '-y' { $script:ASSUME_YES = $true; $script:YES_SET = $true; $i++; continue }
-            '--yes' { $script:ASSUME_YES = $true; $script:YES_SET = $true; $i++; continue }
-            '--interactive' { $script:INTERACTIVE = $true; $script:ASSUME_YES = $false; $script:YES_SET = $true; $i++; continue }
-            '--install-deps' { $script:INSTALL_DEPS = $true; $i++; continue }
-            '--no-install-deps' { $script:INSTALL_DEPS = $false; $i++; continue }
-            '--no-color' { $script:NO_COLOR_FLAG = $true; $i++; continue }
-            '--json' { $script:JSON = $true; $i++; continue }
-            '--verbose' { $script:VERBOSE_LOG = $true; $i++; continue }
+            '--local' { $script:SG_BACKEND = 'http://127.0.0.1:3001'; $script:SG_BACKEND_SET = $true }
+            '--sg-api-key' { $script:SG_API_KEY = Get-FlagValue $List $i $a; $n = 2 }
+            '--server-name' { $script:SERVER_NAME = Get-FlagValue $List $i $a; $n = 2 }
+            '--device-label' { $script:DEVICE_LABEL = Get-FlagValue $List $i $a; $n = 2 }
+            '--node-version' { $script:NODE_VERSION = Get-FlagValue $List $i $a; $n = 2 }
+            '--oauth-wait' { $script:OAUTH_WAIT = [int](Get-FlagValue $List $i $a); $n = 2 }
+            '--beeper-wait' { $script:BEEPER_WAIT = [int](Get-FlagValue $List $i $a); $n = 2 }
+            '--no-open' { $script:NO_OPEN = $true }
+            '--relogin' { $script:RELOGIN = $true }
+            '--new-device' { $script:NEW_DEVICE = $true; $script:RELOGIN = $true }
+            '--no-preauth' { $script:NO_PREAUTH = $true }
+            '--stdiod-tag' { $script:STDIOD_TAG = Get-FlagValue $List $i $a; $n = 2 }
+            '--stdiod-prerelease' { $script:STDIOD_PRERELEASE = $true; $script:STDIOD_CHANNEL_SET = $true }
+            '--stdiod-release' { $script:STDIOD_PRERELEASE = $false; $script:STDIOD_CHANNEL_SET = $true }
+            '--dry-run' { $script:DRY_RUN = $true }
+            '-y' { $script:ASSUME_YES = $true; $script:YES_SET = $true }
+            '--yes' { $script:ASSUME_YES = $true; $script:YES_SET = $true }
+            '--interactive' { $script:INTERACTIVE = $true; $script:ASSUME_YES = $false; $script:YES_SET = $true }
+            '--install-deps' { $script:INSTALL_DEPS = $true }
+            '--no-install-deps' { $script:INSTALL_DEPS = $false }
+            '--no-color' { $script:NO_COLOR_FLAG = $true }
+            '--json' { $script:JSON = $true }
+            '--verbose' { $script:VERBOSE_LOG = $true }
             '-h' { return $true }
             '--help' { return $true }
-            '--' { $i++; continue }
+            '--' { }
             # --from-source needs a Rust toolchain and a checkout, which the
             # Windows path does not carry; the prebuilt exe is the only path.
             '--from-source' { Die '--from-source is not supported by the Windows installer' 'drop the flag to download the prebuilt exe, or build with cargo from a checkout of crates/stdiod' }
             default {
                 if ($a.StartsWith('-')) { Die "unknown flag: $a" "run '$($script:PROG) <command> --help' for accepted flags" }
                 $script:POSITIONAL += $a
-                $i++
             }
         }
+        $i += $n
     }
     return $false
 }
@@ -463,10 +462,6 @@ function Install-NodeUserspace {
 
 function Ensure-Node {
     if (Test-Command 'npx.cmd') { return }
-    if (Test-Path (Join-Path $script:NODE_DIR 'npx.cmd')) {
-        $env:Path = "$($script:NODE_DIR);$env:Path"
-        if (Test-Command 'npx.cmd') { Ok "found npx in $($script:NODE_DIR) (added to PATH for this run)"; return }
-    }
     $fix = "install Node from https://nodejs.org, then re-run: $($script:RERUN) install"
     if ($script:DRY_RUN) {
         Info "dep 'npx' missing; would download the official Node.js LTS zip into $($script:NODE_DIR) (per-user, no admin)"
@@ -589,10 +584,6 @@ function Install-StdiodPrebuilt {
 
 function Ensure-StdiodBin {
     if (Test-Command 'sealgate-stdiod') { return }
-    if (Test-Path $script:STDIOD_EXE) {
-        $env:Path = "$($script:INSTALL_DIR);$env:Path"
-        if (Test-Command 'sealgate-stdiod') { Ok "found sealgate-stdiod in $($script:INSTALL_DIR) (added to PATH for this run)"; return }
-    }
     if ($script:DRY_RUN) {
         Info "dep 'sealgate-stdiod' missing; would download the prebuilt release exe into $($script:INSTALL_DIR)"
         return
@@ -947,7 +938,7 @@ function Get-StdiodSavedBackend {
 function Resolve-Backend {
     if ($script:SG_BACKEND_SET) { return }
     $saved = Get-StdiodSavedBackend
-    if ($saved -and $saved -ne ($script:SG_BACKEND -replace '/+$', '')) {
+    if ($saved -and $saved -ne $script:SG_BACKEND) {
         $script:SG_BACKEND = $saved
         Info "using the backend this device is authorized to: $($script:SG_BACKEND) (override with --sg-backend / --demo / --release)"
     }
@@ -957,7 +948,7 @@ function Resolve-Backend {
 function Resolve-StdiodChannel {
     if ($script:STDIOD_CHANNEL_SET) { return }
     if ($script:STDIOD_TAG) { return }
-    if (($script:SG_BACKEND -replace '/+$', '') -match '//demo-|//[^/]*-demo\.') {
+    if ($script:SG_BACKEND -match '//demo-|//[^/]*-demo\.') {
         $script:STDIOD_PRERELEASE = $true
         Vlog "demo backend ($($script:SG_BACKEND)): taking the daemon from the demo channel"
     }
@@ -973,13 +964,12 @@ function Ensure-StdiodAuth {
     if (-not $script:RELOGIN) { $cred = Get-StdiodCredentialState }
     switch ($cred) {
         { $_ -in @('live', 'unknown') } {
+            # Resolve-Backend already adopted the saved backend when no flag
+            # named one, so a mismatch here is an explicit flag disagreeing
+            # with the saved session: ambiguous, so stop.
             $saved = Get-StdiodSavedBackend
-            if ($saved -and $saved -ne ($script:SG_BACKEND -replace '/+$', '')) {
-                if ($script:SG_BACKEND_SET) {
-                    Die "this device is authorized to $saved, but --sg-backend asked for $($script:SG_BACKEND)" "pass --relogin to switch to $($script:SG_BACKEND), or drop --sg-backend to keep $saved"
-                }
-                Warn "using the authorized backend $saved (pass --sg-backend <url> --relogin to switch)"
-                $script:SG_BACKEND = $saved
+            if ($saved -and $saved -ne $script:SG_BACKEND) {
+                Die "this device is authorized to $saved, but --sg-backend asked for $($script:SG_BACKEND)" "pass --relogin to switch to $($script:SG_BACKEND), or drop --sg-backend to keep $saved"
             }
             if ($cred -eq 'unknown') {
                 Warn 'could not verify the saved credential (backend unreachable); using it as-is'
@@ -989,7 +979,7 @@ function Ensure-StdiodAuth {
             return
         }
         'dead' {
-            Warn "the saved credential is expired or revoked ($($script:SG_BACKEND -replace '/+$', '') returned 401)"
+            Warn "the saved credential is expired or revoked ($($script:SG_BACKEND) returned 401)"
             Info 're-running the browser device flow to replace it'
         }
     }
@@ -1002,25 +992,17 @@ function Ensure-StdiodAuth {
     Ok "device authorized to $($script:SG_BACKEND)"
 }
 
-function Get-StdiodConnectionState {
-    $f = Get-StdiodStatePath
-    if (-not (Test-Path $f)) { return '' }
-    try {
-        $st = (Get-Content -Path $f -Raw -ErrorAction SilentlyContinue) | ConvertFrom-Json
-        return [string]$st.connection_state
-    } catch { return '' }
-}
-
-# The daemon's last_error from state.json, or ''. This is where the backend's
-# own explanation lands when a connect is refused (an org with stdio servers
+# One top-level field of the daemon's state.json, or ''. connection_state is
+# "connected", "needs_reauth", ...; last_error is where the backend's own
+# explanation lands when a connect is refused (an org with stdio servers
 # switched off says "Stdio servers are not enabled for your organisation.
 # Contact your admin."), so a stalled connection can name its cause.
-function Get-StdiodLastError {
+function Get-StdiodStateField([string]$Key) {
     $f = Get-StdiodStatePath
     if (-not (Test-Path $f)) { return '' }
     try {
         $st = (Get-Content -Path $f -Raw -ErrorAction SilentlyContinue) | ConvertFrom-Json
-        return [string]$st.last_error
+        return [string]$st.$Key
     } catch { return '' }
 }
 
@@ -1029,7 +1011,7 @@ function Get-StdiodLastError {
 function Wait-StdiodConnected([int]$Seconds) {
     $deadline = (Get-Date).AddSeconds($Seconds)
     while ((Get-Date) -lt $deadline) {
-        switch (Get-StdiodConnectionState) {
+        switch (Get-StdiodStateField 'connection_state') {
             'connected' { return $true }
             'needs_reauth' { Warn "the daemon's credential was rejected (run: $($script:RERUN) install --relogin)"; return $false }
             'needs_upgrade' { Warn 'the daemon is too old for this backend; update it'; return $false }
@@ -1055,8 +1037,8 @@ function Ensure-StdiodSupervised {
         Ok 'daemon connected'
         $script:STDIOD_CONNECTED = $true
     } else {
-        Warn "the daemon has not connected yet (state: $(Get-StdiodConnectionState))"
-        $lastErr = Get-StdiodLastError
+        Warn "the daemon has not connected yet (state: $(Get-StdiodStateField 'connection_state'))"
+        $lastErr = Get-StdiodStateField 'last_error'
         if ($lastErr) { Warn "the daemon reports: $lastErr" }
     }
 }
@@ -1128,7 +1110,7 @@ function Submit-BeeperServer {
         Info "Beeper is wired up. To check the daemon's connection, run 'sealgate-stdiod status'."
     } else {
         Ok "submitted '$($script:SERVER_NAME)' (npx $($script:MCP_PKG)) for approval"
-        Todo "approve '$($script:SERVER_NAME)' as an admin: $($script:SG_BACKEND -replace '/+$', '')  ->  Servers page (pending requests), or Overview"
+        Todo "approve '$($script:SERVER_NAME)' as an admin: $($script:SG_BACKEND)  ->  Servers page (pending requests), or Overview"
         Info "a 'not verified' badge before the first successful spawn is expected and does not block approval"
     }
 }
@@ -1137,7 +1119,7 @@ function Submit-BeeperServer {
 # Result
 # ---------------------------------------------------------------------------
 function Write-Result {
-    $mcpUrl = "$($script:SG_BACKEND -replace '/+$', '')/mcp"
+    $mcpUrl = "$($script:SG_BACKEND)/mcp"
     if ($script:JSON) {
         $obj = [ordered]@{ mcp_url = $mcpUrl; server = $script:SERVER_NAME; device_label = $script:DEVICE_LABEL; mcp_pkg = $script:MCP_PKG }
         Write-Output (ConvertTo-Json -InputObject $obj -Compress)
@@ -1382,6 +1364,9 @@ function Invoke-Main([string[]]$Argv) {
     }
     if (Parse-Flags $rest) { Initialize-Colors; Show-SubcommandHelp $cmd; return }
     Initialize-Colors
+    # Invariant from here on: SG_BACKEND carries no trailing slash, whether it
+    # came from the environment, a flag, or the saved session below.
+    $script:SG_BACKEND = $script:SG_BACKEND -replace '/+$', ''
     # An exe this script installed may not be on the user's PATH yet.
     if ((Test-Path $script:STDIOD_EXE) -and -not (Test-Command 'sealgate-stdiod')) { $env:Path = "$($script:INSTALL_DIR);$env:Path" }
     if ((Test-Path (Join-Path $script:NODE_DIR 'npx.cmd')) -and -not (Test-Command 'npx.cmd')) { $env:Path = "$($script:NODE_DIR);$env:Path" }
@@ -1417,22 +1402,23 @@ function Test-OneShotHost {
     return $false
 }
 
+# Dot-sourced (`. .\install-beeper.ps1`): define the functions and stop, for
+# the CI test and for anyone poking at the helpers from a prompt.
+if ($MyInvocation.InvocationName -eq '.') { return }
+
 $script:ExitCode = 0
 $script:ARGV = @()
 if ($Arguments) { $script:ARGV = @($Arguments | Where-Object { $null -ne $_ }) }
 try {
     Invoke-Main $script:ARGV
 } catch {
-    $msg = $_.Exception.Message
-    if ($msg.StartsWith($script:DIE_MARK)) {
-        Write-Diag "x error: $($msg.Substring($script:DIE_MARK.Length))" 'Red'
-        if ($script:DIE_FIX) { Write-Diag "     fix: $($script:DIE_FIX)" 'Cyan' }
-        $script:ExitCode = $script:DIE_CODE
-    } else {
-        Write-Diag "x error: $msg" 'Red'
-        if ($script:VERBOSE_LOG) { Write-Diag ($_.ScriptStackTrace) 'DarkGray' }
-        $script:ExitCode = 1
+    Write-Diag "x error: $($_.Exception.Message)" 'Red'
+    if ($_.Exception.Data.Contains('fix')) {
+        if ($_.Exception.Data['fix']) { Write-Diag "     fix: $($_.Exception.Data['fix'])" 'Cyan' }
+    } elseif ($script:VERBOSE_LOG) {
+        Write-Diag ($_.ScriptStackTrace) 'DarkGray'
     }
+    $script:ExitCode = 1
 }
 if ($script:ExitCode -ne 0) {
     if (Test-OneShotHost) { exit $script:ExitCode }

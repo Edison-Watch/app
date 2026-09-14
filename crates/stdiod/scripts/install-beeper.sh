@@ -194,7 +194,7 @@ require_supported_platform() {
           "run the Windows installer from PowerShell instead: $WINDOWS_ONE_LINER"
       fi
       warn "Linux is experimental: the stdiod supervisor needs a systemd --user session, and Beeper's MCP endpoint comes from the Desktop app, so the child has nothing to reach without one";;
-    MINGW*|MSYS*|CYGWIN*|Windows_NT)
+    MINGW*|MSYS*|CYGWIN*)
       die "this is the macOS/Linux installer; on Windows use the PowerShell one" \
         "open PowerShell and run: $WINDOWS_ONE_LINER";;
     *)      die "unsupported platform: $(uname -s)" "macOS, Linux and Windows (install-beeper.ps1) are supported; see stdiod/README.md";;
@@ -363,12 +363,6 @@ install_node_userspace() {
 # previews). Userspace download first; an existing Homebrew is only a fallback.
 ensure_node() {
   command -v npx >/dev/null 2>&1 && return 0
-  # A node we linked on a previous run that just fell off this shell's PATH.
-  if [ -x "$HOME/.local/bin/npx" ]; then
-    PATH="$HOME/.local/bin:$PATH"
-    command -v npx >/dev/null 2>&1 \
-      && { ok "found npx in ~/.local/bin (added to PATH for this run)"; return 0; }
-  fi
   local fix="install Node from https://nodejs.org (userspace, no sudo), then re-run: $PROG install"
   if [ "$DRY_RUN" -eq 1 ]; then
     info "dep 'npx' missing; would download the official Node.js LTS build into ~/.local (userspace, no sudo)"
@@ -689,11 +683,6 @@ build_stdiod_from_source() {
 # who never asked for one. It fails instead, naming --from-source.
 ensure_stdiod_bin() {
   command -v sealgate-stdiod >/dev/null 2>&1 && return 0
-  if [ -x "$HOME/.local/bin/sealgate-stdiod" ]; then
-    PATH="$HOME/.local/bin:$PATH"
-    ok "found sealgate-stdiod in ~/.local/bin (added to PATH for this run)"
-    return 0
-  fi
   if [ "$DRY_RUN" -eq 1 ]; then
     if [ "$FROM_SOURCE" -eq 1 ]; then
       info "dep 'sealgate-stdiod' missing; would build it from source (needs Rust + a C toolchain + a checkout)"
@@ -1092,7 +1081,7 @@ stdiod_saved_backend() {
 resolve_backend() {
   [ "$SG_BACKEND_SET" -eq 1 ] && return 0
   local saved; saved="$(stdiod_saved_backend)"
-  if [ -n "$saved" ] && [ "$saved" != "${SG_BACKEND%/}" ]; then
+  if [ -n "$saved" ] && [ "$saved" != "$SG_BACKEND" ]; then
     SG_BACKEND="$saved"
     info "using the backend this device is authorized to: ${SG_BACKEND} (override with --sg-backend / --demo / --release)"
   fi
@@ -1111,7 +1100,7 @@ resolve_backend() {
 resolve_stdiod_channel() {
   [ "$STDIOD_CHANNEL_SET" -eq 1 ] && return 0
   [ -n "$STDIOD_TAG" ] && return 0
-  case "${SG_BACKEND%/}" in
+  case "$SG_BACKEND" in
     *//demo-*|*//*-demo.*)
       STDIOD_PRERELEASE=1
       vlog "demo backend (${SG_BACKEND}): taking the daemon from the demo channel"
@@ -1139,17 +1128,14 @@ ensure_stdiod_auth() {
   [ "$RELOGIN" -eq 0 ] && cred="$(stdiod_credential_state)"
   case "$cred" in
     live|unknown)
+      # resolve_backend already adopted the saved backend when no flag named
+      # one, so a mismatch here is an explicit --sg-backend disagreeing with
+      # the saved session: ambiguous, so stop rather than silently target the
+      # wrong backend.
       local saved; saved="$(stdiod_saved_backend)"
-      if [ -n "$saved" ] && [ "$saved" != "${SG_BACKEND%/}" ]; then
-        # An explicit --sg-backend that disagrees with the saved session is
-        # ambiguous, so stop rather than silently target the wrong backend. With
-        # no explicit flag, prefer the authorized session.
-        if [ "$SG_BACKEND_SET" -eq 1 ]; then
-          die "this device is authorized to ${saved}, but --sg-backend asked for ${SG_BACKEND}" \
-            "pass --relogin to switch to ${SG_BACKEND}, or drop --sg-backend to keep ${saved}"
-        fi
-        warn "using the authorized backend ${saved} (pass --sg-backend <url> --relogin to switch)"
-        SG_BACKEND="$saved"
+      if [ -n "$saved" ] && [ "$saved" != "$SG_BACKEND" ]; then
+        die "this device is authorized to ${saved}, but --sg-backend asked for ${SG_BACKEND}" \
+          "pass --relogin to switch to ${SG_BACKEND}, or drop --sg-backend to keep ${saved}"
       fi
       if [ "$cred" = "unknown" ]; then
         # Could not reach the backend to check. Logging in again would not work
@@ -1162,7 +1148,7 @@ ensure_stdiod_auth() {
       return 0
       ;;
     dead)
-      warn "the saved credential is expired or revoked (${SG_BACKEND%/} returned 401)"
+      warn "the saved credential is expired or revoked (${SG_BACKEND} returned 401)"
       info "re-running the browser device flow to replace it"
       ;;
   esac
@@ -1177,22 +1163,18 @@ ensure_stdiod_auth() {
   ok "device authorized to ${SG_BACKEND}"
 }
 
-# Current connection_state from state.json ("connected", "needs_reauth", ...).
-stdiod_connection_state() {
-  local f="${SEALGATE_STDIOD_STATE:-$HOME/.config/sealgate-stdiod/state.json}"
-  [ -f "$f" ] || return 0
-  sed -n 's/.*"connection_state"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$f" | head -n1
-}
-
-# The daemon's last_error from state.json, or nothing. This is where the
+# One top-level string field of the daemon's state.json, or nothing.
+# connection_state is "connected", "needs_reauth", ...; last_error is where the
 # backend's own explanation lands when a connect is refused (an org with stdio
 # servers switched off says "Stdio servers are not enabled for your
 # organisation. Contact your admin."), so a stalled connection can name its
-# cause instead of just its state.
-stdiod_last_error() {
+# cause instead of just its state. Diagnostic text only: the sed stops at the
+# first quote, so an escaped quote inside the value truncates it and JSON
+# escapes print raw.
+stdiod_state_field() {
   local f="${SEALGATE_STDIOD_STATE:-$HOME/.config/sealgate-stdiod/state.json}"
   [ -f "$f" ] || return 0
-  sed -n 's/.*"last_error"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$f" | head -n1
+  sed -n 's/.*"'"$1"'"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$f" | head -n1
 }
 
 # Wait for the daemon to register with the backend. The backend refuses a
@@ -1202,7 +1184,7 @@ stdiod_last_error() {
 wait_stdiod_connected() {
   local deadline=$(( SECONDS + $1 )) st
   while [ "$SECONDS" -lt "$deadline" ]; do
-    st="$(stdiod_connection_state)"
+    st="$(stdiod_state_field connection_state)"
     case "$st" in
       connected) return 0;;
       needs_reauth) warn "the daemon's credential was rejected (run: $PROG install --relogin)"; return 1;;
@@ -1242,8 +1224,8 @@ ensure_stdiod_supervised() {
     ok "daemon connected"
     STDIOD_CONNECTED=1
   else
-    warn "the daemon has not connected yet (state: $(stdiod_connection_state))"
-    local last_err; last_err="$(stdiod_last_error)"
+    warn "the daemon has not connected yet (state: $(stdiod_state_field connection_state))"
+    local last_err; last_err="$(stdiod_state_field last_error)"
     [ -n "$last_err" ] && warn "the daemon reports: $last_err"
   fi
 }
@@ -1348,7 +1330,7 @@ submit_beeper_server() {
     info "Beeper is wired up - nothing further is required here. To check the daemon's connection, run 'sealgate-stdiod status'."
   else
     ok "submitted '$SERVER_NAME' (npx $MCP_PKG) for approval"
-    todo "approve '$SERVER_NAME' as an admin: ${SG_BACKEND%/}  ->  Servers page (pending requests), or Overview"
+    todo "approve '$SERVER_NAME' as an admin: ${SG_BACKEND}  ->  Servers page (pending requests), or Overview"
     info "a 'not verified' badge before the first successful spawn is expected and does not block approval"
   fi
 }
@@ -1357,7 +1339,7 @@ submit_beeper_server() {
 # Result
 # ---------------------------------------------------------------------------
 print_result() {
-  local mcp_url="${SG_BACKEND%/}/mcp"
+  local mcp_url="${SG_BACKEND}/mcp"
   if [ "$JSON" -eq 1 ]; then
     printf '{"mcp_url":"%s","server":"%s","device_label":"%s","mcp_pkg":"%s"}\n' \
       "$(json_escape "$mcp_url")" "$(json_escape "$SERVER_NAME")" "$(json_escape "$DEVICE_LABEL")" \
@@ -1724,14 +1706,18 @@ main() {
   ARGS=()
   parse_flags "$@" || { init_colors; subcmd_help "$cmd"; exit 0; }
   init_colors
-  # A binary we installed to ~/.local/bin (or cargo put in ~/.cargo/bin) may
-  # not be on the user's PATH yet; every subcommand should still find it.
+  # A binary we installed to ~/.local/bin (node/npx or the daemon; cargo puts
+  # the daemon in ~/.cargo/bin) may not be on the user's PATH yet; every
+  # subcommand should still find it.
   local d
   for d in "$HOME/.local/bin" "$HOME/.cargo/bin"; do
-    if [ -x "$d/sealgate-stdiod" ]; then
+    if [ -x "$d/sealgate-stdiod" ] || [ -x "$d/npx" ]; then
       case ":$PATH:" in *":$d:"*) ;; *) PATH="$d:$PATH";; esac
     fi
   done
+  # Invariant from here on: SG_BACKEND carries no trailing slash, whether it
+  # came from the environment, a flag, or the saved session below.
+  SG_BACKEND="$(printf '%s' "$SG_BACKEND" | sed 's:/*$::')"
   # No subcommand takes positional args; reject stray ones so typos are loud.
   [ "${#ARGS[@]}" -gt 0 ] && die "unexpected argument: ${ARGS[0]}" "run '$PROG --help' for usage"
   # Default the backend to the device's authorized session unless set explicitly,

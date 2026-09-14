@@ -156,12 +156,9 @@ Check 'install --dry-run previews every step and changes nothing' {
 
 Write-Host ''
 Write-Host '== 4. real dependency install'
-# Load the installer's functions without running its dispatch, then call the
-# dependency step for real. Same trick the Linux dry-run used in review.
-$src = Get-Content -Path $Script -Raw
-$head = $src.Substring(0, $src.IndexOf('$script:ExitCode = 0'))
-$head = $head -replace '(?m)^param\([\s\S]*?^\)\r?\n', ''
-. ([scriptblock]::Create($head))
+# Dot-sourcing the installer defines its functions and returns before the
+# dispatch (its own guard), so the dependency step can be called for real.
+. $Script
 Initialize-Colors
 $script:ASSUME_YES = $true
 $script:INSTALL_DEPS = $true
@@ -316,7 +313,7 @@ Check 'Ensure-StdiodSupervised registers the Scheduled Task; the daemon runs and
     Ensure-StdiodSupervised
     $null = Invoke-Native 'schtasks' @('/query', '/tn', $taskName)
     Assert ($script:LastRc -eq 0) "task '$taskName' not registered"
-    $st = Get-StdiodConnectionState
+    $st = Get-StdiodStateField 'connection_state'
     Write-Host "       connection_state after $($script:CONNECT_WAIT)s: [$st]"
     $null = Invoke-Native 'sealgate-stdiod' @('status')
     Write-Host "       status exit code: $($script:LastRc) (0 running, 3 installed but not running)"
