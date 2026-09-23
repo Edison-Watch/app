@@ -1,0 +1,13 @@
+{
+  "extraKnownMarketplaces": {
+    "simple-english": {
+      "source": {
+        "source": "github",
+        "repo": "AminBlg/SimpleEnglish"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "simple-english@simple-english": true
+  }
+}
