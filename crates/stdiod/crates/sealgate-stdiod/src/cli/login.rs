@@ -42,6 +42,13 @@ pub struct LoginArgs {
     /// hostname. Accepting it would silently do nothing.
     #[arg(long, conflicts_with = "api_key")]
     pub new_device: bool,
+    /// Campaign tag added to the approval URL, so a signup made while
+    /// approving this device is credited to the page that sent the user here.
+    #[arg(long, env = "SEALGATE_UTM_CAMPAIGN")]
+    pub utm_campaign: Option<String>,
+    /// Variant tag (for example `whatsapp-grok`), added alongside the campaign.
+    #[arg(long, env = "SEALGATE_UTM_CONTENT")]
+    pub utm_content: Option<String>,
 }
 
 pub async fn run(args: LoginArgs) -> Result<()> {
@@ -89,10 +96,15 @@ pub async fn run(args: LoginArgs) -> Result<()> {
         .initiate(pkce.challenge(), label, existing_installation)
         .await?;
 
+    let approval_url = with_utm(
+        &code.verification_uri_complete,
+        args.utm_campaign.as_deref(),
+        args.utm_content.as_deref(),
+    )?;
     println!("Open this URL to authorize stdiod:");
-    println!("{}", code.verification_uri_complete);
+    println!("{approval_url}");
     println!("User code: {}", code.user_code);
-    if !try_open_browser(&code.verification_uri_complete, args.no_open, |url| {
+    if !try_open_browser(&approval_url, args.no_open, |url| {
         webbrowser::open(url).is_ok()
     })? && !args.no_open
     {
@@ -243,6 +255,22 @@ fn save_login(cfg: &PersistedConfig) -> Result<()> {
     Ok(())
 }
 
+/// Append the given UTM tags to the approval URL. The dashboard stashes them
+/// on first load and stamps them on an account created during the approval.
+fn with_utm(url: &str, campaign: Option<&str>, content: Option<&str>) -> Result<String> {
+    let tags = [("utm_campaign", campaign), ("utm_content", content)];
+    let mut tags = tags
+        .into_iter()
+        .filter_map(|(key, value)| Some((key, value.map(str::trim).filter(|v| !v.is_empty())?)))
+        .peekable();
+    if tags.peek().is_none() {
+        return Ok(url.to_owned());
+    }
+    let mut parsed = url::Url::parse(url)?;
+    parsed.query_pairs_mut().extend_pairs(tags);
+    Ok(parsed.into())
+}
+
 /// Validate before invoking the opener. Returning `false` means skipped or
 /// failed; both are nonfatal because the printed code is sufficient.
 fn try_open_browser<F>(url: &str, no_open: bool, opener: F) -> Result<bool>
@@ -296,6 +324,41 @@ mod tests {
     fn browser_failure_is_nonfatal() {
         let result = try_open_browser("https://example.test/activate", false, |_| false);
         assert!(matches!(result, Ok(false)));
+    }
+
+    #[test]
+    fn utm_tags_are_appended_to_the_approval_url() {
+        let url = with_utm(
+            "https://dashboard.example/device?user_code=ABCD-EFGH",
+            Some("seo-connect"),
+            Some("whatsapp-grok"),
+        )
+        .unwrap();
+        assert_eq!(
+            url,
+            "https://dashboard.example/device?user_code=ABCD-EFGH\
+             &utm_campaign=seo-connect&utm_content=whatsapp-grok"
+        );
+    }
+
+    #[test]
+    fn missing_or_blank_utm_tags_leave_the_url_untouched() {
+        let base = "https://dashboard.example/device?user_code=ABCD-EFGH";
+        assert_eq!(with_utm(base, None, None).unwrap(), base);
+        assert_eq!(with_utm(base, Some(" "), Some("")).unwrap(), base);
+        assert_eq!(
+            with_utm(base, None, Some("docs-grok")).unwrap(),
+            format!("{base}&utm_content=docs-grok")
+        );
+    }
+
+    #[test]
+    fn utm_values_are_query_encoded() {
+        let url = with_utm("https://dashboard.example/device", Some("a&b=c"), None).unwrap();
+        assert_eq!(
+            url,
+            "https://dashboard.example/device?utm_campaign=a%26b%3Dc"
+        );
     }
 
     #[test]
@@ -376,6 +439,8 @@ mod tests {
                 device_id: None,
                 device_label: None,
                 new_device: false,
+                utm_campaign: None,
+                utm_content: None,
             },
         )
         .unwrap();
@@ -408,6 +473,8 @@ mod tests {
                 device_id: Some("new-device".into()),
                 device_label: None,
                 new_device: false,
+                utm_campaign: None,
+                utm_content: None,
             },
         )
         .unwrap();

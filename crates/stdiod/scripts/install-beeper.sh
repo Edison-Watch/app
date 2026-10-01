@@ -53,6 +53,10 @@
 # Built to be driven by an agent or a human: every input is a flag or an
 # UPPER_SNAKE env var, nothing blocks on a prompt unless you pass --interactive,
 # and missing inputs fail fast with the exact command to fix them.
+#
+# SEALGATE_UTM_CAMPAIGN / SEALGATE_UTM_CONTENT, when set, pass straight through
+# to `sealgate-stdiod login`, which adds them to the browser approval URL so a
+# signup made there is credited to the page that handed out this command.
 
 set -euo pipefail
 

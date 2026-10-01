@@ -139,7 +139,7 @@ TLDR: `sealgate-stdiod --help` (and `sealgate-stdiod <command> --help` for any s
 
 | Command | What it does |
 | --- | --- |
-| `login` | Start browser/device authorization and persist the resulting scoped client credential in `~/.config/sealgate-stdiod/config.toml` (mode `0600`). Use `--no-open` for headless login. The deprecated `--api-key` path remains for existing desktop clients. |
+| `login` | Start browser/device authorization and persist the resulting scoped client credential in `~/.config/sealgate-stdiod/config.toml` (mode `0600`). Use `--no-open` for headless login. `--utm-campaign` / `--utm-content` (or `SEALGATE_UTM_CAMPAIGN` / `SEALGATE_UTM_CONTENT`) add attribution tags to the approval URL. The deprecated `--api-key` path remains for existing desktop clients. |
 | `logout` | Atomically remove local credentials and account/device bindings, then best-effort revoke the prior client credential. Retains the backend URL and unrelated preferences. |
 | `install` | Register the OS supervisor unit (macOS LaunchAgent, Windows per-user Scheduled Task, Linux systemd `--user` unit) so the daemon starts at login and restarts on crash. Requires `login` first. |
 | `uninstall` | Stop and remove the supervisor unit. Pass `--purge` to also delete the persisted config and logs. |
