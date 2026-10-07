@@ -160,7 +160,7 @@ export default function WelcomeStep({ auth, onNext }: WelcomeStepProps): React.R
             </button>
             <p className="text-center text-xs text-[var(--text-secondary)]">
               Your browser opens the SealGate dashboard, where you sign in as usual
-              (Google, Microsoft, SSO, or email) and approve this device.
+              (Google, Microsoft, SSO (add-on), or email) and approve this device.
             </p>
             {errorBox}
           </div>
