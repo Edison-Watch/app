@@ -74,7 +74,7 @@ The daemon opens **one** outbound WebSocket to the backend:
 
 ```
 GET <backend>/api/v1/stdio-tunnel/ws
-Authorization: Bearer <api_key>
+Authorization: Bearer <credential>
 X-SealGate-Device-Id: <device_id>
 ```
 

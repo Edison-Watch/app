@@ -29,7 +29,7 @@ This repository is public so that the shared client code used across SealGate ca
 </p>
 
 > [!NOTE]
-> `@sealgate/shared` is at `0.1.0` and is not published to npm. SealGate repositories consume it from source, including through Git submodules. Module subpaths and build output are kept stable so publishing can change without redesigning the public surface. Only values safe to expose in browser bundles belong here: no server credentials, private keys, or privileged tokens.
+> `@sealgate/shared` is not published to npm (its version is the one in `package.json`). SealGate repositories consume it from source, including through Git submodules. Module subpaths and build output are kept stable so publishing can change without redesigning the public surface. Only values safe to expose in browser bundles belong here: no server credentials, private keys, or privileged tokens.
 
 ## Quick start
 

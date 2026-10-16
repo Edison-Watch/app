@@ -28,7 +28,7 @@
 
 ---
 
-SealGate Desktop is the local control plane for [SealGate](https://sealgate.ai) that governs the [MCP](https://modelcontextprotocol.io/) servers wired into your AI tools, using a menu-bar app that watches every client on your machine. It discovers the servers your AI clients have configured, quarantines risky or unapproved ones before they can run, and bridges local servers to the SealGate gateway through a single outbound tunnel. Built for developers who run MCP servers across many AI clients and want one place to see and control them all.
+SealGate Desktop is the local control plane for [SealGate](https://sealgate.ai) that governs the [MCP](https://modelcontextprotocol.io/) servers wired into your AI tools, using a menu-bar app that watches every client on your machine. It discovers the servers your AI clients have configured, quarantines risky or unapproved ones before they can run, keeps their credentials protected, and bridges local servers to the SealGate gateway through a single outbound tunnel. Built for developers who run MCP servers across many AI clients and want one place to see and control them all.
 
 Discover → review → approve → bridge.
 
@@ -45,6 +45,7 @@ Modern AI tools (Claude, Cursor, VS Code, and friends) connect to MCP servers th
 
 - **Discover** - every MCP server configured across the AI clients installed on your machine, with no manual inventory.
 - **Quarantine** - newly-appeared or unapproved servers ("shadow MCPs") before they can run, with a review-and-approve flow.
+- **Protect credentials** - the credentials of remote servers are stored by the SealGate backend, encrypted at rest under a deployment-held key (they travel there over TLS, and the dashboard never shows a saved value again). The values of local stdio servers stay on your device and are never stored by the backend.
 - **Bridge** - local stdio MCP servers to the SealGate gateway through the bundled [`sealgate-stdiod`](https://github.com/Edison-Watch/stdiod) daemon: a single outbound, no-inbound-ports tunnel, so they're reachable and governed without being exposed.
 - **Stay current** - with in-app auto-updates.
 
