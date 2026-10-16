@@ -57,9 +57,8 @@ request. The backend accepts an `ewc_`-prefixed client credential carrying the
 client credential`.
 *Source: `stdio_tunnel.py::_authenticate_ws`.*
 
-**T-06** A client SHOULD send `X-SealGate-Secret-Key` when it holds one. The
-header is optional at v2. Both the bearer token and the secret key MUST be
-treated as sensitive and MUST NOT appear in logs or in `last_error` text.
+**T-06** The bearer token MUST be treated as sensitive and MUST NOT appear in
+logs or in `last_error` text.
 *Source: `tunnel.rs::build_request` (`HeaderValue::set_sensitive`);
 `daemon_auth.rs::connection_error_message`.*
 

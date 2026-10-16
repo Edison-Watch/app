@@ -41,7 +41,7 @@
   <rect x="150" y="212" width="600" height="190" fill="none" stroke="#C3FFFD" stroke-width="2"/>
   <rect x="150" y="212" width="240" height="22" fill="#C3FFFD"/>
   <text x="270" y="228" text-anchor="middle" font-size="12" font-weight="700" letter-spacing="1.5" fill="#000000">DESKTOP APP</text>
-  <text x="734" y="229" text-anchor="end" font-size="12.5" font-weight="700" fill="#C3FFFD">discover &#183; quarantine &#183; encrypt</text>
+  <text x="734" y="229" text-anchor="end" font-size="12.5" font-weight="700" fill="#C3FFFD">discover &#183; quarantine &#183; bridge</text>
 
   <!-- Renderer sub-box (tag: bottom-left) -->
   <rect x="176" y="258" width="240" height="104" fill="none" stroke="#C3FFFD" stroke-width="2"/>

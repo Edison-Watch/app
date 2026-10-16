@@ -84,8 +84,7 @@ export async function handleStdiodReset(deps: StdiodResetDeps): Promise<void> {
   try {
     const result = await resetStdiod({
       backend: apiBaseUrl,
-      apiKey: creds.apiKey,
-      sealgateSecretKey: creds.sealgateSecretKey
+      apiKey: creds.apiKey
     })
     await refreshStdiodStatusCache().catch(() => {})
     deps.updateTrayMenu()

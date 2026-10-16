@@ -1,7 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 
-import type { SecretOutcome } from '../main/detectord/protocol'
 import type { DetectordHealth } from '../main/detectord/health'
 import type { StdiodLoginInput, StdiodResult, StdiodStatus } from '../main/stdiod/types'
 import type { UpdateState } from '../main/infra/updateManager'
@@ -24,18 +23,8 @@ const api = {
     getData: (): Promise<{ completed?: boolean; [key: string]: unknown }> =>
       ipcRenderer.invoke('setup:getData'),
     complete: (data: Record<string, unknown>): void => ipcRenderer.send('setup:complete', data),
-    update: (data: Record<string, unknown>): Promise<{ ok: boolean }> =>
-      ipcRenderer.invoke('setup:update', data),
     reachedFinal: (): void => ipcRenderer.send('setup:reached-final'),
     reset: (): Promise<{ ok: boolean }> => ipcRenderer.invoke('setup:reset')
-  },
-
-  /** Secret-key operations resolved against the active environment in main. */
-  secretKey: {
-    verify: (
-      key: string
-    ): Promise<{ ok: boolean; valid?: boolean; domainValid?: boolean | null }> =>
-      ipcRenderer.invoke('secretKey:verify', { key })
   },
 
   /** Authentication */
@@ -104,18 +93,11 @@ const api = {
       serverAddress: string
       mcpBaseUrl: string
       apiKey: string
-      sealgateSecretKey?: string
       apps: string[]
     }): Promise<{
       success: boolean
       modifiedConfigs: Array<{ appId: string; configPath: string; backupPath: string }>
     }> => ipcRenderer.invoke('mcp:applyAppIntegrations', args),
-    applyForSecretKey: (
-      sealgateSecretKey: string
-    ): Promise<{
-      success: boolean
-      modifiedConfigs: Array<{ appId: string; configPath: string; backupPath: string }>
-    }> => ipcRenderer.invoke('mcp:applyForSecretKey', { sealgateSecretKey }),
     revertAppIntegrations: (args: {
       configs: Array<{ configPath: string; backupPath: string; appId?: string }>
     }): Promise<{ reverted: number; errors: string[] }> =>
@@ -244,14 +226,6 @@ const api = {
   },
 
 
-  /** OS keychain (safeStorage) - store/load the personal encryption key */
-  keychain: {
-    save: (plaintext: string): Promise<{ ok: boolean; error?: string }> =>
-      ipcRenderer.invoke('keychain:save', plaintext),
-    load: (): Promise<string | null> => ipcRenderer.invoke('keychain:load'),
-    delete: (): Promise<{ ok: boolean }> => ipcRenderer.invoke('keychain:delete')
-  },
-
   /** Developer: clear all app data and relaunch */
   app: {
     clearDataAndRestart: (): Promise<void> => ipcRenderer.invoke('app:clearDataAndRestart')
@@ -264,13 +238,7 @@ const api = {
       apiUrl?: string
       mcpUrl?: string
       apiKey?: string
-      sealgateSecretKey?: string
     }): Promise<{ ok: boolean }> => ipcRenderer.invoke('detectord:enroll', input),
-    /** Register/adopt the org secret key when the user enters or changes it. */
-    setSecret: (
-      key: string
-    ): Promise<{ ok: boolean; outcome?: SecretOutcome; reason?: string }> =>
-      ipcRenderer.invoke('detectord:setSecret', key),
     /** Uninstall the daemon; purge=true also deletes all its data + logs. */
     uninstall: (opts?: { purge?: boolean }): Promise<{ ok: boolean; stdout: string; stderr: string }> =>
       ipcRenderer.invoke('detectord:uninstall', opts),

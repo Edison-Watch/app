@@ -5,21 +5,14 @@
  * Call registerIpcHandlers() once after app.whenReady().
  */
 
-import { app, BrowserWindow, ipcMain, safeStorage, shell } from 'electron'
-import { promises as fs } from 'fs'
-import { join } from 'path'
+import { app, BrowserWindow, ipcMain, shell } from 'electron'
 
 import { getHookStatus } from '../runtime/hookStatus'
-import { applyIntegrations, integrationErrors } from '../detectord/integrations'
 import { getAgentFacts } from '../detectord/agents'
 import { getDetectordHealth } from '../detectord/health'
 import { getDetectordClient } from '../detectord/lifecycle'
 import { CLIENT_DISPLAY } from '../clients/displayMeta'
-import {
-  bootstrapDetectord,
-  setDetectordSecret,
-  warnAgentsNotRepointed
-} from '../detectord/bootstrap'
+import { bootstrapDetectord, warnAgentsNotRepointed } from '../detectord/bootstrap'
 import { uninstallService as uninstallDetectord } from '../detectord/controller'
 import {
   getUpdateState,
@@ -37,9 +30,7 @@ import {
 import { registerMcpSubmitHandlers } from './ipcHandlersMcpSubmit'
 import { registerStdiodHandlers } from './ipcHandlersStdiod'
 import {
-  DRY_RUN,
   ENV_DOCS_URL,
-  ALL_SUPPORTED_APPS,
   type SetupData,
   getActiveEnv,
   getApiBaseUrl,
@@ -236,15 +227,6 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     return { ok: true }
   })
 
-  // Persist-only setup update. Unlike 'setup:complete' (the onboarding finish
-  // event), this does NOT restart background services, inject hooks, or
-  // hide/re-show the window. Used post-onboarding (e.g. saving an org key from
-  // the Config tab) where those lifecycle side effects would be wrong.
-  ipcMain.handle('setup:update', (_event, data: Partial<SetupData>) => {
-    markSetupComplete(data)
-    return { ok: true }
-  })
-
   // Renderer pushes credentials right after sign-in so the daemon can enroll on
   // login. A returning login keeps its API key only in the renderer's auth
   // state (never persisted to the setup file), so app-ready's bootstrap can't
@@ -253,7 +235,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     'detectord:enroll',
     async (
       _event,
-      input: { apiUrl?: string; mcpUrl?: string; apiKey?: string; sealgateSecretKey?: string }
+      input: { apiUrl?: string; mcpUrl?: string; apiKey?: string }
     ) => {
       const outcome = await bootstrapDetectord(input).catch((err) => {
         console.error('[detectord] enroll (push) failed:', err)
@@ -265,80 +247,11 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   )
 
-  // Register/adopt the org secret key when the user enters or changes it
-  // (OrgKeyCard). Explicit "enroll key" state change, separate from login.
-  ipcMain.handle('detectord:setSecret', async (_event, key: string) =>
-    setDetectordSecret(key)
-  )
-
   // Stop + remove the detector daemon. purge=true also deletes all its data
   // (enrollment, seen-store, quarantine records, logs, socket).
   ipcMain.handle('detectord:uninstall', async (_event, opts?: { purge?: boolean }) => {
     const r = await uninstallDetectord(opts ?? {})
     return { ok: r.code === 0, stdout: r.stdout, stderr: r.stderr }
-  })
-
-  // Verify a composite secret key against the ACTIVE-environment backend.
-  // Runs in main so it always uses getCredentialsForEnv()/getApiBaseUrl() -
-  // a renderer doing this could authenticate to the active env with a stale
-  // top-level API key after an environment switch.
-  ipcMain.handle(
-    'secretKey:verify',
-    async (
-      _event,
-      args: { key: string }
-    ): Promise<{ ok: boolean; valid?: boolean; domainValid?: boolean | null }> => {
-      const apiBaseUrl = getApiBaseUrl()
-      const creds = getCredentialsForEnv()
-      if (!apiBaseUrl || !creds?.apiKey) return { ok: false }
-      try {
-        const res = await fetch(`${apiBaseUrl.replace(/\/$/, '')}/api/v1/user/secret-key/verify`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${creds.apiKey}` },
-          body: JSON.stringify({ key: args.key })
-        })
-        if (!res.ok) return { ok: false }
-        const data = (await res.json()) as { valid?: boolean; domain_valid?: boolean | null }
-        return { ok: true, valid: data.valid, domainValid: data.domain_valid }
-      } catch {
-        return { ok: false }
-      }
-    }
-  )
-
-  // Re-apply MCP client integrations after a secret-key change (e.g. org key
-  // added from the Config tab). Resolves URL/creds/apps in main so the renderer
-  // doesn't assemble them. Mirrors the "Update Keys" tray flow: a missing or
-  // empty configuredApps falls back to ALL_SUPPORTED_APPS, otherwise older
-  // setups would rewrite no client configs and the new key wouldn't take effect.
-  ipcMain.handle('mcp:applyForSecretKey', async (_event, args: { sealgateSecretKey: string }) => {
-    const setup = getSetupData()
-    const apps = setup.configuredApps?.length ? setup.configuredApps : ALL_SUPPORTED_APPS
-    console.log('[mcp:applyForSecretKey]', apps, DRY_RUN ? '(dry-run)' : '')
-    if (DRY_RUN) return { success: true, modifiedConfigs: [] }
-
-    // Adopt the key BEFORE anything writes a config. The daemon stamps the
-    // secret header from its enrollment, so installing first would write the
-    // previous key (or none) into every agent - and a caller that then fails to
-    // adopt would leave those stale headers behind while the UI reported
-    // success. verify_secret validates against the backend before adopting, so
-    // requiring it here also means we never write an unverified key.
-    const adopted = await setDetectordSecret(args.sealgateSecretKey)
-    if (!adopted.ok || adopted.outcome?.valid === false) {
-      const reason = adopted.reason ?? 'the detector daemon did not accept the key'
-      console.error(`[mcp:applyForSecretKey] not applying: ${reason}`)
-      return { success: false, modifiedConfigs: [], errors: [reason] }
-    }
-
-    // Adopting already re-installs for the *enrolled* agents; this covers the
-    // caller's app list too (and unions it into the enrollment).
-    try {
-      const changes = await applyIntegrations(apps)
-      const errors = integrationErrors(changes)
-      return { success: errors.length === 0, modifiedConfigs: [], ...(errors.length ? { errors } : {}) }
-    } catch (err) {
-      return { success: false, modifiedConfigs: [], errors: [String(err)] }
-    }
   })
 
   // Multi-account management
@@ -506,37 +419,6 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       // client is unhooked.
       return { statuses: [], daemonUnavailable: true }
     }
-  })
-
-  // Keychain: store/load the user's personal encryption key via OS keychain (safeStorage)
-  const keychainFile = join(app.getPath('userData'), '.personal-key.enc')
-
-  ipcMain.handle('keychain:save', async (_event, plaintext: string) => {
-    if (!safeStorage.isEncryptionAvailable()) {
-      return { ok: false, error: 'OS encryption not available' }
-    }
-    const encrypted = safeStorage.encryptString(plaintext)
-    await fs.writeFile(keychainFile, encrypted)
-    return { ok: true }
-  })
-
-  ipcMain.handle('keychain:load', async () => {
-    if (!safeStorage.isEncryptionAvailable()) return null
-    try {
-      const encrypted = await fs.readFile(keychainFile)
-      return safeStorage.decryptString(encrypted)
-    } catch {
-      return null
-    }
-  })
-
-  ipcMain.handle('keychain:delete', async () => {
-    try {
-      await fs.unlink(keychainFile)
-    } catch {
-      // Not present - ignore
-    }
-    return { ok: true }
   })
 
   // Debug window actions

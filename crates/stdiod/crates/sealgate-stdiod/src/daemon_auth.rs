@@ -16,9 +16,6 @@ pub struct RunArgs {
     /// access token in config.toml is preferred.
     #[arg(long, env = "SEALGATE_API_KEY")]
     pub api_key: Option<String>,
-    /// Optional sealgate secret key (X-SealGate-Secret-Key).
-    #[arg(long, env = "SEALGATE_SECRET_KEY")]
-    pub sealgate_secret_key: Option<String>,
     /// Device identifier (must match the row in the backend's `devices` table).
     /// Defaults to the persisted `device_id`, then the machine hostname.
     #[arg(long, env = "SEALGATE_DEVICE_ID")]
@@ -44,7 +41,6 @@ pub(crate) struct ResolvedRun {
     pub(crate) credential: String,
     pub(crate) credential_kind: config::CredentialKind,
     pub(crate) client_installation_id: Option<String>,
-    pub(crate) sealgate_secret_key: Option<String>,
     pub(crate) device_id: String,
     pub(crate) label: String,
 }
@@ -59,7 +55,6 @@ impl ResolvedRun {
                 api_key: args.api_key.clone(),
                 client_access_token: None,
                 client_installation_id: None,
-                sealgate_secret_key: args.sealgate_secret_key.clone(),
                 device_id: args.device_id.clone(),
                 device_label: args.label.clone(),
             },
@@ -98,7 +93,6 @@ impl ResolvedRun {
             credential,
             credential_kind,
             client_installation_id,
-            sealgate_secret_key: merged.sealgate_secret_key.clone(),
             device_id,
             label: merged.device_label(),
         })
@@ -109,7 +103,6 @@ impl ResolvedRun {
             && self.credential == other.credential
             && self.credential_kind == other.credential_kind
             && self.client_installation_id == other.client_installation_id
-            && self.sealgate_secret_key == other.sealgate_secret_key
             && self.device_id == other.device_id
             && self.label == other.label
     }
@@ -146,17 +139,9 @@ pub(crate) fn requires_child_reset(current: &ResolvedRun, next: &ResolvedRun) ->
 }
 
 pub(crate) fn connection_error_message(error: &anyhow::Error, resolved: &ResolvedRun) -> String {
-    let mut message = error
+    error
         .to_string()
-        .replace(&resolved.credential, "<redacted>");
-    if let Some(secret) = resolved
-        .sealgate_secret_key
-        .as_deref()
-        .filter(|secret| !secret.is_empty())
-    {
-        message = message.replace(secret, "<redacted>");
-    }
-    message
+        .replace(&resolved.credential, "<redacted>")
 }
 
 #[cfg(test)]
@@ -169,7 +154,6 @@ mod tests {
             credential: "opaque-client-token".into(),
             credential_kind: config::CredentialKind::ClientAccessToken,
             client_installation_id: Some("install-1".into()),
-            sealgate_secret_key: Some("sealgate-secret".into()),
             device_id: "device-1".into(),
             label: "Laptop".into(),
         }
@@ -178,13 +162,9 @@ mod tests {
     #[test]
     fn backend_close_errors_cannot_reflect_credentials() {
         let resolved = resolved();
-        let error =
-            anyhow::anyhow!("backend close reason echoed opaque-client-token and sealgate-secret");
+        let error = anyhow::anyhow!("backend close reason echoed opaque-client-token");
         let message = connection_error_message(&error, &resolved);
-        assert_eq!(
-            message,
-            "backend close reason echoed <redacted> and <redacted>"
-        );
+        assert_eq!(message, "backend close reason echoed <redacted>");
     }
 
     #[test]

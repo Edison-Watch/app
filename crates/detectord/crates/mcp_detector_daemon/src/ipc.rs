@@ -161,40 +161,15 @@ async fn dispatch(user: &str, req: Request) -> Reply {
                 key,
                 mcp_url,
                 agents,
-                secret,
                 install,
                 armed,
-            } => Reply::Status(
-                ops::enroll(user, url, key, mcp_url, agents, secret, install, armed).await?,
-            ),
+            } => Reply::Status(ops::enroll(user, url, key, mcp_url, agents, install, armed).await?),
             Request::Status { refresh } => Reply::Status(if refresh {
                 ops::refresh_policy(user).await?
             } else {
                 ops::status(user)?
             }),
             Request::RefreshPolicy => Reply::Status(ops::refresh_policy(user).await?),
-            Request::VerifySecret { key } => {
-                let r = ops::verify_secret(user, key).await?;
-                Reply::Secret(crate::protocol::SecretOutcome {
-                    valid: Some(r.valid),
-                    expired: Some(r.expired),
-                    deleted: None,
-                })
-            }
-            Request::ResetSecret { key, confirm } => {
-                if !confirm {
-                    Reply::Error {
-                        message: "reset requires confirm=true (destructive)".into(),
-                    }
-                } else {
-                    let r = ops::reset_secret(user, key).await?;
-                    Reply::Secret(crate::protocol::SecretOutcome {
-                        valid: None,
-                        expired: None,
-                        deleted: Some(r.deleted),
-                    })
-                }
-            }
             Request::ListAgents => Reply::Agents {
                 agents: ops::list_agents(user),
             },

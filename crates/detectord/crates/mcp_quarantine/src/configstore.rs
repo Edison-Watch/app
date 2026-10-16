@@ -491,7 +491,6 @@ pub fn backup_path(path: &Path) -> PathBuf {
 // ── sealgate install (the inverse of quarantine: ADD an entry) ───────────
 
 const SEALGATE_SERVER_NAME: &str = "sealgate";
-const SEALGATE_SECRET_HEADER: &str = "X-SealGate-Secret-Key";
 
 /// The sealgate proxy URL: `<mcp_base>/mcp/<api_key>/?client=<client_id>`.
 pub fn sealgate_url(mcp_base: &str, api_key: &str, client_id: &str) -> String {
@@ -505,27 +504,14 @@ pub fn sealgate_url(mcp_base: &str, api_key: &str, client_id: &str) -> String {
 
 /// Install the `sealgate` proxy entry into `inst`'s config (creating the
 /// file if needed, alongside existing servers, with a one-time backup). The URL
-/// is `<mcp_base>/mcp/<api_key>/?client=<client_id>`; when `secret` is set it is
-/// carried in the `X-SealGate-Secret-Key` header.
-pub fn install_sealgate(
-    inst: &SealGateInstall,
-    mcp_base: &str,
-    api_key: &str,
-    secret: Option<&str>,
-) -> Result<()> {
+/// is `<mcp_base>/mcp/<api_key>/?client=<client_id>`. The entry is replaced
+/// whole, so anything an earlier build wrote into it (headers) does not survive.
+pub fn install_sealgate(inst: &SealGateInstall, mcp_base: &str, api_key: &str) -> Result<()> {
     let url = sealgate_url(mcp_base, api_key, &inst.client_id);
     match inst.style {
-        SealGateStyle::Http => install_json(inst, http_entry(&url, secret)),
-        SealGateStyle::Toml => install_toml(inst, &url, secret),
+        SealGateStyle::Http => install_json(inst, json!({ "type": "http", "url": url })),
+        SealGateStyle::Toml => install_toml(inst, &url),
     }
-}
-
-fn http_entry(url: &str, secret: Option<&str>) -> Value {
-    let mut entry = json!({ "type": "http", "url": url });
-    if let Some(s) = secret {
-        entry["headers"] = json!({ SEALGATE_SECRET_HEADER: s });
-    }
-    entry
 }
 
 /// Remove the `sealgate` entry from `inst`'s config (no-op if absent).
@@ -586,7 +572,7 @@ fn install_json(inst: &SealGateInstall, entry: Value) -> Result<()> {
     write(&inst.path, &serialize(&root))
 }
 
-fn install_toml(inst: &SealGateInstall, url: &str, secret: Option<&str>) -> Result<()> {
+fn install_toml(inst: &SealGateInstall, url: &str) -> Result<()> {
     ensure_parent(&inst.path)?;
     let existed = inst.path.exists();
     let raw = if existed {
@@ -607,14 +593,6 @@ fn install_toml(inst: &SealGateInstall, url: &str, secret: Option<&str>) -> Resu
     }
     let mut entry = toml::Table::new();
     entry.insert("url".into(), toml::Value::String(url.to_string()));
-    if let Some(s) = secret {
-        let mut headers = toml::Table::new();
-        headers.insert(
-            SEALGATE_SECRET_HEADER.into(),
-            toml::Value::String(s.to_string()),
-        );
-        entry.insert("http_headers".into(), toml::Value::Table(headers));
-    }
 
     let servers = root
         .as_table_mut()
@@ -817,7 +795,7 @@ mod tests {
         std::fs::write(&cfg, r#"{"mcpServers":{"keep":{"command":"x"}}}"#).unwrap();
         let inst = sealgate(&cfg, &["mcpServers"], SealGateStyle::Http, "cursor");
 
-        install_sealgate(&inst, "http://localhost:3000/", "sealgate_KEY", None).unwrap();
+        install_sealgate(&inst, "http://localhost:3000/", "sealgate_KEY").unwrap();
         let v: Value = serde_json::from_str(&std::fs::read_to_string(&cfg).unwrap()).unwrap();
         assert_eq!(v["mcpServers"]["sealgate"]["type"], "http");
         assert_eq!(
@@ -834,27 +812,38 @@ mod tests {
     }
 
     #[test]
-    fn install_sealgate_with_secret_adds_header() {
+    fn install_sealgate_replaces_an_entry_that_carries_headers() {
+        // Earlier builds wrote a header into the entry; a reinstall must leave
+        // only the URL behind, in both config styles.
         let dir = tempdir().unwrap();
         let cfg = dir.path().join("mcp.json");
+        std::fs::write(
+            &cfg,
+            r#"{"mcpServers":{"sealgate":{"type":"http","url":"http://old","headers":{"X-Old":"v"}}}}"#,
+        )
+        .unwrap();
         let inst = sealgate(&cfg, &["mcpServers"], SealGateStyle::Http, "cursor");
-        install_sealgate(&inst, "http://localhost:3000", "K", Some("user:SEKRET")).unwrap();
+        install_sealgate(&inst, "http://localhost:3000", "K").unwrap();
         let v: Value = serde_json::from_str(&std::fs::read_to_string(&cfg).unwrap()).unwrap();
         assert_eq!(
-            v["mcpServers"]["sealgate"]["headers"]["X-SealGate-Secret-Key"],
-            "user:SEKRET"
+            v["mcpServers"]["sealgate"],
+            json!({ "type": "http", "url": "http://localhost:3000/mcp/K/?client=cursor" })
         );
 
-        // TOML variant carries it under http_headers.
         let tcfg = dir.path().join("config.toml");
+        std::fs::write(
+            &tcfg,
+            "[mcp_servers.sealgate]\nurl = \"http://old\"\n\n[mcp_servers.sealgate.http_headers]\nX-Old = \"v\"\n",
+        )
+        .unwrap();
         let tinst = sealgate(&tcfg, &["mcp_servers"], SealGateStyle::Toml, "codex");
-        install_sealgate(&tinst, "http://localhost:3000", "K", Some("user:SEKRET")).unwrap();
+        install_sealgate(&tinst, "http://localhost:3000", "K").unwrap();
         let t: toml::Value = toml::from_str(&std::fs::read_to_string(&tcfg).unwrap()).unwrap();
+        let entry = t["mcp_servers"]["sealgate"].as_table().unwrap();
+        assert_eq!(entry.len(), 1);
         assert_eq!(
-            t["mcp_servers"]["sealgate"]["http_headers"]["X-SealGate-Secret-Key"]
-                .as_str()
-                .unwrap(),
-            "user:SEKRET"
+            entry["url"].as_str().unwrap(),
+            "http://localhost:3000/mcp/K/?client=codex"
         );
     }
 
@@ -871,7 +860,6 @@ mod tests {
             &sealgate(&cfg, &["mcpServers"], SealGateStyle::Http, "cursor"),
             "http://h",
             "K",
-            None,
         )
         .unwrap();
         let text = std::fs::read_to_string(&cfg).unwrap();
@@ -892,7 +880,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let cfg = dir.path().join("nested/mcp.json"); // parent absent
         let inst = sealgate(&cfg, &["mcpServers"], SealGateStyle::Http, "cursor");
-        install_sealgate(&inst, "http://localhost:3000", "K", None).unwrap();
+        install_sealgate(&inst, "http://localhost:3000", "K").unwrap();
         let v: Value = serde_json::from_str(&std::fs::read_to_string(&cfg).unwrap()).unwrap();
         assert_eq!(
             v["mcpServers"]["sealgate"]["url"],
@@ -929,7 +917,7 @@ mod tests {
         let cfg = dir.path().join("config.toml");
         std::fs::write(&cfg, "[mcp_servers.keep]\ncommand = \"x\"\n").unwrap();
         let inst = sealgate(&cfg, &["mcp_servers"], SealGateStyle::Toml, "codex");
-        install_sealgate(&inst, "http://localhost:3000", "K", None).unwrap();
+        install_sealgate(&inst, "http://localhost:3000", "K").unwrap();
         let t: toml::Value = toml::from_str(&std::fs::read_to_string(&cfg).unwrap()).unwrap();
         assert_eq!(
             t["mcp_servers"]["sealgate"]["url"].as_str().unwrap(),

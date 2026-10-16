@@ -1,9 +1,9 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import EncryptionStep from './EncryptionStep';
+import ServersStep from './ServersStep';
 
-const meta: Meta<typeof EncryptionStep> = {
-  title: 'Client2/EncryptionStep',
-  component: EncryptionStep,
+const meta: Meta<typeof ServersStep> = {
+  title: 'Client2/ServersStep',
+  component: ServersStep,
   parameters: {
     layout: 'centered',
   },
@@ -25,7 +25,7 @@ const BASE_PROPS = {
   onNext: () => {},
 };
 
-/** Initial state - no keys entered yet. */
+/** Initial state - servers discovered, none registered yet. */
 export const Initial: Story = {
   args: BASE_PROPS,
   decorators: [

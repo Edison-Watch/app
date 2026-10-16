@@ -44,8 +44,7 @@ export async function reprovisionStdiodForActiveAccount(): Promise<void> {
   try {
     const result = await resetStdiod({
       backend,
-      apiKey: creds.apiKey,
-      sealgateSecretKey: creds.sealgateSecretKey
+      apiKey: creds.apiKey
     })
     if (!result.ok) {
       stdiodLog(

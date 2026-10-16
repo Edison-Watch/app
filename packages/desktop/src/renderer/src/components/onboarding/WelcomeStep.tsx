@@ -1,5 +1,4 @@
 import { Button, Badge } from "@sealgate/shared/ui";
-import { clearCachedSecretKey } from "@sealgate/shared/crypto";
 import PromptInjectionAnimation from "../animations/PromptInjectionAnimation";
 import CustomServerConnect from "./CustomServerConnect";
 import type { AuthState } from "../../hooks/useAuth";
@@ -82,7 +81,6 @@ export default function WelcomeStep({ auth, onNext }: WelcomeStepProps): React.R
             } catch {
               // best-effort sign-out; always continue to reset
             }
-            clearCachedSecretKey();
             await window.api.setup.reset();
             window.location.reload();
           }}

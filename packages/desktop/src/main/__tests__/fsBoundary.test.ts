@@ -25,7 +25,6 @@ const FS_ALLOWLIST: Record<string, string> = {
   'main/infra/fsAudit.ts': 'the SEALGATE_FS_AUDIT harness: patches fs to police this very boundary',
   'main/infra/setupConfig.ts': "the app's own setup/accounts JSON in userData",
   'main/infra/updateSettings.ts': "the app's own update settings in userData",
-  'main/ipc/ipcHandlers.ts': "the app's own safeStorage-encrypted key blob",
   'main/runtime/monitorLog.ts': "the app's own log file",
   'main/runtime/desktopIntegration.ts': "the app's own .desktop entry (Linux)",
   'main/runtime/pythonBinary.ts': "the app's own bundled Python runtime",

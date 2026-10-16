@@ -64,19 +64,6 @@ enum ServiceCmd {
 }
 
 #[derive(Subcommand)]
-enum SecretCmd {
-    /// Verify a key against the backend; if valid, adopt it (install it).
-    Verify { key: String },
-    /// Destructively reset to a new key — deletes your encrypted personal
-    /// values on the backend — then install it. Requires --confirm.
-    Reset {
-        key: String,
-        #[arg(long)]
-        confirm: bool,
-    },
-}
-
-#[derive(Subcommand)]
 enum Cmd {
     /// Enroll against the backend (validates the key, caches policy + known
     /// set) and install sealgate into the selected agents.
@@ -96,10 +83,6 @@ enum Cmd {
         /// Quarantine still covers all agents.
         #[arg(long, value_delimiter = ',')]
         agents: Option<Vec<String>>,
-        /// The user's sealgate secret key (composite `user:<base64>`) for the
-        /// X-SealGate-Secret-Key header. Omit to keep the previous value.
-        #[arg(long)]
-        secret: Option<String>,
     },
     /// Show enrollment + cached policy.
     Status {
@@ -139,11 +122,6 @@ enum Cmd {
     /// Reverse every quarantine found on disk (sidecars + sg-disabled dirs),
     /// independent of tracked state. Idempotent.
     Recover,
-    /// Verify or reset the sealgate secret key.
-    Secret {
-        #[command(subcommand)]
-        action: SecretCmd,
-    },
     /// Remove the local enrollment.
     Unenroll,
     /// Manage the LaunchAgent (install/uninstall/status) — how the client
@@ -205,8 +183,7 @@ async fn dispatch(cmd: Cmd) -> anyhow::Result<()> {
             key,
             mcp_url,
             agents,
-            secret,
-        } => cmd_enroll(url, key, mcp_url, agents, secret).await,
+        } => cmd_enroll(url, key, mcp_url, agents).await,
         Cmd::Status { refresh } => cmd_status(refresh).await,
         Cmd::Run { enforce } => runner::run(enforce).await,
         Cmd::List { verbose } => cmd_list(verbose),
@@ -217,10 +194,6 @@ async fn dispatch(cmd: Cmd) -> anyhow::Result<()> {
             println!("Recovered {servers} server(s) and {dirs} plugin dir(s) from disk.");
             Ok(())
         }
-        Cmd::Secret { action } => match action {
-            SecretCmd::Verify { key } => cmd_verify_secret(key).await,
-            SecretCmd::Reset { key, confirm } => cmd_reset_secret(key, confirm).await,
-        },
         Cmd::Service { action } => match action {
             ServiceCmd::Install { enforce } => service::install(enforce),
             ServiceCmd::Uninstall { purge } => service::uninstall(purge),
@@ -261,23 +234,10 @@ async fn cmd_enroll(
     key: String,
     mcp_url: Option<String>,
     agents: Option<Vec<String>>,
-    secret: Option<String>,
 ) -> anyhow::Result<()> {
     // CLI enroll always applies the install and arms enforcement (the
     // operator's explicit intent; no onboarding gate for the dev/admin path).
-    print_status(
-        &ops::enroll(
-            &cli_user(),
-            url,
-            key,
-            mcp_url,
-            agents,
-            secret,
-            true,
-            Some(true),
-        )
-        .await?,
-    );
+    print_status(&ops::enroll(&cli_user(), url, key, mcp_url, agents, true, Some(true)).await?);
     Ok(())
 }
 
@@ -412,35 +372,6 @@ async fn cmd_send_to_ew(name: String, agent: Option<String>) -> anyhow::Result<(
     )
     .await?;
     println!("Sent {name} to SealGate and removed it from the local config.");
-    Ok(())
-}
-
-async fn cmd_verify_secret(key: String) -> anyhow::Result<()> {
-    let r = ops::verify_secret(&cli_user(), key).await?;
-    if r.valid {
-        let warn = if r.expired {
-            " (WARNING: key has expired)"
-        } else {
-            ""
-        };
-        println!("Key is valid — adopted and installed into selected agents.{warn}");
-    } else {
-        println!("Key does NOT match the registered key. Nothing installed.");
-    }
-    Ok(())
-}
-
-async fn cmd_reset_secret(key: String, confirm: bool) -> anyhow::Result<()> {
-    if !confirm {
-        anyhow::bail!(
-            "reset is destructive — it deletes your encrypted personal values on the backend. Re-run with --confirm."
-        );
-    }
-    let r = ops::reset_secret(&cli_user(), key).await?;
-    println!(
-        "Reset complete: {} encrypted value(s) deleted. New key installed into selected agents.",
-        r.deleted
-    );
     Ok(())
 }
 

@@ -17,7 +17,7 @@ metaphors below; don't reinvent.
   animated class, forces the phase end-state, hides packets, and sets
   the progress bar to `scaleX(1)`. Canonical:
   `admin/OrgMCPPushAnimation.tsx:219-240`.
-- Docstring template + per-phase narration: `feature/KeyEncryptionAnimation.tsx:1-23`.
+- Docstring template + per-phase narration: `feature/SealGateMCPProxyAnimation.tsx:1-12`.
 - Default-export the component; re-export named from `index.ts`. Every
   animation has a sibling `*.stories.tsx`.
 
@@ -35,7 +35,7 @@ Canonical implementations - copy from these.
   broken by inserting SealGate on one edge.
   `threat/TrifectaDefenseAnimation.tsx`.
 - **D. Encryption.** Orange open padlock + plaintext → accent closed
-  padlock + `$SEALGATE$1$…` cipher. `feature/KeyEncryptionAnimation.tsx`.
+  padlock + ciphertext. (No animation uses it at the moment.)
 - **E. Visibility.** Eye-slash (`DANGER`) ↔ eye (`var(--accent)`) swap
   - dashed vision rays.
     `admin/AdminFleetBlindAnimation.tsx#AdminNoVisibilityOverlay`.
@@ -81,7 +81,6 @@ jargon; **user-visible text may not**.
 | Tool poisoning                                 | "Booby-trapped connector"                                                                       |
 | RAG / embeddings / fine-tuning / system prompt | Skip, or "the agent's rulebook"                                                                 |
 | HKDF / AES-256-GCM                             | "AES-256 encryption" - drop the primitive                                                       |
-| Zero-knowledge encryption                      | "Keys never leave you"                                                                          |
 | Exfiltration                                   | "Data leaving the company"                                                                      |
 | PII / IP / confidential data                   | Name the data: "customer list", "source code", "salary file"                                    |
 

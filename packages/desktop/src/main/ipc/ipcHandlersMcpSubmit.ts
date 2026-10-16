@@ -191,7 +191,6 @@ export function registerMcpSubmitHandlers(): void {
     serverAddress?: string;
     mcpBaseUrl?: string;
     apiKey?: string;
-    sealgateSecretKey?: string;
     apps: string[];
   }): Promise<{ success: boolean; modifiedConfigs: ModifiedConfig[]; errors?: string[] }> => {
     // The daemon installs the sealgate entry and the hooks: it holds the

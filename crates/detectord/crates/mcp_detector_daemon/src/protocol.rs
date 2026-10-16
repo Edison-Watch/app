@@ -25,9 +25,6 @@ pub enum Request {
         /// `None` keeps the previous selection; `Some` replaces it.
         #[serde(default)]
         agents: Option<Vec<String>>,
-        /// `None` keeps the previous secret.
-        #[serde(default)]
-        secret: Option<String>,
         /// Apply the sealgate install + hooks (default). Set false for a
         /// detect-only enrollment (caller does its own install).
         #[serde(default = "default_true")]
@@ -97,15 +94,6 @@ pub enum Request {
     },
     /// Force a policy + known-set refresh.
     RefreshPolicy,
-    /// Verify an existing secret key; adopt (install) it if valid.
-    VerifySecret { key: String },
-    /// Destructively reset to a new secret key (deletes encrypted personal
-    /// values), then install it. `confirm` must be true.
-    ResetSecret {
-        key: String,
-        #[serde(default)]
-        confirm: bool,
-    },
     /// Remove this user's enrollment.
     Unenroll,
 }
@@ -132,7 +120,6 @@ pub enum Reply {
     Servers {
         servers: Vec<ServerView>,
     },
-    Secret(SecretOutcome),
     Integrations {
         changes: Vec<IntegrationChange>,
     },
@@ -162,17 +149,6 @@ pub struct IntegrationChange {
     pub ok: bool,
     #[serde(default)]
     pub error: Option<String>,
-}
-
-/// Outcome of a verify (`valid`/`expired` set) or reset (`deleted` set).
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SecretOutcome {
-    #[serde(default)]
-    pub valid: Option<bool>,
-    #[serde(default)]
-    pub expired: Option<bool>,
-    #[serde(default)]
-    pub deleted: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

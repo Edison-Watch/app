@@ -74,8 +74,7 @@ The daemon opens **one** outbound WebSocket to the backend:
 
 ```
 GET <backend>/api/v1/stdio-tunnel/ws
-Authorization: Bearer <api_key>
-X-SealGate-Secret-Key: <secret>
+Authorization: Bearer <credential>
 X-SealGate-Device-Id: <device_id>
 ```
 
@@ -226,7 +225,7 @@ The daemon keeps almost nothing durable; the backend is the source of truth.
 
 ```
 ~/.config/sealgate-stdiod/
-  config.toml      backend URL, device_id, api_key, secret
+  config.toml      backend URL, device_id, credential
   state.json       atomic writes; consumed by the desktop tray UI
 ~/Library/Logs/sealgate-stdiod/      (macOS - platform-equivalent paths elsewhere)
   daemon.log       rotated daily

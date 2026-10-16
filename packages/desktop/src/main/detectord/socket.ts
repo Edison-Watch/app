@@ -19,7 +19,6 @@ import {
   type IntegrationChange,
   type Reply,
   type Request,
-  type SecretOutcome,
   type ServerConfig,
   type ServerView,
   type Status
@@ -147,7 +146,6 @@ export class DetectordClient extends EventEmitter {
     key: string
     mcpUrl?: string
     agents?: string[]
-    secret?: string
     /** false = detect-only (no sealgate install / hooks). */
     install?: boolean
     /** Arm auto-quarantine. Set true only once onboarding is complete. */
@@ -159,7 +157,6 @@ export class DetectordClient extends EventEmitter {
       key: input.key,
       mcp_url: input.mcpUrl,
       agents: input.agents,
-      secret: input.secret,
       install: input.install,
       armed: input.armed
     })
@@ -216,18 +213,6 @@ export class DetectordClient extends EventEmitter {
     const r = await this.expect({ op: 'restore_quarantined', name })
     if (r.reply !== 'restored') throw new DetectordError(`unexpected reply ${r.reply}`)
     return { restored: r.restored, errors: r.errors }
-  }
-
-  async verifySecret(key: string): Promise<SecretOutcome> {
-    const r = await this.expect({ op: 'verify_secret', key })
-    if (r.reply !== 'secret') throw new DetectordError(`unexpected reply ${r.reply}`)
-    return r
-  }
-
-  async resetSecret(key: string): Promise<SecretOutcome> {
-    const r = await this.expect({ op: 'reset_secret', key, confirm: true })
-    if (r.reply !== 'secret') throw new DetectordError(`unexpected reply ${r.reply}`)
-    return r
   }
 
   async unenroll(): Promise<void> {

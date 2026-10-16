@@ -21,9 +21,6 @@ const DOMAIN_CONFIG_PATH: &str = "/api/v1/user/domain-config";
 const FINGERPRINTS_PATH: &str = "/api/v1/servers/fingerprints";
 const MCP_REQUESTS_PATH: &str = "/api/v1/mcp-requests";
 const PROFILE_PATH: &str = "/api/v1/user/profile";
-const SECRET_KEY_REGISTER_PATH: &str = "/api/v1/user/secret-key/register";
-const SECRET_KEY_VERIFY_PATH: &str = "/api/v1/user/secret-key/verify";
-const SECRET_KEY_RESET_PATH: &str = "/api/v1/user/secret-key/reset";
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -92,32 +89,6 @@ pub struct Profile {
     pub role: String,
     pub domain: String,
     pub org_id: Option<String>,
-}
-
-/// Result of verifying a secret key (unknown fields are ignored).
-#[derive(Debug, Clone, Deserialize)]
-pub struct VerifyResult {
-    /// Whether the key's user part matches the registered hash.
-    pub valid: bool,
-    /// Whether the `.admin:` org part matches (null if none present).
-    #[serde(default)]
-    pub domain_valid: Option<bool>,
-    /// Whether the registered key has expired.
-    #[serde(default)]
-    pub expired: bool,
-    /// Days until expiry (negative if expired).
-    #[serde(default)]
-    pub days_remaining: Option<i64>,
-}
-
-/// Result of a destructive secret-key reset.
-#[derive(Debug, Clone, Deserialize)]
-pub struct ResetResult {
-    #[serde(default)]
-    pub success: bool,
-    /// Number of encrypted personal values the backend deleted.
-    #[serde(default)]
-    pub deleted: u32,
 }
 
 /// A server to submit to the backend.
@@ -195,67 +166,6 @@ impl BackendClient {
         })
     }
 
-    /// `POST /api/v1/user/secret-key/register` with `{ user_key_hash }`.
-    ///
-    /// Registers the SHA-256 hash of the key's **user part** (the base64 without
-    /// the `user:` prefix) so the MCP gateway can validate the
-    /// `X-SealGate-Secret-Key` header the daemon installs. Call whenever the key
-    /// is set or rotated. The raw key never leaves the machine.
-    pub async fn register_secret_key(&self, composite_key: &str) -> Result<()> {
-        let body = serde_json::json!({ "user_key_hash": user_part_hash(composite_key) });
-        let resp = self
-            .http
-            .post(format!("{}{}", self.base_url, SECRET_KEY_REGISTER_PATH))
-            .bearer_auth(&self.api_key)
-            .json(&body)
-            .send()
-            .await?;
-        if !resp.status().is_success() {
-            return Err(status_error(resp, SECRET_KEY_REGISTER_PATH).await);
-        }
-        Ok(())
-    }
-
-    /// `POST /api/v1/user/secret-key/verify` with `{ key }` (the raw composite;
-    /// the backend hashes it). Non-destructive check that a key matches the
-    /// registered hash — the "enter your existing key" path.
-    pub async fn verify_secret_key(&self, composite_key: &str) -> Result<VerifyResult> {
-        let resp = self
-            .http
-            .post(format!("{}{}", self.base_url, SECRET_KEY_VERIFY_PATH))
-            .bearer_auth(&self.api_key)
-            .json(&serde_json::json!({ "key": composite_key }))
-            .send()
-            .await?;
-        if !resp.status().is_success() {
-            return Err(status_error(resp, SECRET_KEY_VERIFY_PATH).await);
-        }
-        Ok(resp.json().await?)
-    }
-
-    /// `POST /api/v1/user/secret-key/reset` with `{ new_key_hash, confirm:true }`.
-    ///
-    /// **Destructive**: the backend deletes this user's personal encrypted
-    /// values (those they supply themselves) and stores the new key's hash. The
-    /// "I lost my key, start fresh" path. The raw key never leaves the machine.
-    pub async fn reset_secret_key(&self, composite_key: &str) -> Result<ResetResult> {
-        let body = serde_json::json!({
-            "new_key_hash": user_part_hash(composite_key),
-            "confirm": true,
-        });
-        let resp = self
-            .http
-            .post(format!("{}{}", self.base_url, SECRET_KEY_RESET_PATH))
-            .bearer_auth(&self.api_key)
-            .json(&body)
-            .send()
-            .await?;
-        if !resp.status().is_success() {
-            return Err(status_error(resp, SECRET_KEY_RESET_PATH).await);
-        }
-        Ok(resp.json().await?)
-    }
-
     /// `POST /api/v1/mcp-requests`.
     pub async fn submit(&self, req: &SubmitRequest) -> Result<()> {
         let resp = self
@@ -322,23 +232,6 @@ fn extract_detail(raw: &str) -> Option<String> {
         text = text.chars().take(300).collect::<String>() + "…";
     }
     Some(text)
-}
-
-/// SHA-256 hex of a composite key's **user part** — the base64 between `user:`
-/// and any `.admin:<…>` org segment. Matches the client's
-/// `hashSecretKey(userPart)`, so the daemon registers the same hash the backend
-/// would already have on file for that key.
-pub fn user_part_hash(composite_key: &str) -> String {
-    use sha2::{Digest, Sha256};
-    // `user:<userPart>[.admin:<domainPart>]` → userPart.
-    let user_part = composite_key
-        .split('.')
-        .next()
-        .unwrap_or(composite_key)
-        .strip_prefix("user:")
-        .unwrap_or(composite_key);
-    let digest = Sha256::digest(user_part.as_bytes());
-    digest.iter().map(|b| format!("{b:02x}")).collect()
 }
 
 // ── pure parsing (unit-testable without HTTP) ───────────────────────────────
@@ -571,17 +464,6 @@ mod tests {
     fn base_url_trailing_slash_trimmed() {
         let c = BackendClient::new("https://api.example/", "k");
         assert_eq!(c.base_url, "https://api.example");
-    }
-
-    #[test]
-    fn user_part_hash_strips_prefix_and_ignores_org_segment() {
-        // sha256("abc") — the hash is of the user part, not the composite.
-        const SHA256_ABC: &str = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
-        assert_eq!(user_part_hash("user:abc"), SHA256_ABC);
-        // The `.admin:<…>` org segment is not part of the user hash.
-        assert_eq!(user_part_hash("user:abc.admin:xyz"), SHA256_ABC);
-        // A bare key (no prefix) hashes as-is.
-        assert_eq!(user_part_hash("abc"), SHA256_ABC);
     }
 
     #[test]

@@ -1,6 +1,5 @@
 import type { ElectronAPI } from '@electron-toolkit/preload'
 
-import type { SecretOutcome } from '../main/detectord/protocol'
 import type { DetectordHealth } from '../main/detectord/health'
 import type { StdiodLoginInput, StdiodResult, StdiodStatus } from '../main/stdiod/types'
 import type { UpdateState } from '../main/infra/updateManager'
@@ -12,12 +11,8 @@ interface SealGateAPI {
   setup: {
     getData: () => Promise<{ completed?: boolean; [key: string]: unknown }>
     complete: (data: Record<string, unknown>) => void
-    update: (data: Record<string, unknown>) => Promise<{ ok: boolean }>
     reachedFinal: () => void
     reset: () => Promise<{ ok: boolean }>
-  }
-  secretKey: {
-    verify: (key: string) => Promise<{ ok: boolean; valid?: boolean; domainValid?: boolean | null }>
   }
   auth: {
     openSaml: (url: string) => void
@@ -62,17 +57,12 @@ interface SealGateAPI {
       serverAddress: string
       mcpBaseUrl: string
       apiKey: string
-      sealgateSecretKey?: string
       apps: string[]
     }) => Promise<{
       success: boolean
       modifiedConfigs: Array<{ appId: string; configPath: string; backupPath: string }>
       /** Per-agent reasons when `success` is false. */
       errors?: string[]
-    }>
-    applyForSecretKey: (sealgateSecretKey: string) => Promise<{
-      success: boolean
-      modifiedConfigs: Array<{ appId: string; configPath: string; backupPath: string }>
     }>
     revertAppIntegrations: (args: {
       configs: Array<{ configPath: string; backupPath: string; appId?: string }>
@@ -196,11 +186,6 @@ interface SealGateAPI {
     setSettings: (patch: Partial<UpdateSettings>) => Promise<UpdateSettings>
     onStatus: (callback: (state: UpdateState) => void) => () => void
   }
-  keychain: {
-    save: (plaintext: string) => Promise<{ ok: boolean; error?: string }>
-    load: () => Promise<string | null>
-    delete: () => Promise<{ ok: boolean }>
-  }
   app: {
     clearDataAndRestart: () => Promise<void>
   }
@@ -209,9 +194,7 @@ interface SealGateAPI {
       apiUrl?: string
       mcpUrl?: string
       apiKey?: string
-      sealgateSecretKey?: string
     }) => Promise<{ ok: boolean }>
-    setSecret: (key: string) => Promise<{ ok: boolean; outcome?: SecretOutcome; reason?: string }>
     uninstall: (opts?: { purge?: boolean }) => Promise<{ ok: boolean; stdout: string; stderr: string }>
     health: () => Promise<DetectordHealth>
     onHealth: (callback: (h: DetectordHealth) => void) => () => void

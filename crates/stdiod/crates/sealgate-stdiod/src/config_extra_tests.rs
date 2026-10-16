@@ -5,7 +5,6 @@ fn explicit_legacy_rotation_keeps_same_issuer_legacy_settings() {
     let persisted = PersistedConfig {
         backend_url: Some("https://issuer.test".into()),
         api_key: Some("old-key".into()),
-        sealgate_secret_key: Some("legacy-secret".into()),
         device_id: Some("legacy-device".into()),
         ..Default::default()
     };
@@ -16,13 +15,11 @@ fn explicit_legacy_rotation_keeps_same_issuer_legacy_settings() {
             api_key: Some("rotated-key".into()),
             client_access_token: None,
             client_installation_id: None,
-            sealgate_secret_key: None,
             device_id: None,
             device_label: None,
         },
     )
     .unwrap();
-    assert_eq!(merged.sealgate_secret_key.as_deref(), Some("legacy-secret"));
     assert_eq!(merged.device_id.as_deref(), Some("legacy-device"));
 }
 
@@ -39,7 +36,6 @@ fn backend_override_is_allowed_when_no_credential_is_saved() {
             api_key: None,
             client_access_token: None,
             client_installation_id: None,
-            sealgate_secret_key: None,
             device_id: None,
             device_label: None,
         },
@@ -62,7 +58,6 @@ fn backend_override_mismatch_is_rejected_while_a_credential_is_saved() {
             api_key: None,
             client_access_token: None,
             client_installation_id: None,
-            sealgate_secret_key: None,
             device_id: None,
             device_label: None,
         },
@@ -84,7 +79,6 @@ fn explicit_legacy_backend_replacement_ignores_invalid_saved_backend() {
             api_key: Some("legacy-key".into()),
             client_access_token: None,
             client_installation_id: None,
-            sealgate_secret_key: None,
             device_id: None,
             device_label: None,
         },
@@ -116,7 +110,6 @@ fn backend_override_is_allowed_after_logout_left_an_installation_id() {
             api_key: None,
             client_access_token: None,
             client_installation_id: None,
-            sealgate_secret_key: None,
             device_id: None,
             device_label: None,
         },

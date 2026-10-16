@@ -176,22 +176,8 @@ export function setCustomBackend(apiBaseUrl: string, mcpBaseUrl?: string): Custo
 
 // ── Setup data persistence ──────────────────────────────────────────
 
-/**
- * Apps SealGate configures itself, used as the fallback when a caller names none.
- *
- * Excludes every host whose servers SealGate cannot install into: ChatGPT, and
- * the two Claude hosts whose config file takes stdio entries only. The daemon
- * drops them anyway, but a list here that disagrees with the daemon is a second
- * answer to the same question waiting to be believed.
- */
-export const ALL_SUPPORTED_APPS = [
-  "vscode", "cursor", "claude-code", "windsurf", "zed", "codex",
-  "intellij", "pycharm", "webstorm",
-];
-
 export interface EnvCredentials {
   apiKey: string;
-  sealgateSecretKey?: string;
 }
 
 export interface SetupData {
@@ -202,7 +188,6 @@ export interface SetupData {
   mcpBaseUrl?: string;
   apiBaseUrl?: string;
   apiKey?: string;
-  sealgateSecretKey?: string;
   configuredApps?: string[];
   /** Per-environment credentials so switching envs also switches API keys. */
   envCredentials?: Record<string, EnvCredentials>;
@@ -241,21 +226,14 @@ export function markSetupComplete(data?: Partial<SetupData>): void {
   //
   // The apiKey may exist ONLY in this map: a returning login keeps it in the
   // renderer's auth state and never writes it top-level. Gating this block on
-  // the top-level key therefore skipped the update for exactly those setups, so
-  // saving a new org key left `envCredentials[env].sealgateSecretKey` stale - and
-  // getCredentialsForEnv() prefers that entry, so every later reader (daemon
-  // enrollment included) kept handing out the OLD secret.
+  // the top-level key would skip the update for exactly those setups, and
+  // getCredentialsForEnv() prefers this entry.
   const env = getActiveEnv();
   const envCreds = merged.envCredentials ?? {};
   const existingEnvEntry = envCreds[env];
   const resolvedApiKey = data?.apiKey ?? existingEnvEntry?.apiKey ?? merged.apiKey;
-  const resolvedSecret =
-    data?.sealgateSecretKey ?? existingEnvEntry?.sealgateSecretKey ?? merged.sealgateSecretKey;
   if (resolvedApiKey) {
-    envCreds[env] = {
-      apiKey: resolvedApiKey,
-      ...(resolvedSecret && { sealgateSecretKey: resolvedSecret }),
-    };
+    envCreds[env] = { apiKey: resolvedApiKey };
     merged.envCredentials = envCreds;
   }
 
@@ -284,6 +262,52 @@ export function markSetupIncomplete(): void {
   app.setLoginItemSettings({ openAtLogin: false });
 }
 
+// ── Upgrade cleanup ──────────────────────────────────────────────────
+
+/** Field older versions stored a per-user key under, in every file below. */
+const RETIRED_KEY_FIELD = "sealgateSecretKey";
+
+/** Remove the retired field from `record` and its per-env entries. */
+function dropRetiredKey(record: Record<string, unknown>): boolean {
+  const scopes = [record, ...Object.values(record.envCredentials ?? {})];
+  let changed = false;
+  for (const scope of scopes) {
+    if (scope && typeof scope === "object" && RETIRED_KEY_FIELD in scope) {
+      delete (scope as Record<string, unknown>)[RETIRED_KEY_FIELD];
+      changed = true;
+    }
+  }
+  return changed;
+}
+
+/** Rewrite a JSON file in userData without the retired field, if it has it. */
+function scrubRetiredKey(path: string, recordsOf: (doc: Record<string, unknown>) => unknown): void {
+  try {
+    const doc = JSON.parse(readFileSync(path, "utf-8")) as Record<string, unknown>;
+    const records = [recordsOf(doc)].flat() as Record<string, unknown>[];
+    const changed = records.map(dropRetiredKey).some(Boolean);
+    if (changed) writeFileSync(path, JSON.stringify(doc, null, 2), "utf-8");
+  } catch {
+    // Missing or unreadable: nothing to clean.
+  }
+}
+
+/**
+ * Delete the key material older versions left in userData: the field in
+ * setup.json and accounts.json, and the safeStorage blob. The keys unlock
+ * nothing any more, so there is no reason to keep them on disk. Runs on every
+ * start; it only writes a file that still holds the field.
+ */
+export function removeRetiredKeyMaterial(): void {
+  try {
+    unlinkSync(join(app.getPath("userData"), ".personal-key.enc"));
+  } catch {
+    // Never written on this machine.
+  }
+  scrubRetiredKey(getSetupFlagPath(), (doc) => doc);
+  scrubRetiredKey(getAccountsPath(), (doc) => doc.accounts ?? []);
+}
+
 // ── Multi-account persistence ────────────────────────────────────────
 
 export interface SavedAccount {
@@ -293,7 +317,6 @@ export interface SavedAccount {
   mcpBaseUrl?: string;
   apiBaseUrl?: string;
   apiKey?: string;
-  sealgateSecretKey?: string;
   configuredApps?: string[];
   envCredentials?: Record<string, EnvCredentials>;
   savedAt: string;
@@ -327,7 +350,6 @@ export function saveAccount(data: SetupData): void {
     mcpBaseUrl: data.mcpBaseUrl,
     apiBaseUrl: data.apiBaseUrl,
     apiKey: data.apiKey,
-    sealgateSecretKey: data.sealgateSecretKey,
     configuredApps: data.configuredApps,
     envCredentials: data.envCredentials,
     savedAt: new Date().toISOString(),
@@ -365,7 +387,6 @@ export function switchToAccount(userId: string): SetupData | null {
     mcpBaseUrl: account.mcpBaseUrl,
     apiBaseUrl: account.apiBaseUrl,
     apiKey: account.apiKey,
-    sealgateSecretKey: account.sealgateSecretKey,
     configuredApps: account.configuredApps,
     envCredentials: account.envCredentials,
   };
@@ -377,7 +398,7 @@ export function switchToAccount(userId: string): SetupData | null {
 // ── Per-environment credential helpers ───────────────────────────────
 
 /**
- * Return the API key (and optional secret key) for the given environment.
+ * Return the API key for the given environment.
  * Falls back to the top-level apiKey when no per-env entry exists (backwards compat).
  */
 export function getCredentialsForEnv(env?: string): EnvCredentials | null {
@@ -390,7 +411,7 @@ export function getCredentialsForEnv(env?: string): EnvCredentials | null {
   // entry means the user hasn't registered for that env yet - return null
   // so callers can warn instead of silently using the wrong key.
   if (!setupData.envCredentials && setupData.apiKey) {
-    return { apiKey: setupData.apiKey, sealgateSecretKey: setupData.sealgateSecretKey };
+    return { apiKey: setupData.apiKey };
   }
   return null;
 }
@@ -480,24 +501,13 @@ export function getMcpUrl(): string | null {
  *
  * A URL entry rather than an `npx -y mcp-remote <url>` bridge: what the user
  * pastes is what their client runs on every launch, and that command would
- * fetch an unpinned npm package with the secret key in `argv`. Clients whose
+ * fetch an unpinned npm package. Clients whose
  * config file cannot hold a URL are not served by this snippet at all.
  */
 export function getMcpConfig(): string | null {
   const url = getMcpUrl();
   if (!url) return null;
-  const creds = getCredentialsForEnv();
-  const config = {
-    servers: {
-      sealgate: {
-        type: "http",
-        url,
-        ...(creds?.sealgateSecretKey
-          ? { headers: { "X-SealGate-Secret-Key": creds.sealgateSecretKey } }
-          : {}),
-      },
-    },
-  };
+  const config = { servers: { sealgate: { type: "http", url } } };
   return JSON.stringify(config, null, 2);
 }
 

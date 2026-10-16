@@ -7,7 +7,6 @@ import type { StdiodErrorCode, StdiodStatus } from '../../../main/stdiod/types'
 interface StdiodEnableCardProps {
   apiBaseUrl: string
   apiKey: string
-  sealgateSecretKey?: string
 }
 
 // Pick a human-meaningful status line. We deliberately don't surface a
@@ -48,7 +47,7 @@ function describeStatus(status: StdiodStatus): string {
 const ERROR_HINTS: Record<StdiodErrorCode, string> = {
   binary_missing: 'The stdiod binary is not bundled with this build.',
   not_installed: 'The launchd unit is not registered yet.',
-  not_logged_in: 'Daemon needs an API key + sealgate_secret_key.',
+  not_logged_in: 'Daemon needs an API key.',
   permission_denied: 'macOS denied the install action.',
   spawn_failed: 'Could not start the daemon binary.',
   unknown: 'See the daemon log for details.'
@@ -56,8 +55,7 @@ const ERROR_HINTS: Record<StdiodErrorCode, string> = {
 
 export default function StdiodEnableCard({
   apiBaseUrl,
-  apiKey,
-  sealgateSecretKey
+  apiKey
 }: StdiodEnableCardProps): React.ReactNode {
   const [status, setStatus] = useState<StdiodStatus | null>(null)
   const [busy, setBusy] = useState(false)
@@ -108,8 +106,7 @@ export default function StdiodEnableCard({
     try {
       const loginResult = await window.api.stdiod.login({
         backend: apiBaseUrl,
-        apiKey,
-        sealgateSecretKey
+        apiKey
       })
       if (!loginResult.ok) {
         const code = loginResult.errorCode ?? 'unknown'
@@ -174,8 +171,7 @@ export default function StdiodEnableCard({
       // main process. Same path the tray "Reset Local Tunnel" action uses.
       const result = await window.api.stdiod.reset({
         backend: apiBaseUrl,
-        apiKey,
-        sealgateSecretKey
+        apiKey
       })
       if (!result.ok) {
         const code = result.errorCode ?? 'unknown'

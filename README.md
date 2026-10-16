@@ -15,17 +15,17 @@ servers can read files, hold credentials, and reach the network, and they're
 configured in a dozen different places on each machine.
 
 The client side of that lives here: a desktop app that finds every MCP server
-configured across the AI clients on a machine, quarantines new or unapproved
-ones before they run, and encrypts credentials with zero-knowledge keys, plus
-the two daemons that do the on-machine work. Everything that gets installed on
-a user's device is in this repository, open source and auditable. The gateway
-and web dashboard are server-side and live elsewhere (see below).
+configured across the AI clients on a machine and quarantines new or
+unapproved ones before they run, plus the two daemons that do the on-machine
+work. Everything that gets installed on a user's device is in this repository,
+open source and auditable. The gateway and web dashboard are server-side and
+live elsewhere (see below).
 
 ## What's in this repo
 
 | Component | Path | What it does |
 | --- | --- | --- |
-| Desktop app | [`packages/desktop/`](./packages/desktop) | Electron menu-bar app: discovery, quarantine review, credential encryption, and settings. The user-facing control plane. |
+| Desktop app | [`packages/desktop/`](./packages/desktop) | Electron menu-bar app: discovery, quarantine review, and settings. The user-facing control plane. |
 | stdiod | [`crates/stdiod/`](./crates/stdiod) | Rust daemon that spawns local stdio MCP servers and bridges them to the gateway over one outbound WebSocket. No inbound ports; the processes and their secrets stay on the device. |
 | detectord | [`crates/detectord/`](./crates/detectord) | Rust daemon and library that watches the MCP config files of host apps (Claude Code, VS Code, Cursor, ...) and enforces quarantine. |
 | Shared library | [`packages/shared/`](./packages/shared) | `@sealgate/shared`: the React components, design tokens, and client utilities the desktop app shares with the web dashboard. |

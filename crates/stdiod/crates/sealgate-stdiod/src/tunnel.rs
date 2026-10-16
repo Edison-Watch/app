@@ -123,10 +123,9 @@ impl OutgoingHandle {
 pub async fn connect(
     backend_url: &str,
     credential: &str,
-    sealgate_secret_key: Option<&str>,
     device_id: &str,
 ) -> std::result::Result<WsStream, ConnectError> {
-    let request = build_request(backend_url, credential, sealgate_secret_key, device_id)?;
+    let request = build_request(backend_url, credential, device_id)?;
     let ws_url = request.uri().to_string();
     info!(url = %ws_url, device_id = %device_id, "connecting to backend");
 
@@ -153,7 +152,6 @@ pub async fn connect(
 fn build_request(
     backend_url: &str,
     credential: &str,
-    sealgate_secret_key: Option<&str>,
     device_id: &str,
 ) -> Result<tokio_tungstenite::tungstenite::http::Request<()>> {
     let ws_url = build_ws_url(backend_url)?;
@@ -169,12 +167,6 @@ fn build_request(
         "X-SealGate-Device-Id",
         HeaderValue::from_str(device_id).context("invalid device_id header")?,
     );
-    if let Some(secret) = sealgate_secret_key {
-        let mut secret =
-            HeaderValue::from_str(secret).context("invalid SealGate secret-key header")?;
-        secret.set_sensitive(true);
-        headers.insert("X-SealGate-Secret-Key", secret);
-    }
     Ok(request)
 }
 
@@ -327,22 +319,12 @@ mod tests {
     }
 
     #[test]
-    fn request_uses_client_credential_and_marks_secrets_sensitive() {
-        let request = build_request(
-            "https://example.test",
-            "opaque-client-token",
-            Some("sealgate-secret"),
-            "device-1",
-        )
-        .unwrap();
+    fn request_uses_client_credential_and_marks_it_sensitive() {
+        let request =
+            build_request("https://example.test", "opaque-client-token", "device-1").unwrap();
         let authorization = request.headers().get("Authorization").unwrap();
         assert_eq!(authorization, "Bearer opaque-client-token");
         assert!(authorization.is_sensitive());
-        assert!(request
-            .headers()
-            .get("X-SealGate-Secret-Key")
-            .unwrap()
-            .is_sensitive());
     }
 
     #[test]

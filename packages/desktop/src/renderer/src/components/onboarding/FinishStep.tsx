@@ -22,7 +22,6 @@ interface FinishStepProps {
   apiBaseUrl: string;
   serverStatus: "checking" | "online" | "offline";
   modifiedConfigs: Array<{ appId: string; configPath: string; backupPath: string }>;
-  sealgateSecretKey?: string;
   selectedApps: string[];
   onComplete: () => void;
   onRestart: () => void;
@@ -36,7 +35,6 @@ export default function FinishStep({
   apiBaseUrl,
   serverStatus,
   modifiedConfigs,
-  sealgateSecretKey,
   selectedApps,
   onComplete,
   onRestart,
@@ -70,7 +68,6 @@ export default function FinishStep({
         apiKey,
         mcpBaseUrl,
         apiBaseUrl,
-        sealgateSecretKey: sealgateSecretKey || undefined,
         configuredApps: selectedApps,
       });
       onComplete();
@@ -113,7 +110,6 @@ export default function FinishStep({
         serverAddress: mcpBaseUrl,
         mcpBaseUrl,
         apiKey,
-        sealgateSecretKey: sealgateSecretKey || undefined,
         apps: [appId],
       });
       if (result.success && result.modifiedConfigs.length > 0) {
@@ -341,11 +337,7 @@ export default function FinishStep({
         </Card>
       )}
 
-      <StdiodEnableCard
-        apiBaseUrl={apiBaseUrl}
-        apiKey={apiKey}
-        sealgateSecretKey={sealgateSecretKey}
-      />
+      <StdiodEnableCard apiBaseUrl={apiBaseUrl} apiKey={apiKey} />
 
       <div className="flex flex-col gap-2">
         <Button

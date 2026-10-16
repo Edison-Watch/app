@@ -11,7 +11,6 @@ export type Request =
       key: string
       mcp_url?: string
       agents?: string[]
-      secret?: string
       /** false = detect-only (no sealgate install / hooks). Defaults true. */
       install?: boolean
       /** Arm auto-quarantine. Set true only once onboarding completes. */
@@ -42,8 +41,6 @@ export type Request =
   /** Put quarantined servers back: one by name, or all when omitted. */
   | { op: 'restore_quarantined'; name?: string }
   | { op: 'refresh_policy' }
-  | { op: 'verify_secret'; key: string }
-  | { op: 'reset_secret'; key: string; confirm: boolean }
   | { op: 'unenroll' }
 
 export interface Status {
@@ -134,12 +131,6 @@ export interface IntegrationChange {
   error?: string | null
 }
 
-export interface SecretOutcome {
-  valid?: boolean | null
-  expired?: boolean | null
-  deleted?: number | null
-}
-
 export type Reply =
   | ({ reply: 'status' } & Status)
   | { reply: 'integrations'; changes: IntegrationChange[] }
@@ -147,7 +138,6 @@ export type Reply =
   | { reply: 'restored'; restored: number; errors: string[] }
   | { reply: 'agents'; agents: AgentInfo[] }
   | { reply: 'servers'; servers: ServerView[] }
-  | ({ reply: 'secret' } & SecretOutcome)
   | { reply: 'ack' }
   | { reply: 'error'; message: string }
 

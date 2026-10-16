@@ -16,10 +16,7 @@ vi.mock('../stdiod/stdiodLog', () => ({ stdiodLog: () => {} }))
 
 // Active-account credentials. Overridden per test.
 let apiBaseUrl: string | null = 'https://api.testsealgate.example'
-let creds: { apiKey: string; sealgateSecretKey?: string } | null = {
-  apiKey: 'test-key',
-  sealgateSecretKey: 'test-secret'
-}
+let creds: { apiKey: string } | null = { apiKey: 'test-key' }
 
 vi.mock('../infra/setupConfig', () => ({
   getApiBaseUrl: () => apiBaseUrl,
@@ -57,7 +54,7 @@ describe('reprovisionStdiodForActiveAccount', () => {
     resetMock.mockClear()
     launchAgentLoaded = true
     apiBaseUrl = 'https://api.testsealgate.example'
-    creds = { apiKey: 'test-key', sealgateSecretKey: 'test-secret' }
+    creds = { apiKey: 'test-key' }
     delete process.env.SEALGATE_DRY_RUN
   })
   afterEach(() => {
@@ -76,8 +73,7 @@ describe('reprovisionStdiodForActiveAccount', () => {
     expect(resetMock).toHaveBeenCalledTimes(1)
     expect(resetMock).toHaveBeenCalledWith({
       backend: 'https://api.testsealgate.example',
-      apiKey: 'test-key',
-      sealgateSecretKey: 'test-secret'
+      apiKey: 'test-key'
     })
     expect(uninstallMock).not.toHaveBeenCalled()
   })
