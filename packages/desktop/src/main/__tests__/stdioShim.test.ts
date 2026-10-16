@@ -81,11 +81,11 @@ describe("unwrapStdioShim", () => {
         "mcp-remote",
         "https://x/mcp",
         "--header",
-        "X-SealGate-Secret-Key: user:abc:def",
+        "X-Token: user:abc:def",
       ],
     };
     expect(unwrapStdioShim(cfg)?.headers).toEqual({
-      "X-SealGate-Secret-Key": "user:abc:def",
+      "X-Token": "user:abc:def",
     });
   });
 

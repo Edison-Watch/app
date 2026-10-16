@@ -36,11 +36,6 @@ pub struct Enrollment {
     /// quarantine still acts on all agents.
     #[serde(default)]
     pub selected_agents: Vec<String>,
-    /// The user's sealgate secret key (composite `user:<base64>`), provided by the
-    /// UI/CLI. Carried in the `X-SealGate-Secret-Key` header of the installed
-    /// entry. `None` installs without the header.
-    #[serde(default)]
-    pub sealgate_secret_key: Option<String>,
     /// Whether automatic quarantine enforcement is armed for this user. The UI
     /// arms it only once onboarding is complete, so the daemon stays detect-only
     /// (list/report, no removal) while the user is still reviewing their servers
@@ -131,7 +126,6 @@ mod tests {
             quarantine: true,
             mcp_base_url: None,
             selected_agents: Vec::new(),
-            sealgate_secret_key: None,
             armed: false,
         }
     }
@@ -151,5 +145,21 @@ mod tests {
 
         assert!(s.remove("alice").is_some());
         assert!(s.get("alice").is_none());
+    }
+
+    #[test]
+    fn a_store_written_by_an_older_version_still_loads() {
+        // Older versions kept a per-user key in each record. The field is gone;
+        // the record must still load, and the value must not be written back.
+        let old = r#"{"users":{"alice":{
+            "api_base_url":"u","api_key":"k","org_id":"org-a","quarantine":true,
+            "selected_agents":["cursor"],
+            "sealgate_secret_key":"user:abc.admin:def",
+            "armed":true}}}"#;
+        let store: Enrollments = serde_json::from_str(old).unwrap();
+        let alice = store.get("alice").unwrap();
+        assert_eq!(alice.selected_agents, vec!["cursor".to_string()]);
+        assert!(alice.armed);
+        assert!(!serde_json::to_string(&store).unwrap().contains("user:abc"));
     }
 }

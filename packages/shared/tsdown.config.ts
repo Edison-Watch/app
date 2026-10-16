@@ -4,7 +4,6 @@ export default defineConfig({
   entry: {
     index: 'src/index.ts',
     'auth/index': 'src/auth/index.ts',
-    'crypto/index': 'src/crypto/index.ts',
     'config/index': 'src/config/index.ts',
     'ui/index': 'src/ui/index.ts',
     'ui/Badge': 'src/ui/Badge.tsx',

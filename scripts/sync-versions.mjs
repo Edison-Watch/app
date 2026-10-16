@@ -20,7 +20,7 @@
  * commit what it touches - CI fails the build otherwise.
  *
  * NOT synced: packages/shared. It is a separately versioned library that the
- * desktop app consumes via a semver range (`^0.1.0`), so tying it to the app's
+ * desktop app consumes via a semver range (`^0.2.0`), so tying it to the app's
  * release number would make every app bump a fake breaking change downstream.
  */
 

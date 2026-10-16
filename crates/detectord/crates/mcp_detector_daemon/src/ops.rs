@@ -405,18 +405,16 @@ pub async fn refresh_policy(user: &str) -> anyhow::Result<Status> {
 /// Online enrollment handshake: validate the key, resolve the org, cache the
 /// policy and known set, then install the `sealgate` proxy entry into the
 /// selected agents (when an MCP base URL was given).
-/// `mcp_base_url`, `selected_agents`, and `secret` are all optional inputs from
+/// `mcp_base_url` and `selected_agents` are optional inputs from
 /// the UI/CLI: `None`/unspecified keeps the previous value, so re-running
 /// `enroll` acts as an update. The selection diff uninstalls sealgate from
 /// agents dropped from the set.
-#[allow(clippy::too_many_arguments)]
 pub async fn enroll(
     user: &str,
     url: String,
     key: String,
     mcp_base_url: Option<String>,
     selected_agents: Option<Vec<String>>,
-    secret: Option<String>,
     install: bool,
     armed: Option<bool>,
 ) -> anyhow::Result<Status> {
@@ -429,16 +427,6 @@ pub async fn enroll(
         .context("validating key / fetching org fingerprints")?;
     let policy = client.fetch_policy().await.context("fetching policy")?;
     let profile = client.fetch_profile().await.context("fetching profile")?;
-
-    // A newly-provided/rotated secret must be registered (its hash) so the MCP
-    // gateway will accept the X-SealGate-Secret-Key header we install. Done before
-    // save/install so a rejected key fails the whole enroll cleanly.
-    if let Some(sk) = &secret {
-        client
-            .register_secret_key(sk)
-            .await
-            .context("registering secret key")?;
-    }
 
     // Merge install inputs over the previous enrollment (enroll = update).
     // Agents are ADDITIVE: `--agents` unions with the existing selection and
@@ -467,11 +455,6 @@ pub async fn enroll(
     retain_manageable(&mut new_agents);
     let mcp_base_url =
         mcp_base_url.or_else(|| existing.as_ref().and_then(|e| e.mcp_base_url.clone()));
-    let sealgate_secret_key = secret.or_else(|| {
-        existing
-            .as_ref()
-            .and_then(|e| e.sealgate_secret_key.clone())
-    });
     // `armed` is a straight set (not additive): the UI arms enforcement when
     // onboarding completes; a missing value keeps the prior state.
     let armed = armed.unwrap_or_else(|| existing.as_ref().map(|e| e.armed).unwrap_or(false));
@@ -486,7 +469,6 @@ pub async fn enroll(
         quarantine: policy.quarantine,
         mcp_base_url,
         selected_agents: new_agents.clone(),
-        sealgate_secret_key,
         armed,
     };
     paths::ensure_user_dir(user)?;
@@ -802,7 +784,6 @@ fn install_sealgate_entries_for(
         }
         return Vec::new();
     };
-    let secret = e.sealgate_secret_key.as_deref();
     let mut changes = Vec::new();
     for agent in agents::build() {
         if !wanted.iter().any(|s| s == agent.name()) {
@@ -814,7 +795,7 @@ fn install_sealgate_entries_for(
             let done_via_cli = inst.prefer_cli
                 && {
                     let url = mcp_quarantine::sealgate_url(mcp_base, &e.api_key, &inst.client_id);
-                    match crate::claude_cli::install(user, &url, secret) {
+                    match crate::claude_cli::install(user, &url) {
                         Ok(()) => {
                             tracing::info!(
                                 agent = agent.name(),
@@ -841,7 +822,7 @@ fn install_sealgate_entries_for(
             // The backup is taken on the first edit only, so report it just
             // when it's actually on disk.
             let backup = mcp_quarantine::backup_path(&inst.path);
-            let res = mcp_quarantine::install_sealgate(&inst, mcp_base, &e.api_key, secret);
+            let res = mcp_quarantine::install_sealgate(&inst, mcp_base, &e.api_key);
             match &res {
                 Ok(()) => {
                     tracing::info!(agent = agent.name(), path = %inst.path.display(), "installed sealgate")
@@ -882,7 +863,6 @@ pub fn heal_sealgate_install(user: &str, e: &Enrollment) -> usize {
         .filter(|s| is_sealgate_entry(s))
         .map(|s| s.client)
         .collect();
-    let secret = e.sealgate_secret_key.as_deref();
     let mut healed = 0;
     for agent in &built {
         if !e.selected_agents.iter().any(|s| s == agent.name()) {
@@ -911,13 +891,13 @@ pub fn heal_sealgate_install(user: &str, e: &Enrollment) -> usize {
         for inst in agent.sealgate_installs(&home) {
             let done_via_cli = inst.prefer_cli && {
                 let url = mcp_quarantine::sealgate_url(mcp_base, &e.api_key, &inst.client_id);
-                crate::claude_cli::install(user, &url, secret).is_ok()
+                crate::claude_cli::install(user, &url).is_ok()
             };
             if done_via_cli {
                 wrote = true;
                 continue;
             }
-            match mcp_quarantine::install_sealgate(&inst, mcp_base, &e.api_key, secret) {
+            match mcp_quarantine::install_sealgate(&inst, mcp_base, &e.api_key) {
                 Ok(()) => wrote = true,
                 Err(err) => {
                     tracing::debug!(
@@ -1034,39 +1014,6 @@ fn remove_all_hooks_for(user: &str) {
             }
         }
     }
-}
-
-/// Verify an existing key against the backend; on success adopt it (store +
-/// re-install with it) without re-registering. The "enter your existing key"
-/// path. Returns the verification result either way.
-pub async fn verify_secret(user: &str, key: String) -> anyhow::Result<mcp_backend::VerifyResult> {
-    let mut e = Enrollment::load_for(user)?.ok_or_else(|| anyhow::anyhow!("not enrolled"))?;
-    let client = BackendClient::new(e.api_base_url.clone(), e.api_key.clone());
-    let result = client
-        .verify_secret_key(&key)
-        .await
-        .context("verifying secret key")?;
-    if result.valid {
-        e.sealgate_secret_key = Some(key);
-        e.save_for(user)?;
-        apply_install(user, &e);
-    }
-    Ok(result)
-}
-
-/// Destructively reset to a new key (the backend deletes this user's encrypted
-/// personal values), then adopt it (store + re-install). The "start fresh" path.
-pub async fn reset_secret(user: &str, key: String) -> anyhow::Result<mcp_backend::ResetResult> {
-    let mut e = Enrollment::load_for(user)?.ok_or_else(|| anyhow::anyhow!("not enrolled"))?;
-    let client = BackendClient::new(e.api_base_url.clone(), e.api_key.clone());
-    let result = client
-        .reset_secret_key(&key)
-        .await
-        .context("resetting secret key")?;
-    e.sealgate_secret_key = Some(key);
-    e.save_for(user)?;
-    apply_install(user, &e);
-    Ok(result)
 }
 
 /// Remove `user`'s enrollment (uninstalling sealgate first); returns the org

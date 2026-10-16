@@ -49,7 +49,6 @@ export interface StdiodStatus {
 export interface StdiodLoginInput {
   backend: string
   apiKey: string
-  sealgateSecretKey?: string
   deviceId?: string
   deviceLabel?: string
 }

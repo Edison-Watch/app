@@ -1,6 +1,6 @@
 {
   "name": "@sealgate/shared",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Shared React components, design tokens, and client utilities for SealGate.",
   "license": "AGPL-3.0-only",
   "repository": {
@@ -44,16 +44,6 @@
       "require": {
         "types": "./dist/auth/index.d.cts",
         "default": "./dist/auth/index.cjs"
-      }
-    },
-    "./crypto": {
-      "import": {
-        "types": "./dist/crypto/index.d.mts",
-        "default": "./dist/crypto/index.mjs"
-      },
-      "require": {
-        "types": "./dist/crypto/index.d.cts",
-        "default": "./dist/crypto/index.cjs"
       }
     },
     "./config": {

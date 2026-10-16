@@ -7,7 +7,6 @@ import type { BrowserWindow, MenuItemConstructorOptions } from 'electron'
 import { showDebugWindow } from '../dialogs/debugWindow'
 import { showFeedbackWindow } from '../dialogs/feedbackWindow'
 import { showServerRegistrationDialog } from '../dialogs/mcpServerActionDialog'
-import { showUpdateKeysWindow } from '../dialogs/updateKeysWindow'
 import { fetchUserRole } from '../discovery/mcpServerSubmit'
 import {
   checkForUpdates,
@@ -20,14 +19,11 @@ import {
   getApiBaseUrl,
   getCredentialsForEnv,
   getIsServerOnline,
-  getMcpBaseUrl,
   getMcpConfig,
   getMcpUrl,
-  getSetupData,
-  markSetupComplete
+  getSetupData
 } from '../infra/setupConfig'
 import { isSseConnected, pendingApprovals, showPendingApprovalsDialog } from '../ipc/approvalsHandler'
-import { bootstrapDetectord } from '../detectord/bootstrap'
 import { getDetectordHealth } from '../detectord/health'
 import { buildStdiodMenuItems } from '../stdiod/trayMenu'
 import { handleStdiodReset } from '../stdiod/trayReset'
@@ -219,41 +215,6 @@ export function buildTrayMenuItems(deps: TrayMenuDeps): MenuItemConstructorOptio
     { type: 'separator' },
     { label: 'Re-run Setup Wizard', click: () => deps.rerunWizard() },
     { label: 'Clear App Data & Restart', click: () => deps.handleClearDataAndRestart() },
-    {
-      label: 'Update Keys',
-      click: () =>
-        showUpdateKeysWindow(
-          getSetupData,
-          (key) => markSetupComplete({ sealgateSecretKey: key }),
-          async (compositeKey) => {
-            // Hand the key straight to the enrollment rather than relying on
-            // what was just persisted. Enrollment otherwise reads it back via
-            // getCredentialsForEnv(), and the daemon stamps every agent config
-            // with whatever it gets - so a persistence gap would silently
-            // rewrite them all with the PREVIOUS secret.
-            //
-            // Throwing is the contract with the dialog: it shows its success
-            // view unless this rejects. Returning quietly when the key wasn't
-            // applied would tell the user their apps use the new key while
-            // every one of them still sends the old header.
-            if (!getMcpBaseUrl() || !getCredentialsForEnv()?.apiKey) {
-              throw new Error(
-                'Sign in to SealGate before updating keys - your apps were not changed.'
-              )
-            }
-            const outcome = await bootstrapDetectord({ sealgateSecretKey: compositeKey })
-            // `applied` is the only proof the new key reached the agents: a
-            // daemon still enrolled from before reports ok=true while every
-            // agent keeps the old secret header.
-            if (!outcome.applied) {
-              throw new Error(
-                "Couldn't apply the new key - the SealGate detector daemon did not accept it, " +
-                  `so your apps still use the previous key. ${outcome.reason ?? ''}`.trim()
-              )
-            }
-          }
-        )
-    },
     // Linux compact: drop Send Feedback + Sign Out (both available in-app).
     ...(compactTray
       ? []

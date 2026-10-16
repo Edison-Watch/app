@@ -23,7 +23,7 @@ import { showDaemonApprovalDialog } from './approvalDialog'
 import { detectordBinaryExists, getDetectordBinaryPath } from './binary'
 import { reportDetectordFailure, reportDetectordOk } from './health'
 import { ensureDetectord } from './lifecycle'
-import type { DetectordEvent, SecretOutcome, ServerView } from './protocol'
+import type { DetectordEvent, ServerView } from './protocol'
 import type { DetectordClient } from './socket'
 
 // App ids use dashes (`claude-code`); daemon agent names use underscores.
@@ -42,7 +42,6 @@ export interface DetectordEnrollInput {
   apiUrl?: string
   mcpUrl?: string
   apiKey?: string
-  sealgateSecretKey?: string
 }
 
 /**
@@ -100,9 +99,8 @@ export async function bootstrapDetectord(
   const client = ensured.client
 
   // Enroll is safe to run on every login: it's additive (agents union with the
-  // existing set, never removed) and non-destructive (a missing secret keeps
-  // the existing one). So we always (re-)enroll whenever credentials are
-  // available rather than guarding on prior state; agent/key *additions* still
+  // existing set, never removed). So we always (re-)enroll whenever credentials
+  // are available rather than guarding on prior state; agent *additions* still
   // come through here (union) and removals go through unenroll.
   let applied = true
   if (!(await enrollDaemon(client, primary, creds))) {
@@ -172,30 +170,6 @@ export async function warnAgentsNotRepointed(what: string, reason?: string): Pro
   else await app.whenReady().then(show)
 }
 
-/**
- * Register/adopt the org secret key with the daemon when the user enters or
- * changes it (OrgKeyCard). `verify_secret` validates against the backend and
- * adopts it into the enrollment: the explicit "enroll key" state change. The
- * daemon must already be enrolled; if it isn't, this is a non-fatal no-op.
- */
-export async function setDetectordSecret(
-  key: string
-): Promise<{ ok: boolean; outcome?: SecretOutcome; reason?: string }> {
-  const ensured = await ensureDetectord((m) => console.log(m), true)
-  if (!ensured.ok) {
-    console.warn(`[detectord] set secret skipped: ${ensured.reason}`)
-    return { ok: false, reason: ensured.reason }
-  }
-  try {
-    const outcome = await ensured.client.verifySecret(key)
-    console.log(`[detectord] secret adopted valid=${outcome.valid ?? '?'}`)
-    return { ok: true, outcome }
-  } catch (err) {
-    console.error(`[detectord] set secret failed: ${String(err)}`)
-    return { ok: false, reason: String(err) }
-  }
-}
-
 async function enrollDaemon(
   client: DetectordClient,
   primary: boolean,
@@ -205,7 +179,6 @@ async function enrollDaemon(
   const apiUrl = override?.apiUrl ?? getApiBaseUrl()
   const mcpUrl = override?.mcpUrl ?? getMcpBaseUrl()
   const apiKey = override?.apiKey ?? stored?.apiKey
-  const sealgateSecretKey = override?.sealgateSecretKey ?? stored?.sealgateSecretKey
   const setup = getSetupData()
   if (!apiUrl || !apiKey) {
     console.warn('[detectord] not enrolling: no api url / key yet')
@@ -228,7 +201,6 @@ async function enrollDaemon(
       key: apiKey,
       mcpUrl: mcpUrl ?? undefined,
       agents,
-      secret: sealgateSecretKey,
       // primary => the daemon installs sealgate + hooks; shadow => detect-only.
       install: primary,
       armed

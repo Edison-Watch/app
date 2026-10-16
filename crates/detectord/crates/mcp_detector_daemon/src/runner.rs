@@ -112,7 +112,7 @@ pub async fn worker(user: String, enforce: bool, events: Option<EventTx>) -> any
     loop {
         // Re-read the enrollment from disk each pass so an onboarding-completion
         // re-enroll takes effect without restarting the worker: it arms
-        // enforcement AND fills in selected_agents / mcp_base_url / secret (the
+        // enforcement AND fills in selected_agents / mcp_base_url (the
         // login enroll started empty). Until armed the daemon is detect-only —
         // lists/reports but quarantines nothing — so onboarding can review +
         // send-to-SG first. Policy (`quarantine`) is refreshed from the backend

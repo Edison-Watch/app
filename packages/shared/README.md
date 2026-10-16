@@ -20,7 +20,7 @@
 - React UI components and SealGate design tokens
 - Product and security animations used in the SealGate clients
 - Agent registry data and SVG assets
-- Browser-side authentication, configuration, and crypto utilities
+- Browser-side authentication and configuration utilities
 
 This repository is public so that the shared client code used across SealGate can be audited and evaluated. It is intentionally an SealGate package, not a generic component library or a hosted service SDK.
 
@@ -79,7 +79,6 @@ Each entrypoint is independently tree-shakeable.
 | `@sealgate/shared/svg`                            | SVG asset path/string exports                  |
 | `@sealgate/shared/auth`                           | Browser auth and Supabase client               |
 | `@sealgate/shared/config`                         | Client/runtime environment configuration       |
-| `@sealgate/shared/crypto`                         | Client-side crypto utilities                   |
 | `@sealgate/shared/agent-registry`                 | Canonical agent icon and metadata registry     |
 
 </details>
@@ -98,7 +97,6 @@ TLDR: a design-system half and a client-services half; browse [`src/`](src) for 
 - **SVG assets** ([`src/svg/`](src/svg)): logo, app-icon, and connector SVG path data.
 - **Auth** ([`src/auth/`](src/auth)): browser-side authentication and the shared Supabase client.
 - **Config** ([`src/config/`](src/config)): runtime environment configuration with demo/release/local switching, plus a "custom" environment for self-hosted backends.
-- **Crypto** ([`src/crypto/`](src/crypto)): client-side encryption and secret-key API helpers.
 - **Agent registry** ([`src/agent-registry/`](src/agent-registry)): display names, brand colors, and icon data for supported coding agents.
 
 </details>

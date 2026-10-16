@@ -258,10 +258,9 @@ export async function login(input: StdiodLoginInput): Promise<StdiodResult> {
   // (stdin) requires a daemon-side change and the window is short-lived.
   // A future hardening item is to teach the daemon to read from stdin.
   const args = ['login', '--backend', input.backend, '--api-key', input.apiKey]
-  if (input.sealgateSecretKey) args.push('--sealgate-secret-key', input.sealgateSecretKey)
   if (input.deviceId) args.push('--device-id', input.deviceId)
   if (input.deviceLabel) args.push('--device-label', input.deviceLabel)
-  // Never log args: they carry the api key + sealgate_secret_key. Log only
+  // Never log args: they carry the api key. Log only
   // the non-secret shape so client.log stays safe to share.
   stdiodLog(`login: backend=${input.backend} deviceId=${input.deviceId ?? '(default)'}`)
   try {

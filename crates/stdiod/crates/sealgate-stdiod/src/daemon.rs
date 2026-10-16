@@ -293,13 +293,7 @@ async fn run_one_session(
     outgoing: &OutgoingHandle,
     writer: &StateWriter,
 ) -> Result<()> {
-    let ws = tunnel::connect(
-        &args.backend,
-        &args.credential,
-        args.sealgate_secret_key.as_deref(),
-        &args.device_id,
-    )
-    .await?;
+    let ws = tunnel::connect(&args.backend, &args.credential, &args.device_id).await?;
     // The WS upgrade means auth + the org feature flag passed, but the state
     // only flips to Connected on server_hello (see drain_incoming): the
     // backend registers the device between the upgrade and that frame, and

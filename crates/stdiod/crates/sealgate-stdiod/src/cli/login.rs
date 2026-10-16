@@ -23,9 +23,6 @@ pub struct LoginArgs {
     /// verification URL and user code are still printed.
     #[arg(long)]
     pub no_open: bool,
-    /// Optional `X-SealGate-Secret-Key` for per-user secret decryption.
-    #[arg(long)]
-    pub sealgate_secret_key: Option<String>,
     /// Legacy device identifier override. Interactive login always uses the
     /// server-issued device ID.
     #[arg(long)]
@@ -131,11 +128,6 @@ pub async fn run(args: LoginArgs) -> Result<()> {
     if let Some(label) = args.device_label {
         cfg.device_label = Some(label);
     }
-    if account_changed {
-        cfg.sealgate_secret_key = args.sealgate_secret_key;
-    } else if let Some(secret) = args.sealgate_secret_key {
-        cfg.sealgate_secret_key = Some(secret);
-    }
 
     save_login(&cfg)?;
     if account_changed {
@@ -161,8 +153,8 @@ async fn legacy_login(
 
 /// A reused installation can still come back bound to a different user or
 /// organization, so compare every server-issued account identifier - not just
-/// the installation - before deciding to keep per-user state like the SealGate
-/// secret key or to skip revoking the previous client credential.
+/// the installation - before deciding to skip revoking the previous client
+/// credential.
 fn account_changed(
     cfg: &PersistedConfig,
     same_issuer: bool,
@@ -234,9 +226,6 @@ fn configure_legacy_login(
     cfg.authenticated_user_id = None;
     cfg.authenticated_org_id = None;
     cfg.scopes.clear();
-    if let Some(value) = args.sealgate_secret_key {
-        cfg.sealgate_secret_key = Some(value);
-    }
     if let Some(value) = args.device_id {
         cfg.device_id = Some(value);
     }
@@ -422,7 +411,6 @@ mod tests {
             client_installation_id: Some("install-1".into()),
             authenticated_user_id: Some("user-1".into()),
             authenticated_org_id: Some("org-1".into()),
-            sealgate_secret_key: Some("old-secret".into()),
             device_id: Some("old-device".into()),
             ..Default::default()
         };
@@ -435,7 +423,6 @@ mod tests {
                 backend: None,
                 api_key: None,
                 no_open: true,
-                sealgate_secret_key: None,
                 device_id: None,
                 device_label: None,
                 new_device: false,
@@ -448,15 +435,13 @@ mod tests {
         assert!(updated.client_installation_id.is_none());
         assert!(updated.authenticated_user_id.is_none());
         assert!(updated.authenticated_org_id.is_none());
-        assert!(updated.sealgate_secret_key.is_none());
         assert!(updated.device_id.is_none());
     }
 
     #[test]
-    fn changed_backend_legacy_login_keeps_only_explicit_secret_and_device() {
+    fn changed_backend_legacy_login_keeps_only_explicit_device() {
         let cfg = PersistedConfig {
             backend_url: Some("https://old.test".into()),
-            sealgate_secret_key: Some("old-secret".into()),
             device_id: Some("old-device".into()),
             ..Default::default()
         };
@@ -469,7 +454,6 @@ mod tests {
                 backend: None,
                 api_key: None,
                 no_open: true,
-                sealgate_secret_key: Some("new-secret".into()),
                 device_id: Some("new-device".into()),
                 device_label: None,
                 new_device: false,
@@ -478,7 +462,6 @@ mod tests {
             },
         )
         .unwrap();
-        assert_eq!(updated.sealgate_secret_key.as_deref(), Some("new-secret"));
         assert_eq!(updated.device_id.as_deref(), Some("new-device"));
     }
 }

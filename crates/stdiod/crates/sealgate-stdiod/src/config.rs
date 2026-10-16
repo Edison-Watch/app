@@ -73,9 +73,6 @@ pub struct PersistedConfig {
     pub authenticated_org_id: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub scopes: Vec<String>,
-    /// Optional SealGate secret key (`X-SealGate-Secret-Key`).
-    #[serde(default)]
-    pub sealgate_secret_key: Option<String>,
     /// Server-issued device ID for client auth, or a legacy override.
     #[serde(default)]
     pub device_id: Option<String>,
@@ -98,10 +95,6 @@ impl std::fmt::Debug for PersistedConfig {
             .field("authenticated_user_id", &self.authenticated_user_id)
             .field("authenticated_org_id", &self.authenticated_org_id)
             .field("scopes", &self.scopes)
-            .field(
-                "sealgate_secret_key",
-                &self.sealgate_secret_key.as_ref().map(|_| "<redacted>"),
-            )
             .field("device_id", &self.device_id)
             .field("device_label", &self.device_label)
             .finish()
@@ -192,7 +185,6 @@ impl PersistedConfig {
         self.authenticated_user_id = None;
         self.authenticated_org_id = None;
         self.scopes.clear();
-        self.sealgate_secret_key = None;
         self.device_id = None;
     }
 }
@@ -205,7 +197,6 @@ pub struct Resolved {
     pub api_key: Option<String>,
     pub client_access_token: Option<String>,
     pub client_installation_id: Option<String>,
-    pub sealgate_secret_key: Option<String>,
     pub device_id: Option<String>,
     pub device_label: Option<String>,
 }
@@ -290,17 +281,6 @@ impl Resolved {
             } else {
                 persisted.client_installation_id
             },
-            sealgate_secret_key: if has_legacy_override {
-                overrides.sealgate_secret_key.or_else(|| {
-                    preserve_legacy_values
-                        .then_some(persisted.sealgate_secret_key)
-                        .flatten()
-                })
-            } else {
-                overrides
-                    .sealgate_secret_key
-                    .or(persisted.sealgate_secret_key)
-            },
             device_id: if has_legacy_override {
                 overrides.device_id.or_else(|| {
                     preserve_legacy_values
@@ -357,7 +337,6 @@ impl PersistedConfig {
         self.usable_credential().is_some()
             || nonempty(self.authenticated_user_id.as_deref()).is_some()
             || nonempty(self.authenticated_org_id.as_deref()).is_some()
-            || nonempty(self.sealgate_secret_key.as_deref()).is_some()
             || nonempty(self.device_id.as_deref()).is_some()
     }
 }
@@ -467,7 +446,6 @@ mod tests {
         let cfg = PersistedConfig {
             backend_url: Some("http://localhost:3001".into()),
             api_key: Some("sealgate_test".into()),
-            sealgate_secret_key: None,
             device_id: Some("laptop".into()),
             device_label: Some("My Laptop".into()),
             ..Default::default()
@@ -499,7 +477,6 @@ mod tests {
             api_key: None,
             client_access_token: None,
             client_installation_id: None,
-            sealgate_secret_key: None,
             device_id: None,
             device_label: None,
         };
@@ -537,7 +514,6 @@ mod tests {
                 api_key: Some("flag-key".into()),
                 client_access_token: None,
                 client_installation_id: None,
-                sealgate_secret_key: Some("explicit-secret".into()),
                 device_id: Some("explicit-device".into()),
                 device_label: None,
             },
@@ -547,10 +523,6 @@ mod tests {
         assert_eq!(selected.kind(), CredentialKind::LegacyApiKey);
         assert_eq!(selected.token(), "flag-key");
         assert_eq!(merged.backend_url.as_deref(), Some("https://other.test"));
-        assert_eq!(
-            merged.sealgate_secret_key.as_deref(),
-            Some("explicit-secret")
-        );
         assert_eq!(merged.device_id.as_deref(), Some("explicit-device"));
     }
 
@@ -560,7 +532,6 @@ mod tests {
             backend_url: Some("https://issuer.test".into()),
             client_access_token: Some("client-token".into()),
             client_installation_id: Some("install-1".into()),
-            sealgate_secret_key: Some("account-secret".into()),
             device_id: Some("device-1".into()),
             ..Default::default()
         };
@@ -571,7 +542,6 @@ mod tests {
                 api_key: None,
                 client_access_token: None,
                 client_installation_id: None,
-                sealgate_secret_key: None,
                 device_id: None,
                 device_label: None,
             },
@@ -585,7 +555,6 @@ mod tests {
             backend_url: Some("https://issuer.test".into()),
             client_access_token: Some("client-token".into()),
             client_installation_id: Some("install-1".into()),
-            sealgate_secret_key: Some("account-secret".into()),
             device_id: Some("device-1".into()),
             ..Default::default()
         };
@@ -596,7 +565,6 @@ mod tests {
                 api_key: Some("legacy-key".into()),
                 client_access_token: None,
                 client_installation_id: None,
-                sealgate_secret_key: None,
                 device_id: None,
                 device_label: None,
             },
@@ -604,7 +572,6 @@ mod tests {
         .unwrap();
         assert!(merged.client_access_token.is_none());
         assert!(merged.client_installation_id.is_none());
-        assert!(merged.sealgate_secret_key.is_none());
         assert!(merged.device_id.is_none());
     }
 
@@ -624,7 +591,6 @@ mod tests {
                 api_key: None,
                 client_access_token: None,
                 client_installation_id: None,
-                sealgate_secret_key: None,
                 device_id: Some("device-2".into()),
                 device_label: None,
             },
@@ -647,6 +613,24 @@ device_label = "Laptop"
     }
 
     #[test]
+    fn toml_with_fields_from_older_versions_still_loads_and_drops_them() {
+        // Older versions persisted a per-user key here. It must not stop the
+        // config loading, and it must not survive the next save.
+        let parsed: PersistedConfig = toml::from_str(
+            r#"backend_url = "https://example.test"
+client_access_token = "client"
+sealgate_secret_key = "user:abc.admin:def"
+device_id = "device-1"
+"#,
+        )
+        .unwrap();
+        assert_eq!(parsed.client_access_token.as_deref(), Some("client"));
+        assert_eq!(parsed.device_id.as_deref(), Some("device-1"));
+        let saved = toml::to_string_pretty(&parsed).unwrap();
+        assert!(!saved.contains("user:abc"));
+    }
+
+    #[test]
     fn clearing_authentication_preserves_preferences() {
         let mut cfg = PersistedConfig {
             backend_url: Some("https://example.test".into()),
@@ -656,7 +640,6 @@ device_label = "Laptop"
             authenticated_user_id: Some("user-1".into()),
             authenticated_org_id: Some("org-1".into()),
             scopes: vec!["tunnel:connect".into()],
-            sealgate_secret_key: Some("secret".into()),
             device_id: Some("device-1".into()),
             device_label: Some("My Laptop".into()),
         };
@@ -665,7 +648,6 @@ device_label = "Laptop"
         assert_eq!(cfg.device_label.as_deref(), Some("My Laptop"));
         assert!(cfg.usable_credential().is_none());
         assert!(cfg.device_id.is_none());
-        assert!(cfg.sealgate_secret_key.is_none());
     }
 
     #[test]
@@ -673,13 +655,11 @@ device_label = "Laptop"
         let cfg = PersistedConfig {
             api_key: Some("legacy-secret-value".into()),
             client_access_token: Some("client-secret-value".into()),
-            sealgate_secret_key: Some("sealgate-secret-value".into()),
             ..Default::default()
         };
         let debug = format!("{cfg:?}");
         assert!(!debug.contains("legacy-secret-value"));
         assert!(!debug.contains("client-secret-value"));
-        assert!(!debug.contains("sealgate-secret-value"));
     }
 
     #[test]

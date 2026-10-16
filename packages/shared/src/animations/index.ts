@@ -1,4 +1,3 @@
-export { default as KeyEncryptionAnimation } from './feature/KeyEncryptionAnimation'
 export { default as SealGateMCPProxyAnimation } from './feature/SealGateMCPProxyAnimation'
 export { default as PromptInjectionAnimation } from './threat/PromptInjectionAnimation'
 export { default as RBACViolationAnimation } from './threat/RBACViolationAnimation'

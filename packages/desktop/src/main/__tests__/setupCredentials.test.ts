@@ -1,13 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { mkdtempSync, rmSync, writeFileSync } from 'fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 
 /**
  * `getCredentialsForEnv()` is what every later reader uses - including the
- * daemon enrollment that stamps the secret header into every agent config. So
- * whatever `markSetupComplete` fails to record here is a wrong key written
- * across the machine, silently.
+ * daemon enrollment that points every agent config at the gateway. So whatever
+ * `markSetupComplete` fails to record here is a wrong key written across the
+ * machine, silently.
  */
 
 let userDataDir: string
@@ -23,68 +23,51 @@ vi.mock('electron', () => ({
 import {
   getActiveEnv,
   getCredentialsForEnv,
+  getSavedAccounts,
   getSetupData,
-  markSetupComplete
+  markSetupComplete,
+  removeRetiredKeyMaterial
 } from '../infra/setupConfig'
 
 const SETUP = () => join(userDataDir, 'setup.json')
+const ACCOUNTS = () => join(userDataDir, 'accounts.json')
+const KEY_BLOB = () => join(userDataDir, '.personal-key.enc')
 
 // Derived, not assumed: getActiveEnv() resolves from the build/override, so an
 // unpackaged (test) build reports 'dev' rather than the 'demo' fallback.
 const ENV = getActiveEnv()
 
-describe('markSetupComplete credential persistence', () => {
-  beforeEach(() => {
-    userDataDir = mkdtempSync(join(tmpdir(), 'sg-setup-'))
-  })
-  afterEach(() => {
-    rmSync(userDataDir, { recursive: true, force: true })
-    vi.restoreAllMocks()
-  })
+beforeEach(() => {
+  userDataDir = mkdtempSync(join(tmpdir(), 'sg-setup-'))
+})
+afterEach(() => {
+  rmSync(userDataDir, { recursive: true, force: true })
+  vi.restoreAllMocks()
+})
 
-  it('updates the per-env secret when the apiKey lives only in envCredentials', () => {
+describe('markSetupComplete credential persistence', () => {
+  it('keeps the apiKey that lives only in envCredentials', () => {
     // A returning login: the apiKey was recorded per-env and never top-level.
     writeFileSync(
       SETUP(),
-      JSON.stringify({
-        completed: true,
-        envCredentials: { [ENV]: { apiKey: 'sg_key', sealgateSecretKey: 'user:OLD' } }
-      }),
+      JSON.stringify({ completed: true, envCredentials: { [ENV]: { apiKey: 'sg_key' } } }),
       'utf-8'
     )
-
-    markSetupComplete({ sealgateSecretKey: 'user:NEW' })
-
-    // The env entry is what getCredentialsForEnv prefers, so it must carry the
-    // new key - otherwise enrollment re-stamps every agent with 'user:OLD'.
-    expect(getCredentialsForEnv(ENV)?.sealgateSecretKey).toBe('user:NEW')
-    expect(getCredentialsForEnv(ENV)?.apiKey).toBe('sg_key')
+    markSetupComplete({ configuredApps: ['cursor'] })
+    expect(getCredentialsForEnv(ENV)).toEqual({ apiKey: 'sg_key' })
   })
 
-  it('still records the key top-level', () => {
-    writeFileSync(
-      SETUP(),
-      JSON.stringify({
-        completed: true,
-        envCredentials: { [ENV]: { apiKey: 'sg_key', sealgateSecretKey: 'user:OLD' } }
-      }),
-      'utf-8'
-    )
-    markSetupComplete({ sealgateSecretKey: 'user:NEW' })
-    expect(getSetupData().sealgateSecretKey).toBe('user:NEW')
-  })
-
-  it('keeps working when the apiKey is top-level (the fresh-signup shape)', () => {
+  it('records a top-level apiKey per environment (the fresh-signup shape)', () => {
     writeFileSync(SETUP(), JSON.stringify({ completed: true, apiKey: 'sg_key' }), 'utf-8')
-    markSetupComplete({ sealgateSecretKey: 'user:NEW' })
-    expect(getCredentialsForEnv(ENV)).toEqual({ apiKey: 'sg_key', sealgateSecretKey: 'user:NEW' })
+    markSetupComplete({})
+    expect(getSetupData().envCredentials).toEqual({ [ENV]: { apiKey: 'sg_key' } })
   })
 
   it('does not invent a credential entry when there is no apiKey anywhere', () => {
     writeFileSync(SETUP(), JSON.stringify({ completed: true }), 'utf-8')
-    markSetupComplete({ sealgateSecretKey: 'user:NEW' })
-    // No key to pair it with: a half-populated entry would make
-    // getCredentialsForEnv return something unusable instead of null.
+    markSetupComplete({})
+    // A half-populated entry would make getCredentialsForEnv return something
+    // unusable instead of null.
     expect(getCredentialsForEnv(ENV)).toBeNull()
   })
 
@@ -93,14 +76,69 @@ describe('markSetupComplete credential persistence', () => {
       SETUP(),
       JSON.stringify({
         completed: true,
-        envCredentials: {
-          [ENV]: { apiKey: 'sg_demo', sealgateSecretKey: 'user:OLD' },
-          prod: { apiKey: 'sg_prod', sealgateSecretKey: 'user:PROD' }
-        }
+        envCredentials: { [ENV]: { apiKey: 'sg_demo' }, prod: { apiKey: 'sg_prod' } }
       }),
       'utf-8'
     )
-    markSetupComplete({ sealgateSecretKey: 'user:NEW' })
-    expect(getCredentialsForEnv('prod')?.sealgateSecretKey).toBe('user:PROD')
+    markSetupComplete({ apiKey: 'sg_new' })
+    expect(getCredentialsForEnv(ENV)).toEqual({ apiKey: 'sg_new' })
+    expect(getCredentialsForEnv('prod')).toEqual({ apiKey: 'sg_prod' })
+  })
+})
+
+describe('files written by a version that stored a per-user key', () => {
+  const OLD_SETUP = {
+    completed: true,
+    userId: 'u1',
+    apiKey: 'sg_key',
+    sealgateSecretKey: 'user:AAA.admin:BBB',
+    configuredApps: ['cursor'],
+    envCredentials: {
+      [ENV]: { apiKey: 'sg_key', sealgateSecretKey: 'user:AAA.admin:BBB' },
+      prod: { apiKey: 'sg_prod', sealgateSecretKey: 'user:CCC' }
+    }
+  }
+  const OLD_ACCOUNTS = {
+    accounts: [{ ...OLD_SETUP, completed: undefined, userEmail: 'a@b.c', savedAt: 'then' }]
+  }
+
+  beforeEach(() => {
+    writeFileSync(SETUP(), JSON.stringify(OLD_SETUP), 'utf-8')
+    writeFileSync(ACCOUNTS(), JSON.stringify(OLD_ACCOUNTS), 'utf-8')
+    writeFileSync(KEY_BLOB(), 'blob')
+  })
+
+  it('still load', () => {
+    expect(getCredentialsForEnv(ENV)?.apiKey).toBe('sg_key')
+    expect(getSetupData().configuredApps).toEqual(['cursor'])
+    expect(getSavedAccounts()[0]?.userId).toBe('u1')
+  })
+
+  it('lose the key material at startup and keep everything else', () => {
+    removeRetiredKeyMaterial()
+
+    expect(existsSync(KEY_BLOB())).toBe(false)
+    for (const file of [SETUP(), ACCOUNTS()]) {
+      const text = readFileSync(file, 'utf-8')
+      expect(text).not.toContain('user:')
+      expect(text).not.toContain('sealgateSecretKey')
+    }
+    expect(getSetupData()).toEqual({
+      completed: true,
+      userId: 'u1',
+      apiKey: 'sg_key',
+      configuredApps: ['cursor'],
+      envCredentials: { [ENV]: { apiKey: 'sg_key' }, prod: { apiKey: 'sg_prod' } }
+    })
+    expect(getSavedAccounts()[0]).toMatchObject({ userId: 'u1', userEmail: 'a@b.c', apiKey: 'sg_key' })
+  })
+
+  it('are not rewritten once clean, and a missing file is not created', () => {
+    removeRetiredKeyMaterial()
+    const before = readFileSync(SETUP(), 'utf-8')
+    rmSync(ACCOUNTS())
+    removeRetiredKeyMaterial()
+    expect(readFileSync(SETUP(), 'utf-8')).toBe(before)
+    expect(existsSync(ACCOUNTS())).toBe(false)
   })
 })

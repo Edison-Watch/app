@@ -2,7 +2,7 @@
 
 # SealGate - Desktop
 
-<b>The local control plane for your AI tools' MCP servers - discover, quarantine, and encrypt, all from your menu bar.</b>
+<b>The local control plane for your AI tools' MCP servers - discover, quarantine, and bridge, all from your menu bar.</b>
 
 <p>
   <a href="#what-it-does">What it does</a> •
@@ -28,9 +28,9 @@
 
 ---
 
-SealGate Desktop is the local control plane for [SealGate](https://sealgate.ai) that governs the [MCP](https://modelcontextprotocol.io/) servers wired into your AI tools, using a menu-bar app that watches every client on your machine. It discovers the servers your AI clients have configured, quarantines risky or unapproved ones before they can run, encrypts their credentials with zero-knowledge keys, and bridges local servers to the SealGate gateway through a single outbound tunnel. Built for developers who run MCP servers across many AI clients and want one place to see and control them all.
+SealGate Desktop is the local control plane for [SealGate](https://sealgate.ai) that governs the [MCP](https://modelcontextprotocol.io/) servers wired into your AI tools, using a menu-bar app that watches every client on your machine. It discovers the servers your AI clients have configured, quarantines risky or unapproved ones before they can run, and bridges local servers to the SealGate gateway through a single outbound tunnel. Built for developers who run MCP servers across many AI clients and want one place to see and control them all.
 
-Discover → review → approve → encrypt → bridge, without secrets ever leaving your device in the clear.
+Discover → review → approve → bridge.
 
 <div align="center">
   <img src="docs/architecture.svg" width="80%" alt="SealGate Desktop architecture: AI clients, the renderer, the main process and the sealgate-stdiod daemon run locally on your machine; the desktop app and the daemon reach the remote SealGate cloud over two outbound-initiated but bidirectional links, and the backend pushes events (trifecta / pre-block approvals, quarantine) back to the app." />
@@ -45,7 +45,6 @@ Modern AI tools (Claude, Cursor, VS Code, and friends) connect to MCP servers th
 
 - **Discover** - every MCP server configured across the AI clients installed on your machine, with no manual inventory.
 - **Quarantine** - newly-appeared or unapproved servers ("shadow MCPs") before they can run, with a review-and-approve flow.
-- **Encrypt** - credentials with zero-knowledge keys (personal and organization), so secrets never leave your device in the clear.
 - **Bridge** - local stdio MCP servers to the SealGate gateway through the bundled [`sealgate-stdiod`](https://github.com/Edison-Watch/stdiod) daemon: a single outbound, no-inbound-ports tunnel, so they're reachable and governed without being exposed.
 - **Stay current** - with in-app auto-updates.
 
@@ -58,7 +57,7 @@ The ChatGPT desktop app is detected but not managed: its MCP servers are Connect
 ## Getting Started
 
 1. **Install** the app - see [Installation](#installation) (or [build from source](#build-from-source) until signed installers ship).
-2. **Launch** it - the app lives in your menu bar / system tray. A setup wizard walks you through signing in, connecting your installed AI clients, and setting up encryption.
+2. **Launch** it - the app lives in your menu bar / system tray. A setup wizard walks you through signing in, connecting your installed AI clients, and registering your MCP servers.
 3. **Review** - from then on the app watches your clients' MCP configuration, surfaces changes for approval, and keeps the tunnel to the SealGate backend healthy.
 
 New to MCP? See the [Model Context Protocol docs](https://modelcontextprotocol.io/).
@@ -104,7 +103,7 @@ Packaging installers also bundles the `sealgate-stdiod` daemon and per-platform 
 
 ## How it works
 
-The app runs in your menu bar / system tray and supervises the bundled `sealgate-stdiod` daemon. On first launch a setup wizard walks you through signing in, connecting your installed AI clients, and setting up encryption. From then on it watches your clients' MCP configuration, surfaces changes for review, and keeps the tunnel to the SealGate backend healthy.
+The app runs in your menu bar / system tray and supervises the bundled `sealgate-stdiod` daemon. On first launch a setup wizard walks you through signing in, connecting your installed AI clients, and registering your MCP servers. From then on it watches your clients' MCP configuration, surfaces changes for review, and keeps the tunnel to the SealGate backend healthy.
 
 ## Architecture
 

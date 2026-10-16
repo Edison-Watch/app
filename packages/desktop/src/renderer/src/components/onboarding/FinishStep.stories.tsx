@@ -40,7 +40,6 @@ export const WithModifiedConfigs: Story = {
         backupPath: '/Users/alice/.claude/mcp.json.bak',
       },
     ],
-    sealgateSecretKey: 'sealgate_secret_demo',
   },
   decorators: [
     (Story) => (

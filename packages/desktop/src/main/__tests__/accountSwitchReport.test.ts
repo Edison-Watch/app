@@ -50,12 +50,11 @@ vi.mock('../detectord/bootstrap', () => ({
       applied ? { ok: true, applied: true } : { ok: true, applied: false, reason: 'backend unreachable' }
     )
   },
-  setDetectordSecret: () => Promise.resolve({ ok: true }),
   warnAgentsNotRepointed
 }))
 
 vi.mock('../infra/setupConfig', async () => {
-  const actual = { ALL_SUPPORTED_APPS: [], DRY_RUN: false, ENV_DOCS_URL: '' }
+  const actual = { ENV_DOCS_URL: '' }
   return {
     ...actual,
     getSetupData: () => ({ userId: 'old-user' }),

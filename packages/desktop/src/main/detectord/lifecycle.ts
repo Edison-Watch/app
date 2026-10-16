@@ -44,7 +44,7 @@ export async function ensureDetectord(
   // don't want to bounce it on every call, but we DO want it installed on every
   // client run, which the unconditional caller guarantees). Serialized via a
   // shared in-flight promise: concurrent bootstrap/enroll paths (app-ready +
-  // the login push, setup:complete, setSecret) must not both run `service
+  // the login push, setup:complete) must not both run `service
   // install`, which would bounce the LaunchAgent under another caller. First
   // caller runs it; the rest await the same promise. On failure it's cleared so
   // a later call can retry.

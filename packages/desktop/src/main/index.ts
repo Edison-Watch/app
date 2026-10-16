@@ -56,6 +56,7 @@ import {
   getMcpBaseUrl,
   isSetupComplete,
   markSetupIncomplete,
+  removeRetiredKeyMaterial,
   startServerStatusChecks,
   stopServerStatusChecks
 } from './infra/setupConfig'
@@ -249,7 +250,6 @@ async function handleLogoutAndRestart(): Promise<void> {
 const CLEAR_DATA_FILES = [
   'setup.json',
   'accounts.json',
-  '.personal-key.enc',
   'sealgate_debug_env.json',
   'seen-servers.json'
 ]
@@ -445,6 +445,7 @@ app.whenReady().then(async () => {
   // quitting; never build a window.
   if (!gotSingleInstanceLock) return
   slog('app.whenReady fired')
+  removeRetiredKeyMaterial()
   electronApp.setAppUserModelId('com.sealgate.desktop')
   // macOS: ask for confirmation on quit (registered after the single-instance
   // check so a doomed second instance can still quit silently).

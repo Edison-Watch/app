@@ -3,7 +3,7 @@ import WizardLayout from "./components/onboarding/WizardLayout";
 import WelcomeStep from "./components/onboarding/WelcomeStep";
 import AppsStep from "./components/onboarding/AppsStep";
 import type { ModifiedConfig, DiscoveredServer, RemovalTarget, DuplicateSelections } from "./components/onboarding/AppsStep";
-import EncryptionStep from "./components/onboarding/EncryptionStep";
+import ServersStep from "./components/onboarding/ServersStep";
 import FinishStep from "./components/onboarding/FinishStep";
 import MainMenu from "./components/main/MainMenu";
 import useAuth from "./hooks/useAuth";
@@ -23,7 +23,6 @@ export default function App(): React.ReactNode {
   const [skipServers, setSkipServers] = useState<string[]>([]);
   const [duplicateSelections, setDuplicateSelections] = useState<DuplicateSelections | null>(null);
   const [modifiedConfigs, setModifiedConfigs] = useState<ModifiedConfig[]>([]);
-  const [sealgateSecretKey, setSealGateSecretKey] = useState("");
   const auth = useAuth();
 
   // Check if setup was already completed on mount
@@ -43,8 +42,8 @@ export default function App(): React.ReactNode {
   // past the login window) so it enrolls right away. A returning login keeps
   // its API key only in this renderer's auth state; main's setup file has no
   // key for the active env, so app-ready's bootstrap can't do this on its own.
-  // Enroll is additive (agents union) and non-destructive (a missing secret
-  // keeps the existing one), so it's safe to (re-)send on every sign-in. Before
+  // Enroll is additive (agents union), so it's safe to (re-)send on every
+  // sign-in. Before
   // app selection there are no configured agents yet, so this is a base enroll
   // (url + key); onboarding's setup:complete adds the chosen agents.
   useEffect(() => {
@@ -54,10 +53,9 @@ export default function App(): React.ReactNode {
         apiUrl: auth.apiBaseUrl,
         mcpUrl: auth.mcpBaseUrl,
         apiKey: auth.apiKey,
-        sealgateSecretKey: sealgateSecretKey || undefined,
       })
       .catch((err) => console.error("[App] detectord enroll push failed:", err));
-  }, [auth.signedIn, auth.apiKey, auth.apiBaseUrl, auth.mcpBaseUrl, sealgateSecretKey]);
+  }, [auth.signedIn, auth.apiKey, auth.apiBaseUrl, auth.mcpBaseUrl]);
 
   // Windows: right-click in the app body opens the app menu (skip editable
   // fields/selections); the title bar keeps the OS system menu.
@@ -87,8 +85,7 @@ export default function App(): React.ReactNode {
     goToStep(2);
   };
 
-  const handleEncryptionNext = (compositeKey: string, configs: ModifiedConfig[]) => {
-    setSealGateSecretKey(compositeKey);
+  const handleServersNext = (configs: ModifiedConfig[]) => {
     setModifiedConfigs(configs);
     window.api.setup.reachedFinal();
     goToStep(3);
@@ -96,7 +93,6 @@ export default function App(): React.ReactNode {
 
   const handleRestart = () => {
     setModifiedConfigs([]);
-    setSealGateSecretKey("");
     setSelectedApps(null);
     setServersToRemove([]);
     goToStep(1);
@@ -136,7 +132,7 @@ export default function App(): React.ReactNode {
         />
       )}
       {currentStep === 2 && (
-        <EncryptionStep
+        <ServersStep
           mcpBaseUrl={auth.mcpBaseUrl}
           apiBaseUrl={auth.apiBaseUrl}
           apiKey={auth.apiKey}
@@ -146,7 +142,7 @@ export default function App(): React.ReactNode {
           serversToRemove={serversToRemove}
           skipServers={skipServers}
           autoQuarantine={auth.autoQuarantineOtherMcpServers}
-          onNext={handleEncryptionNext}
+          onNext={handleServersNext}
         />
       )}
       {currentStep === 3 && (
@@ -158,7 +154,6 @@ export default function App(): React.ReactNode {
           apiBaseUrl={auth.apiBaseUrl}
           serverStatus={auth.serverStatus}
           modifiedConfigs={modifiedConfigs}
-          sealgateSecretKey={sealgateSecretKey}
           selectedApps={selectedApps ?? []}
           onComplete={handleComplete}
           onRestart={handleRestart}

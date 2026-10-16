@@ -2,12 +2,10 @@ import { useState, useEffect } from "react";
 import { Button, Badge } from "@sealgate/shared/ui";
 import { deviceSignOut } from "@sealgate/shared/auth";
 import { getActiveEnvName, getEnv } from "@sealgate/shared/config";
-import { clearCachedSecretKey } from "@sealgate/shared/crypto";
 import sealgateIcon from "../../assets/sealgate-icon.png";
 import ClientsView from "./ClientsView";
 import MyMcpsView from "./MyMcpsView";
 import StdiodEnableCard from "../StdiodEnableCard";
-import OrgKeyCard from "../OrgKeyCard";
 import UpdateBanner from "../UpdateBanner";
 import DaemonWarningBanner from "../DaemonWarningBanner";
 import UpdateSettingsCard from "./UpdateSettingsCard";
@@ -32,7 +30,6 @@ interface SetupData {
   mcpBaseUrl?: string;
   apiBaseUrl?: string;
   apiKey?: string;
-  sealgateSecretKey?: string;
 }
 
 interface SavedAccount {
@@ -52,11 +49,6 @@ export default function MainMenu(): React.ReactNode {
   const [showAccounts, setShowAccounts] = useState(false);
   const [switching, setSwitching] = useState(false);
   const [activeTab, setActiveTab] = useState<MenuTab>("clients");
-  // Loaded once from the OS keychain so StdiodEnableCard can pass it to
-  // `stdiod login` if the user is enabling the daemon post-onboarding.
-  // EncryptionStep stashed it during setup; null if the user signed in
-  // pre-keychain-rollout or cleared their data.
-  const [sealgateSecretKey, setSealGateSecretKey] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -76,8 +68,6 @@ export default function MainMenu(): React.ReactNode {
       setSetupData(mergedData);
       const saved = await window.api.accounts.list();
       setAccounts(saved);
-      const secret = await window.api.keychain.load();
-      setSealGateSecretKey(secret);
       // Default tab is "clients" which needs taller window for the list
       await window.api.menu.resizeWindow(461, 749);
     })();
@@ -166,7 +156,6 @@ export default function MainMenu(): React.ReactNode {
       // fall through to reload regardless - main process may already
       // be operating as the new account after a successful switch
     }
-    clearCachedSecretKey();
     window.location.reload();
   };
 
@@ -181,7 +170,6 @@ export default function MainMenu(): React.ReactNode {
     } catch {
       // best-effort sign-out; always continue to reset
     }
-    clearCachedSecretKey();
     await window.api.setup.reset();
     window.location.reload();
   };
@@ -374,23 +362,7 @@ export default function MainMenu(): React.ReactNode {
               it here, and an enabled user can disable it without uninstalling
               the app. */}
           {setupData.apiBaseUrl && setupData.apiKey && (
-            <StdiodEnableCard
-              apiBaseUrl={setupData.apiBaseUrl}
-              apiKey={setupData.apiKey}
-              sealgateSecretKey={sealgateSecretKey ?? undefined}
-            />
-          )}
-
-          {/* Organisation encryption key - paste a shared key from your admin.
-              Moved here from the onboarding wizard. */}
-          {setupData.apiKey && (
-            <OrgKeyCard
-              personalKey={sealgateSecretKey}
-              currentComposite={setupData.sealgateSecretKey}
-              onSaved={(composite) =>
-                setSetupData((prev) => (prev ? { ...prev, sealgateSecretKey: composite } : prev))
-              }
-            />
+            <StdiodEnableCard apiBaseUrl={setupData.apiBaseUrl} apiKey={setupData.apiKey} />
           )}
 
           {/* Auto-update preferences */}

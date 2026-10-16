@@ -55,11 +55,9 @@ export function createMockApi(): PartialApi {
       // sent stories down a branch that cannot happen.
       getData: async () => ({ completed: false }),
       complete: () => {},
-      update: async () => ({ ok: true }),
       reachedFinal: () => {},
       reset: async () => ({ ok: true })
     },
-    secretKey: { verify: async () => ({ ok: true, valid: true, domainValid: true }) },
     auth: {
       openSaml: () => {},
       onCallback: noopUnsubscribe,
@@ -79,7 +77,6 @@ export function createMockApi(): PartialApi {
       resubmitServer: async () => ({ success: true }),
       readConfig: async () => ({ content: null }),
       applyAppIntegrations: async () => ({ success: true, modifiedConfigs: [] }),
-      applyForSecretKey: async () => ({ success: true, modifiedConfigs: [] }),
       revertAppIntegrations: async () => ({ reverted: 0, errors: [] }),
       submitWithTemplates: async () => ({
         submitted: 0,
@@ -128,11 +125,9 @@ export function createMockApi(): PartialApi {
       setSettings: async () => ({ autoDownload: true, autoInstallOnQuit: true }),
       onStatus: noopUnsubscribe
     },
-    keychain: { save: async () => ({ ok: true }), load: async () => null, delete: async () => ({ ok: true }) },
     app: { clearDataAndRestart: async () => {} },
     detectord: {
       enroll: async () => ({ ok: true }),
-      setSecret: async () => ({ ok: true }),
       uninstall: async () => ({ ok: true, stdout: '', stderr: '' }),
       // The warning banner asks on mount; a missing namespace here throws
       // inside its effect and takes the whole view down with it.

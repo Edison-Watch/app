@@ -1,23 +1,13 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import React from 'react'
 import { render, screen, waitFor, cleanup } from '@testing-library/react'
 
 import { installMockApi } from '../testing/mockApi'
 
-// The personal-key card owns a backend round-trip and keychain state of its
-// own. Stub it so these tests exercise EncryptionStep's own submit handling
-// rather than re-testing the key flow.
-vi.mock('../components/onboarding/PersonalKeyCard', () => ({
-  default: ({ onReady }: { onReady: (raw: string, composite: string) => void }) => {
-    React.useEffect(() => onReady('raw', 'user:KEY'), [onReady])
-    return null
-  }
-}))
 import AppsStep from '../components/onboarding/AppsStep'
 import MainMenu from '../components/main/MainMenu'
 import ClientsView from '../components/main/ClientsView'
-import EncryptionStep from '../components/onboarding/EncryptionStep'
+import ServersStep from '../components/onboarding/ServersStep'
 
 /**
  * Render smoke tests for the two views that talk to `window.api` hardest.
@@ -256,7 +246,7 @@ describe('ClientsView', () => {
   })
 })
 
-describe('EncryptionStep', () => {
+describe('ServersStep', () => {
   const props = {
     mcpBaseUrl: 'https://mcp.example',
     apiBaseUrl: 'https://api.example',
@@ -276,7 +266,7 @@ describe('EncryptionStep', () => {
     })
     const onNext = vi.fn()
 
-    render(<EncryptionStep {...props} onNext={onNext} />)
+    render(<ServersStep {...props} onNext={onNext} />)
     ;(await screen.findByRole('button', { name: /Configure 1 App/i })).click()
 
     await waitFor(() => {
@@ -296,7 +286,7 @@ describe('EncryptionStep', () => {
     })
     const onNext = vi.fn()
 
-    render(<EncryptionStep {...props} onNext={onNext} />)
+    render(<ServersStep {...props} onNext={onNext} />)
     ;(await screen.findByRole('button', { name: /Configure 1 App/i })).click()
 
     await waitFor(() => expect(onNext).toHaveBeenCalledTimes(1))

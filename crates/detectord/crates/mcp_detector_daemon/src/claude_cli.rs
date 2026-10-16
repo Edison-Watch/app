@@ -10,11 +10,9 @@ use anyhow::Context;
 #[cfg(unix)]
 use crate::{paths, platform};
 
-/// `claude mcp add --transport http --scope user [--header …] sealgate <url>`.
-pub fn install(user: &str, url: &str, secret: Option<&str>) -> anyhow::Result<()> {
-    // `--header` is variadic, so it must come AFTER the <name> <url> positionals
-    // or it greedily consumes them (matches the CLI's own help example).
-    let mut args: Vec<String> = vec![
+/// `claude mcp add --transport http --scope user sealgate <url>`.
+pub fn install(user: &str, url: &str) -> anyhow::Result<()> {
+    let args: Vec<String> = vec![
         "mcp".into(),
         "add".into(),
         "--transport".into(),
@@ -24,10 +22,6 @@ pub fn install(user: &str, url: &str, secret: Option<&str>) -> anyhow::Result<()
         "sealgate".into(),
         url.to_string(),
     ];
-    if let Some(s) = secret {
-        args.push("--header".into());
-        args.push(format!("X-SealGate-Secret-Key: {s}"));
-    }
     run_as(user, &args)
 }
 
