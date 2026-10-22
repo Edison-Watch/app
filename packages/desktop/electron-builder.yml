@@ -183,7 +183,7 @@ appImage:
 # runtime - type2-runtime#121 - but stock systems are unaffected.)
 toolsets:
   appimage: "1.0.3"
-electronVersion: 40.8.0
+electronVersion: 43.8.3
 npmRebuild: false
 # Default artifact names: stable and space-free. Spaces (from productName
 # "SealGate") become %20 and break electron-updater URLs and GitHub asset
