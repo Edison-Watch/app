@@ -16,8 +16,8 @@
 param(
   [ValidateSet('all', 'x64', 'arm64')]
   [string]$Arch = 'all',
-  [string]$NodeVersion = 'v24.16.0',
-  [string]$UvVersion = '0.13.4'
+  [string]$NodeVersion = 'v24.22.1',
+  [string]$UvVersion = '0.13.5'
 )
 
 $ErrorActionPreference = 'Stop'
