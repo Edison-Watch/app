@@ -831,7 +831,7 @@ dependencies = [
 
 [[package]]
 name = "mcp_backend"
-version = "0.6.14"
+version = "0.6.15"
 dependencies = [
  "reqwest",
  "sealgate-detectord",
@@ -843,7 +843,7 @@ dependencies = [
 
 [[package]]
 name = "mcp_detector_daemon"
-version = "0.6.14"
+version = "0.6.15"
 dependencies = [
  "anyhow",
  "clap",
@@ -866,7 +866,7 @@ dependencies = [
 
 [[package]]
 name = "mcp_quarantine"
-version = "0.6.14"
+version = "0.6.15"
 dependencies = [
  "regex",
  "rusqlite",
@@ -1331,7 +1331,7 @@ dependencies = [
 
 [[package]]
 name = "sealgate-detectord"
-version = "0.6.14"
+version = "0.6.15"
 dependencies = [
  "dirs",
  "notify",
