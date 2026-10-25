@@ -36,7 +36,7 @@ jobs:
       matrix:
         shell: [powershell, pwsh]
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # The test treats the process running it as the shell under test (it
       # spawns the installer from its own exe), so the matrix picks the exe
       # here; the step's own shell is only a launcher.

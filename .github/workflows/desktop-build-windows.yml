@@ -73,10 +73,10 @@ jobs:
       VITE_MCP_BASE_URL: ${{ vars.DEMO_VITE_MCP_BASE_URL }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: 22
           cache: npm
@@ -97,7 +97,7 @@ jobs:
         # does not reliably provide. Runs via npm script (-> pwsh).
         run: npm run stage:python -- -Arch ${{ matrix.arch }}
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           # Same per-arch cache as the windows legs in desktop-release.yml and
           # desktop-release-demo.yml - see the note there. This per-push job is
@@ -187,7 +187,7 @@ jobs:
           done
 
       - name: Upload Windows artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           # Per-arch name: two legs uploading the same artifact name would
           # collide (upload-artifact v4+ rejects duplicates).
