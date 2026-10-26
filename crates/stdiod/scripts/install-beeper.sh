@@ -938,15 +938,48 @@ json_escape() {
 # child that finds the approval already saved.
 restart_daemon_after_grant() {
   command -v sealgate-stdiod >/dev/null 2>&1 || return 0
+  # Skip only when no supervisor unit is installed (exit 4); `restart` copes
+  # with a unit whose run state cannot be read.
   local st
   sealgate-stdiod status >/dev/null 2>&1 && st=0 || st=$?
-  [ "$st" -eq 0 ] || return 0
+  [ "$st" -eq 4 ] && return 0
   if sealgate-stdiod restart >/dev/null 2>&1; then
     ok "restarted the daemon so it connects to Beeper with the approval"
   else
     warn "could not restart the daemon"
     todo "run: sealgate-stdiod restart"
   fi
+}
+
+# Echo every descendant pid of $1 (children first, then theirs).
+descendant_pids() {
+  local c
+  for c in $(pgrep -P "$1" 2>/dev/null || true); do
+    echo "$c"
+    descendant_pids "$c"
+  done
+}
+
+# Stop the OAuth probe ($1, the npx proxy) and everything it spawned, and wait
+# until they are gone. npx runs the proxy as a child, so killing $1 alone can
+# leave it alive; a daemon restarted while it lives gets a child that defers
+# to it for the approval and freezes when it exits. $2 is the feeder sleep
+# holding the proxy's stdin; ending it gives the proxy EOF. Bounded: TERM,
+# up to 5s to exit, then KILL.
+stop_probe() {
+  local pid="$1" feeder="$2" pids p i alive
+  pids="$pid $(descendant_pids "$pid")"
+  [ -n "$feeder" ] && kill "$feeder" 2>/dev/null || true
+  # shellcheck disable=SC2086 # word splitting of the pid list is intended
+  kill $pids 2>/dev/null || true
+  for i in 1 2 3 4 5; do
+    alive=0
+    for p in $pids; do kill -0 "$p" 2>/dev/null && alive=1; done
+    [ "$alive" -eq 0 ] && return 0
+    sleep 1
+  done
+  # shellcheck disable=SC2086
+  kill -9 $pids 2>/dev/null || true
 }
 
 # ---------------------------------------------------------------------------
@@ -980,7 +1013,10 @@ prime_oauth_grant() {
   # npx, that same EOF (or the sleep expiring) winds down any child it spawned.
   # ${MCP_ENDPOINT:+...} expands to nothing when unset, so the proxy keeps its
   # built-in default; the guarded form stays safe under bash 3.2's set -u.
-  { printf '%s\n' "$init"; sleep "$OAUTH_WAIT"; } | npx -y "$MCP_PKG" ${MCP_ENDPOINT:+"$MCP_ENDPOINT"} >"$dir/out" 2>"$dir/err" &
+  # The sleep's pid is recorded so teardown can end it: that closes the proxy's
+  # stdin at once instead of holding it open for the rest of OAUTH_WAIT.
+  { printf '%s\n' "$init"; sleep "$OAUTH_WAIT" & echo $! >"$dir/feeder.pid"; wait; } \
+    | npx -y "$MCP_PKG" ${MCP_ENDPOINT:+"$MCP_ENDPOINT"} >"$dir/out" 2>"$dir/err" &
   pid=$!
   todo "Beeper is opening a pop-up asking you to allow access. Click Allow."
   info "if you don't see the Beeper approval pop-up, check whether it is behind other windows"
@@ -1001,12 +1037,7 @@ prime_oauth_grant() {
     fi
     sleep 1; waited=$((waited + 1))
   done
-  # Bounded teardown: TERM, give it a second, then KILL. A blocking `wait`
-  # here could stall the whole script if the child defers TERM while inside a
-  # long-running call; the script exits soon anyway, so reaping can wait.
-  kill "$pid" 2>/dev/null || true
-  sleep 1
-  kill -9 "$pid" 2>/dev/null || true
+  stop_probe "$pid" "$(cat "$dir/feeder.pid" 2>/dev/null || true)"
   if grep -q '"result"' "$dir/out" 2>/dev/null; then
     if [ "$waited" -le 3 ]; then
       ok "MCP handshake completed immediately (grant already cached)"

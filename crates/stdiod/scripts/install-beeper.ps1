@@ -784,8 +784,11 @@ function Read-SharedFile([string]$Path) {
 # finds the approval already saved.
 function Restart-DaemonAfterGrant {
     if (-not (Test-Command 'sealgate-stdiod')) { return }
+    # Skip only when no task is installed (exit 4). Exit 3 is not trusted: on a
+    # non-English Windows the run state is unreadable and a live task reports 3,
+    # while `restart` handles that case itself.
     $null = Invoke-Native 'sealgate-stdiod' @('status')
-    if ($script:LastRc -ne 0) { return }
+    if ($script:LastRc -eq 4) { return }
     $null = Invoke-Native 'sealgate-stdiod' @('restart')
     if ($script:LastRc -eq 0) {
         Ok 'restarted the daemon so it connects to Beeper with the approval'
