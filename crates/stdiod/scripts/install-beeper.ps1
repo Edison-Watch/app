@@ -778,6 +778,26 @@ function Read-SharedFile([string]$Path) {
     } catch { return '' }
 }
 
+# The daemon's 'beeper' child may have started while the approval was pending.
+# That child then defers to ours for the approval and freezes when ours exits,
+# so every mount times out. Restarting the daemon gives it a fresh child that
+# finds the approval already saved.
+function Restart-DaemonAfterGrant {
+    if (-not (Test-Command 'sealgate-stdiod')) { return }
+    # Skip only when no task is installed (exit 4). Exit 3 is not trusted: on a
+    # non-English Windows the run state is unreadable and a live task reports 3,
+    # while `restart` handles that case itself.
+    $null = Invoke-Native 'sealgate-stdiod' @('status')
+    if ($script:LastRc -eq 4) { return }
+    $null = Invoke-Native 'sealgate-stdiod' @('restart')
+    if ($script:LastRc -eq 0) {
+        Ok 'restarted the daemon so it connects to Beeper with the approval'
+    } else {
+        Warn 'could not restart the daemon'
+        Todo 'run: sealgate-stdiod restart'
+    }
+}
+
 # Spawn the proxy, send one MCP initialize over stdio, and poll for a reply;
 # the proxy only answers once the OAuth grant exists. Beeper raises its
 # approve/deny prompt on the first connect and caches the grant for later
@@ -844,6 +864,7 @@ function Invoke-PrimeOauthGrant {
     if ($done) {
         if ($waited -le 3) { Ok 'MCP handshake completed immediately (grant already cached)' } else { Ok 'OAuth grant approved; the MCP handshake completed' }
         Remove-Item $dir -Recurse -Force -ErrorAction SilentlyContinue
+        Restart-DaemonAfterGrant
         return
     }
     Warn "you didn't allow access in Beeper within $($script:OAUTH_WAIT)s, so SealGate can't read your Beeper chats yet"
