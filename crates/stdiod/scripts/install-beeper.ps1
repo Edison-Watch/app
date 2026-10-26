@@ -783,7 +783,7 @@ function Read-SharedFile([string]$Path) {
 # approve/deny prompt on the first connect and caches the grant for later
 # spawns (same profile, so the daemon's child reuses it).
 function Invoke-PrimeOauthGrant {
-    Step 'Beeper OAuth grant (approve in Beeper if prompted)'
+    Step 'Allow SealGate to use Beeper'
     if ($script:DRY_RUN) {
         Info "would run 'npx -y $($script:MCP_PKG)', send an MCP initialize, and wait up to $($script:OAUTH_WAIT)s for the grant"
         return
@@ -815,13 +815,18 @@ function Invoke-PrimeOauthGrant {
     $proc = [System.Diagnostics.Process]::Start($psi)
     $proc.StandardInput.WriteLine($init)
     $proc.StandardInput.Flush()
-    Info "if Beeper raises an approval prompt, approve it (waiting up to $($script:OAUTH_WAIT)s)"
+    Todo 'Beeper is opening a pop-up asking you to allow access. Click Allow.'
+    Info "if you don't see the Beeper approval pop-up, check whether it is behind other windows"
+    Info "waiting up to $($script:OAUTH_WAIT)s"
     $waited = 0
     $authUrl = ''
     $done = $false
     while ($waited -lt $script:OAUTH_WAIT) {
         if ((Read-SharedFile $outFile) -match '"result"') { $done = $true; break }
         if ($proc.HasExited) { break }
+        if ($waited -gt 0 -and $waited % 30 -eq 0) {
+            Info "still waiting for you to click Allow in the Beeper pop-up ($($script:OAUTH_WAIT - $waited)s left)"
+        }
         if (-not $authUrl) {
             $err = Read-SharedFile $errFile
             $m = [regex]::Match($err, 'https?://[^\s"'']*authorize[^\s"'']*')
@@ -841,11 +846,18 @@ function Invoke-PrimeOauthGrant {
         Remove-Item $dir -Recurse -Force -ErrorAction SilentlyContinue
         return
     }
-    Warn "no MCP handshake within $($script:OAUTH_WAIT)s"
+    Warn "you didn't allow access in Beeper within $($script:OAUTH_WAIT)s, so SealGate can't read your Beeper chats yet"
+    Info 'the pop-up was probably hidden behind your other windows'
+    Todo 'to try again, run this and click Allow when the pop-up appears:'
+    Log ''
+    Log "    $($script:RERUN) preauth"
+    Log ''
+    # The proxy's stderr ends in a stack trace; show its error lines, not frames.
     $errTail = Read-SharedFile $errFile
-    if ($errTail) { Info "proxy stderr (tail): $((($errTail -split "`n") | Where-Object { $_.Trim() } | Select-Object -Last 3) -join ' ')" }
-    Todo "keep Beeper running and re-run: $($script:RERUN) preauth   (then approve the prompt it raises)"
-    Info "until the grant exists, the daemon's '$($script:SERVER_NAME)' child cannot reach Beeper"
+    if ($errTail) {
+        $detail = @(($errTail -split "`n") | Where-Object { $_.Trim() -and $_ -notmatch '^\s*(at |\{|\}|[A-Za-z]+: undefined)' } | Select-Object -Last 2) -join ' '
+        if ($detail) { Info "technical detail: $detail" }
+    }
     Remove-Item $dir -Recurse -Force -ErrorAction SilentlyContinue
 }
 

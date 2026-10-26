@@ -126,7 +126,11 @@ BEEPER_READY=0      # set by ensure_beeper_desktop when Beeper's client API answ
 STDIOD_CONNECTED=0  # set by ensure_stdiod_supervised once the daemon registers
 FROM_SOURCE=0       # cargo-build sealgate-stdiod instead of downloading the release binary
 
-PROG="$(basename "$0")"
+# How to run this script again, printed in every "re-run: ..." hint. Run
+# from a file it is that file; piped from curl, $0 is just "bash", so the
+# hint has to be the full one-liner or it is not a command anyone can run.
+SCRIPT_URL="https://raw.githubusercontent.com/$STDIOD_REPO/main/crates/stdiod/scripts/install-beeper.sh"
+if [ -f "$0" ]; then PROG="bash $0"; else PROG="curl -fsSL $SCRIPT_URL | bash -s --"; fi
 # The user's PATH as we found it, before this script prepends ~/.local/bin or
 # ~/.cargo/bin for its own run; used to decide whether to print a PATH todo.
 PATH_AT_LAUNCH="$PATH"
@@ -662,7 +666,7 @@ build_stdiod_from_source() {
   local stdiod_src; stdiod_src="$(dirname "$0")/../crates/sealgate-stdiod"
   [ -f "$stdiod_src/Cargo.toml" ] \
     || die "--from-source needs a checkout, and there is none at $stdiod_src" \
-           "clone it and run the script from there: git clone https://github.com/$STDIOD_REPO && bash app/crates/stdiod/scripts/$PROG install --from-source"
+           "clone it and run the script from there: git clone https://github.com/$STDIOD_REPO && bash app/crates/stdiod/scripts/install-beeper.sh install --from-source"
   # `ring` compiles C, which rustup does not provide a compiler for. Checking
   # here turns a confusing linker error minutes into the build into an
   # actionable message before cargo starts.
@@ -940,7 +944,7 @@ json_escape() {
 # proxy, send one MCP initialize over stdio, and poll for a reply; the proxy
 # only answers once the grant exists.
 prime_oauth_grant() {
-  step "Beeper OAuth grant (approve in Beeper if prompted)"
+  step "Allow SealGate to use Beeper"
   if [ "$DRY_RUN" -eq 1 ]; then
     info "would run 'npx -y $MCP_PKG', send an MCP initialize, and wait up to ${OAUTH_WAIT}s for the grant"
     return 0
@@ -961,10 +965,15 @@ prime_oauth_grant() {
   # built-in default; the guarded form stays safe under bash 3.2's set -u.
   { printf '%s\n' "$init"; sleep "$OAUTH_WAIT"; } | npx -y "$MCP_PKG" ${MCP_ENDPOINT:+"$MCP_ENDPOINT"} >"$dir/out" 2>"$dir/err" &
   pid=$!
-  info "if Beeper raises an approval prompt, approve it (waiting up to ${OAUTH_WAIT}s)"
+  todo "Beeper is opening a pop-up asking you to allow access. Click Allow."
+  info "if you don't see the Beeper approval pop-up, check whether it is behind other windows"
+  info "waiting up to ${OAUTH_WAIT}s"
   while [ "$waited" -lt "$OAUTH_WAIT" ]; do
     grep -q '"result"' "$dir/out" 2>/dev/null && break
     kill -0 "$pid" 2>/dev/null || break
+    if [ "$waited" -gt 0 ] && [ $((waited % 30)) -eq 0 ]; then
+      info "still waiting for you to click Allow in the Beeper pop-up ($((OAUTH_WAIT - waited))s left)"
+    fi
     # Surface the authorization URL as soon as the proxy prints it: on a
     # headless server there is no Desktop dialog, so this URL is the only way
     # to approve. Print it once. The trailing || true keeps a no-match grep
@@ -990,10 +999,16 @@ prime_oauth_grant() {
     rm -rf "$dir"
     return 0
   fi
-  warn "no MCP handshake within ${OAUTH_WAIT}s"
-  [ -s "$dir/err" ] && info "proxy stderr (tail): $(tail -n 3 "$dir/err" | tr '\n' ' ')"
-  todo "keep Beeper running and re-run: $PROG preauth   (then approve the prompt it raises)"
-  info "until the grant exists, the daemon's '$SERVER_NAME' child cannot reach Beeper"
+  warn "you didn't allow access in Beeper within ${OAUTH_WAIT}s, so SealGate can't read your Beeper chats yet"
+  info "the pop-up was probably hidden behind your other windows"
+  todo "to try again, run this and click Allow when the pop-up appears:"
+  log ""
+  log "    $PROG preauth"
+  log ""
+  # The proxy's stderr ends in a stack trace; show its error lines, not frames.
+  local detail
+  detail="$(grep -vE '^[[:space:]]*(at |\{|\}|[A-Za-z]+: undefined|$)' "$dir/err" 2>/dev/null | tail -n 2 | tr '\n' ' ' || true)"
+  [ -n "$detail" ] && info "technical detail: $detail"
   rm -rf "$dir"
   return 0
 }
@@ -1566,7 +1581,7 @@ usage() {
   # SUBSTITUTION, not quoting - a `sealgate-stdiod login` in the prose runs and
   # is replaced by its (empty) output. Quote command names with 'single quotes'.
   cat >&2 <<EOF
-$PROG - wire Beeper into the SealGate MCP gateway (macOS; Linux experimental)
+install-beeper.sh - wire Beeper into the SealGate MCP gateway (macOS; Linux experimental)
 
 Beeper only serves MCP from the Desktop app, so this automates the SealGate side
 and prints the exact human steps Beeper and the dashboard still require.
