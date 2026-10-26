@@ -932,6 +932,23 @@ json_escape() {
   printf '%s' "$s"
 }
 
+# The daemon's 'beeper' child may have started while the approval below was
+# pending. That child then defers to ours for the approval and freezes when
+# ours exits, so every mount times out. Restarting the daemon gives it a fresh
+# child that finds the approval already saved.
+restart_daemon_after_grant() {
+  command -v sealgate-stdiod >/dev/null 2>&1 || return 0
+  local st
+  sealgate-stdiod status >/dev/null 2>&1 && st=0 || st=$?
+  [ "$st" -eq 0 ] || return 0
+  if sealgate-stdiod restart >/dev/null 2>&1; then
+    ok "restarted the daemon so it connects to Beeper with the approval"
+  else
+    warn "could not restart the daemon"
+    todo "run: sealgate-stdiod restart"
+  fi
+}
+
 # ---------------------------------------------------------------------------
 # Step 5 / C: prime the Beeper OAuth grant
 # ---------------------------------------------------------------------------
@@ -997,6 +1014,7 @@ prime_oauth_grant() {
       ok "OAuth grant approved; the MCP handshake completed"
     fi
     rm -rf "$dir"
+    restart_daemon_after_grant
     return 0
   fi
   warn "you didn't allow access in Beeper within ${OAUTH_WAIT}s, so SealGate can't read your Beeper chats yet"
