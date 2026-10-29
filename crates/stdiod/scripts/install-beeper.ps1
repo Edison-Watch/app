@@ -10,9 +10,15 @@
   every Windows 10/11) and on PowerShell 7+. No admin rights are needed:
   everything lands under the user's profile.
 
-  One-liner (runs 'install' with the defaults):
+  One-liner, typed into PowerShell (runs 'install' with the defaults). A
+  SealGate dashboard serves a copy aimed at itself, e.g.
+  irm https://beeper.sealgate.ai/install.ps1 | iex
 
-    powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/Edison-Watch/app/main/crates/stdiod/scripts/install-beeper.ps1 | iex"
+    irm https://raw.githubusercontent.com/Edison-Watch/app/main/crates/stdiod/scripts/install-beeper.ps1 | iex
+
+  Not wrapped in 'powershell -ExecutionPolicy Bypass -Command "..."': that
+  starts a process whose command line Defender flags, and the execution
+  policy does not apply to a script run from memory anyway.
 
   With a command or flags (same names as the bash script):
 
@@ -65,6 +71,19 @@ param(
     [string[]] $Arguments
 )
 
+# Typed as `irm ... | iex`, this script runs in the caller's own session scope,
+# so its preferences, variables and functions would outlive the run. Note what
+# is there now; Restore-CallerScope puts it back when the run ends.
+$__sgCaller = @{
+    Vars  = @(Get-Variable -Scope 0 | ForEach-Object { $_.Name })
+    Fns   = @(Get-ChildItem function: | ForEach-Object { $_.Name })
+    Prefs = @{}
+}
+foreach ($__sgName in 'ErrorActionPreference', 'ProgressPreference', 'PSNativeCommandUseErrorActionPreference') {
+    $__sgVar = Get-Variable -Name $__sgName -Scope 0 -ErrorAction SilentlyContinue
+    if ($__sgVar) { $__sgCaller.Prefs[$__sgName] = $__sgVar.Value }
+}
+
 $ErrorActionPreference = 'Stop'
 # PowerShell 7.4+ can turn a native command's non-zero exit into a terminating
 # error under 'Stop'. Exit codes are read explicitly everywhere below.
@@ -83,8 +102,17 @@ if (-not $env:RUST_LIB_BACKTRACE) { $env:RUST_LIB_BACKTRACE = '0' }
 # ---------------------------------------------------------------------------
 # Defaults (every one overridable by flag or environment variable)
 # ---------------------------------------------------------------------------
-$script:SG_BACKEND_SET = [bool]$env:SG_BACKEND
-$script:SG_BACKEND = if ($env:SG_BACKEND) { $env:SG_BACKEND } else { 'https://dashboard.sealgate.ai' }
+# A SealGate deployment serving this script (GET <dashboard>/install.ps1) fills
+# these two in with its own address, so that copy installs for it with no
+# flags. The copy on GitHub keeps them unfilled and the defaults below apply.
+$script:BAKED_BACKEND = '__SEALGATE_BACKEND__'
+$script:BAKED_SCRIPT_URL = '__SEALGATE_SCRIPT_URL__'
+if ($script:BAKED_BACKEND.StartsWith('__')) { $script:BAKED_BACKEND = ''; $script:BAKED_SCRIPT_URL = '' }
+# Fetching the script from a deployment is an explicit choice, like SG_BACKEND.
+$script:SG_BACKEND_SET = [bool]$env:SG_BACKEND -or [bool]$script:BAKED_BACKEND
+$script:SG_BACKEND = if ($env:SG_BACKEND) { $env:SG_BACKEND } elseif ($script:BAKED_BACKEND) { $script:BAKED_BACKEND } else { 'https://dashboard.sealgate.ai' }
+# What chose the backend, for messages that tell the user how to undo it.
+$script:SG_BACKEND_FROM = if ($env:SG_BACKEND) { 'SG_BACKEND' } elseif ($script:BAKED_BACKEND) { 'baked' } else { '' }
 $script:SG_API_KEY = if ($env:SG_API_KEY) { $env:SG_API_KEY } else { '' }
 $script:SERVER_NAME = if ($env:SERVER_NAME) { $env:SERVER_NAME } else { 'beeper' }
 $script:DEVICE_LABEL = if ($env:DEVICE_LABEL) { $env:DEVICE_LABEL } elseif ($env:COMPUTERNAME) { $env:COMPUTERNAME } else { 'my-pc' }
@@ -117,7 +145,7 @@ $script:MCP_ENDPOINT = ''
 $script:STDIOD_CRED_STATE = ''
 
 $script:PROG = 'install-beeper.ps1'
-$script:SCRIPT_URL = "https://raw.githubusercontent.com/$($script:STDIOD_REPO)/main/crates/stdiod/scripts/install-beeper.ps1"
+$script:SCRIPT_URL = if ($script:BAKED_SCRIPT_URL) { $script:BAKED_SCRIPT_URL } else { "https://raw.githubusercontent.com/$($script:STDIOD_REPO)/main/crates/stdiod/scripts/install-beeper.ps1" }
 # Per-user install root. The daemon looks for npx in '<exe dir>\runtimes\node'
 # on its own (see proc.rs, bundled_runtime_dirs), so Node goes there.
 $script:LOCALAPPDATA = if ($env:LOCALAPPDATA) { $env:LOCALAPPDATA } else { Join-Path $HOME 'AppData\Local' }
@@ -257,12 +285,12 @@ function Parse-Flags([string[]]$List) {
         # Tokens this flag consumes: 2 for the ones that take a value.
         $n = 1
         switch ($a) {
-            '--sg-backend' { $script:SG_BACKEND = Get-FlagValue $List $i $a; $script:SG_BACKEND_SET = $true; $n = 2 }
-            '--demo' { $script:SG_BACKEND = 'https://demo-dashboard.sealgate.ai'; $script:SG_BACKEND_SET = $true }
-            '--release' { $script:SG_BACKEND = 'https://dashboard.sealgate.ai'; $script:SG_BACKEND_SET = $true }
+            '--sg-backend' { $script:SG_BACKEND = Get-FlagValue $List $i $a; $script:SG_BACKEND_SET = $true; $script:SG_BACKEND_FROM = '--sg-backend'; $n = 2 }
+            '--demo' { $script:SG_BACKEND = 'https://demo-dashboard.sealgate.ai'; $script:SG_BACKEND_SET = $true; $script:SG_BACKEND_FROM = '--demo' }
+            '--release' { $script:SG_BACKEND = 'https://dashboard.sealgate.ai'; $script:SG_BACKEND_SET = $true; $script:SG_BACKEND_FROM = '--release' }
             # A backend run from a checkout of the product repo listens on 3001;
             # the device login opens the approval page on that local dashboard.
-            '--local' { $script:SG_BACKEND = 'http://127.0.0.1:3001'; $script:SG_BACKEND_SET = $true }
+            '--local' { $script:SG_BACKEND = 'http://127.0.0.1:3001'; $script:SG_BACKEND_SET = $true; $script:SG_BACKEND_FROM = '--local' }
             '--sg-api-key' { $script:SG_API_KEY = Get-FlagValue $List $i $a; $n = 2 }
             '--server-name' { $script:SERVER_NAME = Get-FlagValue $List $i $a; $n = 2 }
             '--device-label' { $script:DEVICE_LABEL = Get-FlagValue $List $i $a; $n = 2 }
@@ -987,6 +1015,22 @@ function Resolve-StdiodChannel {
     }
 }
 
+# The device is signed in to one backend and this run asked for another. Says
+# what asked, since the fix depends on it: a flag can be dropped, a script
+# fetched from a dashboard cannot.
+function Stop-BackendMismatch([string]$Saved) {
+    $from = if ($script:SG_BACKEND_FROM) { $script:SG_BACKEND_FROM } else { '--sg-backend' }
+    switch ($from) {
+        'baked' {
+            $asked = "this installer is for $($script:SG_BACKEND)"
+            $keep = "use the general installer instead, which keeps ${Saved}: irm https://sealgate.ai/install-beeper.ps1 | iex"
+        }
+        'SG_BACKEND' { $asked = "SG_BACKEND asked for $($script:SG_BACKEND)"; $keep = "remove `$env:SG_BACKEND to keep $Saved" }
+        default { $asked = "$from asked for $($script:SG_BACKEND)"; $keep = "drop $from to keep $Saved" }
+    }
+    Die "this device is authorized to $Saved, but $asked" "re-run with --relogin to switch to $($script:SG_BACKEND): $($script:RERUN.TrimEnd()) install --relogin; or $keep"
+}
+
 function Ensure-StdiodAuth {
     Step 'SealGate device authorization (browser)'
     $loginArgs = @('login', '--backend', $script:SG_BACKEND)
@@ -1001,9 +1045,7 @@ function Ensure-StdiodAuth {
             # named one, so a mismatch here is an explicit flag disagreeing
             # with the saved session: ambiguous, so stop.
             $saved = Get-StdiodSavedBackend
-            if ($saved -and $saved -ne $script:SG_BACKEND) {
-                Die "this device is authorized to $saved, but --sg-backend asked for $($script:SG_BACKEND)" "pass --relogin to switch to $($script:SG_BACKEND), or drop --sg-backend to keep $saved"
-            }
+            if ($saved -and $saved -ne $script:SG_BACKEND) { Stop-BackendMismatch $saved }
             if ($cred -eq 'unknown') {
                 Warn 'could not verify the saved credential (backend unreachable); using it as-is'
             } else {
@@ -1019,7 +1061,7 @@ function Ensure-StdiodAuth {
     Info 'a browser opens to approve this device; on a headless box pass --no-open and open the printed URL elsewhere'
     $rc = Invoke-Live 'sealgate-stdiod' $loginArgs
     if ($rc -ne 0) {
-        Die 'sealgate-stdiod login failed' "check --sg-backend ($($script:SG_BACKEND)) and complete the browser approval, then re-run: $($script:RERUN) install"
+        Die 'sealgate-stdiod login failed' "check the backend ($($script:SG_BACKEND)) and complete the browser approval, then re-run: $($script:RERUN) install"
     }
     $script:STDIOD_CRED_STATE = ''
     Ok "device authorized to $($script:SG_BACKEND)"
@@ -1304,8 +1346,8 @@ Beeper only serves MCP from the Desktop app, so this automates the SealGate side
 and prints the exact human steps Beeper and the dashboard still require. Same
 commands and flags as install-beeper.sh (macOS/Linux).
 
-Usage:
-  powershell -ExecutionPolicy Bypass -Command "irm $($script:SCRIPT_URL) | iex"
+Usage (from PowerShell):
+  irm $($script:SCRIPT_URL) | iex
       (no command runs 'install' with the defaults)
   & ([scriptblock]::Create((irm $($script:SCRIPT_URL)))) [command] [flags]
   $p [command] [flags]        (from a saved copy)
@@ -1435,6 +1477,22 @@ function Test-OneShotHost {
     return $false
 }
 
+# Put the caller's scope back as it was before this script ran: preference
+# values restored, and every variable and function the run added removed.
+function Restore-CallerScope([string[]]$Keep = @()) {
+    # A local copy: the loop below removes $__sgCaller itself.
+    $before = $__sgCaller
+    foreach ($n in @($before.Prefs.Keys)) { Set-Variable -Name $n -Value $before.Prefs[$n] -Scope 1 }
+    foreach ($v in @(Get-Variable -Scope 1 | ForEach-Object { $_.Name })) {
+        if (($before.Vars -notcontains $v) -and ($Keep -notcontains $v) -and -not $before.Prefs.ContainsKey($v)) {
+            Remove-Variable -Name $v -Scope 1 -Force -ErrorAction SilentlyContinue
+        }
+    }
+    foreach ($f in @(Get-ChildItem function: | ForEach-Object { $_.Name })) {
+        if ($before.Fns -notcontains $f) { Remove-Item -Path "function:\$f" -Force -ErrorAction SilentlyContinue }
+    }
+}
+
 # Dot-sourced (`. .\install-beeper.ps1`): define the functions and stop, for
 # the CI test and for anyone poking at the helpers from a prompt.
 if ($MyInvocation.InvocationName -eq '.') { return }
@@ -1443,17 +1501,28 @@ $script:ExitCode = 0
 $script:ARGV = @()
 if ($Arguments) { $script:ARGV = @($Arguments | Where-Object { $null -ne $_ }) }
 try {
-    Invoke-Main $script:ARGV
-} catch {
-    Write-Diag "x error: $($_.Exception.Message)" 'Red'
-    if ($_.Exception.Data.Contains('fix')) {
-        if ($_.Exception.Data['fix']) { Write-Diag "     fix: $($_.Exception.Data['fix'])" 'Cyan' }
-    } elseif ($script:VERBOSE_LOG) {
-        Write-Diag ($_.ScriptStackTrace) 'DarkGray'
+    try {
+        Invoke-Main $script:ARGV
+    } catch {
+        Write-Diag "x error: $($_.Exception.Message)" 'Red'
+        if ($_.Exception.Data.Contains('fix')) {
+            if ($_.Exception.Data['fix']) { Write-Diag "     fix: $($_.Exception.Data['fix'])" 'Cyan' }
+        } elseif ($script:VERBOSE_LOG) {
+            Write-Diag ($_.ScriptStackTrace) 'DarkGray'
+        }
+        $script:ExitCode = 1
     }
-    $script:ExitCode = 1
+    $__sgOutcome = @{
+        Code    = $script:ExitCode
+        OneShot = (Test-OneShotHost)
+        Message = "$($script:PROG) failed (exit $($script:ExitCode)); see the error above"
+    }
+} finally {
+    Restore-CallerScope -Keep '__sgOutcome'
 }
-if ($script:ExitCode -ne 0) {
-    if (Test-OneShotHost) { exit $script:ExitCode }
-    throw "$($script:PROG) failed (exit $($script:ExitCode)); see the error above"
+# The one variable kept through the restore, removed on every way out.
+if ($__sgOutcome.Code -ne 0) {
+    if ($__sgOutcome.OneShot) { exit $__sgOutcome.Code }
+    throw "$($__sgOutcome.Message)$(Remove-Variable -Name __sgOutcome -Scope 0)"
 }
+Remove-Variable -Name __sgOutcome -Scope 0

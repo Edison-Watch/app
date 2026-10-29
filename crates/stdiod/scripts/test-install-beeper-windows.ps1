@@ -42,6 +42,13 @@ function Check([string]$Name, [scriptblock]$Body) {
     }
 }
 function Assert([bool]$Cond, [string]$Msg) { if (-not $Cond) { throw $Msg } }
+# A fresh folder per check, so concurrent runs cannot collide; the caller
+# removes it in a finally.
+function New-TestDir {
+    $dir = Join-Path ([System.IO.Path]::GetTempPath()) ("install-beeper-test-" + [guid]::NewGuid().ToString('N'))
+    $null = New-Item -ItemType Directory -Path $dir
+    return $dir
+}
 
 # The host running this test is the one under test (powershell.exe or pwsh).
 $shell = (Get-Process -Id $PID).Path
@@ -90,6 +97,58 @@ Check '--help exits 0 and names both one-liner forms' {
     Assert ($r.Rc -eq 0) "rc=$($r.Rc)"
     Assert ($r.Out -match 'irm https://raw\.githubusercontent\.com/.*install-beeper\.ps1 \| iex') 'one-liner missing'
     Assert ($r.Out -match 'scriptblock') 'scriptblock form missing'
+}
+Check 'a copy served by a deployment defaults to that deployment' {
+    # What GET <dashboard>/install.ps1 does on the SealGate backend.
+    $dir = New-TestDir
+    try {
+        $baked = Join-Path $dir 'install-beeper.ps1'
+        $src = (Get-Content -Raw $Script).Replace('__SEALGATE_BACKEND__', 'https://beeper.example').Replace('__SEALGATE_SCRIPT_URL__', 'https://beeper.example/install.ps1')
+        [System.IO.File]::WriteAllText($baked, $src)
+        $out = & $shell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $baked --help 2>&1 | ForEach-Object { "$_" }
+    } finally {
+        Remove-Item -Path $dir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    $text = $out -join "`n"
+    Assert ($text -match 'default https://beeper\.example\)') 'baked backend is not the default'
+    Assert ($text -match 'irm https://beeper\.example/install\.ps1 \| iex') 'one-liner does not name the serving deployment'
+}
+Check 'run through irm | iex, it leaves the caller''s session as it found it' {
+    # iex runs the script in the caller's own scope, so its preferences,
+    # variables and functions would otherwise outlive the run. iex passes no
+    # arguments, so the copy defaults to --help.
+    $dir = New-TestDir
+    try {
+        $copy = Join-Path $dir 'install-beeper.ps1'
+        $src = Get-Content -Raw $Script
+        $withHelp = $src.Replace('[string[]] $Arguments', "[string[]] `$Arguments = @('--help')")
+        # Without the default the copy would run 'install' on this machine.
+        Assert ($withHelp -ne $src) 'could not default the copy to --help'
+        [System.IO.File]::WriteAllText($copy, $withHelp)
+        $probe = Join-Path $dir 'probe.ps1'
+        [System.IO.File]::WriteAllText($probe, @'
+param([string]$Target)
+$before = @(Get-Variable | ForEach-Object { $_.Name }) + 'before', 'fns', 'newVars', 'newFns', 'printed', 'ran', 'err', 'Matches'
+$fns = @(Get-ChildItem function: | ForEach-Object { $_.Name })
+$ErrorActionPreference = 'Continue'; $ProgressPreference = 'Continue'
+# A script that failed early would also leave the session untouched, so the
+# run itself has to be shown to have worked: no error, and the help printed.
+$ran = $false; $err = ''
+try {
+    $printed = (Get-Content -Raw $Target | Invoke-Expression *>&1 | ForEach-Object { "$_" }) -join "`n"
+    $ran = $printed -match 'Usage \(from PowerShell\):'
+} catch { $err = $_.Exception.Message }
+$newVars = @(Get-Variable | ForEach-Object { $_.Name } | Where-Object { $before -notcontains $_ })
+$newFns = @(Get-ChildItem function: | ForEach-Object { $_.Name } | Where-Object { $fns -notcontains $_ })
+"ran=$ran err=$err"
+"$ErrorActionPreference|$ProgressPreference|$($newVars -join ',')|$($newFns.Count)"
+'@)
+        $out = (& $shell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $probe -Target $copy 2>&1 | ForEach-Object { "$_" }) -join "`n"
+    } finally {
+        Remove-Item -Path $dir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    Assert ($out -match 'ran=True err=(\r?\n|$)') "the script did not run cleanly: $out"
+    Assert ($out -match 'Continue\|Continue\|\|0') "session changed: $out"
 }
 Check 'mcp-url --json --demo prints valid JSON with the demo backend' {
     $r = Run @('mcp-url', '--json', '--demo')

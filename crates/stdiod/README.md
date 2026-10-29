@@ -53,11 +53,13 @@ macOS (Linux experimental):
 curl -fsSL https://raw.githubusercontent.com/Edison-Watch/app/main/crates/stdiod/scripts/install-beeper.sh | bash -s -- install --install-deps --yes
 ```
 
-Windows (PowerShell 5.1+, no admin; Node and the daemon land under `%LOCALAPPDATA%\Programs\sealgate-stdiod`):
+Windows (PowerShell 5.1+, no admin; Node and the daemon land under `%LOCALAPPDATA%\Programs\sealgate-stdiod`), typed into PowerShell. Not via `powershell -ExecutionPolicy Bypass -Command "..."`: Defender flags that command line.
 
 ```powershell
-powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/Edison-Watch/app/main/crates/stdiod/scripts/install-beeper.ps1 | iex"
+irm https://raw.githubusercontent.com/Edison-Watch/app/main/crates/stdiod/scripts/install-beeper.ps1 | iex
 ```
+
+A SealGate dashboard serves both scripts aimed at itself, so no backend flag is needed: `curl -fsSL https://beeper.sealgate.ai/install.sh | bash` or `irm https://beeper.sealgate.ai/install.ps1 | iex`. The route lives in the product repo (`src/api/installer_scripts.py`); the values it fills in are `BAKED_BACKEND` / `BAKED_SCRIPT_URL` in both scripts.
 
 To pass a command or flags on Windows, use the scriptblock form (or the matching `UPPER_SNAKE` environment variables):
 
