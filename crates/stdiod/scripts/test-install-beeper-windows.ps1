@@ -101,6 +101,27 @@ Check 'a copy served by a deployment defaults to that deployment' {
     Assert ($text -match 'default https://beeper\.example\)') 'baked backend is not the default'
     Assert ($text -match 'irm https://beeper\.example/install\.ps1 \| iex') 'one-liner does not name the serving deployment'
 }
+Check 'run through irm | iex, it leaves the caller''s session as it found it' {
+    # iex runs the script in the caller's own scope, so its preferences,
+    # variables and functions would otherwise outlive the run. iex passes no
+    # arguments, so the copy defaults to --help.
+    $tmp = [System.IO.Path]::GetTempPath()
+    $copy = Join-Path $tmp 'install-beeper-iex.ps1'
+    [System.IO.File]::WriteAllText($copy, (Get-Content -Raw $Script).Replace('[string[]] $Arguments', "[string[]] `$Arguments = @('--help')"))
+    $probe = Join-Path $tmp 'install-beeper-iex-probe.ps1'
+    [System.IO.File]::WriteAllText($probe, @'
+param([string]$Target)
+$before = @(Get-Variable | ForEach-Object { $_.Name }) + 'before', 'fns', 'newVars', 'newFns'
+$fns = @(Get-ChildItem function: | ForEach-Object { $_.Name })
+$ErrorActionPreference = 'Continue'; $ProgressPreference = 'Continue'
+Get-Content -Raw $Target | Invoke-Expression *> $null
+$newVars = @(Get-Variable | ForEach-Object { $_.Name } | Where-Object { $before -notcontains $_ })
+$newFns = @(Get-ChildItem function: | ForEach-Object { $_.Name } | Where-Object { $fns -notcontains $_ })
+"$ErrorActionPreference|$ProgressPreference|$($newVars -join ',')|$($newFns.Count)"
+'@)
+    $out = (& $shell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $probe -Target $copy 2>&1 | ForEach-Object { "$_" }) -join "`n"
+    Assert ($out -match 'Continue\|Continue\|\|0') "session changed: $out"
+}
 Check 'mcp-url --json --demo prints valid JSON with the demo backend' {
     $r = Run @('mcp-url', '--json', '--demo')
     Assert ($r.Rc -eq 0) "rc=$($r.Rc)"

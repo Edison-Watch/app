@@ -71,6 +71,19 @@ param(
     [string[]] $Arguments
 )
 
+# Typed as `irm ... | iex`, this script runs in the caller's own session scope,
+# so its preferences, variables and functions would outlive the run. Note what
+# is there now; Restore-CallerScope puts it back when the run ends.
+$__sgCaller = @{
+    Vars  = @(Get-Variable -Scope 0 | ForEach-Object { $_.Name })
+    Fns   = @(Get-ChildItem function: | ForEach-Object { $_.Name })
+    Prefs = @{}
+}
+foreach ($__sgName in 'ErrorActionPreference', 'ProgressPreference', 'PSNativeCommandUseErrorActionPreference') {
+    $__sgVar = Get-Variable -Name $__sgName -Scope 0 -ErrorAction SilentlyContinue
+    if ($__sgVar) { $__sgCaller.Prefs[$__sgName] = $__sgVar.Value }
+}
+
 $ErrorActionPreference = 'Stop'
 # PowerShell 7.4+ can turn a native command's non-zero exit into a terminating
 # error under 'Stop'. Exit codes are read explicitly everywhere below.
@@ -1448,6 +1461,22 @@ function Test-OneShotHost {
     return $false
 }
 
+# Put the caller's scope back as it was before this script ran: preference
+# values restored, and every variable and function the run added removed.
+function Restore-CallerScope([string[]]$Keep = @()) {
+    # A local copy: the loop below removes $__sgCaller itself.
+    $before = $__sgCaller
+    foreach ($n in @($before.Prefs.Keys)) { Set-Variable -Name $n -Value $before.Prefs[$n] -Scope 1 }
+    foreach ($v in @(Get-Variable -Scope 1 | ForEach-Object { $_.Name })) {
+        if (($before.Vars -notcontains $v) -and ($Keep -notcontains $v) -and -not $before.Prefs.ContainsKey($v)) {
+            Remove-Variable -Name $v -Scope 1 -Force -ErrorAction SilentlyContinue
+        }
+    }
+    foreach ($f in @(Get-ChildItem function: | ForEach-Object { $_.Name })) {
+        if ($before.Fns -notcontains $f) { Remove-Item -Path "function:\$f" -Force -ErrorAction SilentlyContinue }
+    }
+}
+
 # Dot-sourced (`. .\install-beeper.ps1`): define the functions and stop, for
 # the CI test and for anyone poking at the helpers from a prompt.
 if ($MyInvocation.InvocationName -eq '.') { return }
@@ -1456,17 +1485,28 @@ $script:ExitCode = 0
 $script:ARGV = @()
 if ($Arguments) { $script:ARGV = @($Arguments | Where-Object { $null -ne $_ }) }
 try {
-    Invoke-Main $script:ARGV
-} catch {
-    Write-Diag "x error: $($_.Exception.Message)" 'Red'
-    if ($_.Exception.Data.Contains('fix')) {
-        if ($_.Exception.Data['fix']) { Write-Diag "     fix: $($_.Exception.Data['fix'])" 'Cyan' }
-    } elseif ($script:VERBOSE_LOG) {
-        Write-Diag ($_.ScriptStackTrace) 'DarkGray'
+    try {
+        Invoke-Main $script:ARGV
+    } catch {
+        Write-Diag "x error: $($_.Exception.Message)" 'Red'
+        if ($_.Exception.Data.Contains('fix')) {
+            if ($_.Exception.Data['fix']) { Write-Diag "     fix: $($_.Exception.Data['fix'])" 'Cyan' }
+        } elseif ($script:VERBOSE_LOG) {
+            Write-Diag ($_.ScriptStackTrace) 'DarkGray'
+        }
+        $script:ExitCode = 1
     }
-    $script:ExitCode = 1
+    $__sgOutcome = @{
+        Code    = $script:ExitCode
+        OneShot = (Test-OneShotHost)
+        Message = "$($script:PROG) failed (exit $($script:ExitCode)); see the error above"
+    }
+} finally {
+    Restore-CallerScope -Keep '__sgOutcome'
 }
-if ($script:ExitCode -ne 0) {
-    if (Test-OneShotHost) { exit $script:ExitCode }
-    throw "$($script:PROG) failed (exit $($script:ExitCode)); see the error above"
+# The one variable kept through the restore, removed on every way out.
+if ($__sgOutcome.Code -ne 0) {
+    if ($__sgOutcome.OneShot) { exit $__sgOutcome.Code }
+    throw "$($__sgOutcome.Message)$(Remove-Variable -Name __sgOutcome -Scope 0)"
 }
+Remove-Variable -Name __sgOutcome -Scope 0
