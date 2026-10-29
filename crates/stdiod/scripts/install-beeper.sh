@@ -73,13 +73,20 @@ export HOMEBREW_NO_ENV_HINTS="${HOMEBREW_NO_ENV_HINTS:-1}"
 # ---------------------------------------------------------------------------
 # Defaults (every one overridable by flag or environment variable)
 # ---------------------------------------------------------------------------
+# A SealGate deployment serving this script (GET <dashboard>/install.sh) fills
+# these two in with its own address, so that copy installs for it with no
+# flags. The copy on GitHub keeps them unfilled and the defaults below apply.
+BAKED_BACKEND='__SEALGATE_BACKEND__'
+BAKED_SCRIPT_URL='__SEALGATE_SCRIPT_URL__'
+case "$BAKED_BACKEND" in __*) BAKED_BACKEND=""; BAKED_SCRIPT_URL="" ;; esac
 # An SG_BACKEND supplied through the environment is an explicit choice, exactly
 # like passing --sg-backend, so resolve_backend must not override it with the
-# device's saved session. Capture that before applying the release default.
-if [ -n "${SG_BACKEND:-}" ]; then SG_BACKEND_SET=1; else SG_BACKEND_SET=0; fi
+# device's saved session. So is fetching the script from a deployment.
+# Capture that before applying the release default.
+if [ -n "${SG_BACKEND:-}" ] || [ -n "$BAKED_BACKEND" ]; then SG_BACKEND_SET=1; else SG_BACKEND_SET=0; fi
 # sealgate.ai is the canonical host: the old edison.watch domains answer with a
 # 308 the login client will not re-POST across.
-SG_BACKEND="${SG_BACKEND:-https://dashboard.sealgate.ai}"  # --sg-backend/--demo/--release also set SG_BACKEND_SET
+SG_BACKEND="${SG_BACKEND:-${BAKED_BACKEND:-https://dashboard.sealgate.ai}}"  # --sg-backend/--demo/--release also set SG_BACKEND_SET
 SG_API_KEY="${SG_API_KEY:-}"                       # only for the mcp-url client snippet
 SERVER_NAME="${SERVER_NAME:-beeper}"               # tunnel server name / gateway prefix
 # Display label for this script's own output only. It does NOT set the stdiod
@@ -129,7 +136,7 @@ FROM_SOURCE=0       # cargo-build sealgate-stdiod instead of downloading the rel
 # How to run this script again, printed in every "re-run: ..." hint. Run
 # from a file it is that file; piped from curl, $0 is just "bash", so the
 # hint has to be the full one-liner or it is not a command anyone can run.
-SCRIPT_URL="https://raw.githubusercontent.com/$STDIOD_REPO/main/crates/stdiod/scripts/install-beeper.sh"
+SCRIPT_URL="${BAKED_SCRIPT_URL:-https://raw.githubusercontent.com/$STDIOD_REPO/main/crates/stdiod/scripts/install-beeper.sh}"
 if [ -f "$0" ]; then PROG="bash $0"; else PROG="curl -fsSL $SCRIPT_URL | bash -s --"; fi
 # The user's PATH as we found it, before this script prepends ~/.local/bin or
 # ~/.cargo/bin for its own run; used to decide whether to print a PATH todo.
@@ -192,7 +199,13 @@ confirm() {
 # daemon's PATH, and the release exe is a different asset), and under WSL the
 # daemon would land inside the VM where Beeper's loopback API on the Windows
 # side is out of reach. Both cases hand over to install-beeper.ps1.
-WINDOWS_ONE_LINER='powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/Edison-Watch/app/main/crates/stdiod/scripts/install-beeper.ps1 | iex"'
+# Typed into PowerShell itself: wrapping it in `powershell -ExecutionPolicy
+# Bypass -Command "..."` starts a process whose command line Defender flags.
+if [ -n "$BAKED_BACKEND" ]; then
+  WINDOWS_ONE_LINER="irm $BAKED_BACKEND/install.ps1 | iex"
+else
+  WINDOWS_ONE_LINER="irm https://raw.githubusercontent.com/Edison-Watch/app/main/crates/stdiod/scripts/install-beeper.ps1 | iex"
+fi
 require_supported_platform() {
   case "$(uname -s)" in
     Darwin) ;;
@@ -1634,7 +1647,7 @@ install-beeper.sh - wire Beeper into the SealGate MCP gateway (macOS; Linux expe
 
 Beeper only serves MCP from the Desktop app, so this automates the SealGate side
 and prints the exact human steps Beeper and the dashboard still require.
-On Windows use install-beeper.ps1 instead (same commands and flags):
+On Windows use install-beeper.ps1 instead (same commands and flags), from PowerShell:
   $WINDOWS_ONE_LINER
 
 Usage:

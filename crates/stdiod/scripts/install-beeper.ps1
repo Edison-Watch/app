@@ -10,9 +10,15 @@
   every Windows 10/11) and on PowerShell 7+. No admin rights are needed:
   everything lands under the user's profile.
 
-  One-liner (runs 'install' with the defaults):
+  One-liner, typed into PowerShell (runs 'install' with the defaults). A
+  SealGate dashboard serves a copy aimed at itself, e.g.
+  irm https://beeper.sealgate.ai/install.ps1 | iex
 
-    powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/Edison-Watch/app/main/crates/stdiod/scripts/install-beeper.ps1 | iex"
+    irm https://raw.githubusercontent.com/Edison-Watch/app/main/crates/stdiod/scripts/install-beeper.ps1 | iex
+
+  Not wrapped in 'powershell -ExecutionPolicy Bypass -Command "..."': that
+  starts a process whose command line Defender flags, and the execution
+  policy does not apply to a script run from memory anyway.
 
   With a command or flags (same names as the bash script):
 
@@ -83,8 +89,15 @@ if (-not $env:RUST_LIB_BACKTRACE) { $env:RUST_LIB_BACKTRACE = '0' }
 # ---------------------------------------------------------------------------
 # Defaults (every one overridable by flag or environment variable)
 # ---------------------------------------------------------------------------
-$script:SG_BACKEND_SET = [bool]$env:SG_BACKEND
-$script:SG_BACKEND = if ($env:SG_BACKEND) { $env:SG_BACKEND } else { 'https://dashboard.sealgate.ai' }
+# A SealGate deployment serving this script (GET <dashboard>/install.ps1) fills
+# these two in with its own address, so that copy installs for it with no
+# flags. The copy on GitHub keeps them unfilled and the defaults below apply.
+$script:BAKED_BACKEND = '__SEALGATE_BACKEND__'
+$script:BAKED_SCRIPT_URL = '__SEALGATE_SCRIPT_URL__'
+if ($script:BAKED_BACKEND.StartsWith('__')) { $script:BAKED_BACKEND = ''; $script:BAKED_SCRIPT_URL = '' }
+# Fetching the script from a deployment is an explicit choice, like SG_BACKEND.
+$script:SG_BACKEND_SET = [bool]$env:SG_BACKEND -or [bool]$script:BAKED_BACKEND
+$script:SG_BACKEND = if ($env:SG_BACKEND) { $env:SG_BACKEND } elseif ($script:BAKED_BACKEND) { $script:BAKED_BACKEND } else { 'https://dashboard.sealgate.ai' }
 $script:SG_API_KEY = if ($env:SG_API_KEY) { $env:SG_API_KEY } else { '' }
 $script:SERVER_NAME = if ($env:SERVER_NAME) { $env:SERVER_NAME } else { 'beeper' }
 $script:DEVICE_LABEL = if ($env:DEVICE_LABEL) { $env:DEVICE_LABEL } elseif ($env:COMPUTERNAME) { $env:COMPUTERNAME } else { 'my-pc' }
@@ -117,7 +130,7 @@ $script:MCP_ENDPOINT = ''
 $script:STDIOD_CRED_STATE = ''
 
 $script:PROG = 'install-beeper.ps1'
-$script:SCRIPT_URL = "https://raw.githubusercontent.com/$($script:STDIOD_REPO)/main/crates/stdiod/scripts/install-beeper.ps1"
+$script:SCRIPT_URL = if ($script:BAKED_SCRIPT_URL) { $script:BAKED_SCRIPT_URL } else { "https://raw.githubusercontent.com/$($script:STDIOD_REPO)/main/crates/stdiod/scripts/install-beeper.ps1" }
 # Per-user install root. The daemon looks for npx in '<exe dir>\runtimes\node'
 # on its own (see proc.rs, bundled_runtime_dirs), so Node goes there.
 $script:LOCALAPPDATA = if ($env:LOCALAPPDATA) { $env:LOCALAPPDATA } else { Join-Path $HOME 'AppData\Local' }
@@ -1304,8 +1317,8 @@ Beeper only serves MCP from the Desktop app, so this automates the SealGate side
 and prints the exact human steps Beeper and the dashboard still require. Same
 commands and flags as install-beeper.sh (macOS/Linux).
 
-Usage:
-  powershell -ExecutionPolicy Bypass -Command "irm $($script:SCRIPT_URL) | iex"
+Usage (from PowerShell):
+  irm $($script:SCRIPT_URL) | iex
       (no command runs 'install' with the defaults)
   & ([scriptblock]::Create((irm $($script:SCRIPT_URL)))) [command] [flags]
   $p [command] [flags]        (from a saved copy)

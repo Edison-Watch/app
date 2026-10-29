@@ -91,6 +91,16 @@ Check '--help exits 0 and names both one-liner forms' {
     Assert ($r.Out -match 'irm https://raw\.githubusercontent\.com/.*install-beeper\.ps1 \| iex') 'one-liner missing'
     Assert ($r.Out -match 'scriptblock') 'scriptblock form missing'
 }
+Check 'a copy served by a deployment defaults to that deployment' {
+    # What GET <dashboard>/install.ps1 does on the SealGate backend.
+    $baked = Join-Path ([System.IO.Path]::GetTempPath()) 'install-beeper-baked.ps1'
+    $src = (Get-Content -Raw $Script).Replace('__SEALGATE_BACKEND__', 'https://beeper.example').Replace('__SEALGATE_SCRIPT_URL__', 'https://beeper.example/install.ps1')
+    [System.IO.File]::WriteAllText($baked, $src)
+    $out = & $shell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $baked --help 2>&1 | ForEach-Object { "$_" }
+    $text = $out -join "`n"
+    Assert ($text -match 'default https://beeper\.example\)') 'baked backend is not the default'
+    Assert ($text -match 'irm https://beeper\.example/install\.ps1 \| iex') 'one-liner does not name the serving deployment'
+}
 Check 'mcp-url --json --demo prints valid JSON with the demo backend' {
     $r = Run @('mcp-url', '--json', '--demo')
     Assert ($r.Rc -eq 0) "rc=$($r.Rc)"
