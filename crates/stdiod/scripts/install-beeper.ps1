@@ -111,6 +111,8 @@ if ($script:BAKED_BACKEND.StartsWith('__')) { $script:BAKED_BACKEND = ''; $scrip
 # Fetching the script from a deployment is an explicit choice, like SG_BACKEND.
 $script:SG_BACKEND_SET = [bool]$env:SG_BACKEND -or [bool]$script:BAKED_BACKEND
 $script:SG_BACKEND = if ($env:SG_BACKEND) { $env:SG_BACKEND } elseif ($script:BAKED_BACKEND) { $script:BAKED_BACKEND } else { 'https://dashboard.sealgate.ai' }
+# What chose the backend, for messages that tell the user how to undo it.
+$script:SG_BACKEND_FROM = if ($env:SG_BACKEND) { 'SG_BACKEND' } elseif ($script:BAKED_BACKEND) { 'baked' } else { '' }
 $script:SG_API_KEY = if ($env:SG_API_KEY) { $env:SG_API_KEY } else { '' }
 $script:SERVER_NAME = if ($env:SERVER_NAME) { $env:SERVER_NAME } else { 'beeper' }
 $script:DEVICE_LABEL = if ($env:DEVICE_LABEL) { $env:DEVICE_LABEL } elseif ($env:COMPUTERNAME) { $env:COMPUTERNAME } else { 'my-pc' }
@@ -283,12 +285,12 @@ function Parse-Flags([string[]]$List) {
         # Tokens this flag consumes: 2 for the ones that take a value.
         $n = 1
         switch ($a) {
-            '--sg-backend' { $script:SG_BACKEND = Get-FlagValue $List $i $a; $script:SG_BACKEND_SET = $true; $n = 2 }
-            '--demo' { $script:SG_BACKEND = 'https://demo-dashboard.sealgate.ai'; $script:SG_BACKEND_SET = $true }
-            '--release' { $script:SG_BACKEND = 'https://dashboard.sealgate.ai'; $script:SG_BACKEND_SET = $true }
+            '--sg-backend' { $script:SG_BACKEND = Get-FlagValue $List $i $a; $script:SG_BACKEND_SET = $true; $script:SG_BACKEND_FROM = '--sg-backend'; $n = 2 }
+            '--demo' { $script:SG_BACKEND = 'https://demo-dashboard.sealgate.ai'; $script:SG_BACKEND_SET = $true; $script:SG_BACKEND_FROM = '--demo' }
+            '--release' { $script:SG_BACKEND = 'https://dashboard.sealgate.ai'; $script:SG_BACKEND_SET = $true; $script:SG_BACKEND_FROM = '--release' }
             # A backend run from a checkout of the product repo listens on 3001;
             # the device login opens the approval page on that local dashboard.
-            '--local' { $script:SG_BACKEND = 'http://127.0.0.1:3001'; $script:SG_BACKEND_SET = $true }
+            '--local' { $script:SG_BACKEND = 'http://127.0.0.1:3001'; $script:SG_BACKEND_SET = $true; $script:SG_BACKEND_FROM = '--local' }
             '--sg-api-key' { $script:SG_API_KEY = Get-FlagValue $List $i $a; $n = 2 }
             '--server-name' { $script:SERVER_NAME = Get-FlagValue $List $i $a; $n = 2 }
             '--device-label' { $script:DEVICE_LABEL = Get-FlagValue $List $i $a; $n = 2 }
@@ -1013,6 +1015,22 @@ function Resolve-StdiodChannel {
     }
 }
 
+# The device is signed in to one backend and this run asked for another. Says
+# what asked, since the fix depends on it: a flag can be dropped, a script
+# fetched from a dashboard cannot.
+function Stop-BackendMismatch([string]$Saved) {
+    $from = if ($script:SG_BACKEND_FROM) { $script:SG_BACKEND_FROM } else { '--sg-backend' }
+    switch ($from) {
+        'baked' {
+            $asked = "this installer is for $($script:SG_BACKEND)"
+            $keep = 'install from the GitHub copy instead, which keeps it: irm https://sealgate.ai/install-beeper.ps1 | iex'
+        }
+        'SG_BACKEND' { $asked = "SG_BACKEND asked for $($script:SG_BACKEND)"; $keep = "remove `$env:SG_BACKEND to keep $Saved" }
+        default { $asked = "$from asked for $($script:SG_BACKEND)"; $keep = "drop $from to keep $Saved" }
+    }
+    Die "this device is authorized to $Saved, but $asked" "re-run with --relogin to switch to $($script:SG_BACKEND): $($script:RERUN.TrimEnd()) install --relogin; or $keep"
+}
+
 function Ensure-StdiodAuth {
     Step 'SealGate device authorization (browser)'
     $loginArgs = @('login', '--backend', $script:SG_BACKEND)
@@ -1027,9 +1045,7 @@ function Ensure-StdiodAuth {
             # named one, so a mismatch here is an explicit flag disagreeing
             # with the saved session: ambiguous, so stop.
             $saved = Get-StdiodSavedBackend
-            if ($saved -and $saved -ne $script:SG_BACKEND) {
-                Die "this device is authorized to $saved, but --sg-backend asked for $($script:SG_BACKEND)" "pass --relogin to switch to $($script:SG_BACKEND), or drop --sg-backend to keep $saved"
-            }
+            if ($saved -and $saved -ne $script:SG_BACKEND) { Stop-BackendMismatch $saved }
             if ($cred -eq 'unknown') {
                 Warn 'could not verify the saved credential (backend unreachable); using it as-is'
             } else {
@@ -1045,7 +1061,7 @@ function Ensure-StdiodAuth {
     Info 'a browser opens to approve this device; on a headless box pass --no-open and open the printed URL elsewhere'
     $rc = Invoke-Live 'sealgate-stdiod' $loginArgs
     if ($rc -ne 0) {
-        Die 'sealgate-stdiod login failed' "check --sg-backend ($($script:SG_BACKEND)) and complete the browser approval, then re-run: $($script:RERUN) install"
+        Die 'sealgate-stdiod login failed' "check the backend ($($script:SG_BACKEND)) and complete the browser approval, then re-run: $($script:RERUN) install"
     }
     $script:STDIOD_CRED_STATE = ''
     Ok "device authorized to $($script:SG_BACKEND)"

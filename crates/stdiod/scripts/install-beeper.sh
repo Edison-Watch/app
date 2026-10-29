@@ -84,6 +84,10 @@ case "$BAKED_BACKEND" in __*) BAKED_BACKEND=""; BAKED_SCRIPT_URL="" ;; esac
 # device's saved session. So is fetching the script from a deployment.
 # Capture that before applying the release default.
 if [ -n "${SG_BACKEND:-}" ] || [ -n "$BAKED_BACKEND" ]; then SG_BACKEND_SET=1; else SG_BACKEND_SET=0; fi
+# What chose the backend, for messages that tell the user how to undo it.
+if [ -n "${SG_BACKEND:-}" ]; then SG_BACKEND_FROM="SG_BACKEND"
+elif [ -n "$BAKED_BACKEND" ]; then SG_BACKEND_FROM="baked"
+else SG_BACKEND_FROM=""; fi
 # sealgate.ai is the canonical host: the old edison.watch domains answer with a
 # 308 the login client will not re-POST across.
 SG_BACKEND="${SG_BACKEND:-${BAKED_BACKEND:-https://dashboard.sealgate.ai}}"  # --sg-backend/--demo/--release also set SG_BACKEND_SET
@@ -240,13 +244,13 @@ needval() {
 parse_flags() {
   while [ $# -gt 0 ]; do
     case "$1" in
-      --sg-backend)   needval $# "$1" "${2:-}"; SG_BACKEND="$2"; SG_BACKEND_SET=1; shift 2;;
-      --demo)         SG_BACKEND="https://demo-dashboard.sealgate.ai"; SG_BACKEND_SET=1; shift;;
-      --release)      SG_BACKEND="https://dashboard.sealgate.ai"; SG_BACKEND_SET=1; shift;;
+      --sg-backend)   needval $# "$1" "${2:-}"; SG_BACKEND="$2"; SG_BACKEND_SET=1; SG_BACKEND_FROM="--sg-backend"; shift 2;;
+      --demo)         SG_BACKEND="https://demo-dashboard.sealgate.ai"; SG_BACKEND_SET=1; SG_BACKEND_FROM="--demo"; shift;;
+      --release)      SG_BACKEND="https://dashboard.sealgate.ai"; SG_BACKEND_SET=1; SG_BACKEND_FROM="--release"; shift;;
       # A backend run from a checkout of the product repo (make dev / the
       # cloud-sandbox skill) listens on 3001; the device login opens the
       # approval page on that same localhost dashboard.
-      --local)        SG_BACKEND="http://127.0.0.1:3001"; SG_BACKEND_SET=1; shift;;
+      --local)        SG_BACKEND="http://127.0.0.1:3001"; SG_BACKEND_SET=1; SG_BACKEND_FROM="--local"; shift;;
       --sg-api-key)   needval $# "$1" "${2:-}"; SG_API_KEY="$2"; shift 2;;
       --server-name)  needval $# "$1" "${2:-}"; SERVER_NAME="$2"; shift 2;;
       --device-label) needval $# "$1" "${2:-}"; DEVICE_LABEL="$2"; shift 2;;
@@ -1159,6 +1163,22 @@ stdiod_saved_backend() {
 # When no backend was given explicitly, follow the one this device is already
 # authorized to (from stdiod config) instead of the release default. Stops
 # commands from silently targeting the wrong environment.
+# The device is signed in to one backend and this run asked for another. Says
+# what asked, since the fix depends on it: a flag can be dropped, a script
+# fetched from a dashboard cannot.
+backend_mismatch() {
+  local saved="$1" keep
+  case "$SG_BACKEND_FROM" in
+    baked)      keep="install from the GitHub copy instead, which keeps it: curl -fsSL https://sealgate.ai/install-beeper.sh | bash" ;;
+    SG_BACKEND) keep="unset SG_BACKEND to keep ${saved}" ;;
+    *)          keep="drop ${SG_BACKEND_FROM:---sg-backend} to keep ${saved}" ;;
+  esac
+  local asked="${SG_BACKEND_FROM:---sg-backend} asked for ${SG_BACKEND}"
+  [ "$SG_BACKEND_FROM" = "baked" ] && asked="this installer is for ${SG_BACKEND}"
+  die "this device is authorized to ${saved}, but ${asked}" \
+    "re-run with --relogin to switch to ${SG_BACKEND}: $PROG install --relogin; or ${keep}"
+}
+
 resolve_backend() {
   [ "$SG_BACKEND_SET" -eq 1 ] && return 0
   local saved; saved="$(stdiod_saved_backend)"
@@ -1215,8 +1235,7 @@ ensure_stdiod_auth() {
       # wrong backend.
       local saved; saved="$(stdiod_saved_backend)"
       if [ -n "$saved" ] && [ "$saved" != "$SG_BACKEND" ]; then
-        die "this device is authorized to ${saved}, but --sg-backend asked for ${SG_BACKEND}" \
-          "pass --relogin to switch to ${SG_BACKEND}, or drop --sg-backend to keep ${saved}"
+        backend_mismatch "$saved"
       fi
       if [ "$cred" = "unknown" ]; then
         # Could not reach the backend to check. Logging in again would not work
@@ -1238,7 +1257,7 @@ ensure_stdiod_auth() {
   # credential. No API key, no step-up token.
   info "a browser opens to approve this device; on a headless box pass --no-open and open the printed URL elsewhere"
   if ! run sealgate-stdiod "${args[@]}"; then
-    die "sealgate-stdiod login failed" "check --sg-backend (${SG_BACKEND}) and complete the browser approval, then re-run: $PROG install"
+    die "sealgate-stdiod login failed" "check the backend (${SG_BACKEND}) and complete the browser approval, then re-run: $PROG install"
   fi
   STDIOD_CRED_STATE=""   # a fresh credential: drop the cached probe result
   ok "device authorized to ${SG_BACKEND}"
