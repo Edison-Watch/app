@@ -31,7 +31,8 @@
     1. Install prerequisites: node/npx (official Node.js zip, checksum
        verified, into the daemon's own runtimes folder where the daemon looks
        for it on its own), sealgate-stdiod (prebuilt checksum-verified release
-       exe), and Beeper Desktop itself via winget. Each behind the
+       exe), and Beeper Desktop itself via winget (on ARM64, the native build
+       from beeper.com, since winget has only x64). Each behind the
        --install-deps consent gate (on by default for 'install').
     2. Authorize this device to SealGate via the stdiod browser/device flow
        ('sealgate-stdiod login').
@@ -702,20 +703,57 @@ function Get-BeeperDesktopExe {
     return ''
 }
 
-# Offer to install Beeper Desktop via winget (the package is Beeper.Beeper).
+# Beeper's own download link for a Windows architecture; it redirects to the
+# newest stable build. Used on ARM64, where winget's Beeper.Beeper package lists
+# only an x64 installer and so installs the x64 build under emulation.
+$script:BEEPER_DOWNLOAD = 'https://api.beeper.com/desktop/download/windows/{0}/stable/com.automattic.beeper.desktop'
+# Whoever signs Beeper's installers. The direct download has no checksum to
+# verify, so the Authenticode signature stands in for winget's.
+$script:BEEPER_SIGNER = 'O=Automattic Inc.'
+
+# The architecture an exe was built for, read from its PE header: x64, arm64,
+# x86, or '' when the file cannot be read.
+function Get-ExeArch([string]$Path) {
+    $machine = 0
+    try {
+        $fs = [System.IO.File]::OpenRead($Path)
+        try {
+            $br = New-Object System.IO.BinaryReader($fs)
+            $fs.Position = 0x3C
+            $fs.Position = $br.ReadInt32() + 4
+            $machine = $br.ReadUInt16()
+        } finally { $fs.Dispose() }
+    } catch { return '' }
+    switch ($machine) {
+        0x8664 { return 'x64' }
+        0xAA64 { return 'arm64' }
+        0x14C { return 'x86' }
+    }
+    return ''
+}
+
+# Offer to install Beeper Desktop: via winget (the package is Beeper.Beeper), or
+# on ARM64 from Beeper's own download, since winget has only the x64 build.
 # Shared consent model, NON-FATAL throughout: install can still wire the whole
 # SealGate side with Beeper absent, so every failure path prints the manual
 # action and returns $false instead of dying.
 function Install-BeeperDesktop {
-    $fix = 'install Beeper Desktop: winget install --id Beeper.Beeper -e   (or https://www.beeper.com/download)'
+    $arm = (Get-Arch) -eq 'arm64'
+    $how = if ($arm) { "the native ARM64 build from beeper.com" } else { 'winget install --id Beeper.Beeper -e' }
+    $fix = if ($arm) {
+        "install Beeper Desktop for ARM: $($script:BEEPER_DOWNLOAD -f 'arm64')"
+    } else {
+        'install Beeper Desktop: winget install --id Beeper.Beeper -e   (or https://www.beeper.com/download)'
+    }
     if (-not ($script:INSTALL_DEPS -or $script:INTERACTIVE) -or -not ($script:ASSUME_YES -or $script:INTERACTIVE)) {
         Todo "$fix, then re-run: $($script:RERUN) install"
         return $false
     }
-    if (-not (Confirm-Action 'Beeper Desktop is not installed. Install it now via: winget install --id Beeper.Beeper -e')) {
+    if (-not (Confirm-Action "Beeper Desktop is not installed. Install it now ($how)?")) {
         Todo "$fix, then re-run: $($script:RERUN) install"
         return $false
     }
+    if ($arm) { return (Install-BeeperDesktopDirect 'arm64' $fix) }
     if (-not (Test-Command 'winget')) {
         Warn 'winget is not available on this machine; cannot auto-install Beeper Desktop'
         Todo 'download it from https://www.beeper.com/download, install it, then re-run'
@@ -739,6 +777,44 @@ function Install-BeeperDesktop {
     return $true
 }
 
+# Download Beeper's installer for $Arch, check it is signed by Beeper, and run
+# it silently (a per-user NSIS installer: no admin, lands in %LOCALAPPDATA%).
+function Install-BeeperDesktopDirect([string]$Arch, [string]$Fix) {
+    $url = $script:BEEPER_DOWNLOAD -f $Arch
+    Step "installing Beeper Desktop ($Arch) from $url"
+    $setup = Join-Path ([System.IO.Path]::GetTempPath()) ("beeper-setup-" + [guid]::NewGuid().ToString('N') + '.exe')
+    try {
+        if (-not (Get-File $url $setup)) {
+            Warn 'could not download the Beeper installer'
+            Todo $Fix
+            return $false
+        }
+        $sig = Get-AuthenticodeSignature -FilePath $setup
+        $signer = if ($sig.SignerCertificate) { $sig.SignerCertificate.Subject } else { '' }
+        if ($sig.Status -ne 'Valid' -or $signer -notlike "*$($script:BEEPER_SIGNER)*") {
+            Warn "the downloaded installer is not signed by Beeper (signature: $($sig.Status); signer: $signer); not running it"
+            Todo $Fix
+            return $false
+        }
+        $proc = Start-Process -FilePath $setup -ArgumentList '/S' -Wait -PassThru
+        if ($proc.ExitCode -ne 0) {
+            Warn "the Beeper installer failed (exit $($proc.ExitCode))"
+            Todo $Fix
+            return $false
+        }
+    } finally {
+        Remove-Item -Path $setup -Force -ErrorAction SilentlyContinue
+    }
+    $app = Get-BeeperDesktopExe
+    if (-not $app) {
+        Warn 'the Beeper installer finished but Beeper Desktop was not found afterwards'
+        Todo $Fix
+        return $false
+    }
+    Ok "installed Beeper Desktop: $app"
+    return $true
+}
+
 # Poll the Beeper client API for up to N seconds; the base URL, or ''.
 function Wait-BeeperApi([int]$Seconds) {
     $deadline = (Get-Date).AddSeconds($Seconds)
@@ -755,11 +831,21 @@ function Ensure-BeeperDesktop {
     if ($script:DRY_RUN) {
         Info 'would look for Beeper Desktop in the per-user uninstall registry and %LOCALAPPDATA%\Programs'
         Info 'would probe 127.0.0.1:23373-23378 for the Beeper Client API'
-        Info "if either is missing: would offer 'winget install --id Beeper.Beeper -e' and open the app"
+        if ((Get-Arch) -eq 'arm64') {
+            Info "if either is missing: would install the ARM64 build from $($script:BEEPER_DOWNLOAD -f 'arm64') (signed by Automattic) and open the app"
+        } else {
+            Info "if either is missing: would offer 'winget install --id Beeper.Beeper -e' and open the app"
+        }
         return
     }
     $app = Get-BeeperDesktopExe
     if ($app) { Ok "app:        $app" } else { Warn 'app:        Beeper Desktop not found (registry, %LOCALAPPDATA%\Programs)' }
+    # winget installs the x64 build even on ARM64, where it runs under
+    # emulation and may not work. Left in place, but said.
+    if ($app -and (Get-Arch) -eq 'arm64' -and (Get-ExeArch $app) -eq 'x64') {
+        Warn 'app:        this is the x64 build of Beeper, running under emulation on an ARM PC'
+        Todo "uninstall it and install the ARM64 build: $($script:BEEPER_DOWNLOAD -f 'arm64'), then re-run: $($script:RERUN) install"
+    }
     $base = Get-BeeperApiBase
     if ($base) {
         Ok "client API: responding at $base"
@@ -1385,7 +1471,8 @@ one-liner takes options):
   --install-deps       On by default. Auto-install missing deps: node/npx (official
                        Node.js zip into %LOCALAPPDATA%\Programs\sealgate-stdiod\runtimes\node,
                        no admin), sealgate-stdiod (prebuilt release exe, sha256 verified),
-                       and Beeper Desktop via 'winget install --id Beeper.Beeper'.
+                       and Beeper Desktop via 'winget install --id Beeper.Beeper'
+                       (on ARM64: the native build from beeper.com, signature checked).
   --node-version VER   Pin the Node.js build, e.g. v24.20.0 (NODE_VERSION, default: newest LTS)
   --stdiod-tag TAG     Pin the release the sealgate-stdiod exe comes from (STDIOD_TAG;
                        STDIOD_REPO overrides the repo, default $($script:STDIOD_REPO))

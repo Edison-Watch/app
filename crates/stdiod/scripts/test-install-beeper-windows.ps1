@@ -285,6 +285,28 @@ Check 'Beeper absent: no exe, no API' {
     Assert ((Get-BeeperDesktopExe) -eq '') "found: $(Get-BeeperDesktopExe)"
     Assert ((Get-BeeperApiBase) -eq '') "found: $(Get-BeeperApiBase)"
 }
+Check 'Get-ExeArch reads an exe built for this machine as this machine' {
+    $arch = Get-ExeArch $shell
+    Assert ($arch -eq (Get-Arch)) "shell exe read as '$arch', machine is '$(Get-Arch)'"
+}
+if ($SkipWinget) {
+    Write-Host '  skip the ARM64 Beeper installer download (-SkipWinget)'
+} else {
+    Check 'the ARM64 download is a Beeper installer signed by the signer the script requires' {
+        # What Install-BeeperDesktopDirect checks before it runs anything. Not
+        # run here: this runner is x64.
+        $dir = New-TestDir
+        try {
+            $setup = Join-Path $dir 'beeper-setup.exe'
+            Assert (Get-File ($script:BEEPER_DOWNLOAD -f 'arm64') $setup) 'download failed'
+            $sig = Get-AuthenticodeSignature -FilePath $setup
+            Assert ($sig.Status -eq 'Valid') "signature: $($sig.Status)"
+            Assert ($sig.SignerCertificate.Subject -like "*$($script:BEEPER_SIGNER)*") "signer: $($sig.SignerCertificate.Subject)"
+        } finally {
+            Remove-Item -Path $dir -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
 if ($SkipWinget) {
     Write-Host '  skip winget install of Beeper Desktop (-SkipWinget)'
 } elseif (-not (Test-Command 'winget')) {
@@ -301,7 +323,7 @@ if ($SkipWinget) {
         }
         $exe = Get-BeeperDesktopExe
         Assert ($exe -ne '' -and (Test-Path $exe)) "exe not found after install"
-        Write-Host "       found $exe"
+        Write-Host "       found $exe ($(Get-ExeArch $exe))"
     }
 }
 
