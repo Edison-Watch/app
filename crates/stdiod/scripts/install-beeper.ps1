@@ -1023,7 +1023,7 @@ function Stop-BackendMismatch([string]$Saved) {
     switch ($from) {
         'baked' {
             $asked = "this installer is for $($script:SG_BACKEND)"
-            $keep = 'install from the GitHub copy instead, which keeps it: irm https://sealgate.ai/install-beeper.ps1 | iex'
+            $keep = "use the general installer instead, which keeps ${Saved}: irm https://sealgate.ai/install-beeper.ps1 | iex"
         }
         'SG_BACKEND' { $asked = "SG_BACKEND asked for $($script:SG_BACKEND)"; $keep = "remove `$env:SG_BACKEND to keep $Saved" }
         default { $asked = "$from asked for $($script:SG_BACKEND)"; $keep = "drop $from to keep $Saved" }

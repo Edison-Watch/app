@@ -1169,7 +1169,7 @@ stdiod_saved_backend() {
 backend_mismatch() {
   local saved="$1" keep
   case "$SG_BACKEND_FROM" in
-    baked)      keep="install from the GitHub copy instead, which keeps it: curl -fsSL https://sealgate.ai/install-beeper.sh | bash" ;;
+    baked)      keep="use the general installer instead, which keeps ${saved}: curl -fsSL https://sealgate.ai/install-beeper.sh | bash" ;;
     SG_BACKEND) keep="unset SG_BACKEND to keep ${saved}" ;;
     *)          keep="drop ${SG_BACKEND_FROM:---sg-backend} to keep ${saved}" ;;
   esac
