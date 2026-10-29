@@ -120,22 +120,34 @@ Check 'run through irm | iex, it leaves the caller''s session as it found it' {
     $dir = New-TestDir
     try {
         $copy = Join-Path $dir 'install-beeper.ps1'
-        [System.IO.File]::WriteAllText($copy, (Get-Content -Raw $Script).Replace('[string[]] $Arguments', "[string[]] `$Arguments = @('--help')"))
+        $src = Get-Content -Raw $Script
+        $withHelp = $src.Replace('[string[]] $Arguments', "[string[]] `$Arguments = @('--help')")
+        # Without the default the copy would run 'install' on this machine.
+        Assert ($withHelp -ne $src) 'could not default the copy to --help'
+        [System.IO.File]::WriteAllText($copy, $withHelp)
         $probe = Join-Path $dir 'probe.ps1'
         [System.IO.File]::WriteAllText($probe, @'
 param([string]$Target)
-$before = @(Get-Variable | ForEach-Object { $_.Name }) + 'before', 'fns', 'newVars', 'newFns'
+$before = @(Get-Variable | ForEach-Object { $_.Name }) + 'before', 'fns', 'newVars', 'newFns', 'printed', 'ran', 'err', 'Matches'
 $fns = @(Get-ChildItem function: | ForEach-Object { $_.Name })
 $ErrorActionPreference = 'Continue'; $ProgressPreference = 'Continue'
-Get-Content -Raw $Target | Invoke-Expression *> $null
+# A script that failed early would also leave the session untouched, so the
+# run itself has to be shown to have worked: no error, and the help printed.
+$ran = $false; $err = ''
+try {
+    $printed = (Get-Content -Raw $Target | Invoke-Expression *>&1 | ForEach-Object { "$_" }) -join "`n"
+    $ran = $printed -match 'Usage \(from PowerShell\):'
+} catch { $err = $_.Exception.Message }
 $newVars = @(Get-Variable | ForEach-Object { $_.Name } | Where-Object { $before -notcontains $_ })
 $newFns = @(Get-ChildItem function: | ForEach-Object { $_.Name } | Where-Object { $fns -notcontains $_ })
+"ran=$ran err=$err"
 "$ErrorActionPreference|$ProgressPreference|$($newVars -join ',')|$($newFns.Count)"
 '@)
         $out = (& $shell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $probe -Target $copy 2>&1 | ForEach-Object { "$_" }) -join "`n"
     } finally {
         Remove-Item -Path $dir -Recurse -Force -ErrorAction SilentlyContinue
     }
+    Assert ($out -match 'ran=True err=(\r?\n|$)') "the script did not run cleanly: $out"
     Assert ($out -match 'Continue\|Continue\|\|0') "session changed: $out"
 }
 Check 'mcp-url --json --demo prints valid JSON with the demo backend' {
