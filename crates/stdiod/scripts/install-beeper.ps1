@@ -707,9 +707,43 @@ function Get-BeeperDesktopExe {
 # newest stable build. Used on ARM64, where winget's Beeper.Beeper package lists
 # only an x64 installer and so installs the x64 build under emulation.
 $script:BEEPER_DOWNLOAD = 'https://api.beeper.com/desktop/download/windows/{0}/stable/com.automattic.beeper.desktop'
-# Whoever signs Beeper's installers. The direct download has no checksum to
-# verify, so the Authenticode signature stands in for winget's.
-$script:BEEPER_SIGNER = 'O=Automattic Inc.'
+# Who signs Beeper's installers. The direct download has no checksum to verify,
+# so the Authenticode signature stands in for winget's. Beeper signs through
+# Microsoft's signing service, whose certificates last three days with a new key
+# each time, so no certificate or key can be pinned. What stays the same is the
+# identity EKU Microsoft puts in every certificate it issues to this verified
+# publisher: that is the pin, with the publisher's name and issuer checked
+# exactly beside it.
+$script:BEEPER_IDENTITY_EKU = '1.3.6.1.4.1.311.97.957952903.505523381.893587982.878473517'
+$script:BEEPER_PUBLISHER = 'Automattic Inc.'
+
+# The fields of a distinguished name, by attribute (CN, O, ...), read one per
+# relative name rather than by substring.
+function Get-DnFields($Name) {
+    $fields = @{}
+    foreach ($line in ($Name.Format($true) -split "\r?\n")) {
+        $i = $line.IndexOf('=')
+        if ($i -gt 0) { $fields[$line.Substring(0, $i).Trim()] = $line.Substring($i + 1).Trim().Trim('"') }
+    }
+    return $fields
+}
+
+# Why $Cert is not Beeper's signing certificate, or '' when it is.
+function Test-BeeperSigner($Cert) {
+    if (-not $Cert) { return 'no signer certificate' }
+    $ekus = @($Cert.Extensions | Where-Object { $_.Oid.Value -eq '2.5.29.37' } |
+        ForEach-Object { $_.EnhancedKeyUsages } | ForEach-Object { $_.Value })
+    if ($ekus -notcontains $script:BEEPER_IDENTITY_EKU) { return "not Beeper's publisher identity: $($Cert.Subject)" }
+    $subject = Get-DnFields $Cert.SubjectName
+    if ($subject['O'] -ne $script:BEEPER_PUBLISHER -or $subject['CN'] -ne $script:BEEPER_PUBLISHER) {
+        return "publisher is not exactly $($script:BEEPER_PUBLISHER): $($Cert.Subject)"
+    }
+    $issuer = Get-DnFields $Cert.IssuerName
+    if ($issuer['O'] -ne 'Microsoft Corporation' -or -not ([string]$issuer['CN']).StartsWith('Microsoft ID Verified CS ')) {
+        return "not issued by Microsoft's signing service: $($Cert.Issuer)"
+    }
+    return ''
+}
 
 # The architecture an exe was built for, read from its PE header: x64, arm64,
 # x86, or '' when the file cannot be read.
@@ -789,14 +823,26 @@ function Install-BeeperDesktopDirect([string]$Arch, [string]$Fix) {
             Todo $Fix
             return $false
         }
-        $sig = Get-AuthenticodeSignature -FilePath $setup
-        $signer = if ($sig.SignerCertificate) { $sig.SignerCertificate.Subject } else { '' }
-        if ($sig.Status -ne 'Valid' -or $signer -notlike "*$($script:BEEPER_SIGNER)*") {
-            Warn "the downloaded installer is not signed by Beeper (signature: $($sig.Status); signer: $signer); not running it"
+        # Both of these throw under 'Stop' (an unreadable file; a launch that
+        # antivirus or a cancelled prompt refuses), and this step must fail soft.
+        try {
+            $sig = Get-AuthenticodeSignature -FilePath $setup
+            $why = if ($sig.Status -ne 'Valid') { "signature: $($sig.Status)" } else { Test-BeeperSigner $sig.SignerCertificate }
+        } catch {
+            $why = "could not read its signature: $($_.Exception.Message)"
+        }
+        if ($why) {
+            Warn "the downloaded installer is not signed by Beeper ($why); not running it"
             Todo $Fix
             return $false
         }
-        $proc = Start-Process -FilePath $setup -ArgumentList '/S' -Wait -PassThru
+        try {
+            $proc = Start-Process -FilePath $setup -ArgumentList '/S' -Wait -PassThru
+        } catch {
+            Warn "could not start the Beeper installer: $($_.Exception.Message)"
+            Todo $Fix
+            return $false
+        }
         if ($proc.ExitCode -ne 0) {
             Warn "the Beeper installer failed (exit $($proc.ExitCode))"
             Todo $Fix
@@ -811,7 +857,15 @@ function Install-BeeperDesktopDirect([string]$Arch, [string]$Fix) {
         Todo $Fix
         return $false
     }
-    Ok "installed Beeper Desktop: $app"
+    # The signature proves it is Beeper's, not which build: the installer is
+    # an x86 stub either way, so the installed app is what can be checked.
+    $built = Get-ExeArch $app
+    if ($built -ne $Arch) {
+        Warn "installed Beeper Desktop is the $built build, not $Arch"
+        Todo $Fix
+        return $false
+    }
+    Ok "installed Beeper Desktop ($Arch): $app"
     return $true
 }
 

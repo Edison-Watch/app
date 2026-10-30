@@ -285,6 +285,30 @@ Check 'Beeper absent: no exe, no API' {
     Assert ((Get-BeeperDesktopExe) -eq '') "found: $(Get-BeeperDesktopExe)"
     Assert ((Get-BeeperApiBase) -eq '') "found: $(Get-BeeperApiBase)"
 }
+Check 'the Beeper signer check rejects lookalike certificates' {
+    # Self-signed stand-ins: a real Beeper certificate is checked below, from
+    # the actual download. Each of these passed the old substring check.
+    function New-Cert([string]$Subject, [string[]]$Ekus) {
+        $rsa = [System.Security.Cryptography.RSA]::Create(2048)
+        $req = New-Object System.Security.Cryptography.X509Certificates.CertificateRequest(
+            $Subject, $rsa, [System.Security.Cryptography.HashAlgorithmName]::SHA256,
+            [System.Security.Cryptography.RSASignaturePadding]::Pkcs1)
+        $oids = New-Object System.Security.Cryptography.OidCollection
+        foreach ($e in $Ekus) { [void]$oids.Add((New-Object System.Security.Cryptography.Oid($e))) }
+        $req.CertificateExtensions.Add((New-Object System.Security.Cryptography.X509Certificates.X509EnhancedKeyUsageExtension($oids, $false)))
+        return $req.CreateSelfSigned([DateTimeOffset]::Now, [DateTimeOffset]::Now.AddDays(1))
+    }
+    $codeSigning = '1.3.6.1.5.5.7.3.3'
+    $cases = @(
+        @('CN=Automattic Inc., O=Automattic Inc. Holdings, C=US', @($codeSigning)),
+        @('CN=Automattic Inc., O=Automattic Inc., C=US', @($codeSigning)),
+        @('CN=Automattic Inc., O=Automattic Inc., C=US', @($codeSigning, $script:BEEPER_IDENTITY_EKU))
+    )
+    foreach ($case in $cases) {
+        $why = Test-BeeperSigner (New-Cert $case[0] $case[1])
+        Assert ($why -ne '') "accepted a lookalike: $($case[0])"
+    }
+}
 Check 'Get-ExeArch reads an exe built for this machine as this machine' {
     $arch = Get-ExeArch $shell
     Assert ($arch -eq (Get-Arch)) "shell exe read as '$arch', machine is '$(Get-Arch)'"
@@ -301,7 +325,20 @@ if ($SkipWinget) {
             Assert (Get-File ($script:BEEPER_DOWNLOAD -f 'arm64') $setup) 'download failed'
             $sig = Get-AuthenticodeSignature -FilePath $setup
             Assert ($sig.Status -eq 'Valid') "signature: $($sig.Status)"
-            Assert ($sig.SignerCertificate.Subject -like "*$($script:BEEPER_SIGNER)*") "signer: $($sig.SignerCertificate.Subject)"
+            $why = Test-BeeperSigner $sig.SignerCertificate
+            Assert ($why -eq '') $why
+            # Not Get-ExeArch on the installer: it is an x86 stub for every
+            # build. The build is the app archive inside it, named for its arch.
+            $sevenZip = Get-Command 7z -ErrorAction SilentlyContinue
+            if (-not $sevenZip) { $sevenZip = Get-Command 'C:\Program Files\7-Zip\7z.exe' -ErrorAction SilentlyContinue }
+            if ($sevenZip) {
+                $listing = (& $sevenZip.Source l $setup) -join "`n"
+                Assert ($listing -match 'app-arm64\.7z') 'the installer does not carry the arm64 app'
+                # The x64 installer's archive is app-64.7z, not app-x64.7z.
+                Assert ($listing -notmatch 'app-64\.7z') 'the installer carries the x64 app'
+            } else {
+                Write-Host '       7-Zip not on this runner: the build inside was not checked'
+            }
         } finally {
             Remove-Item -Path $dir -Recurse -Force -ErrorAction SilentlyContinue
         }
