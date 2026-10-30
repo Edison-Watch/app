@@ -84,7 +84,7 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Compute demo prerelease version
         id: ver
@@ -177,16 +177,16 @@ jobs:
       VITE_API_BASE_URL: ${{ vars.DEMO_VITE_API_BASE_URL }}
       VITE_MCP_BASE_URL: ${{ vars.DEMO_VITE_MCP_BASE_URL }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: package-lock.json
 
       - name: Cache electron-builder downloads
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/Library/Caches/electron
@@ -204,9 +204,11 @@ jobs:
         run: npm run build -w packages/shared
         working-directory: .
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master 2026-10-15
+        with:
+          toolchain: stable
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           # Same cache as desktop-build-macos.yml / desktop-release.yml -
           # identical crates and Darwin targets. See the note there.
@@ -408,9 +410,9 @@ jobs:
       VITE_API_BASE_URL: ${{ vars.DEMO_VITE_API_BASE_URL }}
       VITE_MCP_BASE_URL: ${{ vars.DEMO_VITE_MCP_BASE_URL }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
           cache: npm
@@ -429,7 +431,7 @@ jobs:
         # steps; they are identical here.
         run: npm run stage:python -- -Arch ${{ matrix.arch }}
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           # Same per-arch cache as desktop-release.yml's windows leg - see the
           # note there.
@@ -543,9 +545,9 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
 
@@ -603,16 +605,16 @@ jobs:
       VITE_API_BASE_URL: ${{ vars.DEMO_VITE_API_BASE_URL }}
       VITE_MCP_BASE_URL: ${{ vars.DEMO_VITE_MCP_BASE_URL }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: package-lock.json
 
       - name: Cache electron-builder downloads
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.cache/electron
@@ -631,11 +633,12 @@ jobs:
       # Static musl so one binary runs on any distro. zig + cargo-zigbuild supply
       # the C cross-toolchain `ring` needs when this leg's arch differs from the
       # runner's - the exact setup stdiod-build.yml's linux job uses.
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master 2026-10-15
         with:
+          toolchain: stable
           targets: x86_64-unknown-linux-musl, aarch64-unknown-linux-musl
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           # Shared with desktop-release.yml's linux leg for the SAME arch - see
           # the note there for why the arch has to stay in the key.
@@ -644,8 +647,8 @@ jobs:
             crates/detectord
             crates/stdiod
 
-      - uses: mlugg/setup-zig@v2
-      - uses: taiki-e/install-action@v2
+      - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
+      - uses: taiki-e/install-action@8cca0918f8471c33515202b73f56ab27f2bed283 # v2.87.29
         with:
           tool: cargo-zigbuild
 
@@ -737,7 +740,7 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Re-check the versioning invariant before going public
         # The draft job's guard closes the window at the START of the run, but

@@ -11,6 +11,7 @@
   ],
   "scripts": {
     "version:sync": "node scripts/sync-versions.mjs",
-    "version:check": "node scripts/sync-versions.mjs --check"
+    "version:check": "node scripts/sync-versions.mjs --check",
+    "pinned-refs:check": "python3 scripts/check_immutable_refs.py"
   }
 }

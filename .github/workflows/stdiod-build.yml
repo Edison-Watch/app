@@ -45,18 +45,19 @@ jobs:
       run:
         working-directory: crates/stdiod
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # crates/stdiod/rust-toolchain.toml pins the stable channel. arm64 ONLY:
       # Intel Macs are not supported, and `lipo`-merging a cross-compiled x86_64
       # slice (which carries no signature of its own) produced a Mach-O with no
       # designated requirement at all, so TCC could never remember a grant made
       # against it.
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master 2026-10-15
         with:
+          toolchain: stable
           targets: aarch64-apple-darwin
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           workspaces: crates/stdiod
 
@@ -85,7 +86,7 @@ jobs:
 
       # Download from the run's Artifacts section to inspect the build.
       - name: Upload workflow artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ env.ASSET_NAME }}
           path: |
@@ -100,23 +101,24 @@ jobs:
       run:
         working-directory: crates/stdiod
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # Both musl targets; built fully STATIC so the published binary has zero
       # glibc/libc dependency and runs on any distro (incl. Alpine / containers).
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master 2026-10-15
         with:
+          toolchain: stable
           targets: x86_64-unknown-linux-musl, aarch64-unknown-linux-musl
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           workspaces: crates/stdiod
 
       # zig + cargo-zigbuild supply a C cross-toolchain for `ring`'s C-crypto,
       # which can't be cross-built to musl with the stock toolchain. Mirrors the
       # desktop app's scripts/build-stdiod-linux.sh.
-      - uses: mlugg/setup-zig@v2
-      - uses: taiki-e/install-action@v2
+      - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
+      - uses: taiki-e/install-action@8cca0918f8471c33515202b73f56ab27f2bed283 # v2.87.29
         with:
           tool: cargo-zigbuild
 
@@ -140,7 +142,7 @@ jobs:
         run: shasum -a 256 sealgate-stdiod-linux-x64 sealgate-stdiod-linux-arm64 > SHA256SUMS-linux
 
       - name: Upload workflow artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: sealgate-stdiod-linux
           path: |
