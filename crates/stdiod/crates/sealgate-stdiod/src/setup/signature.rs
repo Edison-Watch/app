@@ -8,6 +8,9 @@ use std::os::windows::ffi::OsStrExt;
 use std::path::Path;
 use std::ptr::{null, null_mut};
 
+use windows_sys::Win32::Foundation::{
+    CERT_E_REVOCATION_FAILURE, CERT_E_REVOKED, CRYPT_E_REVOCATION_OFFLINE,
+};
 use windows_sys::Win32::Security::Cryptography::{
     CertCloseStore, CertFindCertificateInStore, CertFreeCertificateContext,
     CertGetEnhancedKeyUsage, CertGetNameStringW, CryptMsgClose, CryptMsgGetParam, CryptQueryObject,
@@ -18,8 +21,8 @@ use windows_sys::Win32::Security::Cryptography::{
 };
 use windows_sys::Win32::Security::WinTrust::{
     WinVerifyTrust, WINTRUST_ACTION_GENERIC_VERIFY_V2, WINTRUST_DATA, WINTRUST_DATA_0,
-    WINTRUST_FILE_INFO, WTD_CHOICE_FILE, WTD_REVOKE_NONE, WTD_STATEACTION_CLOSE,
-    WTD_STATEACTION_VERIFY, WTD_UI_NONE,
+    WINTRUST_FILE_INFO, WTD_CHOICE_FILE, WTD_REVOCATION_CHECK_CHAIN_EXCLUDE_ROOT,
+    WTD_REVOKE_WHOLECHAIN, WTD_STATEACTION_CLOSE, WTD_STATEACTION_VERIFY, WTD_UI_NONE,
 };
 
 use super::publisher::Signer;
@@ -45,9 +48,11 @@ fn verify_trust(wide: &[u16]) -> Result<(), String> {
     let mut data: WINTRUST_DATA = unsafe { std::mem::zeroed() };
     data.cbStruct = std::mem::size_of::<WINTRUST_DATA>() as u32;
     data.dwUIChoice = WTD_UI_NONE;
-    // Revocation needs the network and can hang; validity, chain and the
-    // timestamp do not, and the publisher pin does the rest.
-    data.fdwRevocationChecks = WTD_REVOKE_NONE;
+    // A timestamped signature outlives its certificate, so revocation is
+    // what rejects a file signed with a compromised key. It needs the
+    // network, which the download just used; a failed check fails closed.
+    data.fdwRevocationChecks = WTD_REVOKE_WHOLECHAIN;
+    data.dwProvFlags = WTD_REVOCATION_CHECK_CHAIN_EXCLUDE_ROOT;
     data.dwUnionChoice = WTD_CHOICE_FILE;
     data.Anonymous = WINTRUST_DATA_0 { pFile: &mut file };
     data.dwStateAction = WTD_STATEACTION_VERIFY;
@@ -69,13 +74,23 @@ fn verify_trust(wide: &[u16]) -> Result<(), String> {
             (&mut data as *mut WINTRUST_DATA).cast(),
         )
     };
-    if status == 0 {
-        Ok(())
-    } else {
-        Err(format!(
+    trust_result(status)
+}
+
+/// `WinVerifyTrust`'s status as a reason the person can act on.
+fn trust_result(status: i32) -> Result<(), String> {
+    match status {
+        0 => Ok(()),
+        CERT_E_REVOKED => Err("the signing certificate has been revoked".into()),
+        CRYPT_E_REVOCATION_OFFLINE | CERT_E_REVOCATION_FAILURE => Err(format!(
+            "could not check whether the signing certificate was revoked (0x{:08X}); \
+             check the internet connection and try again",
+            status as u32
+        )),
+        _ => Err(format!(
             "the signature is not valid (0x{:08X})",
             status as u32
-        ))
+        )),
     }
 }
 
@@ -244,5 +259,25 @@ mod tests {
         let result = signer(&path);
         let _ = std::fs::remove_file(&path);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn a_revoked_signer_is_refused() {
+        assert!(trust_result(CERT_E_REVOKED)
+            .unwrap_err()
+            .contains("revoked"));
+    }
+
+    #[test]
+    fn an_unchecked_revocation_is_refused_not_passed() {
+        for status in [CRYPT_E_REVOCATION_OFFLINE, CERT_E_REVOCATION_FAILURE] {
+            let reason = trust_result(status).unwrap_err();
+            assert!(reason.contains("could not check"), "{reason}");
+        }
+    }
+
+    #[test]
+    fn a_valid_signature_passes() {
+        assert!(trust_result(0).is_ok());
     }
 }

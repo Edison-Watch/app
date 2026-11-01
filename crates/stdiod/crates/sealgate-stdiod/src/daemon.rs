@@ -22,7 +22,7 @@ use anyhow::{bail, Result};
 use sealgate_tunnel_protocol::{
     ClientHello, McpFrame, ServerHello, TunnelError, TunnelFrame, PROTOCOL_VERSION,
 };
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::{mpsc, watch, Mutex};
 use tokio::time::sleep;
 use tracing::{debug, info, warn};
 
@@ -340,10 +340,16 @@ async fn run_one_session(
     };
 
     // Children that exit on their own are started again, with backoff
-    // (Supervisor::respawn_exited).
+    // (Supervisor::respawn_exited). Only after server_hello: a respawn sends
+    // frames the backend refuses before it has registered the device, and the
+    // snapshot in server_hello may drop the server altogether.
+    let (hello_tx, mut hello_rx) = watch::channel(false);
     let respawn_task = {
         let supervisor = supervisor.clone();
         tokio::spawn(async move {
+            if hello_rx.wait_for(|seen| *seen).await.is_err() {
+                return;
+            }
             let mut tick = tokio::time::interval(std::time::Duration::from_secs(1));
             loop {
                 tick.tick().await;
@@ -358,7 +364,7 @@ async fn run_one_session(
 
     let result = tokio::select! {
         biased;
-        r = drain_incoming(supervisor.clone(), &mut incoming_rx, last_pong, writer) => match r {
+        r = drain_incoming(supervisor.clone(), &mut incoming_rx, last_pong, writer, &hello_tx) => match r {
             Ok(()) => websocket_task_result(&mut ws_task).await,
             Err(error) => Err(error),
         },
@@ -394,6 +400,7 @@ async fn drain_incoming(
     incoming_rx: &mut mpsc::Receiver<TunnelFrame>,
     last_pong: Arc<Mutex<Instant>>,
     writer: &StateWriter,
+    hello: &watch::Sender<bool>,
 ) -> Result<()> {
     while let Some(frame) = incoming_rx.recv().await {
         // Any inbound traffic counts as liveness, not just pongs.
@@ -435,6 +442,7 @@ async fn drain_incoming(
                     })
                     .await;
                 sup.apply_snapshot(servers).await;
+                hello.send_replace(true);
             }
             TunnelFrame::DesiredStateUpdate(update) => sup.apply_delta(update).await,
             TunnelFrame::McpFrame(McpFrame { server_id, frame }) => {
