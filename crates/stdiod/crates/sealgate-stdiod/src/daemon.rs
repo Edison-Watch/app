@@ -339,6 +339,23 @@ async fn run_one_session(
         tokio::spawn(heartbeat(outgoing, last_pong))
     };
 
+    // Children that exit on their own are started again, with backoff
+    // (Supervisor::respawn_exited).
+    let respawn_task = {
+        let supervisor = supervisor.clone();
+        tokio::spawn(async move {
+            let mut tick = tokio::time::interval(std::time::Duration::from_secs(1));
+            loop {
+                tick.tick().await;
+                supervisor
+                    .lock()
+                    .await
+                    .respawn_exited(std::time::Instant::now())
+                    .await;
+            }
+        })
+    };
+
     let result = tokio::select! {
         biased;
         r = drain_incoming(supervisor.clone(), &mut incoming_rx, last_pong, writer) => match r {
@@ -359,6 +376,7 @@ async fn run_one_session(
         }
     };
     hb_task.abort();
+    respawn_task.abort();
     ws_task.abort();
     drop(outgoing_tx);
     result

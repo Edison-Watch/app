@@ -220,6 +220,10 @@ pub fn install() -> Result<()> {
 /// Stop + remove the task. Idempotent.
 pub fn uninstall() -> Result<()> {
     let task = task_name();
+    // First, so nothing keeps the install folder's files open: ending the
+    // task stops the daemon but not what it started (node.exe from the
+    // bundled runtime), and an uninstaller cannot delete files in use.
+    stop_processes_in_install_dir();
     let _ = schtasks(&["/end", "/tn", &task]); // stop a running instance
                                                // Also clean up a legacy base-named task from before SID namespacing.
     if task != TASK_BASENAME {
@@ -243,6 +247,83 @@ pub fn uninstall() -> Result<()> {
     }
     println!("Uninstalled scheduled task. Config + logs left in place (--purge to wipe).");
     Ok(())
+}
+
+/// End every process whose program lives in this exe's folder (the daemon,
+/// and Node from `runtimes\node`), except this one and the setup program's
+/// uninstaller (`unins000.exe`), which is what may be running this. Best effort.
+fn stop_processes_in_install_dir() {
+    let Some(dir) = std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(Path::to_path_buf))
+    else {
+        return;
+    };
+    let me = std::process::id();
+    for (pid, image) in running_processes() {
+        let uninstaller = image
+            .file_name()
+            .is_some_and(|name| name.to_string_lossy().to_lowercase().starts_with("unins"));
+        if pid != me && !uninstaller && image.starts_with(&dir) {
+            info!(pid, image = %image.display(), "stopping process from the install folder");
+            terminate(pid);
+        }
+    }
+}
+
+/// (pid, full image path) of every process this user can query.
+fn running_processes() -> Vec<(u32, std::path::PathBuf)> {
+    use std::os::windows::ffi::OsStringExt;
+    use windows_sys::Win32::Foundation::{CloseHandle, INVALID_HANDLE_VALUE};
+    use windows_sys::Win32::System::Diagnostics::ToolHelp::{
+        CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
+        TH32CS_SNAPPROCESS,
+    };
+    use windows_sys::Win32::System::Threading::{
+        OpenProcess, QueryFullProcessImageNameW, PROCESS_QUERY_LIMITED_INFORMATION,
+    };
+
+    let mut found = Vec::new();
+    // SAFETY: snapshot and process handles are closed below; buffers are
+    // sized and their lengths passed in.
+    unsafe {
+        let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+        if snapshot == INVALID_HANDLE_VALUE {
+            return found;
+        }
+        let mut entry: PROCESSENTRY32W = std::mem::zeroed();
+        entry.dwSize = std::mem::size_of::<PROCESSENTRY32W>() as u32;
+        let mut more = Process32FirstW(snapshot, &mut entry) != 0;
+        while more {
+            let pid = entry.th32ProcessID;
+            let process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+            if !process.is_null() {
+                let mut buf = [0u16; 1024];
+                let mut len = buf.len() as u32;
+                if QueryFullProcessImageNameW(process, 0, buf.as_mut_ptr(), &mut len) != 0 {
+                    let path = std::ffi::OsString::from_wide(&buf[..len as usize]);
+                    found.push((pid, std::path::PathBuf::from(path)));
+                }
+                CloseHandle(process);
+            }
+            more = Process32NextW(snapshot, &mut entry) != 0;
+        }
+        CloseHandle(snapshot);
+    }
+    found
+}
+
+fn terminate(pid: u32) {
+    use windows_sys::Win32::Foundation::CloseHandle;
+    use windows_sys::Win32::System::Threading::{OpenProcess, TerminateProcess, PROCESS_TERMINATE};
+    // SAFETY: the handle is checked and closed.
+    unsafe {
+        let process = OpenProcess(PROCESS_TERMINATE, 0, pid);
+        if !process.is_null() {
+            TerminateProcess(process, 1);
+            CloseHandle(process);
+        }
+    }
 }
 
 /// True iff the scheduled task exists.

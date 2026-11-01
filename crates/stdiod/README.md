@@ -67,6 +67,10 @@ To pass a command or flags on Windows, use the scriptblock form (or the matching
 & ([scriptblock]::Create((irm https://raw.githubusercontent.com/Edison-Watch/app/main/crates/stdiod/scripts/install-beeper.ps1))) install --demo --no-open
 ```
 
+### Windows setup program (Beeper connector)
+
+A wizard alternative to the PowerShell one-liner: installs the daemon and Node, then walks through approving the PC, Beeper and Allow. See [`installer/windows/`](./installer/windows/README.md).
+
 ### From source
 
 Requires a [Rust toolchain](https://rustup.rs/) (the pinned channel is in [`rust-toolchain.toml`](./rust-toolchain.toml)). Build and install the `sealgate-stdiod` binary straight from a checkout:
@@ -151,6 +155,7 @@ TLDR: `sealgate-stdiod --help` (and `sealgate-stdiod <command> --help` for any s
 | `server add <name>` | Submit a stdio request and print its pending or auto-approved status. Browser auth uses the exact-device-scoped client request endpoint; legacy API keys use `/api/v1/mcp-requests` with the local hostname. `--command <exe>`, repeatable `--arg <a>`, and optional `--display-name` are supported. `--working-dir` is rejected because requests cannot persist it. |
 | `server list` | With browser auth, list only approved stdio_tunnel servers bound to this exact client device. `--json` for raw output. Legacy API keys retain the compatibility listing flow. |
 | `server remove <name>` | With browser auth, withdraw your pending request by name. Approved server removal requires dashboard/admin action. Legacy API keys retain direct server deletion. |
+| `setup status` / `install-beeper` / `approve` / `register` | The Beeper setup steps, one per command, for the Windows installer and the install scripts: report Beeper's state, install Beeper's native build (Windows; the installer must be signed by Beeper), wait for Beeper's Allow, and register the `beeper` connector. `--json` prints one event per line; exit 0 = done, 2 = needs the person first, 3 = not on this platform. Source: `crates/sealgate-stdiod/src/setup/`. |
 
 </details>
 

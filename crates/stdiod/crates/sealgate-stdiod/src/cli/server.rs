@@ -91,10 +91,10 @@ struct ClientCreateRequestBody {
 }
 
 #[derive(Debug, Deserialize)]
-struct ClientCreateRequestResponse {
-    request_id: u64,
+pub(crate) struct ClientCreateRequestResponse {
+    pub(crate) request_id: u64,
     #[serde(default)]
-    auto_approved: bool,
+    pub(crate) auto_approved: bool,
 }
 
 async fn add_with(args: AddArgs, cfg: &PersistedConfig, client: &BackendClient) -> Result<String> {
@@ -111,33 +111,33 @@ async fn add_with(args: AddArgs, cfg: &PersistedConfig, client: &BackendClient) 
         );
     }
 
-    match credential_kind(cfg)? {
-        CredentialKind::ClientAccessToken => {
-            let body = ClientCreateRequestBody {
-                name: name.clone(),
-                display_name,
-                command,
-                args,
-                hostname: None,
-            };
-            let response: ClientCreateRequestResponse = client
-                .post_json("/api/v1/client/mcp-requests", &body)
-                .await?;
-            Ok(format_create_result(&name, response))
-        }
-        CredentialKind::LegacyApiKey => {
-            let body = ClientCreateRequestBody {
-                name: name.clone(),
-                display_name,
-                command,
-                args,
-                hostname: Some(crate::config::hostname()),
-            };
-            let response: ClientCreateRequestResponse =
-                client.post_json("/api/v1/mcp-requests", &body).await?;
-            Ok(format_create_result(&name, response))
-        }
-    }
+    let response = submit(cfg, client, &name, display_name, command, args).await?;
+    Ok(format_create_result(&name, response))
+}
+
+/// Submit a server request for this device. Shared by `server add` and
+/// `setup register`, which needs the outcome rather than the printed line; an
+/// HTTP failure stays an [`http::HttpError`] so a 409 can be told apart.
+pub(crate) async fn submit(
+    cfg: &PersistedConfig,
+    client: &BackendClient,
+    name: &str,
+    display_name: Option<String>,
+    command: String,
+    args: Vec<String>,
+) -> Result<ClientCreateRequestResponse> {
+    let (path, hostname) = match credential_kind(cfg)? {
+        CredentialKind::ClientAccessToken => ("/api/v1/client/mcp-requests", None),
+        CredentialKind::LegacyApiKey => ("/api/v1/mcp-requests", Some(crate::config::hostname())),
+    };
+    let body = ClientCreateRequestBody {
+        name: name.to_string(),
+        display_name,
+        command,
+        args,
+        hostname,
+    };
+    Ok(client.post_json(path, &body).await?)
 }
 
 fn format_create_result(name: &str, response: ClientCreateRequestResponse) -> String {
@@ -175,13 +175,21 @@ struct ServerListItem {
     device_id: Option<String>,
 }
 
-async fn list_with(
-    args: ListArgs,
+/// Names of the approved stdio_tunnel servers bound to this device.
+pub(crate) async fn approved_names(
     cfg: &PersistedConfig,
     client: &BackendClient,
-) -> Result<String> {
+) -> Result<Vec<String>> {
+    let (_, items) = fetch_items(cfg, client).await?;
+    Ok(items.into_iter().map(|item| item.name).collect())
+}
+
+async fn fetch_items(
+    cfg: &PersistedConfig,
+    client: &BackendClient,
+) -> Result<(CredentialKind, Vec<ServerListItem>)> {
     let kind = credential_kind(cfg)?;
-    let mut items = match kind {
+    let items = match kind {
         CredentialKind::ClientAccessToken => {
             client
                 .get_json::<ListServersResponse>("/api/v1/client/servers")
@@ -204,6 +212,15 @@ async fn list_with(
             items
         }
     };
+    Ok((kind, items))
+}
+
+async fn list_with(
+    args: ListArgs,
+    cfg: &PersistedConfig,
+    client: &BackendClient,
+) -> Result<String> {
+    let (kind, mut items) = fetch_items(cfg, client).await?;
     items.sort_by(|left, right| left.name.cmp(&right.name));
 
     if args.json {
