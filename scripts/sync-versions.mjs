@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Propagate the release version from packages/desktop/package.json into every
- * Rust workspace in crates/.
+ * Rust workspace in crates/, and into the root package-lock.json's record of it.
  *
  * packages/desktop/package.json is the single source of truth for a release:
  * desktop-release.yml tags `v${version}` from it, and the daemons' build.rs
@@ -208,6 +208,22 @@ for (const ws of RUST_WORKSPACES) {
   if (still.length > 0) {
     fail(`${ws}/Cargo.lock still stale after cargo update:\n  - ${still.join('\n  - ')}`)
   }
+}
+
+// npm records each workspace's version in the root lockfile but only rewrites
+// it on install, so a bump that runs no install leaves the lock behind.
+const NPM_LOCK = join(ROOT, 'package-lock.json')
+const NPM_ENTRY = 'packages/desktop'
+const npmLock = JSON.parse(readFileSync(NPM_LOCK, 'utf8'))
+const npmEntry = npmLock.packages?.[NPM_ENTRY]
+if (!npmEntry) fail(`package-lock.json has no entry for ${NPM_ENTRY}`)
+if (npmEntry.version === version) {
+  console.log(`  ok    package-lock.json (${version})`)
+} else {
+  const was = npmEntry.version
+  npmEntry.version = version
+  // npm's own layout: two-space indent and a trailing newline.
+  apply(NPM_LOCK, `${JSON.stringify(npmLock, null, 2)}\n`, `${NPM_ENTRY} ${was} != ${version}`)
 }
 
 if (CHECK && drift.length > 0) {
