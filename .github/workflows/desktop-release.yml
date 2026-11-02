@@ -751,7 +751,9 @@ jobs:
     timeout-minutes: 30
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      BACKENDS: https://beeper.sealgate.ai
+      # beeper.sealgate.ai for the Beeper edition, dashboard.sealgate.ai for
+      # sealgate.ai/connect (the landing site links to its file directly).
+      BACKENDS: https://beeper.sealgate.ai https://dashboard.sealgate.ai
       # An Inno Setup sign tool command, $f the file. The Azure secrets are
       # for Trusted Signing's signtool dlib; unused otherwise.
       SIGN_COMMAND: ${{ vars.WINDOWS_SIGN_COMMAND }}

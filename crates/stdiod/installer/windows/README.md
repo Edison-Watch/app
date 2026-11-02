@@ -35,7 +35,7 @@ Each release carries the setup program for its own deployment, as
 
 | Workflow | Deployment | Signed |
 | --- | --- | --- |
-| `desktop-release.yml` (stable, manual) | `beeper.sealgate.ai` | by default (`sign` input) |
+| `desktop-release.yml` (stable, manual) | `beeper.sealgate.ai`, and `dashboard.sealgate.ai` for sealgate.ai/connect | by default (`sign` input) |
 | `desktop-release-demo.yml` (every push to main) | `demo-beeper-backend.up.railway.app` | only when a manual run asks |
 
 A deployment's `/get_sealgate_for_beeper` redirects to the newest published
