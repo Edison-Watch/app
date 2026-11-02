@@ -7,12 +7,13 @@
 //! backoff, frame routing) and drives this type across reconnects.
 
 use std::collections::HashMap;
+use std::time::{Duration, Instant};
 
 use sealgate_tunnel_protocol::{
     DesiredServer, DesiredStateUpdate, ServerSpawnResult, ServerSpecUpdate, TunnelError,
     TunnelFrame,
 };
-use tracing::warn;
+use tracing::{info, warn};
 
 use crate::env_store::{resolve_env_for_spawn, substitute_templated_args, EnvStore};
 use crate::proc::ChildServer;
@@ -55,12 +56,39 @@ fn child_entry(name: &str, child: &ChildServer) -> ServerEntry {
     }
 }
 
+/// How long to wait before each start of a child that exited on its own:
+/// quick at first, for an app that is still starting (Beeper Desktop after
+/// a reboot), then once a minute.
+const RESPAWN_DELAYS: [Duration; 5] = [
+    Duration::from_secs(2),
+    Duration::from_secs(5),
+    Duration::from_secs(10),
+    Duration::from_secs(30),
+    Duration::from_secs(60),
+];
+
+/// A child that has stayed up this long starts its retry count afresh.
+const RESPAWN_STABLE_AFTER: Duration = Duration::from_secs(60);
+
+/// The delay before the next start, after `attempts` starts so far.
+fn respawn_delay(attempts: u32) -> Duration {
+    RESPAWN_DELAYS[(attempts as usize).min(RESPAWN_DELAYS.len() - 1)]
+}
+
+/// Retry bookkeeping for one child that exited on its own.
+struct Respawn {
+    attempts: u32,
+    next_at: Instant,
+    started_at: Instant,
+}
+
 /// Reconciles desired-state announcements against running children.
 pub(crate) struct Supervisor {
     pub(crate) children: HashMap<String, ChildServer>,
     pub(crate) tunnel_outgoing: OutgoingHandle,
     state: StateWriter,
     env_store: EnvStore,
+    respawns: HashMap<String, Respawn>,
 }
 
 impl Supervisor {
@@ -74,6 +102,7 @@ impl Supervisor {
             tunnel_outgoing,
             state,
             env_store,
+            respawns: HashMap::new(),
         }
     }
 
@@ -219,6 +248,69 @@ impl Supervisor {
                     }))
                     .await;
             }
+        }
+    }
+
+    /// Start again any child whose process exited on its own, after a delay
+    /// that grows with each attempt ([`RESPAWN_DELAYS`]).
+    ///
+    /// Without this a child that exits stays down until the backend next
+    /// announces the desired state, which a tool call does not trigger. The
+    /// case that needs it: after a reboot the daemon starts at logon and
+    /// spawns the Beeper proxy before Beeper Desktop is listening, so the
+    /// proxy exits at once, and nothing would try again.
+    ///
+    /// Called once a second by the daemon while connected; `now` is a
+    /// parameter so tests can step through the delays.
+    pub(crate) async fn respawn_exited(&mut self, now: Instant) {
+        // Forget servers no longer supervised, and children that have now
+        // stayed up long enough to count as healthy.
+        let children = &self.children;
+        self.respawns.retain(|id, retry| match children.get(id) {
+            Some(child) => {
+                child.has_observed_exit()
+                    || now.saturating_duration_since(retry.started_at) < RESPAWN_STABLE_AFTER
+            }
+            None => false,
+        });
+
+        let exited: Vec<String> = self
+            .children
+            .iter()
+            .filter(|(_, child)| child.has_observed_exit())
+            .map(|(id, _)| id.clone())
+            .collect();
+        let mut changed = false;
+        for id in exited {
+            let retry = self.respawns.entry(id.clone()).or_insert(Respawn {
+                attempts: 0,
+                next_at: now + respawn_delay(0),
+                started_at: now,
+            });
+            if now < retry.next_at {
+                continue;
+            }
+            retry.attempts += 1;
+            retry.started_at = now;
+            let wait = respawn_delay(retry.attempts);
+            retry.next_at = now + wait;
+            let attempt = retry.attempts;
+            let Some(old) = self.children.remove(&id) else {
+                continue;
+            };
+            info!(
+                server_id = %id,
+                attempt,
+                next_retry_secs = wait.as_secs(),
+                "local MCP process exited; starting it again"
+            );
+            let raw = old.desired_raw.clone();
+            old.shutdown().await;
+            self.try_spawn(raw).await;
+            changed = true;
+        }
+        if changed {
+            self.publish_state().await;
         }
     }
 

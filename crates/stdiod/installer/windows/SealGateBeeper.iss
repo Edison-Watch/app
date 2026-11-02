@@ -1,0 +1,1227 @@
+; SealGate for Beeper - the Windows setup program.
+;
+; Installs the sealgate-stdiod daemon and a private Node runtime, then walks
+; the person through what only they can do: approve this PC in the browser,
+; sign in to Beeper, click Allow in Beeper. Each step is a
+; `sealgate-stdiod setup ...` command (crates/sealgate-stdiod/src/setup); this
+; script only asks for them in order and shows what they report.
+;
+; Built by build.ps1, which stages the files and passes the defines below. The
+; install folder is the one scripts/install-beeper.ps1 uses, so either one
+; upgrades the other.
+
+; ExecAndCaptureOutput, which shows each step's output, arrived in 6.3.
+#if Ver < EncodeVer(6, 3, 0)
+  #error Inno Setup 6.3 or newer is required
+#endif
+
+#ifndef Backend
+  #define Backend "https://beeper.sealgate.ai"
+#endif
+#ifndef AppVersion
+  #define AppVersion "0.0.0"
+#endif
+#ifndef Stage
+  #define Stage "stage"
+#endif
+#ifndef OutputName
+  #define OutputName "SealGate-Beeper-Setup"
+#endif
+
+[Setup]
+AppId={{6F1E9B7C-2D4A-4E7B-9C3F-5A8D1B2E4C60}
+AppName=SealGate for Beeper
+AppVersion={#AppVersion}
+AppPublisher=SealGate
+AppPublisherURL=https://sealgate.ai
+DefaultDirName={localappdata}\Programs\sealgate-stdiod
+DisableDirPage=yes
+DisableProgramGroupPage=yes
+DisableReadyPage=yes
+PrivilegesRequired=lowest
+ArchitecturesAllowed=x64compatible
+ArchitecturesInstallIn64BitMode=x64compatible
+OutputBaseFilename={#OutputName}
+WizardStyle=modern
+Compression=lzma2
+SolidCompression=yes
+ChangesEnvironment=yes
+UninstallDisplayName=SealGate for Beeper
+UninstallDisplayIcon={app}\sealgate-stdiod.exe
+; Images from assets/make_images.py, one per DPI; Inno picks the closest.
+DisableWelcomePage=no
+SetupIconFile=assets\setup.ico
+WizardImageFile=assets\banner-164.bmp,assets\banner-192.bmp,assets\banner-246.bmp,assets\banner-273.bmp,assets\banner-328.bmp,assets\banner-355.bmp,assets\banner-410.bmp
+WizardSmallImageFile=assets\header-55.bmp,assets\header-64.bmp,assets\header-83.bmp,assets\header-92.bmp,assets\header-110.bmp,assets\header-119.bmp,assets\header-138.bmp
+
+[Messages]
+WelcomeLabel1=Welcome to SealGate for Beeper
+WelcomeLabel2=This sets up SealGate on this computer and connects it to Beeper, so your AI assistant can read and send your messages safely.%n%nIt takes three short steps: sign in to SealGate, set up Beeper, and allow SealGate in Beeper.
+; Inno adds this line under the welcome text; the buttons read Install and Exit.
+ClickNext=Click Install to continue, or Exit to close Setup.
+
+[Files]
+; IsArm64 rather than the architecture filter: x64compatible also matches an
+; ARM PC, which must get the native build.
+Source: "{#Stage}\x64\sealgate-stdiod.exe"; DestDir: "{app}"; Check: not IsArm64; Flags: ignoreversion
+Source: "{#Stage}\arm64\sealgate-stdiod.exe"; DestDir: "{app}"; Check: IsArm64; Flags: ignoreversion
+; The daemon looks for npx in <exe dir>\runtimes\node on its own.
+Source: "{#Stage}\x64\node\*"; DestDir: "{app}\runtimes\node"; Check: not IsArm64; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#Stage}\arm64\node\*"; DestDir: "{app}\runtimes\node"; Check: IsArm64; Flags: ignoreversion recursesubdirs createallsubdirs
+
+[Registry]
+; `sealgate-stdiod` on the user's PATH, as the install script does.
+Root: HKCU; Subkey: "Environment"; ValueType: expandsz; ValueName: "Path"; ValueData: "{olddata};{app}"; Check: NeedsAddPath(ExpandConstant('{app}'))
+
+[UninstallDelete]
+; The folder belongs to SealGate alone: also remove what this setup did not
+; install itself (an earlier PowerShell install, files written at run time).
+; The sign-in and logs live in the user's profile and are kept.
+Type: filesandordirs; Name: "{app}"
+
+[UninstallRun]
+; Stops the daemon and removes its logon task. The sign-in stays in
+; %USERPROFILE%\.config\sealgate-stdiod, as `sealgate-stdiod uninstall` leaves it.
+Filename: "{app}\sealgate-stdiod.exe"; Parameters: "uninstall"; Flags: runhidden waituntilterminated; RunOnceId: "RemoveLogonTask"
+
+[Code]
+const
+  EXIT_OK = 0;
+  EXIT_NOT_YET = 2;
+  EXIT_STOPPED = 130;
+  { The steps that wait for the person, and so run in the background. }
+  STEP_NONE = 0;
+  STEP_LOGIN = 1;
+  STEP_BEEPER = 2;
+  STEP_APPROVE = 3;
+  APPROVE_TIMEOUT = 180;
+  { What the Beeper page found, which decides its text and big button. }
+  BEEPER_CHECKING = 0;
+  BEEPER_READY = 1;
+  BEEPER_NOT_READY = 2;
+  BEEPER_RETRY = 3;
+  { A tick-list row's state. }
+  RS_PENDING = 0;
+  RS_BUSY = 1;
+  RS_DONE = 2;
+  RS_FAILED = 3;
+  RS_SKIPPED = 4;
+  { Row icons: glyphs of the icon font every Windows 10+ has. }
+  GLYPH_FONT = 'Segoe MDL2 Assets';
+  GLYPH_DONE = #$E930;
+  GLYPH_PENDING = #$EA3A;
+  GLYPH_FAILED = #$E783;
+  GLYPH_SKIPPED = #$E738;
+  GLYPH_BROWSER = #$E774;
+  GLYPH_DOWNLOAD = #$E896;
+  GLYPH_PACKAGE = #$E7B8;
+  GLYPH_WAIT = #$E823;
+  GLYPH_SYNC = #$E895;
+  { Colours, as $BBGGRR. }
+  CLR_DONE = $0F7B0F;
+  CLR_BUSY = $C06700;
+  CLR_FAILED = $1C2BC4;
+  CLR_PENDING = $9A9A9A;
+  CLR_MUTED = $6B6B6B;
+
+var
+  SignInPage, BeeperPage, AllowPage: TOutputMsgMemoWizardPage;
+  SignInButton, BeeperButton, AllowButton, OtherAccountButton: TNewButton;
+  Backend: String;
+  { Whether this PC was already signed in to Backend when the sign-in page
+    opened, and whether the person asked to use another account instead. }
+  AlreadySignedIn, UseOtherAccount: Boolean;
+  { The signed-in account's email, when the backend says (it may not). }
+  SignedInEmail: String;
+  { The step running in the background, the page and row it reports to,
+    and the files it is followed through (src/setup/stepio.rs). }
+  StepKind, StepRow: Integer;
+  StepPage: TOutputMsgMemoWizardPage;
+  StepOut, StepRc, StepStop: String;
+  StepTimer, StepStarted: LongWord;
+  { Set while moving on after a step succeeded, so NextButtonClick can tell
+    that from the person pressing Skip. }
+  Advancing: Boolean;
+  { What each page achieved, for the last page. }
+  SignInDone, BeeperDone, AllowDone: Boolean;
+  BeeperState: Integer;
+  ClosingEarly: Boolean;
+  { The tick lists: one row is an icon, a label, a detail on the right and
+    an optional progress bar under it, shown while the row is busy. }
+  RowIcon, RowText, RowDetail: array of TNewStaticText;
+  RowBar: array of TNewProgressBar;
+  RowBusyGlyph: array of String;
+  RowState, RowRight: array of Integer;
+  RowCount: Integer;
+  RowLogin, RowStart: Integer;
+  RowCheck, RowDownload, RowInstall, RowReady: Integer;
+  RowRegister, RowAllow, RowRestart: Integer;
+  RowSummary: Integer;
+  LaidOut: Boolean;
+#ifdef DebugUi
+  DebugButton: TNewButton;
+  DebugState: Integer;
+#endif
+
+function SetTimer(hWnd, nIDEvent, uElapse, lpTimerFunc: LongWord): LongWord;
+  external 'SetTimer@user32.dll stdcall';
+function KillTimer(hWnd, uIDEvent: LongWord): LongWord;
+  external 'KillTimer@user32.dll stdcall';
+function WinTickCount(): LongWord;
+  external 'GetTickCount@kernel32.dll stdcall';
+function GetSystemMenu(hWnd: HWND; bRevert: BOOL): LongWord;
+  external 'GetSystemMenu@user32.dll stdcall';
+function EnableMenuItem(hMenu, uIDEnableItem, uEnable: LongWord): BOOL;
+  external 'EnableMenuItem@user32.dll stdcall';
+
+{ The deployment this setup program is for, or /backend=URL for testing. }
+function GetBackend(): String;
+begin
+  Result := ExpandConstant('{param:backend|{#Backend}}');
+end;
+
+function NeedsAddPath(Dir: String): Boolean;
+var
+  Path: String;
+begin
+  if not RegQueryStringValue(HKCU, 'Environment', 'Path', Path) then
+    Path := '';
+  Result := Pos(';' + Uppercase(Dir) + ';', ';' + Uppercase(Path) + ';') = 0;
+end;
+
+function DaemonExe(): String;
+begin
+  Result := ExpandConstant('{app}\sealgate-stdiod.exe');
+end;
+
+{ Run one quick daemon command hidden, wait for it, and return its exit code
+  with what it printed. -1 when it could not be started at all. }
+function Stdiod(Params: String; var Output: String): Integer;
+var
+  ResultCode, I: Integer;
+  Captured: TExecOutput;
+begin
+  Output := '';
+  if not ExecAndCaptureOutput(DaemonExe(), Params, '', SW_HIDE,
+      ewWaitUntilTerminated, ResultCode, Captured) then
+  begin
+    Output := SysErrorMessage(ResultCode);
+    Result := -1;
+    exit;
+  end;
+  for I := 0 to GetArrayLength(Captured.StdOut) - 1 do
+    Output := Output + Captured.StdOut[I] + #13#10;
+  for I := 0 to GetArrayLength(Captured.StdErr) - 1 do
+    Output := Output + Captured.StdErr[I] + #13#10;
+  Result := ResultCode;
+end;
+
+{ ---- Tick lists ---- }
+
+function AddRow(Parent: TWinControl; Left, Right: Integer; Caption, BusyGlyph: String;
+  WithBar: Boolean): Integer;
+var
+  I: Integer;
+begin
+  I := RowCount;
+  RowCount := RowCount + 1;
+  SetArrayLength(RowIcon, RowCount);
+  SetArrayLength(RowText, RowCount);
+  SetArrayLength(RowDetail, RowCount);
+  SetArrayLength(RowBar, RowCount);
+  SetArrayLength(RowBusyGlyph, RowCount);
+  SetArrayLength(RowState, RowCount);
+  SetArrayLength(RowRight, RowCount);
+
+  RowIcon[I] := TNewStaticText.Create(Parent);
+  RowIcon[I].Parent := Parent;
+  RowIcon[I].Font.Name := GLYPH_FONT;
+  RowIcon[I].Font.Size := 11;
+  RowIcon[I].Left := Left;
+
+  RowText[I] := TNewStaticText.Create(Parent);
+  RowText[I].Parent := Parent;
+  RowText[I].Caption := Caption;
+  RowText[I].Left := Left + ScaleX(26);
+
+  RowDetail[I] := TNewStaticText.Create(Parent);
+  RowDetail[I].Parent := Parent;
+  RowDetail[I].Font.Color := CLR_MUTED;
+
+  RowBar[I] := nil;
+  if WithBar then
+  begin
+    RowBar[I] := TNewProgressBar.Create(Parent);
+    RowBar[I].Parent := Parent;
+    RowBar[I].Left := Left + ScaleX(26);
+    RowBar[I].Width := Right - RowBar[I].Left;
+    RowBar[I].Height := ScaleY(6);
+    RowBar[I].Min := 0;
+    RowBar[I].Max := 100;
+    RowBar[I].Visible := False;
+  end;
+  RowBusyGlyph[I] := BusyGlyph;
+  RowRight[I] := Right;
+  RowState[I] := -1;
+  Result := I;
+end;
+
+{ Stack rows First..Last from Top; returns the bottom. }
+function LayoutRows(First, Last, Top: Integer): Integer;
+var
+  I: Integer;
+begin
+  for I := First to Last do
+  begin
+    RowIcon[I].Top := Top;
+    RowText[I].Top := Top + ScaleY(2);
+    RowDetail[I].Top := Top + ScaleY(2);
+    Top := Top + ScaleY(24);
+    if (RowBar[I] <> nil) and RowBar[I].Visible then
+    begin
+      RowBar[I].Top := Top - ScaleY(2);
+      Top := Top + ScaleY(10);
+    end;
+  end;
+  Result := Top;
+end;
+
+{ Stack a page: its text, big button, the optional small button under it,
+  its rows, then the output box when it has something to show. }
+procedure LayoutActionPage(Page: TOutputMsgMemoWizardPage; Button, Extra: TNewButton;
+  First, Last: Integer);
+var
+  Bottom, Room: Integer;
+begin
+  Page.SubCaptionLabel.AdjustHeight();
+  Button.Top := Page.SubCaptionLabel.Top + Page.SubCaptionLabel.Height + ScaleY(12);
+  Bottom := Button.Top + Button.Height;
+  if (Extra <> nil) and Extra.Visible then
+  begin
+    Extra.Top := Bottom + ScaleY(6);
+    Extra.Left := (Page.SurfaceWidth - Extra.Width) div 2;
+    Bottom := Extra.Top + Extra.Height;
+  end;
+  Bottom := LayoutRows(First, Last, Bottom + ScaleY(18));
+  Room := Page.SurfaceHeight;
+#ifdef DebugUi
+  if Page = SignInPage then
+    Room := Room - DebugButton.Height - ScaleY(6);
+#endif
+  Page.RichEditViewer.Top := Bottom + ScaleY(4);
+  Page.RichEditViewer.Height := Room - Page.RichEditViewer.Top;
+  Page.RichEditViewer.Visible := (Page.RichEditViewer.Text <> '') and
+    (Page.RichEditViewer.Height > ScaleY(30));
+end;
+
+procedure Relayout();
+begin
+  if not LaidOut then
+    exit;
+  LayoutActionPage(SignInPage, SignInButton, OtherAccountButton, RowLogin, RowStart);
+  LayoutActionPage(BeeperPage, BeeperButton, nil, RowCheck, RowReady);
+  LayoutActionPage(AllowPage, AllowButton, nil, RowRegister, RowRestart);
+end;
+
+procedure SetRow(I, State: Integer; Detail: String);
+var
+  WasBar: Boolean;
+begin
+  if (RowState[I] = State) and (RowDetail[I].Caption = Detail) then
+    exit;
+  RowState[I] := State;
+  case State of
+    RS_PENDING:
+      begin
+        RowIcon[I].Caption := GLYPH_PENDING;
+        RowIcon[I].Font.Color := CLR_PENDING;
+        RowText[I].Font.Color := CLR_MUTED;
+      end;
+    RS_BUSY:
+      begin
+        RowIcon[I].Caption := RowBusyGlyph[I];
+        RowIcon[I].Font.Color := CLR_BUSY;
+        RowText[I].Font.Color := clWindowText;
+      end;
+    RS_DONE:
+      begin
+        RowIcon[I].Caption := GLYPH_DONE;
+        RowIcon[I].Font.Color := CLR_DONE;
+        RowText[I].Font.Color := clWindowText;
+      end;
+    RS_FAILED:
+      begin
+        RowIcon[I].Caption := GLYPH_FAILED;
+        RowIcon[I].Font.Color := CLR_FAILED;
+        RowText[I].Font.Color := clWindowText;
+      end;
+    RS_SKIPPED:
+      begin
+        RowIcon[I].Caption := GLYPH_SKIPPED;
+        RowIcon[I].Font.Color := CLR_PENDING;
+        RowText[I].Font.Color := CLR_MUTED;
+      end;
+  end;
+  RowDetail[I].Caption := Detail;
+  RowDetail[I].Left := RowRight[I] - RowDetail[I].Width;
+  if RowBar[I] <> nil then
+  begin
+    WasBar := RowBar[I].Visible;
+    RowBar[I].Visible := State = RS_BUSY;
+    if WasBar <> RowBar[I].Visible then
+      Relayout();
+  end;
+end;
+
+{ A busy row's bar: 0..100, or -1 for one that just moves. }
+procedure SetRowProgress(I, Percent: Integer);
+begin
+  if Percent < 0 then
+    RowBar[I].Style := npbstMarquee
+  else begin
+    RowBar[I].Style := npbstNormal;
+    RowBar[I].Position := Percent;
+  end;
+end;
+
+procedure SetRowCaption(I: Integer; Caption: String);
+begin
+  RowText[I].Caption := Caption;
+end;
+
+{ After a step ended: its busy rows become State. }
+procedure EndBusyRows(First, Last, State: Integer; Detail: String);
+var
+  I: Integer;
+begin
+  for I := First to Last do
+    if RowState[I] = RS_BUSY then
+      SetRow(I, State, Detail);
+end;
+
+procedure PageRows(Page: TOutputMsgMemoWizardPage; var First, Last: Integer);
+begin
+  if Page = SignInPage then
+  begin
+    First := RowLogin;
+    Last := RowStart;
+  end else if Page = BeeperPage then
+  begin
+    First := RowCheck;
+    Last := RowReady;
+  end else begin
+    First := RowRegister;
+    Last := RowRestart;
+  end;
+end;
+
+{ Details under the rows: a step's output, or '' to hide the box. }
+procedure Show(Page: TOutputMsgMemoWizardPage; Text: String);
+begin
+  if Page.RichEditViewer.Text = Text then
+    exit;
+  Page.RichEditViewer.Text := Text;
+  Relayout();
+  WizardForm.Refresh;
+end;
+
+{ ---- Steps ---- }
+
+{ The bottom-right button: Skip, or Stop while a step runs. The big buttons
+  are greyed out while a step runs. }
+procedure UpdateButtons();
+var
+  Running: Boolean;
+begin
+  Running := StepKind <> STEP_NONE;
+  if Running then
+    WizardForm.NextButton.Caption := 'Stop'
+  else begin
+    WizardForm.NextButton.Caption := 'Skip';
+    { Stop greys the button until the step has actually ended. }
+    WizardForm.NextButton.Enabled := True;
+  end;
+  SignInButton.Enabled := not Running;
+  OtherAccountButton.Enabled := not Running;
+  BeeperButton.Enabled := not Running;
+  AllowButton.Enabled := not Running;
+end;
+
+{ Give a page's big button the keyboard focus, when it can take it: Windows
+  raises an error for a greyed-out or hidden one. }
+procedure FocusButton(Button: TNewButton);
+begin
+  if Button.Enabled and Button.Visible then
+    WizardForm.ActiveControl := Button;
+end;
+
+{ Leave the current page after its step succeeded. }
+procedure MoveOn();
+begin
+  Advancing := True;
+  try
+    WizardForm.NextButton.OnClick(WizardForm.NextButton);
+  finally
+    Advancing := False;
+  end;
+end;
+
+procedure StepFinished(Kind, Code: Integer; Output: String); forward;
+
+{ The last "downloaded N%" figure in a step's output, or -1. }
+function LastPercent(Output: String): Integer;
+var
+  P: Integer;
+  Rest: String;
+begin
+  Result := -1;
+  Rest := Output;
+  P := Pos('downloaded ', Rest);
+  while P > 0 do
+  begin
+    Rest := Copy(Rest, P + Length('downloaded '), Length(Rest));
+    P := Pos('%', Rest);
+    if (P > 0) and (P <= 4) then
+      Result := StrToIntDef(Copy(Rest, 1, P - 1), Result);
+    P := Pos('downloaded ', Rest);
+  end;
+end;
+
+{ The Beeper rows, from what `setup install-beeper` has printed so far. }
+procedure UpdateBeeperRows(Output: String);
+var
+  Percent: Integer;
+begin
+  if Pos('already installed', Output) > 0 then
+  begin
+    SetRow(RowCheck, RS_DONE, 'installed');
+    SetRow(RowDownload, RS_SKIPPED, 'not needed');
+    SetRow(RowInstall, RS_SKIPPED, 'not needed');
+    exit;
+  end;
+  if Pos('downloading Beeper Desktop', Output) = 0 then
+    exit;
+  SetRow(RowCheck, RS_DONE, 'not installed');
+  if Pos('signed by Beeper', Output) = 0 then
+  begin
+    Percent := LastPercent(Output);
+    if Percent < 0 then
+      SetRow(RowDownload, RS_BUSY, '')
+    else
+      SetRow(RowDownload, RS_BUSY, IntToStr(Percent) + '%');
+    SetRowProgress(RowDownload, Percent);
+    exit;
+  end;
+  SetRow(RowDownload, RS_DONE, '');
+  if Pos('installed Beeper Desktop (', Output) > 0 then
+    SetRow(RowInstall, RS_DONE, '')
+  else if Pos('running the Beeper installer', Output) > 0 then
+  begin
+    SetRow(RowInstall, RS_BUSY, '');
+    SetRowProgress(RowInstall, -1);
+  end;
+end;
+
+{ m:ss left before `setup approve` gives up. }
+function ApproveCountdown(): String;
+var
+  Left: Integer;
+begin
+  Left := APPROVE_TIMEOUT - (WinTickCount() - StepStarted) div 1000;
+  if Left < 0 then
+    Left := 0;
+  Result := Format('%d:%.2d left', [Left div 60, Left mod 60]);
+end;
+
+{ Check the background step: show its progress so far, and finish it once
+  it has written its exit code. }
+procedure StepTick(Wnd, Msg, TimerId, Time: LongWord);
+var
+  Output, Rc: AnsiString;
+  Kind, Code: Integer;
+begin
+  if StepKind = STEP_NONE then
+    exit;
+  Output := '';
+  LoadStringFromFile(StepOut, Output);
+  if not FileExists(StepRc) then
+  begin
+    case StepKind of
+      STEP_BEEPER: UpdateBeeperRows(Output);
+      { The browser link, in case the browser did not open. }
+      STEP_LOGIN: Show(StepPage, Output);
+      STEP_APPROVE:
+        if not WizardForm.NextButton.Enabled then
+          SetRow(StepRow, RS_BUSY, 'stopping...')
+        else
+          SetRow(StepRow, RS_BUSY, ApproveCountdown());
+    end;
+    exit;
+  end;
+  if not LoadStringFromFile(StepRc, Rc) then
+    exit;
+  KillTimer(0, StepTimer);
+  Kind := StepKind;
+  StepKind := STEP_NONE;
+  Code := StrToIntDef(Trim(Rc), -1);
+  UpdateButtons();
+  StepFinished(Kind, Code, Output);
+end;
+
+{ Start a step that waits for the person, without waiting for it here. Row
+  is the row that shows it as busy. }
+procedure StartStep(Page: TOutputMsgMemoWizardPage; Kind: Integer; Params: String; Row: Integer);
+var
+  Base: String;
+  Code: Integer;
+begin
+  Base := ExpandConstant('{tmp}\step');
+  StepOut := Base + '.out';
+  StepRc := Base + '.rc';
+  StepStop := Base + '.stop';
+  DeleteFile(StepOut);
+  DeleteFile(StepRc);
+  DeleteFile(StepStop);
+  Show(Page, '');
+  if not Exec(DaemonExe(), Params + ' --output-file "' + StepOut + '" --exit-code-file "' +
+      StepRc + '" --stop-file "' + StepStop + '"', '', SW_HIDE, ewNoWait, Code) then
+  begin
+    SetRow(Row, RS_FAILED, '');
+    Show(Page, 'Could not start SealGate: ' + SysErrorMessage(Code));
+    exit;
+  end;
+  StepPage := Page;
+  StepKind := Kind;
+  StepRow := Row;
+  StepStarted := WinTickCount();
+  SetRow(Row, RS_BUSY, '');
+  if RowBar[Row] <> nil then
+    SetRowProgress(Row, -1);
+  UpdateButtons();
+  StepTimer := SetTimer(0, 0, 300, CreateCallback(@StepTick));
+end;
+
+{ Stop: the step sees the file and exits with EXIT_STOPPED. }
+procedure StopStep();
+begin
+  SaveStringToFile(StepStop, 'stop', False);
+  WizardForm.NextButton.Enabled := False;
+  SetRow(StepRow, RS_BUSY, 'stopping...');
+end;
+
+{ A large bold button centred under the page's text. }
+function AddActionButton(Page: TOutputMsgMemoWizardPage; Caption: String;
+  Click: TNotifyEvent): TNewButton;
+begin
+  Result := TNewButton.Create(Page);
+  Result.Parent := Page.Surface;
+  Result.Caption := Caption;
+  Result.Font.Style := [fsBold];
+  Result.Font.Size := Result.Font.Size + 2;
+  Result.Width := ScaleX(220);
+  Result.Height := ScaleY(40);
+  Result.Left := (Page.SurfaceWidth - Result.Width) div 2;
+  Result.OnClick := Click;
+end;
+
+{ ---- Sign in ---- }
+
+function SignInText(): String;
+begin
+  Result := 'Click Sign in on this window. Your browser will open on the SealGate ' +
+    'Beeper dashboard page. Approve this computer when prompted and then ' +
+    'return to this window.' + #13#10#13#10 + 'SealGate: ' + Backend;
+end;
+
+{ A string field from one line of `--json` output, or '' when it is absent
+  or null. Enough for an email address, which has no quotes to escape. }
+function JsonString(Json, Key: String): String;
+var
+  P: Integer;
+  Rest: String;
+begin
+  Result := '';
+  P := Pos('"' + Key + '":"', Json);
+  if P = 0 then
+    exit;
+  Rest := Copy(Json, P + Length(Key) + 4, Length(Json));
+  P := Pos('"', Rest);
+  if P > 0 then
+    Result := Copy(Rest, 1, P - 1);
+end;
+
+function SignedInText(): String;
+begin
+  Result := 'This computer is already signed in to SealGate (' + Backend + '). ' +
+    'Click Continue to keep using that account.' + #13#10#13#10 +
+    'To use a different account, click Sign in with a different account. Your ' +
+    'browser will open so you can approve this computer again.';
+end;
+
+{ Show the version of the sign-in page that matches AlreadySignedIn. }
+procedure ShowSignInState();
+begin
+  if AlreadySignedIn then
+  begin
+    SignInPage.SubCaptionLabel.Caption := SignedInText();
+    SignInButton.Caption := 'Continue';
+    SetRowCaption(RowLogin, 'Signed in to SealGate');
+    SetRow(RowLogin, RS_DONE, SignedInEmail);
+  end else begin
+    SignInPage.SubCaptionLabel.Caption := SignInText();
+    SignInButton.Caption := 'Sign in';
+    SetRowCaption(RowLogin, 'Approve this computer in your browser');
+    SetRow(RowLogin, RS_PENDING, '');
+  end;
+  SetRow(RowStart, RS_PENDING, '');
+  OtherAccountButton.Visible := AlreadySignedIn;
+  Relayout();
+end;
+
+{ Check the sign-in as the page opens, and show the version of the page
+  that matches: the browser opens only when there is no sign-in to keep. }
+procedure PrepareSignInPage();
+var
+  Output: String;
+begin
+  SetRow(RowLogin, RS_BUSY, 'checking...');
+  WizardForm.Refresh;
+  AlreadySignedIn :=
+    Stdiod('setup signed-in --json --backend "' + Backend + '"', Output) = EXIT_OK;
+  SignedInEmail := '';
+  if AlreadySignedIn then
+    SignedInEmail := JsonString(Output, 'email');
+  ShowSignInState();
+  Show(SignInPage, '');
+end;
+
+{ Start SealGate at logon; the last part of signing in. }
+procedure FinishSignIn();
+var
+  Output: String;
+begin
+  SetRow(RowStart, RS_BUSY, '');
+  WizardForm.Refresh;
+  if Stdiod('install', Output) <> EXIT_OK then
+  begin
+    SetRow(RowStart, RS_FAILED, '');
+    Show(SignInPage, 'Could not start SealGate in the background.' + #13#10#13#10 + Output);
+    exit;
+  end;
+  SetRow(RowStart, RS_DONE, '');
+  SignInDone := True;
+  MoveOn();
+end;
+
+{ Approve this PC in the browser unless it is already signed in to this
+  deployment (or the person chose another account), then start SealGate. }
+procedure StartSignIn();
+var
+  Params: String;
+begin
+  if AlreadySignedIn and not UseOtherAccount then
+  begin
+    FinishSignIn();
+    exit;
+  end;
+  Params := 'login --backend "' + Backend + '" --device-label "' +
+    GetComputerNameString() + '"';
+  { Another account: a new device record, so this PC is not left bound to
+    the old account's. }
+  if UseOtherAccount then
+    Params := Params + ' --new-device';
+  SetRowCaption(RowLogin, 'Approve this computer in your browser');
+  StartStep(SignInPage, STEP_LOGIN, Params, RowLogin);
+end;
+
+procedure SignInClick(Sender: TObject);
+begin
+  UseOtherAccount := False;
+  StartSignIn();
+end;
+
+{ "Sign in with a different account": a fresh browser approval as a new
+  device, even though this PC is already signed in. }
+procedure OtherAccountClick(Sender: TObject);
+begin
+  UseOtherAccount := True;
+  StartSignIn();
+end;
+
+{ ---- Beeper ---- }
+
+{ Set the Beeper page's text and big button for what it found. }
+procedure SetBeeperState(State: Integer; Text, Button: String);
+begin
+  BeeperState := State;
+  BeeperPage.SubCaptionLabel.Caption := Text;
+  BeeperButton.Caption := Button;
+  Relayout();
+end;
+
+{ As the page opens, and on Check again: find Beeper, and download and
+  install it straight away when it is missing. }
+procedure StartBeeperCheck();
+begin
+  SetBeeperState(BEEPER_CHECKING, 'Checking whether Beeper is installed. If it is ' +
+    'not, it is downloaded (about 230 MB) and installed now.', 'Continue');
+  SetRow(RowDownload, RS_PENDING, '');
+  SetRow(RowInstall, RS_PENDING, '');
+  SetRow(RowReady, RS_PENDING, '');
+  StartStep(BeeperPage, STEP_BEEPER, 'setup install-beeper', RowCheck);
+end;
+
+const
+  BEEPER_SIGN_IN = 'Sign in to Beeper, turn on Settings > Developers > MCP, then ' +
+    'click Continue here.';
+
+{ Beeper is installed and the right build: ready once it answers, which it
+  does once the person has signed in and turned on MCP. }
+procedure FinishBeeper(Installed: String);
+var
+  Output: String;
+begin
+  UpdateBeeperRows(Installed);
+  if Stdiod('setup status', Output) = EXIT_OK then
+  begin
+    SetRow(RowReady, RS_DONE, '');
+    BeeperDone := True;
+    SetBeeperState(BEEPER_READY, 'Beeper is installed and ready. Click Continue.', 'Continue');
+    exit;
+  end;
+  Stdiod('setup open-beeper', Output);
+  SetRow(RowReady, RS_BUSY, '');
+  if Pos('already installed', Installed) > 0 then
+    SetBeeperState(BEEPER_NOT_READY, 'Beeper is already installed. ' + BEEPER_SIGN_IN, 'Continue')
+  else
+    SetBeeperState(BEEPER_NOT_READY, 'Beeper is installed and open. ' + BEEPER_SIGN_IN, 'Continue');
+end;
+
+procedure BeeperClick(Sender: TObject);
+var
+  Output: String;
+begin
+  if BeeperState = BEEPER_RETRY then
+  begin
+    StartBeeperCheck();
+    exit;
+  end;
+  if BeeperState = BEEPER_READY then
+  begin
+    MoveOn();
+    exit;
+  end;
+  { Not ready when the page last looked: look again. }
+  if Stdiod('setup status', Output) = EXIT_OK then
+  begin
+    SetRow(RowReady, RS_DONE, '');
+    BeeperDone := True;
+    MoveOn();
+  end else begin
+    SetRow(RowReady, RS_BUSY, 'not yet');
+    Show(BeeperPage, Output);
+  end;
+end;
+
+{ ---- Allow ---- }
+
+{ Register the Beeper connector, then wait for the Allow click. }
+procedure AllowClick(Sender: TObject);
+var
+  Output: String;
+  Code: Integer;
+begin
+  Show(AllowPage, '');
+  SetRow(RowAllow, RS_PENDING, '');
+  SetRow(RowRestart, RS_PENDING, '');
+  SetRow(RowRegister, RS_BUSY, '');
+  WizardForm.Refresh;
+  Code := Stdiod('setup register', Output);
+  if (Code <> EXIT_OK) and (Code <> EXIT_NOT_YET) then
+  begin
+    SetRow(RowRegister, RS_FAILED, '');
+    Show(AllowPage, 'Could not register Beeper with SealGate. ' +
+      'Click Connect Beeper with SealGate to try again.' + #13#10#13#10 + Output);
+    exit;
+  end;
+  SetRow(RowRegister, RS_DONE, '');
+  StartStep(AllowPage, STEP_APPROVE, 'setup approve --timeout ' + IntToStr(APPROVE_TIMEOUT),
+    RowAllow);
+end;
+
+procedure StepFinished(Kind, Code: Integer; Output: String);
+var
+  First, Last: Integer;
+begin
+  PageRows(StepPage, First, Last);
+  if Code = EXIT_STOPPED then
+  begin
+    EndBusyRows(First, Last, RS_PENDING, 'stopped');
+    if Kind = STEP_BEEPER then
+      SetBeeperState(BEEPER_RETRY, 'Stopped. Click Check again to look for Beeper ' +
+        'again, or Skip.', 'Check again');
+    Show(StepPage, '');
+    exit;
+  end;
+  if Code <> EXIT_OK then
+    EndBusyRows(First, Last, RS_FAILED, '');
+  case Kind of
+    STEP_LOGIN:
+      if Code = EXIT_OK then
+      begin
+        SetRow(RowLogin, RS_DONE, '');
+        Show(SignInPage, '');
+        AlreadySignedIn := True;
+        FinishSignIn();
+      end else
+        Show(SignInPage, 'Sign-in did not finish. Try again.' + #13#10#13#10 + Output);
+    STEP_BEEPER:
+      if Code = EXIT_OK then
+        FinishBeeper(Output)
+      else if Code = EXIT_NOT_YET then
+      begin
+        { The emulated x64 build on an ARM PC: left in place, but it is the
+          setup that does not work, so stop here and say so. }
+        SetRow(RowCheck, RS_FAILED, 'x64 version');
+        SetBeeperState(BEEPER_RETRY, 'Beeper is installed, but it is the x64 version, ' +
+          'which does not run properly on this ARM computer. Uninstall Beeper ' +
+          '(Settings > Apps), then click Check again.', 'Check again');
+        Show(BeeperPage, Output);
+      end else begin
+        SetBeeperState(BEEPER_RETRY, 'Could not install Beeper. Click Check again to ' +
+          'retry, or install it yourself from https://www.beeper.com/download.', 'Check again');
+        Show(BeeperPage, Output);
+      end;
+    STEP_APPROVE:
+      if Code = EXIT_OK then
+      begin
+        SetRow(RowAllow, RS_DONE, '');
+        SetRow(RowRestart, RS_DONE, '');
+        AllowDone := True;
+        MoveOn();
+      end else begin
+        SetRow(RowAllow, RS_FAILED, 'timed out');
+        Show(AllowPage, 'Beeper did not get your Allow in time. Click Connect Beeper with ' +
+          'SealGate to try again, and look for the pop-up behind your other windows.' + #13#10#13#10 +
+          Output);
+      end;
+  end;
+end;
+
+{ ---- Last page ---- }
+
+{ What was done, as ticks between the heading and the closing text. }
+procedure ShowSummary();
+var
+  Top, I: Integer;
+  Done: Boolean;
+begin
+  if SignInDone and BeeperDone and AllowDone then
+  begin
+    WizardForm.FinishedHeadingLabel.Caption := 'Beeper is connected to SealGate';
+    WizardForm.FinishedLabel.Caption :=
+      'Ask your AI assistant about your messages. SealGate runs in the background ' +
+      'and starts with Windows.';
+  end else begin
+    WizardForm.FinishedHeadingLabel.Caption := 'SealGate is installed';
+    WizardForm.FinishedLabel.Caption :=
+      'Beeper is not connected yet because a step was skipped. Run SealGate for ' +
+      'Beeper Setup again to finish.';
+  end;
+  for I := RowSummary to RowSummary + 2 do
+  begin
+    case I - RowSummary of
+      0: Done := SignInDone;
+      1: Done := BeeperDone;
+    else
+      Done := AllowDone;
+    end;
+    if Done then
+      SetRow(I, RS_DONE, '')
+    else
+      SetRow(I, RS_SKIPPED, 'skipped');
+  end;
+  WizardForm.FinishedHeadingLabel.AdjustHeight();
+  Top := WizardForm.FinishedHeadingLabel.Top + WizardForm.FinishedHeadingLabel.Height +
+    ScaleY(16);
+  Top := LayoutRows(RowSummary, RowSummary + 2, Top);
+  WizardForm.FinishedLabel.Top := Top + ScaleY(10);
+  WizardForm.FinishedLabel.AdjustHeight();
+end;
+
+#ifdef DebugUi
+{ Debug builds only: cycle the sign-in page through its three versions
+  without a real sign-in, to see them before the backend sends emails. }
+procedure DebugClick(Sender: TObject);
+begin
+  DebugState := (DebugState + 1) mod 3;
+  AlreadySignedIn := DebugState > 0;
+  SignedInEmail := '';
+  if DebugState = 2 then
+    SignedInEmail := 'test@example.com';
+  ShowSignInState();
+  case DebugState of
+    0: Show(SignInPage, 'Debug: not signed in');
+    1: Show(SignInPage, 'Debug: signed in, backend sent no email');
+    2: Show(SignInPage, 'Debug: signed in as test@example.com');
+  end;
+end;
+#endif
+
+procedure CancelClick(Sender: TObject); forward;
+procedure WizardCloseQuery(Sender: TObject; var CanClose: Boolean); forward;
+
+procedure InitializeWizard();
+var
+  W, Left: Integer;
+begin
+  Backend := GetBackend();
+  StepKind := STEP_NONE;
+  WizardForm.CancelButton.OnClick := @CancelClick;
+  WizardForm.OnCloseQuery := @WizardCloseQuery;
+  SignInPage := CreateOutputMsgMemoPage(wpInstalling,
+    'Sign in to SealGate',
+    'Approve this computer in your browser.',
+    SignInText(), '');
+  BeeperPage := CreateOutputMsgMemoPage(SignInPage.ID,
+    'Set up Beeper',
+    'Beeper Desktop connects SealGate to your chats.',
+    'Checking whether Beeper is installed...', '');
+  AllowPage := CreateOutputMsgMemoPage(BeeperPage.ID,
+    'Connect Beeper with SealGate',
+    'One click in Beeper.',
+    'Click Connect Beeper with SealGate to allow SealGate to access Beeper. ' +
+    'Beeper then shows a pop-up asking whether SealGate may access it: click ' +
+    'Allow in that pop-up.' + #13#10#13#10 +
+    'If you do not see the pop-up, check behind your other windows.', '');
+
+  SignInButton := AddActionButton(SignInPage, 'Sign in', @SignInClick);
+  OtherAccountButton := TNewButton.Create(SignInPage);
+  OtherAccountButton.Parent := SignInPage.Surface;
+  OtherAccountButton.Caption := 'Sign in with a different account';
+  OtherAccountButton.Width := ScaleX(240);
+  OtherAccountButton.Height := ScaleY(26);
+  OtherAccountButton.OnClick := @OtherAccountClick;
+  OtherAccountButton.Visible := False;
+  BeeperButton := AddActionButton(BeeperPage, 'Continue', @BeeperClick);
+  AllowButton := AddActionButton(AllowPage, 'Connect Beeper with SealGate', @AllowClick);
+  { A longer label than the other pages' buttons. }
+  AllowButton.Width := ScaleX(320);
+  AllowButton.Left := (AllowPage.SurfaceWidth - AllowButton.Width) div 2;
+
+  { Rows sit in a column a little narrower than the page, like the text. }
+  W := SignInPage.SurfaceWidth;
+  Left := ScaleX(8);
+  RowLogin := AddRow(SignInPage.Surface, Left, W - Left,
+    'Approve this computer in your browser', GLYPH_BROWSER, True);
+  RowStart := AddRow(SignInPage.Surface, Left, W - Left,
+    'Start SealGate in the background', GLYPH_SYNC, False);
+  RowCheck := AddRow(BeeperPage.Surface, Left, W - Left,
+    'Check whether Beeper is installed', GLYPH_WAIT, False);
+  RowDownload := AddRow(BeeperPage.Surface, Left, W - Left,
+    'Download Beeper', GLYPH_DOWNLOAD, True);
+  RowInstall := AddRow(BeeperPage.Surface, Left, W - Left,
+    'Install Beeper', GLYPH_PACKAGE, True);
+  RowReady := AddRow(BeeperPage.Surface, Left, W - Left,
+    'Sign in to Beeper and turn on MCP', GLYPH_WAIT, False);
+  RowRegister := AddRow(AllowPage.Surface, Left, W - Left,
+    'Register Beeper with SealGate', GLYPH_SYNC, False);
+  RowAllow := AddRow(AllowPage.Surface, Left, W - Left,
+    'Click Allow in the Beeper pop-up', GLYPH_WAIT, True);
+  RowRestart := AddRow(AllowPage.Surface, Left, W - Left,
+    'Restart SealGate with the new access', GLYPH_SYNC, False);
+  Left := WizardForm.FinishedLabel.Left;
+  W := Left + WizardForm.FinishedLabel.Width;
+  RowSummary := AddRow(WizardForm.FinishedPage, Left, W,
+    'This computer is signed in to SealGate', GLYPH_DONE, False);
+  AddRow(WizardForm.FinishedPage, Left, W, 'Beeper is installed and ready', GLYPH_DONE, False);
+  AddRow(WizardForm.FinishedPage, Left, W, 'SealGate may access Beeper', GLYPH_DONE, False);
+  for W := 0 to RowCount - 1 do
+    SetRow(W, RS_PENDING, '');
+
+#ifdef DebugUi
+  DebugButton := TNewButton.Create(SignInPage);
+  DebugButton.Parent := SignInPage.Surface;
+  DebugButton.Caption := 'Debug: next state';
+  DebugButton.Width := ScaleX(130);
+  DebugButton.Height := ScaleY(23);
+  DebugButton.Left := 0;
+  DebugButton.Top := SignInPage.SurfaceHeight - DebugButton.Height;
+  DebugButton.OnClick := @DebugClick;
+  DebugState := 0;
+#endif
+  LaidOut := True;
+  Relayout();
+end;
+
+{ Cancel on a setup page: after asking, stop any running step, skip the
+  remaining setup pages and finish, which Inno allows where closing is not. }
+procedure CloseEarlyClick(Sender: TObject);
+begin
+  if MsgBox('SealGate is installed, but Beeper is not connected yet. Close ' +
+      'setup anyway?' + #13#10#13#10 + 'You can run SealGate for Beeper Setup again ' +
+      'later to finish.', mbConfirmation, MB_YESNO) <> IDYES then
+    exit;
+  if StepKind <> STEP_NONE then
+  begin
+    SaveStringToFile(StepStop, 'stop', False);
+    KillTimer(0, StepTimer);
+    StepKind := STEP_NONE;
+  end;
+  ClosingEarly := True;
+  MoveOn();
+  if WizardForm.CurPageID = wpFinished then
+    MoveOn();
+end;
+
+function IsStepPage(PageID: Integer): Boolean;
+begin
+  Result := (PageID = SignInPage.ID) or (PageID = BeeperPage.ID) or (PageID = AllowPage.ID);
+end;
+
+{ Cancel (and the window's close button, which presses it). Inno blocks
+  closing once the files are installed, so the setup pages close their own
+  way; elsewhere this is what Inno's own handler does. }
+procedure CancelClick(Sender: TObject);
+begin
+  if IsStepPage(WizardForm.CurPageID) then
+    CloseEarlyClick(Sender)
+  else
+    WizardForm.Close();
+end;
+
+{ The window's close button. Inno ignores it once the files are installed,
+  so on the setup pages it does what Cancel does; elsewhere Inno handles it. }
+procedure WizardCloseQuery(Sender: TObject; var CanClose: Boolean);
+begin
+  if not IsStepPage(WizardForm.CurPageID) then
+    exit;
+  CanClose := False;
+  CloseEarlyClick(Sender);
+end;
+
+function ShouldSkipPage(PageID: Integer): Boolean;
+begin
+  { A silent install puts the files in place and stops: every step after it
+    needs the person. }
+  Result := (WizardSilent or ClosingEarly) and IsStepPage(PageID);
+end;
+
+procedure CurPageChanged(CurPageID: Integer);
+begin
+  if IsStepPage(CurPageID) then
+  begin
+    UpdateButtons();
+    { Inno hides Cancel once the files are installed and blocks closing
+      after that; these pages still need a way out. }
+    WizardForm.CancelButton.Visible := True;
+    WizardForm.CancelButton.Enabled := True;
+    { Inno greyed the close button before Cancel was shown again. }
+    EnableMenuItem(GetSystemMenu(WizardForm.Handle, False), $F060, 0);
+  end;
+  { Before installing, Cancel is Exit: nothing is in place yet. It stays
+    visible because the window's close button goes through it. }
+  if CurPageID = wpWelcome then
+    WizardForm.NextButton.Caption := SetupMessage(msgButtonInstall);
+  if CurPageID < wpPreparing then
+    WizardForm.CancelButton.Caption := 'Exit'
+  else
+    WizardForm.CancelButton.Caption := SetupMessage(msgButtonCancel);
+  if CurPageID = SignInPage.ID then
+  begin
+    PrepareSignInPage();
+    FocusButton(SignInButton);
+  end
+  else if CurPageID = BeeperPage.ID then
+  begin
+    { Focus first: the check greys the button out while it runs. }
+    FocusButton(BeeperButton);
+    StartBeeperCheck();
+  end
+  else if CurPageID = AllowPage.ID then
+    FocusButton(AllowButton)
+  else if CurPageID = wpFinished then
+    ShowSummary();
+end;
+
+{ On the step pages the bottom-right button is Skip, or Stop while a step
+  runs; the pages move on by themselves when a step succeeds. }
+function NextButtonClick(CurPageID: Integer): Boolean;
+begin
+  Result := True;
+  if not IsStepPage(CurPageID) or Advancing then
+    exit;
+  if StepKind <> STEP_NONE then
+  begin
+    StopStep();
+    Result := False;
+  end;
+end;
+
+{ Cancel, or the window's close button, on a setup page: the files are
+  already installed, so say what closing now means instead of Inno's
+  "Setup is not complete" question. }
+procedure CancelButtonClick(CurPageID: Integer; var Cancel, Confirm: Boolean);
+begin
+  { Nothing installed yet: just close. }
+  if CurPageID < wpPreparing then
+    Confirm := False;
+  if not IsStepPage(CurPageID) then
+    exit;
+  Confirm := False;
+  Cancel := MsgBox('SealGate is installed, but Beeper is not connected yet. Close ' +
+    'setup anyway?' + #13#10#13#10 + 'You can run SealGate for Beeper Setup again ' +
+    'later to finish.', mbConfirmation, MB_YESNO) = IDYES;
+  if Cancel and (StepKind <> STEP_NONE) then
+    SaveStringToFile(StepStop, 'stop', False);
+end;
+
+{ Take the install folder back off the user's PATH. }
+procedure RemoveFromPath(Dir: String);
+var
+  Path, Entry, Kept: String;
+  P: Integer;
+begin
+  if not RegQueryStringValue(HKCU, 'Environment', 'Path', Path) then
+    exit;
+  Kept := '';
+  Path := Path + ';';
+  while Path <> '' do
+  begin
+    P := Pos(';', Path);
+    Entry := Copy(Path, 1, P - 1);
+    Delete(Path, 1, P);
+    if (Entry <> '') and (CompareText(RemoveBackslashUnlessRoot(Entry),
+        RemoveBackslashUnlessRoot(Dir)) <> 0) then
+    begin
+      if Kept <> '' then
+        Kept := Kept + ';';
+      Kept := Kept + Entry;
+    end;
+  end;
+  RegWriteExpandStringValue(HKCU, 'Environment', 'Path', Kept);
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+begin
+  if CurUninstallStep = usPostUninstall then
+    RemoveFromPath(ExpandConstant('{app}'));
+end;
+
+procedure DeinitializeSetup();
+begin
+  { Closing the wizard mid-step must not leave the step running. }
+  if StepKind <> STEP_NONE then
+    SaveStringToFile(StepStop, 'stop', False);
+end;
+
+{ The running daemon holds its exe open; stop it before the files are
+  replaced. Setup registers it again on the sign-in page. }
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  ResultCode: Integer;
+begin
+  Result := '';
+  if FileExists(DaemonExe()) then
+    Exec(DaemonExe(), 'uninstall', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+end;

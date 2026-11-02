@@ -218,3 +218,137 @@ fn snapshot_of_no_children_is_empty() {
     let supervisor = supervisor_with("empty", HashMap::new());
     assert!(supervisor.snapshot_entries().is_empty());
 }
+
+/// Wait for a child's terminal report: that is what latches its exit.
+async fn wait_for_exit(wire_rx: &mut mpsc::Receiver<TunnelFrame>) {
+    loop {
+        let frame = tokio::time::timeout(Duration::from_secs(5), wire_rx.recv())
+            .await
+            .expect("child death should be reported")
+            .expect("outgoing channel should stay open");
+        if matches!(frame, TunnelFrame::TunnelError(_)) {
+            return;
+        }
+    }
+}
+
+/// Drain whatever is queued and say whether a spawn ack for `id` was in it.
+fn spawn_acked(wire_rx: &mut mpsc::Receiver<TunnelFrame>, id: &str) -> bool {
+    let mut acked = false;
+    while let Ok(frame) = wire_rx.try_recv() {
+        if let TunnelFrame::ServerSpawnResult(result) = frame {
+            acked |= result.ok && result.server_id == id;
+        }
+    }
+    acked
+}
+
+/// The reboot case: a child that exits at once (Beeper not listening yet) is
+/// started again after a short delay instead of staying down.
+#[tokio::test]
+async fn an_exited_child_is_started_again_after_the_first_delay() {
+    let spec = desired("beeper", "exit 1");
+    let outgoing = OutgoingHandle::new();
+    let (wire_tx, mut wire_rx) = mpsc::channel(32);
+    outgoing.set(wire_tx);
+    let child = ChildServer::spawn(&spec, &spec, outgoing.clone(), Vec::new(), None).unwrap();
+    let mut supervisor = supervisor_with_outgoing(
+        "respawn-first",
+        HashMap::from([("beeper".to_string(), child)]),
+        outgoing,
+    );
+    wait_for_exit(&mut wire_rx).await;
+
+    let t0 = Instant::now();
+    supervisor.respawn_exited(t0).await;
+    assert!(
+        !spawn_acked(&mut wire_rx, "beeper"),
+        "not before the first delay"
+    );
+
+    supervisor.respawn_exited(t0 + Duration::from_secs(3)).await;
+    assert!(
+        spawn_acked(&mut wire_rx, "beeper"),
+        "started again after it"
+    );
+    supervisor.shutdown_children().await;
+}
+
+/// A child that keeps exiting is tried less and less often.
+#[tokio::test]
+async fn the_delay_grows_while_a_child_keeps_exiting() {
+    let spec = desired("beeper", "exit 1");
+    let outgoing = OutgoingHandle::new();
+    let (wire_tx, mut wire_rx) = mpsc::channel(32);
+    outgoing.set(wire_tx);
+    let child = ChildServer::spawn(&spec, &spec, outgoing.clone(), Vec::new(), None).unwrap();
+    let mut supervisor = supervisor_with_outgoing(
+        "respawn-growth",
+        HashMap::from([("beeper".to_string(), child)]),
+        outgoing,
+    );
+    wait_for_exit(&mut wire_rx).await;
+
+    let t0 = Instant::now();
+    supervisor.respawn_exited(t0).await;
+    supervisor.respawn_exited(t0 + Duration::from_secs(2)).await;
+    assert!(spawn_acked(&mut wire_rx, "beeper"), "first retry after 2s");
+    wait_for_exit(&mut wire_rx).await;
+
+    // The second wait is 5s, counted from the first retry.
+    supervisor.respawn_exited(t0 + Duration::from_secs(6)).await;
+    assert!(
+        !spawn_acked(&mut wire_rx, "beeper"),
+        "not within 5s of the first retry"
+    );
+    supervisor.respawn_exited(t0 + Duration::from_secs(7)).await;
+    assert!(spawn_acked(&mut wire_rx, "beeper"), "second retry 5s later");
+    supervisor.shutdown_children().await;
+}
+
+/// Once a child has stayed up, its retry count starts afresh: the next exit
+/// is retried after the short first delay again.
+#[tokio::test]
+async fn a_child_that_stays_up_is_forgiven() {
+    let outgoing = OutgoingHandle::new();
+    let (wire_tx, mut wire_rx) = mpsc::channel(32);
+    outgoing.set(wire_tx);
+    let failing = desired("beeper", "exit 1");
+    let child = ChildServer::spawn(&failing, &failing, outgoing.clone(), Vec::new(), None).unwrap();
+    let mut supervisor = supervisor_with_outgoing(
+        "respawn-forgiven",
+        HashMap::from([("beeper".to_string(), child)]),
+        outgoing.clone(),
+    );
+    wait_for_exit(&mut wire_rx).await;
+    let t0 = Instant::now();
+    supervisor.respawn_exited(t0).await;
+    supervisor.respawn_exited(t0 + Duration::from_secs(2)).await;
+    assert_eq!(supervisor.respawns["beeper"].attempts, 1);
+
+    // The replacement stays up: swap in a long-running child under the same id.
+    let healthy = desired("beeper", "sleep 30");
+    let replacement = ChildServer::spawn(&healthy, &healthy, outgoing, Vec::new(), None).unwrap();
+    if let Some(old) = supervisor
+        .children
+        .insert("beeper".to_string(), replacement)
+    {
+        old.shutdown().await;
+    }
+    supervisor
+        .respawn_exited(t0 + Duration::from_secs(2 + 61))
+        .await;
+    assert!(
+        !supervisor.respawns.contains_key("beeper"),
+        "the count is forgotten"
+    );
+    supervisor.shutdown_children().await;
+}
+
+#[test]
+fn the_delays_level_off_at_a_minute() {
+    assert_eq!(respawn_delay(0), Duration::from_secs(2));
+    assert_eq!(respawn_delay(1), Duration::from_secs(5));
+    assert_eq!(respawn_delay(4), Duration::from_secs(60));
+    assert_eq!(respawn_delay(40), Duration::from_secs(60));
+}

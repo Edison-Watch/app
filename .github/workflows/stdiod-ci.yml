@@ -52,3 +52,100 @@ jobs:
         run: cargo build --workspace --verbose
       - name: Test
         run: cargo test --workspace --verbose
+
+  # The Beeper setup steps (src/setup) call Windows APIs for Authenticode,
+  # the registry and the machine architecture; only a Windows runner runs them.
+  setup-windows:
+    name: setup steps (Windows)
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: crates/stdiod
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master 2026-10-15
+        with:
+          toolchain: stable
+          components: clippy
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: crates/stdiod
+      - name: Clippy
+        run: cargo clippy -p sealgate-stdiod --all-targets -- -D warnings
+      - name: Test the setup steps
+        run: 'cargo test -p sealgate-stdiod setup::'
+      - name: Smoke-test setup status
+        shell: pwsh
+        run: |
+          cargo build -p sealgate-stdiod
+          ./target/debug/sealgate-stdiod.exe setup status --json
+          # 2 = Beeper not answering, which is right on a runner without it.
+          if ($LASTEXITCODE -notin 0, 2) { exit 1 }
+          exit 0
+
+  # "SealGate for Beeper" setup (installer/windows): build it from both daemon
+  # builds, install it silently, check what landed, uninstall. The silent
+  # install stops before the steps that need a person. The setup program is
+  # kept as an artifact for trying the wizard on a real PC.
+  installer-windows:
+    name: Beeper setup program (Windows)
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: crates/stdiod
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master 2026-10-15
+        with:
+          toolchain: stable
+          targets: x86_64-pc-windows-msvc, aarch64-pc-windows-msvc
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: crates/stdiod
+          shared-key: beeper-setup-windows
+      - name: Build sealgate-stdiod (x64 and arm64)
+        run: |
+          foreach ($t in 'x86_64-pc-windows-msvc', 'aarch64-pc-windows-msvc') {
+            cargo build --release --target $t --bin sealgate-stdiod
+            if ($LASTEXITCODE -ne 0) { exit 1 }
+          }
+      - name: Inno Setup
+        run: |
+          if (-not (Get-Command ISCC.exe -ErrorAction SilentlyContinue) -and
+              -not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) {
+            # 6.x: the script has not been tried with Inno Setup 7.
+            choco install innosetup --version=6.7.4 --no-progress -y
+          }
+      - name: Build the setup program
+        run: |
+          ./installer/windows/build.ps1 `
+            -X64Exe target/x86_64-pc-windows-msvc/release/sealgate-stdiod.exe `
+            -Arm64Exe target/aarch64-pc-windows-msvc/release/sealgate-stdiod.exe `
+            -Backend https://beeper.sealgate.ai
+      - name: Install silently, check, uninstall
+        run: |
+          $setup = (Resolve-Path installer/windows/dist/SealGate-Beeper-Setup.exe).Path
+          Start-Process $setup -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/LOG=install.log' -Wait
+          $app = Join-Path $env:LOCALAPPDATA 'Programs\sealgate-stdiod'
+          $exe = Join-Path $app 'sealgate-stdiod.exe'
+          if (-not (Test-Path $exe)) { Get-Content install.log -Tail 40; throw 'daemon not installed' }
+          if (-not (Test-Path (Join-Path $app 'runtimes\node\npx.cmd'))) { throw 'Node not installed' }
+          $path = (Get-ItemProperty HKCU:\Environment).Path
+          if ($path -notlike "*$app*") { throw 'install folder not on the user PATH' }
+          # The release exe has no console, so read its output through files.
+          Start-Process $exe -ArgumentList 'setup', 'status', '--json' -Wait -NoNewWindow `
+            -RedirectStandardOutput status.json -RedirectStandardError status.err
+          $result = Get-Content status.json | Where-Object { $_ -like '*"result"*' } | ConvertFrom-Json
+          if ($result.machine_arch -ne 'x64') { throw "installed daemon reports machine_arch '$($result.machine_arch)'" }
+          Start-Process (Join-Path $app 'unins000.exe') -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES' -Wait
+          Start-Sleep -Seconds 3
+          if (Test-Path $app) { throw 'uninstall left the install folder behind' }
+          if ((Get-ItemProperty HKCU:\Environment).Path -like "*$app*") { throw 'uninstall left the folder on the user PATH' }
+          Write-Host 'installed, checked and uninstalled'
+      - name: Keep the setup program
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: SealGate-Beeper-Setup
+          path: crates/stdiod/installer/windows/dist/SealGate-Beeper-Setup.exe
+          retention-days: 14

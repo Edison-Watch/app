@@ -52,7 +52,7 @@ const PUMP_ABORT_GRACE: Duration = Duration::from_millis(200);
 /// PATHEXT and run `.cmd`/`.bat` shims (like `npx.cmd`) through `cmd /c`, because
 /// CreateProcess can't launch them directly and `Command::new` doesn't apply
 /// PATHEXT.
-fn build_child_command(program: &str, args: &[String]) -> Command {
+pub(crate) fn build_child_command(program: &str, args: &[String]) -> Command {
     #[cfg(target_os = "linux")]
     {
         // Resolve against the augmented PATH (interactive login-shell PATH ∪ the

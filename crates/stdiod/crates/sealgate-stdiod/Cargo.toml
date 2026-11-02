@@ -34,6 +34,21 @@ sealgate-tunnel-protocol = { workspace = true }
 url = "2"
 webbrowser = { workspace = true }
 
+# The Beeper setup steps (src/setup): verifying Beeper's installer signature,
+# reading the machine architecture, and finding Beeper in the uninstall registry.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_Security_Cryptography",
+    "Win32_Security_WinTrust",
+    "Win32_System_Console",
+    "Win32_System_Diagnostics_ToolHelp",
+    "Win32_System_Pipes",
+    "Win32_System_SystemInformation",
+    "Win32_System_Threading",
+] }
+winreg = "0.55"
+
 [build-dependencies]
 # build.rs parses packages/desktop/package.json to stamp the daemon version.
 serde_json = { workspace = true }
