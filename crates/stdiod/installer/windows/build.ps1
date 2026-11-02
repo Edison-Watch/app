@@ -28,7 +28,11 @@ param(
     [string] $Iscc = '',
     # Adds a button that previews the sign-in page's versions without a real
     # sign-in; for trying the wizard, never for release.
-    [switch] $DebugUi
+    [switch] $DebugUi,
+    # Signs the setup program, its uninstaller and the daemon: an Inno Setup
+    # sign tool command in which $f is the file, e.g.
+    # 'signtool sign /fd sha256 /tr http://timestamp.acs.microsoft.com /td sha256 /dlib ... $f'.
+    [string] $SignCommand = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -97,9 +101,17 @@ try {
         $defines += '/DDebugUi=1'
     }
     $defines += "/DOutputName=$OutputName"
+    if ($SignCommand) { $defines += @('/DSign=1', "/Ssealgate=$SignCommand") }
     & $iscc @defines "/O$OutDir" (Join-Path $PSScriptRoot 'SealGateBeeper.iss')
     if ($LASTEXITCODE -ne 0) { throw "ISCC failed (exit $LASTEXITCODE)" }
-    Write-Host "built $(Join-Path $OutDir "$OutputName.exe")"
+    $out = Join-Path $OutDir "$OutputName.exe"
+    # Get-AuthenticodeSignature is Windows-only; CI builds there.
+    if ($SignCommand -and $IsWindows -ne $false) {
+        $sig = Get-AuthenticodeSignature -FilePath $out
+        if ($sig.Status -ne 'Valid') { throw "$OutputName.exe is not validly signed ($($sig.Status)): $($sig.StatusMessage)" }
+        Write-Host "signed by $($sig.SignerCertificate.Subject)"
+    }
+    Write-Host "built $out"
 } finally {
     Remove-Item -Path $work -Recurse -Force -ErrorAction SilentlyContinue
 }

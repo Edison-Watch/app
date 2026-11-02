@@ -27,6 +27,13 @@
 #ifndef OutputName
   #define OutputName "SealGate-Beeper-Setup"
 #endif
+; build.ps1 -SignCommand: the setup, its uninstaller and the daemon are signed
+; with the "sealgate" sign tool it passes to ISCC.
+#ifdef Sign
+  #define SignFlag " signonce"
+#else
+  #define SignFlag ""
+#endif
 
 [Setup]
 AppId={{6F1E9B7C-2D4A-4E7B-9C3F-5A8D1B2E4C60}
@@ -48,6 +55,10 @@ SolidCompression=yes
 ChangesEnvironment=yes
 UninstallDisplayName=SealGate for Beeper
 UninstallDisplayIcon={app}\sealgate-stdiod.exe
+#ifdef Sign
+SignTool=sealgate
+SignedUninstaller=yes
+#endif
 ; Images from assets/make_images.py, one per DPI; Inno picks the closest.
 DisableWelcomePage=no
 SetupIconFile=assets\setup.ico
@@ -63,8 +74,8 @@ ClickNext=Click Install to continue, or Exit to close Setup.
 [Files]
 ; IsArm64 rather than the architecture filter: x64compatible also matches an
 ; ARM PC, which must get the native build.
-Source: "{#Stage}\x64\sealgate-stdiod.exe"; DestDir: "{app}"; Check: not IsArm64; Flags: ignoreversion
-Source: "{#Stage}\arm64\sealgate-stdiod.exe"; DestDir: "{app}"; Check: IsArm64; Flags: ignoreversion
+Source: "{#Stage}\x64\sealgate-stdiod.exe"; DestDir: "{app}"; Check: not IsArm64; Flags: ignoreversion{#SignFlag}
+Source: "{#Stage}\arm64\sealgate-stdiod.exe"; DestDir: "{app}"; Check: IsArm64; Flags: ignoreversion{#SignFlag}
 ; The daemon looks for npx in <exe dir>\runtimes\node on its own.
 Source: "{#Stage}\x64\node\*"; DestDir: "{app}\runtimes\node"; Check: not IsArm64; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#Stage}\arm64\node\*"; DestDir: "{app}\runtimes\node"; Check: IsArm64; Flags: ignoreversion recursesubdirs createallsubdirs

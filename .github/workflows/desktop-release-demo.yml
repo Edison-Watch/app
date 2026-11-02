@@ -61,6 +61,10 @@ on:
         description: 'Notarize the macOS build (false = faster, signed-only; testers must run xattr -dr com.apple.quarantine to open)'
         type: boolean
         default: true
+      sign:
+        description: 'Sign the Windows Beeper setup program (needs the WINDOWS_SIGN_COMMAND variable)'
+        type: boolean
+        default: false
 
 concurrency:
   # cancel-in-progress stays false on purpose, and it is what keeps per-commit
@@ -728,6 +732,48 @@ jobs:
           ls dist/*-${{ matrix.appimageArch }}.AppImage >/dev/null 2>&1 || {
             echo "::error::no ${{ matrix.arch }} AppImage produced"; exit 1; }
 
+  beeper-setup:
+    name: Beeper setup program (Windows)
+    # "SealGate for Beeper" setup (crates/stdiod/installer/windows), from the
+    # two daemon exes the windows legs put on the draft prerelease. The
+    # backend is fixed at build time, so there is one per deployment, named
+    # after its host; a
+    # deployment's /get_sealgate_for_beeper redirects to its own (edison-watch
+    # src/api/installer_scripts.py), which on demo picks the newest
+    # prerelease. Unsigned unless a manual run asks (`sign`); a push never does.
+    needs: [draft, windows]
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      BACKENDS: https://demo-beeper-backend.up.railway.app
+      # An Inno Setup sign tool command, $f the file. The Azure secrets are
+      # for Trusted Signing's signtool dlib; unused otherwise.
+      SIGN_COMMAND: ${{ vars.WINDOWS_SIGN_COMMAND }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: crates/stdiod/installer/windows
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Inno Setup
+        run: |
+          if (-not (Get-Command ISCC.exe -ErrorAction SilentlyContinue) -and
+              -not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) {
+            # 6.x: the script has not been tried with Inno Setup 7.
+            choco install innosetup --version=6.7.4 --no-progress -y
+          }
+
+      - name: Build and upload
+        run: |
+          ./release.ps1 -Tag "v${{ needs.draft.outputs.version }}" `
+            -Version "${{ needs.draft.outputs.version }}" -Backends $env:BACKENDS `
+            -Sign:${{ inputs.sign == true && '$true' || '$false' }} -SignCommand "$env:SIGN_COMMAND"
+
   publish:
     name: Publish prerelease
     # All assets + per-platform beta manifests are uploaded across the build
@@ -735,7 +781,7 @@ jobs:
     # assembled by windows-manifest listing both Windows installers - make the
     # prerelease visible. windows-manifest is in `needs` for exactly that reason:
     # without it the prerelease would go public with no Windows beta.yml at all.
-    needs: [draft, macos, windows, windows-manifest, linux]
+    needs: [draft, macos, windows, windows-manifest, beeper-setup, linux]
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
