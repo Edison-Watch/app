@@ -11,6 +11,7 @@ alternative (`scripts/install-beeper.ps1`); both install into
 | --- | --- |
 | `SealGateBeeper.iss` | The Inno Setup wizard. Each step runs a `sealgate-stdiod setup ...` command (`crates/sealgate-stdiod/src/setup/`) and shows its output. |
 | `build.ps1` | Stages both daemon builds and a checksum-verified Node for x64 and ARM64, then compiles the wizard for one deployment. |
+| `release.ps1` | The release workflows' `beeper-setup` job: fetches the daemons from a release, builds one setup program per backend and uploads it. |
 
 One setup program per deployment: the backend is compiled in (`-Backend`),
 since a downloaded `.exe` cannot tell where it came from. `/backend=URL` on the
@@ -25,8 +26,30 @@ Build (Windows, Inno Setup 6.3+):
 
 CI builds it, installs it silently, checks and uninstalls it, and keeps the
 `.exe` as an artifact: the `installer-windows` job in
-`.github/workflows/stdiod-ci.yml`. Unsigned for now, so Windows shows "Windows
-protected your PC" (More info, then Run anyway).
+`.github/workflows/stdiod-ci.yml`.
+
+## Releases
+
+Each release carries the setup program for its own deployment, as
+`SealGate-Beeper-Setup-<host>.exe`:
+
+| Workflow | Deployment | Signed |
+| --- | --- | --- |
+| `desktop-release.yml` (stable, manual) | `beeper.sealgate.ai` | by default (`sign` input) |
+| `desktop-release-demo.yml` (every push to main) | `demo-beeper-backend.up.railway.app` | only when a manual run asks |
+
+A deployment's `/get_sealgate_for_beeper` redirects to the newest published
+release carrying its file (edison-watch `src/api/installer_scripts.py`), so
+demo gets the newest prerelease and stable the newest release.
+
+Signing uses the repo variable `WINDOWS_SIGN_COMMAND`, an Inno Setup sign tool
+command in which `$f` is the file; it signs the setup program, its uninstaller
+and the bundled daemon. For Azure Trusted Signing, `signtool sign /fd SHA256
+/tr http://timestamp.acs.microsoft.com /td SHA256 /dlib <Azure.CodeSigning.Dlib.dll>
+/dmdf <metadata.json> $f`, with `AZURE_TENANT_ID`, `AZURE_CLIENT_ID` and
+`AZURE_CLIENT_SECRET` as secrets. A run asked to sign without the variable fails
+rather than ship unsigned. Unsigned, Windows shows "Windows protected your PC"
+(More info, then Run anyway).
 
 ## Images
 

@@ -69,6 +69,10 @@ on:
         description: 'Publish immediately (true) or upload into a draft to publish manually (false)'
         type: boolean
         default: false
+      sign:
+        description: 'Sign the Windows Beeper setup program (needs the WINDOWS_SIGN_COMMAND variable)'
+        type: boolean
+        default: true
 
 concurrency:
   group: release-desktop-stable
@@ -735,22 +739,29 @@ jobs:
             echo "::error::no ${{ matrix.arch }} AppImage produced"; exit 1; }
 
   beeper-setup:
-    name: Beeper setup programs (Windows)
+    name: Beeper setup program (Windows)
     # "SealGate for Beeper" setup (crates/stdiod/installer/windows), from the
     # two daemon exes the windows legs put on the draft. The backend is fixed
     # at build time, so there is one per deployment, named after its host; a
-    # deployment's /install.exe redirects to its own (edison-watch
-    # src/api/installer_scripts.py). Add a deployment to BACKENDS to give it one.
+    # deployment's /get_sealgate_for_beeper redirects to its own (edison-watch
+    # src/api/installer_scripts.py). The demo one is built by
+    # desktop-release-demo.yml, from main.
     needs: [draft, windows]
     runs-on: windows-latest
     timeout-minutes: 30
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      BACKENDS: https://beeper.sealgate.ai https://demo-beeper-backend.up.railway.app
+      BACKENDS: https://beeper.sealgate.ai
+      # An Inno Setup sign tool command, $f the file. The Azure secrets are
+      # for Trusted Signing's signtool dlib; unused otherwise.
+      SIGN_COMMAND: ${{ vars.WINDOWS_SIGN_COMMAND }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
     defaults:
       run:
         shell: pwsh
-        working-directory: crates/stdiod
+        working-directory: crates/stdiod/installer/windows
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -762,35 +773,11 @@ jobs:
             choco install innosetup --version=6.7.4 --no-progress -y
           }
 
-      - name: Fetch the daemon exes from the draft
+      - name: Build and upload
         run: |
-          $tag = "v${{ needs.draft.outputs.version }}"
-          gh release download $tag --repo $env:GITHUB_REPOSITORY --dir daemons `
-            --pattern 'sealgate-stdiod-windows-*.exe' --pattern 'SHA256SUMS-windows-*'
-          if ($LASTEXITCODE -ne 0) { exit 1 }
-          # The same checksums the windows legs published.
-          foreach ($arch in 'x64', 'arm64') {
-            $line = (Get-Content "daemons/SHA256SUMS-windows-$arch").Trim()
-            $want = ($line -split '\s+')[0]
-            $got = (Get-FileHash "daemons/sealgate-stdiod-windows-$arch.exe" -Algorithm SHA256).Hash
-            if ($got -ne $want) { throw "checksum mismatch for $arch" }
-          }
-
-      - name: Build and upload one per deployment
-        run: |
-          $version = "${{ needs.draft.outputs.version }}"
-          foreach ($backend in $env:BACKENDS -split '\s+' | Where-Object { $_ }) {
-            # Must match setup_exe_asset_url in edison-watch.
-            $hostName = ($backend -replace '^https?://', '') -replace ':', '-'
-            $name = "SealGate-Beeper-Setup-$hostName"
-            ./installer/windows/build.ps1 `
-              -X64Exe daemons/sealgate-stdiod-windows-x64.exe `
-              -Arm64Exe daemons/sealgate-stdiod-windows-arm64.exe `
-              -Backend $backend -Version $version -OutputName $name -OutDir dist
-            if ($LASTEXITCODE -ne 0) { exit 1 }
-            gh release upload "v$version" --repo $env:GITHUB_REPOSITORY --clobber "dist/$name.exe"
-            if ($LASTEXITCODE -ne 0) { exit 1 }
-          }
+          ./release.ps1 -Tag "v${{ needs.draft.outputs.version }}" `
+            -Version "${{ needs.draft.outputs.version }}" -Backends $env:BACKENDS `
+            -Sign:${{ inputs.sign == true && '$true' || '$false' }} -SignCommand "$env:SIGN_COMMAND"
 
   publish:
     name: Publish release
