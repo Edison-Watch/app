@@ -87,13 +87,9 @@ Root: HKCU; Subkey: "Environment"; ValueType: expandsz; ValueName: "Path"; Value
 [UninstallDelete]
 ; The folder belongs to SealGate alone: also remove what this setup did not
 ; install itself (an earlier PowerShell install, files written at run time).
-; The sign-in and logs live in the user's profile and are kept.
+; The sign-in and logs live in the user's profile; the uninstaller removes
+; them too unless the user keeps them (KeepUserData).
 Type: filesandordirs; Name: "{app}"
-
-[UninstallRun]
-; Stops the daemon and removes its logon task. The sign-in stays in
-; %USERPROFILE%\.config\sealgate-stdiod, as `sealgate-stdiod uninstall` leaves it.
-Filename: "{app}\sealgate-stdiod.exe"; Parameters: "uninstall"; Flags: runhidden waituntilterminated; RunOnceId: "RemoveLogonTask"
 
 [Code]
 const
@@ -1213,8 +1209,38 @@ begin
   RegWriteExpandStringValue(HKCU, 'Environment', 'Path', Kept);
 end;
 
-procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+{ Stop the daemon and remove its logon task before the files go. The sign-in
+  and logs in %USERPROFILE%\.config\sealgate-stdiod outlive that, and a stale
+  sign-in sends the next install to the old account's backend, so they are
+  purged unless the user keeps them. A silent uninstall purges too. }
+function KeepUserData(): Boolean;
+var
+  Labels: TArrayOfString;
 begin
+  Result := False;
+  if UninstallSilent() then
+    exit;
+  SetArrayLength(Labels, 2);
+  Labels[0] := 'Yes (recommended)';
+  Labels[1] := 'No';
+  Result := TaskDialogMsgBox('Remove SealGate''s logs and settings?',
+    'Remove or keep the logs and settings SealGate has stored on this computer.',
+    mbConfirmation, MB_YESNO or MB_DEFBUTTON1, Labels, 0) = IDNO;
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  Params: String;
+  ResultCode: Integer;
+begin
+  if CurUninstallStep = usUninstall then
+  begin
+    Params := 'uninstall --purge';
+    if KeepUserData() then
+      Params := 'uninstall';
+    if FileExists(DaemonExe()) then
+      Exec(DaemonExe(), Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  end;
   if CurUninstallStep = usPostUninstall then
     RemoveFromPath(ExpandConstant('{app}'));
 end;
