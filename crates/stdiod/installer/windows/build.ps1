@@ -95,7 +95,9 @@ try {
     }
     New-Item -ItemType Directory -Path $OutDir -Force | Out-Null
     $iscc = if ($Iscc) { $Iscc } else { Find-Iscc }
-    $defines = @("/DBackend=$Backend", "/DAppVersion=$Version", "/DStage=$stage")
+    $fileVersion = ($Version -split '[-+]')[0]
+    if ($fileVersion -notmatch '^\d+(\.\d+){0,3}$') { throw "version $Version does not start with a numeric version" }
+    $defines = @("/DBackend=$Backend", "/DAppVersion=$Version", "/DFileVersion=$fileVersion", "/DStage=$stage")
     if ($DebugUi) {
         $OutputName = "$OutputName-debug"
         $defines += '/DDebugUi=1'

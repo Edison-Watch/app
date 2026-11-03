@@ -1,7 +1,7 @@
 //! Finding Beeper Desktop on this machine: where it is installed, which build,
 //! and whether its local API answers. Same probes as `scripts/install-beeper.*`.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use super::exe_arch::Arch;
@@ -145,6 +145,83 @@ fn beeper_exe_in(dir: &std::path::Path) -> Option<PathBuf> {
                 && name.to_lowercase().ends_with(".exe")
                 && !name.contains("Uninstall")
         })
+}
+
+/// Close Beeper Desktop and wait until it is gone: a new start while the old
+/// one is still exiting is refused by Beeper's single-instance lock.
+pub async fn quit(app: &Path) {
+    #[cfg(windows)]
+    {
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        let Some(name) = app.file_name().map(|n| n.to_string_lossy().to_string()) else {
+            return;
+        };
+        let _ = tokio::process::Command::new("taskkill")
+            .args(["/F", "/T", "/IM", &name])
+            .creation_flags(CREATE_NO_WINDOW)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .await;
+        let filter = format!("IMAGENAME eq {name}");
+        for _ in 0..20 {
+            let listed = tokio::process::Command::new("tasklist")
+                .args(["/FI", &filter, "/NH", "/FO", "CSV"])
+                .creation_flags(CREATE_NO_WINDOW)
+                .output()
+                .await;
+            let running = listed
+                .map(|o| String::from_utf8_lossy(&o.stdout).contains(&format!("\"{name}\"")))
+                .unwrap_or(false);
+            if !running {
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(500)).await;
+        }
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let Some(name) = app.file_stem().map(|n| n.to_string_lossy().to_string()) else {
+            return;
+        };
+        let _ = tokio::process::Command::new("osascript")
+            .args(["-e", &format!("quit app \"{name}\"")])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .await;
+        let main = format!("{}/Contents/MacOS/", app.display());
+        for i in 0..20 {
+            let running = tokio::process::Command::new("pgrep")
+                .args(["-f", &main])
+                .stdout(std::process::Stdio::null())
+                .status()
+                .await
+                .is_ok_and(|s| s.success());
+            if !running {
+                return;
+            }
+            // Asked politely for 5s; then it is stuck (on a dialog, say).
+            if i == 10 {
+                let _ = tokio::process::Command::new("pkill")
+                    .args(["-f", &main])
+                    .status()
+                    .await;
+            }
+            tokio::time::sleep(Duration::from_millis(500)).await;
+        }
+    }
+    #[cfg(not(any(windows, target_os = "macos")))]
+    let _ = app;
+}
+
+/// Start Beeper Desktop without waiting for it.
+pub fn launch(app: &Path) -> std::io::Result<()> {
+    #[cfg(target_os = "macos")]
+    let spawned = std::process::Command::new("open").arg(app).spawn();
+    #[cfg(not(target_os = "macos"))]
+    let spawned = std::process::Command::new(app).spawn();
+    spawned.map(|_| ())
 }
 
 /// The base URL the Beeper Desktop API answers on, or None. `BEEPER_API_URL`

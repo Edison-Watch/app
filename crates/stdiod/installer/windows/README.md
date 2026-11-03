@@ -30,13 +30,17 @@ CI builds it, installs it silently, checks and uninstalls it, and keeps the
 
 ## Releases
 
-Each release carries the setup program for its own deployment, as
-`SealGate-Beeper-Setup-<host>.exe`:
+Each release carries the setup program for its own deployment, named by the
+host table in `release.ps1` and the desktop app's version:
 
-| Workflow | Deployment | Signed |
-| --- | --- | --- |
-| `desktop-release.yml` (stable, manual) | `beeper.sealgate.ai`, and `dashboard.sealgate.ai` for sealgate.ai/connect | by default (`sign` input) |
-| `desktop-release-demo.yml` (every push to main) | `demo-beeper-backend.up.railway.app` | only when a manual run asks |
+| Workflow | Deployment | File | Signed |
+| --- | --- | --- | --- |
+| `desktop-release.yml` (stable, manual) | `beeper.sealgate.ai` | `SealGate-BeeperEdition-Setup-v<version>.exe` | by default (`sign` input) |
+| | `dashboard.sealgate.ai`, for sealgate.ai/connect | `SealGate-Beeper-Setup-v<version>.exe` | |
+| `desktop-release-demo.yml` (every push to main) | `demo-beeper-backend.up.railway.app` | `SealGate-BeeperEdition-demo-Setup-v<version>.exe` | only when a manual run asks |
+
+A new deployment needs a row in that table and in `_SETUP_LABELS` in
+edison-watch, which finds the file by the same name.
 
 A deployment's `/get_sealgate_for_beeper` redirects to the newest published
 release carrying its file (edison-watch `src/api/installer_scripts.py`), so

@@ -737,10 +737,9 @@ jobs:
     # "SealGate for Beeper" setup (crates/stdiod/installer/windows), from the
     # two daemon exes the windows legs put on the draft prerelease. The
     # backend is fixed at build time, so there is one per deployment, named
-    # after its host; a
-    # deployment's /get_sealgate_for_beeper redirects to its own (edison-watch
-    # src/api/installer_scripts.py), which on demo picks the newest
-    # prerelease. Unsigned unless a manual run asks (`sign`); a push never does.
+    # by release.ps1's host table; a deployment's /get_sealgate_for_beeper
+    # redirects to its own (edison-watch src/api/installer_scripts.py), which
+    # on demo picks the newest prerelease. Unsigned unless a manual run asks (`sign`); a push never does.
     needs: [draft, windows]
     runs-on: windows-latest
     timeout-minutes: 30

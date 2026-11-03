@@ -21,6 +21,11 @@
 #ifndef AppVersion
   #define AppVersion "0.0.0"
 #endif
+; The numeric part of AppVersion (0.6.19 for 0.6.19-beta.3): Windows file
+; versions take numbers only. build.ps1 passes it.
+#ifndef FileVersion
+  #define FileVersion "0.0.0"
+#endif
 #ifndef Stage
   #define Stage "stage"
 #endif
@@ -39,6 +44,9 @@
 AppId={{6F1E9B7C-2D4A-4E7B-9C3F-5A8D1B2E4C60}
 AppName=SealGate for Beeper
 AppVersion={#AppVersion}
+VersionInfoVersion={#FileVersion}
+VersionInfoTextVersion={#AppVersion}
+VersionInfoProductTextVersion={#AppVersion}
 AppPublisher=SealGate
 AppPublisherURL=https://sealgate.ai
 DefaultDirName={localappdata}\Programs\sealgate-stdiod
@@ -90,9 +98,13 @@ Root: HKCU; Subkey: "Environment"; ValueType: expandsz; ValueName: "Path"; Value
 ; The sign-in and logs live in the user's profile; the uninstaller removes
 ; them too unless the user keeps them (KeepUserData).
 Type: filesandordirs; Name: "{app}"
+; Beeper's MCP proxy keeps SealGate's sign-in to Beeper here. Useless without
+; the daemon, and a stale one breaks the next install's approval.
+Type: filesandordirs; Name: "{%USERPROFILE}\.beeper-mcp-auth"
 
 [Code]
 const
+  UNINSTALL_KEY = 'Software\Microsoft\Windows\CurrentVersion\Uninstall';
   EXIT_OK = 0;
   EXIT_NOT_YET = 2;
   EXIT_STOPPED = 130;
@@ -101,6 +113,10 @@ const
   STEP_LOGIN = 1;
   STEP_BEEPER = 2;
   STEP_APPROVE = 3;
+  { Restarting Beeper: after its first-run setup (Beeper page), and before
+    asking again after a missed Allow (Allow page). }
+  STEP_RESTART = 4;
+  STEP_RESTART_ALLOW = 5;
   APPROVE_TIMEOUT = 180;
   { What the Beeper page found, which decides its text and big button. }
   BEEPER_CHECKING = 0;
@@ -152,6 +168,12 @@ var
   { What each page achieved, for the last page. }
   SignInDone, BeeperDone, AllowDone: Boolean;
   BeeperState: Integer;
+  { Beeper had never run on this account when setup started. Its first-run
+    setup swallows SealGate's request to be let in, and only a restart clears
+    it, so the Beeper page waits for the person and then restarts it. }
+  BeeperFresh: Boolean;
+  { The last Allow timed out: restart Beeper before asking again. }
+  AllowMissed: Boolean;
   ClosingEarly: Boolean;
   { The tick lists: one row is an icon, a label, a detail on the right and
     an optional progress bar under it, shown while the row is busy. }
@@ -562,6 +584,7 @@ begin
           SetRow(StepRow, RS_BUSY, 'stopping...')
         else
           SetRow(StepRow, RS_BUSY, ApproveCountdown());
+      STEP_RESTART, STEP_RESTART_ALLOW: SetRow(StepRow, RS_BUSY, 'restarting Beeper');
     end;
     exit;
   end;
@@ -781,6 +804,9 @@ end;
 const
   BEEPER_SIGN_IN = 'Sign in to Beeper, turn on Settings > Developers > MCP, then ' +
     'click Continue here.';
+  BEEPER_FIRST_RUN = 'Finish setting up Beeper: sign in and turn on Settings > ' +
+    'Developers > MCP. Then click Continue here, and Beeper restarts once so it can ' +
+    'show SealGate''s request.';
 
 { Beeper is installed and the right build: ready once it answers, which it
   does once the person has signed in and turned on MCP. }
@@ -789,7 +815,9 @@ var
   Output: String;
 begin
   UpdateBeeperRows(Installed);
-  if Stdiod('setup status', Output) = EXIT_OK then
+  { On a first run Beeper answers before its own setup is done, so its
+    answering is not ready: wait for the person either way. }
+  if not BeeperFresh and (Stdiod('setup status', Output) = EXIT_OK) then
   begin
     SetRow(RowReady, RS_DONE, '');
     BeeperDone := True;
@@ -798,7 +826,9 @@ begin
   end;
   Stdiod('setup open-beeper', Output);
   SetRow(RowReady, RS_BUSY, '');
-  if Pos('already installed', Installed) > 0 then
+  if BeeperFresh then
+    SetBeeperState(BEEPER_NOT_READY, 'Beeper is installed and open. ' + BEEPER_FIRST_RUN, 'Continue')
+  else if Pos('already installed', Installed) > 0 then
     SetBeeperState(BEEPER_NOT_READY, 'Beeper is already installed. ' + BEEPER_SIGN_IN, 'Continue')
   else
     SetBeeperState(BEEPER_NOT_READY, 'Beeper is installed and open. ' + BEEPER_SIGN_IN, 'Continue');
@@ -816,6 +846,11 @@ begin
   if BeeperState = BEEPER_READY then
   begin
     MoveOn();
+    exit;
+  end;
+  if BeeperFresh then
+  begin
+    StartStep(BeeperPage, STEP_RESTART, 'setup restart-beeper --timeout 60', RowReady);
     exit;
   end;
   { Not ready when the page last looked: look again. }
@@ -838,6 +873,12 @@ var
   Output: String;
   Code: Integer;
 begin
+  if AllowMissed then
+  begin
+    AllowMissed := False;
+    StartStep(AllowPage, STEP_RESTART_ALLOW, 'setup restart-beeper --timeout 60', RowAllow);
+    exit;
+  end;
   Show(AllowPage, '');
   SetRow(RowAllow, RS_PENDING, '');
   SetRow(RowRestart, RS_PENDING, '');
@@ -864,7 +905,7 @@ begin
   if Code = EXIT_STOPPED then
   begin
     EndBusyRows(First, Last, RS_PENDING, 'stopped');
-    if Kind = STEP_BEEPER then
+    if (Kind = STEP_BEEPER) or (Kind = STEP_RESTART) then
       SetBeeperState(BEEPER_RETRY, 'Stopped. Click Check again to look for Beeper ' +
         'again, or Skip.', 'Check again');
     Show(StepPage, '');
@@ -908,10 +949,26 @@ begin
         MoveOn();
       end else begin
         SetRow(RowAllow, RS_FAILED, 'timed out');
+        AllowMissed := True;
         Show(AllowPage, 'Beeper did not get your Allow in time. Click Connect Beeper with ' +
-          'SealGate to try again, and look for the pop-up behind your other windows.' + #13#10#13#10 +
-          Output);
+          'SealGate to try again: Beeper restarts first, so its pop-up can show. Look ' +
+          'for the pop-up behind your other windows too.' + #13#10#13#10 + Output);
       end;
+    STEP_RESTART:
+      if Code = EXIT_OK then
+      begin
+        BeeperFresh := False;
+        SetRow(RowReady, RS_DONE, '');
+        BeeperDone := True;
+        MoveOn();
+      end else begin
+        SetRow(RowReady, RS_BUSY, 'not yet');
+        Show(BeeperPage, Output);
+      end;
+    { Ask again whether or not Beeper came back: the approve step says why
+      if it did not. }
+    STEP_RESTART_ALLOW:
+      AllowClick(nil);
   end;
 end;
 
@@ -984,6 +1041,7 @@ var
 begin
   Backend := GetBackend();
   StepKind := STEP_NONE;
+  BeeperFresh := not DirExists(ExpandConstant('{userappdata}\BeeperTexts'));
   WizardForm.CancelButton.OnClick := @CancelClick;
   WizardForm.OnCloseQuery := @WizardCloseQuery;
   SignInPage := CreateOutputMsgMemoPage(wpInstalling,
@@ -1228,6 +1286,101 @@ begin
     mbConfirmation, MB_YESNO or MB_DEFBUTTON1, Labels, 0) = IDNO;
 end;
 
+{ Beeper Desktop's per-user uninstall entry: the command that removes it
+  silently, and its exe. False when Beeper is not installed. }
+function FindBeeper(var Command, Exe: String): Boolean;
+var
+  Names: TArrayOfString;
+  I, Comma: Integer;
+  Key, Name: String;
+begin
+  Result := False;
+  if not RegGetSubkeyNames(HKCU, UNINSTALL_KEY, Names) then
+    exit;
+  for I := 0 to GetArrayLength(Names) - 1 do
+  begin
+    Key := UNINSTALL_KEY + '\' + Names[I];
+    if RegQueryStringValue(HKCU, Key, 'DisplayName', Name) and (Pos('Beeper', Name) = 1) then
+    begin
+      if not RegQueryStringValue(HKCU, Key, 'QuietUninstallString', Command) then
+      begin
+        if not RegQueryStringValue(HKCU, Key, 'UninstallString', Command) then
+          continue;
+        Command := Command + ' /S';
+      end;
+      { DisplayIcon is "C:\...\Beeper.exe",0 }
+      Exe := '';
+      if RegQueryStringValue(HKCU, Key, 'DisplayIcon', Exe) then
+      begin
+        Comma := Pos('.exe', Lowercase(Exe));
+        if Comma > 0 then
+          Exe := RemoveQuotes(Copy(Exe, 1, Comma + 3));
+      end;
+      Result := True;
+      exit;
+    end;
+  end;
+end;
+
+{ Split '"C:\path\Uninstall Beeper.exe" /currentuser /S' into the exe and
+  its parameters. }
+procedure SplitCommand(Command: String; var FileName, Params: String);
+var
+  P: Integer;
+begin
+  P := Pos('.exe', Lowercase(Command));
+  if P = 0 then
+  begin
+    FileName := RemoveQuotes(Trim(Command));
+    Params := '';
+    exit;
+  end;
+  FileName := RemoveQuotes(Trim(Copy(Command, 1, P + 3)));
+  Params := Copy(Command, P + 4, Length(Command));
+  if (Length(Params) > 0) and (Params[1] = '"') then
+    Delete(Params, 1, 1);
+  Params := Trim(Params);
+end;
+
+{ Offer to remove Beeper too, with its data: its own uninstaller leaves
+  %APPDATA%\BeeperTexts behind. Off by default: it is the user's messaging
+  app, and the folder holds their local chats. }
+procedure OfferBeeperUninstall();
+var
+  Labels: TArrayOfString;
+  Command, Exe, FileName, Params: String;
+  ResultCode, Waited: Integer;
+begin
+  if UninstallSilent() or not FindBeeper(Command, Exe) then
+    exit;
+  SetArrayLength(Labels, 2);
+  Labels[0] := 'Yes';
+  Labels[1] := 'No (recommended)';
+  if TaskDialogMsgBox('Also uninstall Beeper?',
+    'Remove Beeper and the chats and settings it has stored on this computer. ' +
+    'Your Beeper account is not affected.',
+    mbConfirmation, MB_YESNO or MB_DEFBUTTON2, Labels, 0) <> IDYES then
+    exit;
+  { A running Beeper holds its files open, and its uninstaller fails. }
+  if Exe <> '' then
+    Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /T /IM "' + ExtractFileName(Exe) + '"', '',
+      SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  SplitCommand(Command, FileName, Params);
+  if not Exec(FileName, Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+    exit;
+  { An NSIS uninstaller copies itself to %TEMP% and returns at once, so wait for
+    the app itself to go. }
+  Waited := 0;
+  while (Exe <> '') and FileExists(Exe) and (Waited < 60) do
+  begin
+    Sleep(1000);
+    Waited := Waited + 1;
+  end;
+  { Only once Beeper is gone: its data without the app just signs the user out. }
+  if (Exe = '') or not FileExists(Exe) then
+    DelTree(ExpandConstant('{userappdata}\BeeperTexts'), True, True, True);
+end;
+
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   Params: String;
@@ -1240,6 +1393,7 @@ begin
       Params := 'uninstall';
     if FileExists(DaemonExe()) then
       Exec(DaemonExe(), Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    OfferBeeperUninstall();
   end;
   if CurUninstallStep = usPostUninstall then
     RemoveFromPath(ExpandConstant('{app}'));

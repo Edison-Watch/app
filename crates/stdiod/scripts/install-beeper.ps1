@@ -880,6 +880,30 @@ function Wait-BeeperApi([int]$Seconds) {
     return ''
 }
 
+# A console to ask on. `irm ... | iex` keeps the console's input; a CI or agent
+# run has it redirected, and then nothing can answer.
+function Test-CanAsk {
+    if ($script:DRY_RUN) { return $false }
+    try { return -not [Console]::IsInputRedirected } catch { return $false }
+}
+
+# Close Beeper Desktop ($App, its exe), wait for it to be gone, and start it
+# again. A request made during Beeper's first-run setup never shows, and only a
+# fresh start clears it. Waiting matters: Beeper refuses to start while the old
+# instance is still exiting.
+function Restart-BeeperDesktop([string]$App) {
+    Info 'restarting Beeper'
+    $name = [System.IO.Path]::GetFileNameWithoutExtension($App)
+    Stop-Process -Name $name -Force -ErrorAction SilentlyContinue
+    for ($i = 0; $i -lt 20; $i++) {
+        if (-not (Get-Process -Name $name -ErrorAction SilentlyContinue)) { break }
+        Start-Sleep -Milliseconds 500
+    }
+    try { Start-Process -FilePath $App | Out-Null } catch { Warn "could not start Beeper: $($_.Exception.Message)" }
+}
+
+$script:PREAUTH_RETRIED = $false
+
 function Ensure-BeeperDesktop {
     Step 'Beeper Desktop'
     if ($script:DRY_RUN) {
@@ -907,10 +931,26 @@ function Ensure-BeeperDesktop {
         return
     }
     Warn 'client API: no response on 127.0.0.1:23373-23378'
+    # Beeper creates this on its first start. Without it, this run is the
+    # first, and Beeper's first-run setup will swallow SealGate's request.
+    $fresh = -not (Test-Path (Join-Path $env:APPDATA 'BeeperTexts'))
     if (-not $app) {
         if (Install-BeeperDesktop) { $app = Get-BeeperDesktopExe }
     }
-    if ($app) {
+    if ($app -and $fresh -and (Test-CanAsk)) {
+        Info "opening $app"
+        try { Start-Process -FilePath $app | Out-Null } catch { Warn "could not start Beeper: $($_.Exception.Message)" }
+        Todo 'finish setting up Beeper: sign in, then turn on Settings > Developers > MCP'
+        $null = Read-Host "   press Enter here when that is done (Beeper restarts once so it can show SealGate's request)"
+        Restart-BeeperDesktop $app
+        Info 'waiting up to 60s for the client API'
+        $base = Wait-BeeperApi 60
+        if ($base) {
+            Ok "client API: responding at $base"
+            $script:BEEPER_READY = $true
+            return
+        }
+    } elseif ($app) {
         Info "opening $app"
         $opened = $false
         try { Start-Process -FilePath $app | Out-Null; $opened = $true } catch { Warn "could not start Beeper: $($_.Exception.Message)" }
@@ -966,6 +1006,66 @@ function Restart-DaemonAfterGrant {
     }
 }
 
+# Ports browsers refuse to open (the Fetch spec's "bad ports") within the range
+# the proxy picks its OAuth callback port from (3335-49150). The proxy derives
+# the port from a hash of the Beeper URL, and http://127.0.0.1:23373/v0/mcp
+# lands on 6669, so the browser never reaches the callback.
+$script:BLOCKED_PORTS = @(3659, 4045, 4190, 5060, 5061, 6000, 6566, 6665, 6666, 6667, 6668, 6669, 6679, 6697, 10080)
+# The proxy's own default; passing it explicitly keeps the same cached grant.
+$script:DEFAULT_MCP_URL = 'http://localhost:23373/v0/mcp'
+
+function Test-PortFree([int]$Port) {
+    try {
+        $l = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, $Port)
+        $l.Start(); $l.Stop(); return $true
+    } catch { return $false }
+}
+
+# The first port after $Port a browser opens and nothing listens on.
+function Get-SafeCallbackPort([int]$Port) {
+    $p = $Port + 1
+    while ($p -in $script:BLOCKED_PORTS -or -not (Test-PortFree $p)) { $p++ }
+    return $p
+}
+
+# Start the proxy with one MCP initialize on stdin. $Port forces a callback
+# port; 0 lets the proxy choose. npx is a .cmd shim, so it runs through cmd.exe;
+# cmd also does the file redirection. Our end of stdin stays open while OAuth
+# completes. BEEPER_DESKTOP_BASE_URL is dropped: the daemon's child runs
+# without it, and a grant cached for another URL would not reach it.
+function Start-OauthProbe([string]$OutFile, [string]$ErrFile, [int]$Port) {
+    Set-Content -Path $OutFile -Value '' -NoNewline
+    Set-Content -Path $ErrFile -Value '' -NoNewline
+    $init = '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"install-beeper","version":"1.0.0"}}}'
+    $line = "npx -y $($script:MCP_PKG)"
+    if ($Port -gt 0) {
+        $url = if ($script:MCP_ENDPOINT) { $script:MCP_ENDPOINT } else { $script:DEFAULT_MCP_URL }
+        $line += " $url $Port"
+    } elseif ($script:MCP_ENDPOINT) {
+        $line += " $($script:MCP_ENDPOINT)"
+    }
+    $line += " 1>""$OutFile"" 2>""$ErrFile"""
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = 'cmd.exe'
+    $psi.Arguments = "/d /s /c ""$line"""
+    $psi.UseShellExecute = $false
+    $psi.RedirectStandardInput = $true
+    $psi.CreateNoWindow = $true
+    $null = $psi.EnvironmentVariables.Remove('BEEPER_DESKTOP_BASE_URL')
+    $proc = [System.Diagnostics.Process]::Start($psi)
+    $proc.StandardInput.WriteLine($init)
+    $proc.StandardInput.Flush()
+    return $proc
+}
+
+# Teardown: EOF on stdin winds the proxy down; the tree kill catches a child
+# that ignores it.
+function Stop-OauthProbe($Proc) {
+    try { $Proc.StandardInput.Close() } catch {}
+    Start-Sleep -Seconds 1
+    if (-not $Proc.HasExited) { $null = Invoke-Native 'taskkill' @('/pid', "$($Proc.Id)", '/t', '/f') }
+}
+
 # Spawn the proxy, send one MCP initialize over stdio, and poll for a reply;
 # the proxy only answers once the OAuth grant exists. Beeper raises its
 # approve/deny prompt on the first connect and caches the grant for later
@@ -983,26 +1083,16 @@ function Invoke-PrimeOauthGrant {
     }
     Resolve-McpEndpoint
     if ($script:MCP_ENDPOINT) { Info "Beeper answers on a non-default port; pointing the proxy at $($script:MCP_ENDPOINT)" }
+    if ($env:BEEPER_DESKTOP_BASE_URL) {
+        Warn "ignoring BEEPER_DESKTOP_BASE_URL ($($env:BEEPER_DESKTOP_BASE_URL)): SealGate's background service should not use it"
+        Todo 'remove it from your environment so the background service agrees with this step'
+    }
     $dir = Join-Path ([System.IO.Path]::GetTempPath()) ("install-beeper-" + [System.IO.Path]::GetRandomFileName())
     New-Item -ItemType Directory -Path $dir -Force | Out-Null
     $outFile = Join-Path $dir 'out'
     $errFile = Join-Path $dir 'err'
-    $init = '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"install-beeper","version":"1.0.0"}}}'
-    # npx is a .cmd shim, so it runs through cmd.exe; cmd also does the file
-    # redirection. Our end of stdin stays open while OAuth completes, exactly
-    # like the bash script's 'sleep' keeping the pipe alive.
-    $line = "npx -y $($script:MCP_PKG)"
-    if ($script:MCP_ENDPOINT) { $line += " $($script:MCP_ENDPOINT)" }
-    $line += " 1>""$outFile"" 2>""$errFile"""
-    $psi = New-Object System.Diagnostics.ProcessStartInfo
-    $psi.FileName = 'cmd.exe'
-    $psi.Arguments = "/d /s /c ""$line"""
-    $psi.UseShellExecute = $false
-    $psi.RedirectStandardInput = $true
-    $psi.CreateNoWindow = $true
-    $proc = [System.Diagnostics.Process]::Start($psi)
-    $proc.StandardInput.WriteLine($init)
-    $proc.StandardInput.Flush()
+    $proc = Start-OauthProbe $outFile $errFile 0
+    $forced = 0
     Todo 'Beeper is opening a pop-up asking you to allow access. Click Allow.'
     Info "if you don't see the Beeper approval pop-up, check whether it is behind other windows"
     Info "waiting up to $($script:OAUTH_WAIT)s"
@@ -1011,6 +1101,20 @@ function Invoke-PrimeOauthGrant {
     $done = $false
     while ($waited -lt $script:OAUTH_WAIT) {
         if ((Read-SharedFile $outFile) -match '"result"') { $done = $true; break }
+        # A callback port the browser blocks fails every time, so restart on
+        # one it opens. The proxy then drops its old registration and keeps the
+        # new port for later runs, the daemon's included.
+        if ($forced -eq 0) {
+            $m = [regex]::Match((Read-SharedFile $errFile), '(?:callback|client) port: (\d+)')
+            if ($m.Success -and [int]$m.Groups[1].Value -in $script:BLOCKED_PORTS) {
+                $port = [int]$m.Groups[1].Value
+                $forced = Get-SafeCallbackPort $port
+                Warn "Beeper's sign-in picked port $port, which browsers block; retrying on port $forced"
+                Stop-OauthProbe $proc
+                $proc = Start-OauthProbe $outFile $errFile $forced
+                $authUrl = ''
+            }
+        }
         if ($proc.HasExited) { break }
         if ($waited -gt 0 -and $waited % 30 -eq 0) {
             Info "still waiting for you to click Allow in the Beeper pop-up ($($script:OAUTH_WAIT - $waited)s left)"
@@ -1024,16 +1128,26 @@ function Invoke-PrimeOauthGrant {
         $waited++
     }
     if (-not $done -and (Read-SharedFile $outFile) -match '"result"') { $done = $true }
-    # Teardown: EOF on stdin winds the proxy down; the tree kill catches a
-    # child that ignores it.
-    try { $proc.StandardInput.Close() } catch {}
-    Start-Sleep -Seconds 1
-    if (-not $proc.HasExited) { $null = Invoke-Native 'taskkill' @('/pid', "$($proc.Id)", '/t', '/f') }
+    Stop-OauthProbe $proc
     if ($done) {
-        if ($waited -le 3) { Ok 'MCP handshake completed immediately (grant already cached)' } else { Ok 'OAuth grant approved; the MCP handshake completed' }
+        if ($waited -le 3 -and $forced -eq 0) { Ok 'MCP handshake completed immediately (grant already cached)' } else { Ok 'OAuth grant approved; the MCP handshake completed' }
         Remove-Item $dir -Recurse -Force -ErrorAction SilentlyContinue
         Restart-DaemonAfterGrant
         return
+    }
+    # Beeper may have swallowed the request (its first-run setup does): a fresh
+    # start shows it. Asked, not done: restarting closes the person's Beeper.
+    $bapp = Get-BeeperDesktopExe
+    if (-not $script:PREAUTH_RETRIED -and $bapp -and (Test-CanAsk)) {
+        $ans = Read-Host '   Beeper did not show the request? Restart Beeper and ask again? [Y/n]'
+        if ($ans -ne 'n' -and $ans -ne 'N') {
+            Remove-Item $dir -Recurse -Force -ErrorAction SilentlyContinue
+            $script:PREAUTH_RETRIED = $true
+            Restart-BeeperDesktop $bapp
+            $null = Wait-BeeperApi 60
+            Invoke-PrimeOauthGrant
+            return
+        }
     }
     Warn "you didn't allow access in Beeper within $($script:OAUTH_WAIT)s, so SealGate can't read your Beeper chats yet"
     Info 'the pop-up was probably hidden behind your other windows'
@@ -1470,6 +1584,13 @@ function Invoke-CmdUninstall {
     if (Test-Command 'sealgate-stdiod') {
         $null = Invoke-Live 'sealgate-stdiod' @('server', 'remove', $script:SERVER_NAME)
         $null = Invoke-Live 'sealgate-stdiod' @('uninstall')
+    }
+    # Beeper's MCP proxy keeps SealGate's sign-in to Beeper here. Useless
+    # without the daemon, and a stale one breaks the next install's approval.
+    $auth = Join-Path $script:HOME_DIR '.beeper-mcp-auth'
+    if (Test-Path $auth) {
+        if ($script:DRY_RUN) { Info "would remove $auth" }
+        else { Remove-Item -Path $auth -Recurse -Force -ErrorAction SilentlyContinue; Ok "removed $auth" }
     }
     Log 'uninstall complete. Approved-server removal may need a dashboard/admin action; Beeper Desktop was left untouched.'
 }

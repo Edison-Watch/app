@@ -8,8 +8,8 @@
   desktop-release-demo.yml for demo). Downloads the two daemon exes the windows
   legs put on the draft, checks them against the checksums published with them,
   builds one setup program per backend with build.ps1 and uploads each as
-  SealGate-Beeper-Setup-<host>.exe, the name edison-watch's
-  /get_sealgate_for_beeper redirects to (src/api/installer_scripts.py).
+  SealGate-<label>-Setup-v<version>.exe, the name edison-watch's
+  /get_sealgate_for_beeper looks for (src/api/installer_scripts.py).
 
   -Sign signs the setup program, its uninstaller and the bundled daemon with
   -SignCommand, an Inno Setup sign tool command in which $f is the file. It
@@ -41,11 +41,20 @@ foreach ($arch in 'x64', 'arm64') {
     if ($got -ne $want) { throw "checksum mismatch for the $arch daemon" }
 }
 
+# Backend host -> the label its setup program is named by. Must match
+# _SETUP_LABELS in edison-watch's src/api/installer_scripts.py.
+$labels = @{
+    'beeper.sealgate.ai'                 = 'BeeperEdition'
+    'dashboard.sealgate.ai'              = 'Beeper'
+    'demo-beeper-backend.up.railway.app' = 'BeeperEdition-demo'
+}
+
 $dist = Join-Path $PSScriptRoot 'dist'
 foreach ($backend in $Backends -split '\s+' | Where-Object { $_ }) {
-    # Must match setup_exe_asset_url in edison-watch.
-    $hostName = ($backend -replace '^https?://', '') -replace ':', '-'
-    $name = "SealGate-Beeper-Setup-$hostName"
+    $hostName = ([System.Uri]$backend).Authority
+    $label = $labels[$hostName]
+    if (-not $label) { throw "no setup program label for $hostName; add it here and in edison-watch" }
+    $name = "SealGate-$label-Setup-v$Version"
     $build = @{
         X64Exe     = Join-Path $daemons 'sealgate-stdiod-windows-x64.exe'
         Arm64Exe   = Join-Path $daemons 'sealgate-stdiod-windows-arm64.exe'
