@@ -808,6 +808,7 @@ function Install-BeeperDesktop {
         return $false
     }
     Ok "installed Beeper Desktop: $app"
+    Set-InstalledBeeperMark
     return $true
 }
 
@@ -866,6 +867,7 @@ function Install-BeeperDesktopDirect([string]$Arch, [string]$Fix) {
         return $false
     }
     Ok "installed Beeper Desktop ($Arch): $app"
+    Set-InstalledBeeperMark
     return $true
 }
 
@@ -903,6 +905,16 @@ function Restart-BeeperDesktop([string]$App) {
 }
 
 $script:PREAUTH_RETRIED = $false
+
+# Record that SealGate installed Beeper, so "SealGate for Beeper"'s uninstaller
+# offers to remove it ticked (SEALGATE_KEY in installer/windows/SealGateBeeper.iss).
+function Set-InstalledBeeperMark {
+    try {
+        $key = 'HKCU:\Software\SealGate\Beeper'
+        New-Item -Path $key -Force | Out-Null
+        Set-ItemProperty -Path $key -Name 'InstalledBeeper' -Value '1'
+    } catch { Vlog "could not record that Beeper was installed here: $($_.Exception.Message)" }
+}
 
 function Ensure-BeeperDesktop {
     Step 'Beeper Desktop'
