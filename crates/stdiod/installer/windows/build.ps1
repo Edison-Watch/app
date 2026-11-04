@@ -77,6 +77,12 @@ function Find-Iscc {
 }
 
 foreach ($exe in @($X64Exe, $Arm64Exe)) { if (-not (Test-Path $exe)) { throw "not found: $exe" } }
+# Windows file versions are numbers only: the part before any -beta.N or
+# +build suffix. Checked before the Node downloads, so a bad one fails fast.
+$fileVersion = ($Version -split '[-+]')[0]
+if ($fileVersion -notmatch '^\d+(\.\d+){0,3}$') {
+    throw "version $Version must be one to four numbers (like 0.6.19), optionally followed by -suffix or +suffix"
+}
 $work = Join-Path ([System.IO.Path]::GetTempPath()) ("sealgate-beeper-setup-" + [guid]::NewGuid().ToString('N'))
 $stage = Join-Path $work 'stage'
 try {
@@ -95,7 +101,7 @@ try {
     }
     New-Item -ItemType Directory -Path $OutDir -Force | Out-Null
     $iscc = if ($Iscc) { $Iscc } else { Find-Iscc }
-    $defines = @("/DBackend=$Backend", "/DAppVersion=$Version", "/DStage=$stage")
+    $defines = @("/DBackend=$Backend", "/DAppVersion=$Version", "/DFileVersion=$fileVersion", "/DStage=$stage")
     if ($DebugUi) {
         $OutputName = "$OutputName-debug"
         $defines += '/DDebugUi=1'

@@ -134,6 +134,7 @@ RELOGIN=0           # force a fresh `sealgate-stdiod login` even if already auth
 NEW_DEVICE=0        # register as a new device instead of re-binding to this machine's record
 NO_PREAUTH=0        # skip the OAuth-grant priming step during install
 BEEPER_READY=0      # set by ensure_beeper_desktop when Beeper's client API answers
+PREAUTH_RETRIED=0   # prime_oauth_grant restarts Beeper and asks again at most once
 STDIOD_CONNECTED=0  # set by ensure_stdiod_supervised once the daemon registers
 FROM_SOURCE=0       # cargo-build sealgate-stdiod instead of downloading the release binary
 
@@ -872,6 +873,28 @@ wait_beeper_api() {
   return 1
 }
 
+# A terminal to ask on. `curl ... | bash` gives the script the pipe as stdin,
+# so questions go through /dev/tty, which a CI or agent run does not have.
+have_tty() { [ "$DRY_RUN" -eq 0 ] && { : </dev/tty; } 2>/dev/null; }
+
+# Quit Beeper Desktop ($1, the .app), wait for it to be gone, and open it
+# again. A request made during Beeper's first-run setup never shows, and only
+# a fresh start clears it. Waiting matters: Beeper refuses to start while the
+# old instance is still exiting.
+restart_beeper_app() {
+  local app="$1" main i
+  main="$app/Contents/MacOS/"
+  info "restarting Beeper"
+  osascript -e "quit app \"$(basename "$app" .app)\"" >/dev/null 2>&1 || true
+  for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+    pgrep -f "$main" >/dev/null 2>&1 || break
+    # Asked politely for 5s; after that it is stuck (on a dialog, say).
+    [ "$i" -eq 10 ] && pkill -f "$main" 2>/dev/null
+    sleep 0.5
+  done
+  open "$app" 2>/dev/null
+}
+
 ensure_beeper_desktop() {
   step "Beeper Desktop"
   if [ "$DRY_RUN" -eq 1 ]; then
@@ -904,12 +927,29 @@ ensure_beeper_desktop() {
 
   case "$(uname -s)" in
     Darwin)
+      # Beeper creates this on its first start. Without it, this run is the
+      # first, and Beeper's first-run setup will swallow SealGate's request.
+      local fresh=0
+      [ -d "$HOME/Library/Application Support/BeeperTexts" ] || fresh=1
       # Install first if needed, then re-read the path: opening by bundle name
       # fails silently if the cask ever ships a different display name.
       if [ -z "$app" ] && install_beeper_desktop; then
         app="$(beeper_desktop_app)" || app=""
       fi
-      if [ -n "$app" ]; then
+      if [ -n "$app" ] && [ "$fresh" -eq 1 ] && have_tty; then
+        info "opening $app"
+        open "$app" 2>/dev/null
+        todo "finish setting up Beeper: sign in, then turn on Settings > Developers > MCP"
+        printf '   press Enter here when that is done (Beeper restarts once so it can show SealGate'"'"'s request) ' >/dev/tty
+        read -r _ </dev/tty || true
+        restart_beeper_app "$app"
+        info "waiting up to 60s for the client API"
+        if base="$(wait_beeper_api 60)"; then
+          ok "client API: responding at $base"
+          BEEPER_READY=1
+          return 0
+        fi
+      elif [ -n "$app" ]; then
         info "opening $app"
         if open "$app" 2>/dev/null && [ "$BEEPER_WAIT" -gt 0 ]; then
           # An app that is already signed in with MCP on comes up in seconds.
@@ -1010,6 +1050,47 @@ stop_probe() {
 # daemon's first spawn stalling on an unseen dialog. Mechanism: spawn the
 # proxy, send one MCP initialize over stdio, and poll for a reply; the proxy
 # only answers once the grant exists.
+# Ports browsers refuse to open (the Fetch spec's "bad ports") within the range
+# the proxy picks its OAuth callback port from (3335-49150). The proxy derives
+# the port from a hash of the Beeper URL, and http://127.0.0.1:23373/v0/mcp
+# lands on 6669, so the browser never reaches the callback.
+BLOCKED_PORTS=" 3659 4045 4190 5060 5061 6000 6566 6665 6666 6667 6668 6669 6679 6697 10080 "
+# The proxy's own default; passing it explicitly keeps the same cached grant.
+DEFAULT_MCP_URL="http://localhost:23373/v0/mcp"
+
+port_blocked() { case "$BLOCKED_PORTS" in *" $1 "*) return 0 ;; esac; return 1; }
+port_in_use() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
+
+# The first port after $1 a browser opens and nothing listens on.
+safe_callback_port() {
+  local p=$(($1 + 1))
+  while port_blocked "$p" || port_in_use "$p"; do p=$((p + 1)); done
+  printf '%s' "$p"
+}
+
+# Start the proxy in the background with one MCP initialize on stdin; sets
+# $pid. $1 is a callback port to force, or empty to let the proxy choose. The
+# sleep holds stdin open while OAuth completes and its pid is recorded so
+# teardown can end it. BEEPER_DESKTOP_BASE_URL is dropped: the daemon's child
+# runs without it, and a grant cached for another URL would not reach it.
+start_oauth_probe() {
+  : >"$dir/out"; : >"$dir/err"
+  if [ -n "$1" ]; then
+    { printf '%s\n' "$init"; sleep "$OAUTH_WAIT" & echo $! >"$dir/feeder.pid"; wait; } 2>/dev/null \
+      | env -u BEEPER_DESKTOP_BASE_URL npx -y "$MCP_PKG" "${MCP_ENDPOINT:-$DEFAULT_MCP_URL}" "$1" \
+        >"$dir/out" 2>"$dir/err" &
+  else
+    # ${MCP_ENDPOINT:+...} expands to nothing when unset, so the proxy keeps its
+    # built-in default; the guarded form stays safe under bash 3.2's set -u.
+    { printf '%s\n' "$init"; sleep "$OAUTH_WAIT" & echo $! >"$dir/feeder.pid"; wait; } 2>/dev/null \
+      | env -u BEEPER_DESKTOP_BASE_URL npx -y "$MCP_PKG" ${MCP_ENDPOINT:+"$MCP_ENDPOINT"} \
+        >"$dir/out" 2>"$dir/err" &
+  fi
+  pid=$!
+  # Out of the job table: teardown kills it, and bash would report each kill.
+  disown 2>/dev/null || true
+}
+
 prime_oauth_grant() {
   step "Allow SealGate to use Beeper"
   if [ "$DRY_RUN" -eq 1 ]; then
@@ -1023,23 +1104,32 @@ prime_oauth_grant() {
   fi
   resolve_mcp_endpoint
   [ -n "$MCP_ENDPOINT" ] && info "Beeper answers on a non-default port; pointing the proxy at $MCP_ENDPOINT"
-  local dir init pid waited=0 auth_url=""
+  if [ -n "${BEEPER_DESKTOP_BASE_URL:-}" ]; then
+    warn "ignoring BEEPER_DESKTOP_BASE_URL ($BEEPER_DESKTOP_BASE_URL): SealGate's background service does not see it"
+    todo "remove it from your shell profile so other tools agree with SealGate"
+  fi
+  local dir init pid waited=0 auth_url="" port="" forced=""
   dir="$(mktemp -d "${TMPDIR:-/tmp}/install-beeper.XXXXXX")"
   init='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"install-beeper","version":"1.0.0"}}}'
-  # The sleep holds the proxy's stdin open while OAuth completes; after we kill
-  # npx, that same EOF (or the sleep expiring) winds down any child it spawned.
-  # ${MCP_ENDPOINT:+...} expands to nothing when unset, so the proxy keeps its
-  # built-in default; the guarded form stays safe under bash 3.2's set -u.
-  # The sleep's pid is recorded so teardown can end it: that closes the proxy's
-  # stdin at once instead of holding it open for the rest of OAUTH_WAIT.
-  { printf '%s\n' "$init"; sleep "$OAUTH_WAIT" & echo $! >"$dir/feeder.pid"; wait; } \
-    | npx -y "$MCP_PKG" ${MCP_ENDPOINT:+"$MCP_ENDPOINT"} >"$dir/out" 2>"$dir/err" &
-  pid=$!
+  start_oauth_probe ""
   todo "Beeper is opening a pop-up asking you to allow access. Click Allow."
   info "if you don't see the Beeper approval pop-up, check whether it is behind other windows"
   info "waiting up to ${OAUTH_WAIT}s"
   while [ "$waited" -lt "$OAUTH_WAIT" ]; do
     grep -q '"result"' "$dir/out" 2>/dev/null && break
+    # A callback port the browser blocks fails every time, so restart on one it
+    # opens. The proxy then drops its old registration and keeps the new port
+    # for later runs, the daemon's included.
+    if [ -z "$forced" ]; then
+      port="$(sed -nE 's/.*(callback|client) port: ([0-9]+).*/\2/p' "$dir/err" 2>/dev/null | head -n1 || true)"
+      if [ -n "$port" ] && port_blocked "$port"; then
+        forced="$(safe_callback_port "$port")"
+        warn "Beeper's sign-in picked port $port, which browsers block; retrying on port $forced"
+        stop_probe "$pid" "$(cat "$dir/feeder.pid" 2>/dev/null || true)"
+        start_oauth_probe "$forced"
+        auth_url=""
+      fi
+    fi
     kill -0 "$pid" 2>/dev/null || break
     if [ "$waited" -gt 0 ] && [ $((waited % 30)) -eq 0 ]; then
       info "still waiting for you to click Allow in the Beeper pop-up ($((OAUTH_WAIT - waited))s left)"
@@ -1056,7 +1146,7 @@ prime_oauth_grant() {
   done
   stop_probe "$pid" "$(cat "$dir/feeder.pid" 2>/dev/null || true)"
   if grep -q '"result"' "$dir/out" 2>/dev/null; then
-    if [ "$waited" -le 3 ]; then
+    if [ "$waited" -le 3 ] && [ -z "$forced" ]; then
       ok "MCP handshake completed immediately (grant already cached)"
     else
       ok "OAuth grant approved; the MCP handshake completed"
@@ -1064,6 +1154,21 @@ prime_oauth_grant() {
     rm -rf "$dir"
     restart_daemon_after_grant
     return 0
+  fi
+  # Beeper may have swallowed the request (its first-run setup does): a fresh
+  # start shows it. Asked, not done: restarting closes the person's Beeper.
+  local bapp="" ans=""
+  if [ "$PREAUTH_RETRIED" -eq 0 ] && [ "$(uname -s)" = Darwin ] && bapp="$(beeper_desktop_app)" && have_tty; then
+    printf '   Beeper did not show the request? Restart Beeper and ask again? [Y/n] ' >/dev/tty
+    read -r ans </dev/tty || ans=n
+    if [ "$ans" != "n" ] && [ "$ans" != "N" ]; then
+      rm -rf "$dir"
+      PREAUTH_RETRIED=1
+      restart_beeper_app "$bapp"
+      wait_beeper_api 60 >/dev/null || true
+      prime_oauth_grant
+      return $?
+    fi
   fi
   warn "you didn't allow access in Beeper within ${OAUTH_WAIT}s, so SealGate can't read your Beeper chats yet"
   info "the pop-up was probably hidden behind your other windows"
@@ -1650,6 +1755,12 @@ cmd_uninstall() {
     run sealgate-stdiod server remove "$SERVER_NAME" || true
     run sealgate-stdiod uninstall
   }
+  # Beeper's MCP proxy keeps SealGate's sign-in to Beeper here. Useless without
+  # the daemon, and a stale one breaks the next install's approval.
+  if [ -e "$HOME/.beeper-mcp-auth" ]; then
+    run rm -rf "$HOME/.beeper-mcp-auth"
+    [ "$DRY_RUN" -eq 1 ] || ok "removed $HOME/.beeper-mcp-auth"
+  fi
   log "uninstall complete. Approved-server removal may need a dashboard/admin action; Beeper Desktop was left untouched."
 }
 

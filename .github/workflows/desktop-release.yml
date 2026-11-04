@@ -742,8 +742,8 @@ jobs:
     name: Beeper setup program (Windows)
     # "SealGate for Beeper" setup (crates/stdiod/installer/windows), from the
     # two daemon exes the windows legs put on the draft. The backend is fixed
-    # at build time, so there is one per deployment, named after its host; a
-    # deployment's /get_sealgate_for_beeper redirects to its own (edison-watch
+    # at build time, so there is one per deployment, named by release.ps1's
+    # host table; a deployment's /get_sealgate_for_beeper redirects to its own (edison-watch
     # src/api/installer_scripts.py). The demo one is built by
     # desktop-release-demo.yml, from main.
     needs: [draft, windows]
@@ -752,7 +752,8 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       # beeper.sealgate.ai for the Beeper edition, dashboard.sealgate.ai for
-      # sealgate.ai/connect (the landing site links to its file directly).
+      # sealgate.ai/connect (the landing site redirects to its
+      # /get_sealgate_for_beeper).
       BACKENDS: https://beeper.sealgate.ai https://dashboard.sealgate.ai
       # An Inno Setup sign tool command, $f the file. The Azure secrets are
       # for Trusted Signing's signtool dlib; unused otherwise.

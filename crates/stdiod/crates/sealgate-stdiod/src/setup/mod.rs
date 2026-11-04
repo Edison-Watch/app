@@ -57,6 +57,20 @@ pub enum SetupCommand {
     /// Open Beeper Desktop, so the person can sign in to it. Exits 2 when it
     /// is not installed.
     OpenBeeper(CommonArgs),
+    /// Close and reopen Beeper Desktop, then wait for its local API. A request
+    /// to let SealGate in made during Beeper's first-run setup never shows,
+    /// and only a fresh start clears it. Exits 2 when Beeper is not installed
+    /// or did not answer in time.
+    RestartBeeper(RestartArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct RestartArgs {
+    #[command(flatten)]
+    pub common: CommonArgs,
+    /// Seconds to wait for Beeper to answer again.
+    #[arg(long, default_value_t = 60)]
+    pub timeout: u64,
 }
 
 #[derive(Debug, Args)]
@@ -93,6 +107,7 @@ pub async fn run(command: SetupCommand) -> i32 {
         | SetupCommand::OpenBeeper(a) => a.json,
         SetupCommand::Approve(a) => a.common.json,
         SetupCommand::SignedIn(a) => a.common.json,
+        SetupCommand::RestartBeeper(a) => a.common.json,
     };
     let rep = Reporter::new(json);
     let outcome = match command {
@@ -102,6 +117,9 @@ pub async fn run(command: SetupCommand) -> i32 {
         SetupCommand::Register(_) => register::run(&rep).await,
         SetupCommand::SignedIn(a) => signed_in(&rep, a.backend.as_deref()).await,
         SetupCommand::OpenBeeper(_) => open_beeper(&rep),
+        SetupCommand::RestartBeeper(a) => {
+            restart_beeper(&rep, Duration::from_secs(a.timeout)).await
+        }
     };
     match outcome {
         Ok(code) => code,
@@ -193,13 +211,41 @@ fn open_beeper(rep: &Reporter) -> anyhow::Result<i32> {
         rep.warn("Beeper Desktop is not installed");
         return Ok(EXIT_NOT_YET);
     };
-    #[cfg(target_os = "macos")]
-    let spawned = std::process::Command::new("open").arg(&app).spawn();
-    #[cfg(not(target_os = "macos"))]
-    let spawned = std::process::Command::new(&app).spawn();
-    spawned.map_err(|e| anyhow::anyhow!("could not open Beeper: {e}"))?;
+    beeper::launch(&app).map_err(|e| anyhow::anyhow!("could not open Beeper: {e}"))?;
     rep.ok(&format!("opened {}", app.display()));
     Ok(EXIT_OK)
+}
+
+async fn restart_beeper(rep: &Reporter, timeout: Duration) -> anyhow::Result<i32> {
+    let Some(app) = beeper::find_app() else {
+        rep.warn("Beeper Desktop is not installed");
+        return Ok(EXIT_NOT_YET);
+    };
+    rep.info("restarting Beeper");
+    // A Beeper that survived would answer the probe below and pass for the
+    // restarted one, with SealGate's request still lost.
+    if !beeper::quit(&app).await {
+        rep.warn("Beeper did not close");
+        rep.action("quit Beeper yourself (also from the tray or menu bar), then try again");
+        rep.result(json!({ "api_base": null }));
+        return Ok(EXIT_NOT_YET);
+    }
+    beeper::launch(&app).map_err(|e| anyhow::anyhow!("could not open Beeper: {e}"))?;
+    let deadline = tokio::time::Instant::now() + timeout;
+    loop {
+        if let Some(url) = beeper::api_base().await {
+            rep.ok(&format!("Beeper restarted and is answering at {url}"));
+            rep.result(json!({ "api_base": url }));
+            return Ok(EXIT_OK);
+        }
+        if tokio::time::Instant::now() >= deadline {
+            rep.warn("Beeper restarted but is not answering yet");
+            rep.action("check Beeper is signed in, with Settings > Developers > MCP on");
+            rep.result(json!({ "api_base": null }));
+            return Ok(EXIT_NOT_YET);
+        }
+        tokio::time::sleep(Duration::from_secs(2)).await;
+    }
 }
 
 #[derive(serde::Deserialize)]
