@@ -95,17 +95,17 @@ Root: HKCU; Subkey: "Environment"; ValueType: expandsz; ValueName: "Path"; Value
 [UninstallDelete]
 ; The folder belongs to SealGate alone: also remove what this setup did not
 ; install itself (an earlier PowerShell install, files written at run time).
-; The sign-in and logs live in the user's profile; the uninstaller removes
-; them too unless the user keeps them (KeepUserData).
+; The sign-in, logs and Beeper access live in the user's profile; the
+; uninstaller removes them too unless the user keeps them (UninstallData).
 Type: filesandordirs; Name: "{app}"
-; Beeper's MCP proxy keeps SealGate's sign-in to Beeper here. Removed even
-; when KeepUserData keeps the rest (its prompt says so): useless without the
-; daemon, and a stale one breaks the next install's approval.
-Type: filesandordirs; Name: "{%USERPROFILE}\.beeper-mcp-auth"
 
 [Code]
 const
   UNINSTALL_KEY = 'Software\Microsoft\Windows\CurrentVersion\Uninstall';
+  { Set when this setup installed Beeper, so the uninstaller offers to remove
+    it ticked. Removed with SealGate's settings. }
+  SEALGATE_KEY = 'Software\SealGate\Beeper';
+  INSTALLED_BEEPER = 'InstalledBeeper';
   EXIT_OK = 0;
   EXIT_NOT_YET = 2;
   EXIT_STOPPED = 130;
@@ -124,6 +124,11 @@ const
   BEEPER_READY = 1;
   BEEPER_NOT_READY = 2;
   BEEPER_RETRY = 3;
+  { Where a Beeper that is not ready yet stands: waiting for the first-run
+    sign-in (Continue restarts it), or for MCP, before or after a restart. }
+  STAGE_SIGN_IN = 0;
+  STAGE_MCP = 1;
+  STAGE_RESTARTED = 2;
   { A tick-list row's state. }
   RS_PENDING = 0;
   RS_BUSY = 1;
@@ -168,13 +173,16 @@ var
   Advancing: Boolean;
   { What each page achieved, for the last page. }
   SignInDone, BeeperDone, AllowDone: Boolean;
-  BeeperState: Integer;
+  BeeperState, BeeperStage: Integer;
   { Beeper had never run on this account when setup started. Its first-run
     setup swallows SealGate's request to be let in, and only a restart clears
     it, so the Beeper page waits for the person and then restarts it. }
   BeeperFresh: Boolean;
   { The last Allow timed out: restart Beeper before asking again. }
   AllowMissed: Boolean;
+  { The uninstall window's choices, and the Beeper it found. }
+  UninstallData, UninstallBeeper, HasBeeper: Boolean;
+  BeeperKey, BeeperCommand, BeeperExe: String;
   ClosingEarly: Boolean;
   { The tick lists: one row is an icon, a label, a detail on the right and
     an optional progress bar under it, shown while the row is busy. }
@@ -184,7 +192,7 @@ var
   RowState, RowRight: array of Integer;
   RowCount: Integer;
   RowLogin, RowStart: Integer;
-  RowCheck, RowDownload, RowInstall, RowReady: Integer;
+  RowCheck, RowDownload, RowInstall, RowSignIn, RowRestartBeeper, RowMcp: Integer;
   RowRegister, RowAllow, RowRestart: Integer;
   RowSummary: Integer;
   LaidOut: Boolean;
@@ -349,7 +357,7 @@ begin
   if not LaidOut then
     exit;
   LayoutActionPage(SignInPage, SignInButton, OtherAccountButton, RowLogin, RowStart);
-  LayoutActionPage(BeeperPage, BeeperButton, nil, RowCheck, RowReady);
+  LayoutActionPage(BeeperPage, BeeperButton, nil, RowCheck, RowMcp);
   LayoutActionPage(AllowPage, AllowButton, nil, RowRegister, RowRestart);
 end;
 
@@ -438,7 +446,7 @@ begin
   end else if Page = BeeperPage then
   begin
     First := RowCheck;
-    Last := RowReady;
+    Last := RowMcp;
   end else begin
     First := RowRegister;
     Last := RowRestart;
@@ -798,41 +806,59 @@ begin
     'not, it is downloaded (about 230 MB) and installed now.', 'Continue');
   SetRow(RowDownload, RS_PENDING, '');
   SetRow(RowInstall, RS_PENDING, '');
-  SetRow(RowReady, RS_PENDING, '');
+  SetRow(RowSignIn, RS_PENDING, '');
+  SetRow(RowRestartBeeper, RS_PENDING, '');
+  SetRow(RowMcp, RS_PENDING, '');
   StartStep(BeeperPage, STEP_BEEPER, 'setup install-beeper', RowCheck);
 end;
 
 const
-  BEEPER_SIGN_IN = 'Sign in to Beeper, turn on Settings > Developers > MCP, then ' +
-    'click Continue here.';
-  BEEPER_FIRST_RUN = 'Finish setting up Beeper: sign in and turn on Settings > ' +
-    'Developers > MCP. Then click Continue here, and Beeper restarts once so it can ' +
-    'show SealGate''s request.';
+  BEEPER_TURN_ON_MCP = 'In Beeper, turn on Settings > Developers > MCP, then click ' +
+    'Continue here.';
 
-{ Beeper is installed and the right build: ready once it answers, which it
-  does once the person has signed in and turned on MCP. }
+{ Beeper answers, so it is signed in with MCP on: nothing left to do here. }
+procedure BeeperAnswering(Restarted: Boolean);
+begin
+  SetRow(RowSignIn, RS_DONE, '');
+  if not Restarted then
+    SetRow(RowRestartBeeper, RS_SKIPPED, 'not needed');
+  SetRow(RowMcp, RS_DONE, '');
+  BeeperDone := True;
+end;
+
+{ Beeper is installed and the right build. On a first run, wait for the
+  person to sign in, then restart Beeper (its first-run setup swallows
+  SealGate's request); otherwise it is ready once it answers, which it does
+  once signed in with MCP on. }
 procedure FinishBeeper(Installed: String);
 var
   Output: String;
 begin
   UpdateBeeperRows(Installed);
+  if Pos('installed Beeper Desktop (', Installed) > 0 then
+    RegWriteStringValue(HKCU, SEALGATE_KEY, INSTALLED_BEEPER, '1');
   { On a first run Beeper answers before its own setup is done, so its
     answering is not ready: wait for the person either way. }
   if not BeeperFresh and (Stdiod('setup status', Output) = EXIT_OK) then
   begin
-    SetRow(RowReady, RS_DONE, '');
-    BeeperDone := True;
+    BeeperAnswering(False);
     SetBeeperState(BEEPER_READY, 'Beeper is installed and ready. Click Continue.', 'Continue');
     exit;
   end;
   Stdiod('setup open-beeper', Output);
-  SetRow(RowReady, RS_BUSY, '');
+  SetRow(RowSignIn, RS_BUSY, '');
   if BeeperFresh then
-    SetBeeperState(BEEPER_NOT_READY, 'Beeper is installed and open. ' + BEEPER_FIRST_RUN, 'Continue')
-  else if Pos('already installed', Installed) > 0 then
-    SetBeeperState(BEEPER_NOT_READY, 'Beeper is already installed. ' + BEEPER_SIGN_IN, 'Continue')
-  else
-    SetBeeperState(BEEPER_NOT_READY, 'Beeper is installed and open. ' + BEEPER_SIGN_IN, 'Continue');
+  begin
+    BeeperStage := STAGE_SIGN_IN;
+    SetBeeperState(BEEPER_NOT_READY, 'Beeper is installed and running. Please sign in ' +
+      'now and then click Continue.', 'Continue');
+  end else begin
+    { Set up before, so no restart: it only needs signing in or MCP. }
+    BeeperStage := STAGE_MCP;
+    SetRow(RowRestartBeeper, RS_SKIPPED, 'not needed');
+    SetBeeperState(BEEPER_NOT_READY, 'Beeper is running. Sign in if it asks you to. ' +
+      BEEPER_TURN_ON_MCP, 'Continue');
+  end;
 end;
 
 procedure BeeperClick(Sender: TObject);
@@ -849,19 +875,19 @@ begin
     MoveOn();
     exit;
   end;
-  if BeeperFresh then
+  if BeeperStage = STAGE_SIGN_IN then
   begin
-    StartStep(BeeperPage, STEP_RESTART, 'setup restart-beeper --timeout 60', RowReady);
+    SetRow(RowSignIn, RS_DONE, '');
+    StartStep(BeeperPage, STEP_RESTART, 'setup restart-beeper --timeout 30', RowRestartBeeper);
     exit;
   end;
-  { Not ready when the page last looked: look again. }
+  { Not answering when the page last looked: look again. }
   if Stdiod('setup status', Output) = EXIT_OK then
   begin
-    SetRow(RowReady, RS_DONE, '');
-    BeeperDone := True;
+    BeeperAnswering(BeeperStage = STAGE_RESTARTED);
     MoveOn();
   end else begin
-    SetRow(RowReady, RS_BUSY, 'not yet');
+    SetRow(RowMcp, RS_BUSY, 'not yet');
     Show(BeeperPage, Output);
   end;
 end;
@@ -959,13 +985,25 @@ begin
     STEP_RESTART:
       if Code = EXIT_OK then
       begin
+        { Answering after the restart: MCP was already on. }
         BeeperFresh := False;
-        SetRow(RowReady, RS_DONE, '');
-        BeeperDone := True;
+        SetRow(RowRestartBeeper, RS_DONE, '');
+        BeeperAnswering(True);
         MoveOn();
-      end else begin
-        SetRow(RowReady, RS_BUSY, 'not yet');
+      end else if Pos('did not close', Output) > 0 then
+      begin
+        { Still on STAGE_SIGN_IN, so Continue restarts again. }
+        SetRow(RowRestartBeeper, RS_FAILED, 'did not close');
+        SetBeeperState(BEEPER_NOT_READY, 'Beeper did not close. Quit it (also from the ' +
+          'tray next to the clock), then click Continue.', 'Continue');
         Show(BeeperPage, Output);
+      end else begin
+        { Restarted but not answering: MCP is off. }
+        BeeperFresh := False;
+        BeeperStage := STAGE_RESTARTED;
+        SetRow(RowRestartBeeper, RS_DONE, '');
+        SetRow(RowMcp, RS_BUSY, '');
+        SetBeeperState(BEEPER_NOT_READY, 'Beeper restarted. ' + BEEPER_TURN_ON_MCP, 'Continue');
       end;
     STEP_RESTART_ALLOW:
       if Code = EXIT_OK then
@@ -1095,8 +1133,12 @@ begin
     'Download Beeper', GLYPH_DOWNLOAD, True);
   RowInstall := AddRow(BeeperPage.Surface, Left, W - Left,
     'Install Beeper', GLYPH_PACKAGE, True);
-  RowReady := AddRow(BeeperPage.Surface, Left, W - Left,
-    'Sign in to Beeper and turn on MCP', GLYPH_WAIT, False);
+  RowSignIn := AddRow(BeeperPage.Surface, Left, W - Left,
+    'Sign in to Beeper', GLYPH_WAIT, False);
+  RowRestartBeeper := AddRow(BeeperPage.Surface, Left, W - Left,
+    'Restart Beeper', GLYPH_SYNC, False);
+  RowMcp := AddRow(BeeperPage.Surface, Left, W - Left,
+    'Turn on MCP in Beeper', GLYPH_WAIT, False);
   RowRegister := AddRow(AllowPage.Surface, Left, W - Left,
     'Register Beeper with SealGate', GLYPH_SYNC, False);
   RowAllow := AddRow(AllowPage.Surface, Left, W - Left,
@@ -1275,26 +1317,6 @@ begin
   RegWriteExpandStringValue(HKCU, 'Environment', 'Path', Kept);
 end;
 
-{ Stop the daemon and remove its logon task before the files go. The sign-in
-  and logs in %USERPROFILE%\.config\sealgate-stdiod outlive that, and a stale
-  sign-in sends the next install to the old account's backend, so they are
-  purged unless the user keeps them. A silent uninstall purges too. }
-function KeepUserData(): Boolean;
-var
-  Labels: TArrayOfString;
-begin
-  Result := False;
-  if UninstallSilent() then
-    exit;
-  SetArrayLength(Labels, 2);
-  Labels[0] := 'Yes (recommended)';
-  Labels[1] := 'No';
-  Result := TaskDialogMsgBox('Remove SealGate''s logs and settings?',
-    'Remove or keep the logs and settings SealGate has stored on this computer. ' +
-    'SealGate''s access to Beeper is removed either way.',
-    mbConfirmation, MB_YESNO or MB_DEFBUTTON1, Labels, 0) = IDNO;
-end;
-
 { The Beeper exe in Dir, or ''. }
 function BeeperExeIn(Dir: String): String;
 var
@@ -1384,25 +1406,13 @@ begin
   Result := not RegKeyExists(HKCU, Key) and ((Exe = '') or not FileExists(Exe));
 end;
 
-{ Offer to remove Beeper too, with its data: its own uninstaller leaves
-  %APPDATA%\BeeperTexts behind. Off by default: it is the user's messaging
-  app, and the folder holds their local chats. }
-procedure OfferBeeperUninstall();
+{ Remove Beeper and its data: its own uninstaller leaves %APPDATA%\BeeperTexts
+  behind, and that folder holds the person's local chats. }
+procedure RemoveBeeper(Key, Command, Exe: String);
 var
-  Labels: TArrayOfString;
-  Key, Command, Exe, FileName, Params: String;
+  FileName, Params: String;
   ResultCode, Waited: Integer;
 begin
-  if UninstallSilent() or not FindBeeper(Key, Command, Exe) then
-    exit;
-  SetArrayLength(Labels, 2);
-  Labels[0] := 'Yes';
-  Labels[1] := 'No (recommended)';
-  if TaskDialogMsgBox('Also uninstall Beeper?',
-    'Remove Beeper and the chats and settings it has stored on this computer. ' +
-    'Your Beeper account is not affected.',
-    mbConfirmation, MB_YESNO or MB_DEFBUTTON2, Labels, 0) <> IDYES then
-    exit;
   { A running Beeper holds its files open, and its uninstaller fails. }
   if Exe <> '' then
     Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /T /IM "' + ExtractFileName(Exe) + '"', '',
@@ -1425,6 +1435,105 @@ begin
     DelTree(ExpandConstant('{userappdata}\BeeperTexts'), True, True, True);
 end;
 
+{ What to remove besides SealGate itself, in one window. SealGate's data is
+  ticked: a stale sign-in sends the next install to the old account's backend,
+  and a stale Beeper access breaks the next install's approval. Beeper is
+  ticked only when this setup installed it, since it is the person's messaging
+  app. Shown before Inno's own confirmation, which cannot be turned off: this
+  is the last point where Cancel still stops the uninstall cleanly. }
+function ChooseWhatToRemove(): Boolean;
+var
+  Form: TSetupForm;
+  Intro: TNewStaticText;
+  DataBox, BeeperBox: TNewCheckBox;
+  UninstallButton, CancelButton: TNewButton;
+  Marker: String;
+  Left, Width, Top: Integer;
+begin
+  Form := CreateCustomForm(ScaleX(460), ScaleY(200), False, False);
+  try
+    Form.Caption := 'Uninstall SealGate for Beeper';
+    Left := ScaleX(16);
+    Width := Form.ClientWidth - 2 * Left;
+
+    Intro := TNewStaticText.Create(Form);
+    Intro.Parent := Form;
+    Intro.Left := Left;
+    Intro.Top := ScaleY(16);
+    Intro.Width := Width;
+    Intro.Caption := 'Also remove:';
+
+    DataBox := TNewCheckBox.Create(Form);
+    DataBox.Parent := Form;
+    DataBox.Left := Left;
+    DataBox.Top := Intro.Top + Intro.Height + ScaleY(12);
+    DataBox.Width := Width;
+    DataBox.Height := ScaleY(20);
+    DataBox.Caption := 'SealGate''s logs, settings and access to Beeper';
+    DataBox.Checked := True;
+    Top := DataBox.Top + DataBox.Height + ScaleY(8);
+
+    BeeperBox := nil;
+    if HasBeeper then
+    begin
+      BeeperBox := TNewCheckBox.Create(Form);
+      BeeperBox.Parent := Form;
+      BeeperBox.Left := Left;
+      BeeperBox.Top := Top;
+      BeeperBox.Width := Width;
+      BeeperBox.Height := ScaleY(20);
+      BeeperBox.Caption := 'Beeper, with the chats and settings it stored here';
+      BeeperBox.Checked := RegQueryStringValue(HKCU, SEALGATE_KEY, INSTALLED_BEEPER, Marker) and
+        (Marker = '1');
+      Top := BeeperBox.Top + BeeperBox.Height + ScaleY(8);
+    end;
+
+    CancelButton := TNewButton.Create(Form);
+    CancelButton.Parent := Form;
+    CancelButton.Caption := 'Cancel';
+    CancelButton.ModalResult := mrCancel;
+    CancelButton.Cancel := True;
+    CancelButton.Width := ScaleX(85);
+    CancelButton.Height := ScaleY(25);
+    CancelButton.Left := Form.ClientWidth - Left - CancelButton.Width;
+    CancelButton.Top := Top + ScaleY(16);
+
+    UninstallButton := TNewButton.Create(Form);
+    UninstallButton.Parent := Form;
+    UninstallButton.Caption := 'Uninstall';
+    UninstallButton.ModalResult := mrOk;
+    UninstallButton.Default := True;
+    UninstallButton.Width := CancelButton.Width;
+    UninstallButton.Height := CancelButton.Height;
+    UninstallButton.Left := CancelButton.Left - ScaleX(8) - UninstallButton.Width;
+    UninstallButton.Top := CancelButton.Top;
+
+    Form.ClientHeight := CancelButton.Top + CancelButton.Height + ScaleY(16);
+    Form.ActiveControl := UninstallButton;
+    Result := Form.ShowModal() = mrOk;
+    if Result then
+    begin
+      UninstallData := DataBox.Checked;
+      UninstallBeeper := (BeeperBox <> nil) and BeeperBox.Checked;
+    end;
+  finally
+    Form.Free();
+  end;
+end;
+
+{ A silent uninstall removes SealGate's data and leaves Beeper. }
+function InitializeUninstall(): Boolean;
+begin
+  UninstallData := True;
+  UninstallBeeper := False;
+  HasBeeper := FindBeeper(BeeperKey, BeeperCommand, BeeperExe);
+  Result := True;
+  if not UninstallSilent() then
+    Result := ChooseWhatToRemove();
+end;
+
+{ Stop the daemon and remove its logon task before the files go, then remove
+  what the person chose. }
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   Params: String;
@@ -1432,12 +1541,21 @@ var
 begin
   if CurUninstallStep = usUninstall then
   begin
-    Params := 'uninstall --purge';
-    if KeepUserData() then
-      Params := 'uninstall';
+    Params := 'uninstall';
+    if UninstallData then
+      Params := 'uninstall --purge';
     if FileExists(DaemonExe()) then
       Exec(DaemonExe(), Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-    OfferBeeperUninstall();
+    if UninstallData then
+    begin
+      { Beeper's MCP proxy keeps SealGate's sign-in to Beeper here. }
+      DelTree(ExpandConstant('{%USERPROFILE}\.beeper-mcp-auth'), True, True, True);
+      RegDeleteValue(HKCU, SEALGATE_KEY, INSTALLED_BEEPER);
+      RegDeleteKeyIfEmpty(HKCU, SEALGATE_KEY);
+      RegDeleteKeyIfEmpty(HKCU, 'Software\SealGate');
+    end;
+    if UninstallBeeper then
+      RemoveBeeper(BeeperKey, BeeperCommand, BeeperExe);
   end;
   if CurUninstallStep = usPostUninstall then
     RemoveFromPath(ExpandConstant('{app}'));
