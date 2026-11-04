@@ -62,6 +62,22 @@ pub enum SetupCommand {
     /// and only a fresh start clears it. Exits 2 when Beeper is not installed
     /// or did not answer in time.
     RestartBeeper(RestartArgs),
+    /// Wait for an admin to approve the Beeper server request, opening the
+    /// dashboard first with `--open`. Exits 0 once approved, 3 when declined,
+    /// 2 on timeout.
+    WaitApproved(WaitApprovedArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct WaitApprovedArgs {
+    #[command(flatten)]
+    pub common: CommonArgs,
+    /// Seconds to wait for the approval.
+    #[arg(long, default_value_t = 600)]
+    pub timeout: u64,
+    /// Open the dashboard in the browser first.
+    #[arg(long)]
+    pub open: bool,
 }
 
 #[derive(Debug, Args)]
@@ -108,6 +124,7 @@ pub async fn run(command: SetupCommand) -> i32 {
         SetupCommand::Approve(a) => a.common.json,
         SetupCommand::SignedIn(a) => a.common.json,
         SetupCommand::RestartBeeper(a) => a.common.json,
+        SetupCommand::WaitApproved(a) => a.common.json,
     };
     let rep = Reporter::new(json);
     let outcome = match command {
@@ -119,6 +136,9 @@ pub async fn run(command: SetupCommand) -> i32 {
         SetupCommand::OpenBeeper(_) => open_beeper(&rep),
         SetupCommand::RestartBeeper(a) => {
             restart_beeper(&rep, Duration::from_secs(a.timeout)).await
+        }
+        SetupCommand::WaitApproved(a) => {
+            register::wait_approved(&rep, Duration::from_secs(a.timeout), a.open).await
         }
     };
     match outcome {
