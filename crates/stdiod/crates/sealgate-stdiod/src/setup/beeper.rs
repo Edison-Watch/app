@@ -148,13 +148,14 @@ fn beeper_exe_in(dir: &std::path::Path) -> Option<PathBuf> {
 }
 
 /// Close Beeper Desktop and wait until it is gone: a new start while the old
-/// one is still exiting is refused by Beeper's single-instance lock.
-pub async fn quit(app: &Path) {
+/// one is still exiting is refused by Beeper's single-instance lock. False
+/// when it is still running after 10s.
+pub async fn quit(app: &Path) -> bool {
     #[cfg(windows)]
     {
         const CREATE_NO_WINDOW: u32 = 0x0800_0000;
         let Some(name) = app.file_name().map(|n| n.to_string_lossy().to_string()) else {
-            return;
+            return false;
         };
         let _ = tokio::process::Command::new("taskkill")
             .args(["/F", "/T", "/IM", &name])
@@ -174,15 +175,16 @@ pub async fn quit(app: &Path) {
                 .map(|o| String::from_utf8_lossy(&o.stdout).contains(&format!("\"{name}\"")))
                 .unwrap_or(false);
             if !running {
-                return;
+                return true;
             }
             tokio::time::sleep(Duration::from_millis(500)).await;
         }
+        false
     }
     #[cfg(target_os = "macos")]
     {
         let Some(name) = app.file_stem().map(|n| n.to_string_lossy().to_string()) else {
-            return;
+            return false;
         };
         let _ = tokio::process::Command::new("osascript")
             .args(["-e", &format!("quit app \"{name}\"")])
@@ -199,7 +201,7 @@ pub async fn quit(app: &Path) {
                 .await
                 .is_ok_and(|s| s.success());
             if !running {
-                return;
+                return true;
             }
             // Asked politely for 5s; then it is stuck (on a dialog, say).
             if i == 10 {
@@ -210,18 +212,38 @@ pub async fn quit(app: &Path) {
             }
             tokio::time::sleep(Duration::from_millis(500)).await;
         }
+        false
     }
     #[cfg(not(any(windows, target_os = "macos")))]
-    let _ = app;
+    {
+        // No Beeper Desktop is found here, so there is nothing to close.
+        let _ = app;
+        false
+    }
 }
 
 /// Start Beeper Desktop without waiting for it.
+///
+/// With no stdio of ours: Beeper outlives the step, and an inherited copy of
+/// the installer's output pipe (stepio::redirect_output) would stay open for
+/// as long as Beeper runs, so the step's output never reaches its end and
+/// the step waits out finish_output's bound.
 pub fn launch(app: &Path) -> std::io::Result<()> {
+    use std::process::Stdio;
     #[cfg(target_os = "macos")]
-    let spawned = std::process::Command::new("open").arg(app).spawn();
+    let mut command = {
+        let mut c = std::process::Command::new("open");
+        c.arg(app);
+        c
+    };
     #[cfg(not(target_os = "macos"))]
-    let spawned = std::process::Command::new(app).spawn();
-    spawned.map(|_| ())
+    let mut command = std::process::Command::new(app);
+    command
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .map(|_| ())
 }
 
 /// The base URL the Beeper Desktop API answers on, or None. `BEEPER_API_URL`

@@ -222,7 +222,14 @@ async fn restart_beeper(rep: &Reporter, timeout: Duration) -> anyhow::Result<i32
         return Ok(EXIT_NOT_YET);
     };
     rep.info("restarting Beeper");
-    beeper::quit(&app).await;
+    // A Beeper that survived would answer the probe below and pass for the
+    // restarted one, with SealGate's request still lost.
+    if !beeper::quit(&app).await {
+        rep.warn("Beeper did not close");
+        rep.action("quit Beeper yourself (also from the tray or menu bar), then try again");
+        rep.result(json!({ "api_base": null }));
+        return Ok(EXIT_NOT_YET);
+    }
     beeper::launch(&app).map_err(|e| anyhow::anyhow!("could not open Beeper: {e}"))?;
     let deadline = tokio::time::Instant::now() + timeout;
     loop {

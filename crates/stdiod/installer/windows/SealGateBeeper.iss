@@ -98,8 +98,9 @@ Root: HKCU; Subkey: "Environment"; ValueType: expandsz; ValueName: "Path"; Value
 ; The sign-in and logs live in the user's profile; the uninstaller removes
 ; them too unless the user keeps them (KeepUserData).
 Type: filesandordirs; Name: "{app}"
-; Beeper's MCP proxy keeps SealGate's sign-in to Beeper here. Useless without
-; the daemon, and a stale one breaks the next install's approval.
+; Beeper's MCP proxy keeps SealGate's sign-in to Beeper here. Removed even
+; when KeepUserData keeps the rest (its prompt says so): useless without the
+; daemon, and a stale one breaks the next install's approval.
 Type: filesandordirs; Name: "{%USERPROFILE}\.beeper-mcp-auth"
 
 [Code]
@@ -873,9 +874,10 @@ var
   Output: String;
   Code: Integer;
 begin
+  { Cleared only once the restart succeeds, so a stopped or failed one is
+    tried again on the next click, as the message promised. }
   if AllowMissed then
   begin
-    AllowMissed := False;
     StartStep(AllowPage, STEP_RESTART_ALLOW, 'setup restart-beeper --timeout 60', RowAllow);
     exit;
   end;
@@ -965,10 +967,16 @@ begin
         SetRow(RowReady, RS_BUSY, 'not yet');
         Show(BeeperPage, Output);
       end;
-    { Ask again whether or not Beeper came back: the approve step says why
-      if it did not. }
     STEP_RESTART_ALLOW:
-      AllowClick(nil);
+      if Code = EXIT_OK then
+      begin
+        AllowMissed := False;
+        AllowClick(nil);
+      end else begin
+        SetRow(RowAllow, RS_FAILED, 'not restarted');
+        Show(AllowPage, 'Beeper did not restart. Click Connect Beeper with SealGate to ' +
+          'try again.' + #13#10#13#10 + Output);
+      end;
   end;
 end;
 
@@ -1282,17 +1290,40 @@ begin
   Labels[0] := 'Yes (recommended)';
   Labels[1] := 'No';
   Result := TaskDialogMsgBox('Remove SealGate''s logs and settings?',
-    'Remove or keep the logs and settings SealGate has stored on this computer.',
+    'Remove or keep the logs and settings SealGate has stored on this computer. ' +
+    'SealGate''s access to Beeper is removed either way.',
     mbConfirmation, MB_YESNO or MB_DEFBUTTON1, Labels, 0) = IDNO;
 end;
 
-{ Beeper Desktop's per-user uninstall entry: the command that removes it
-  silently, and its exe. False when Beeper is not installed. }
-function FindBeeper(var Command, Exe: String): Boolean;
+{ The Beeper exe in Dir, or ''. }
+function BeeperExeIn(Dir: String): String;
+var
+  Found: TFindRec;
+begin
+  Result := '';
+  if (Dir = '') or not FindFirst(AddBackslash(Dir) + 'Beeper*.exe', Found) then
+    exit;
+  try
+    repeat
+      if Pos('Uninstall', Found.Name) = 0 then
+      begin
+        Result := AddBackslash(Dir) + Found.Name;
+        exit;
+      end;
+    until not FindNext(Found);
+  finally
+    FindClose(Found);
+  end;
+end;
+
+{ Beeper Desktop's per-user uninstall entry (Key): the command that removes
+  it silently, and its exe ('' when it cannot be found). False when Beeper is
+  not installed. }
+function FindBeeper(var Key, Command, Exe: String): Boolean;
 var
   Names: TArrayOfString;
   I, Comma: Integer;
-  Key, Name: String;
+  Name, Location: String;
 begin
   Result := False;
   if not RegGetSubkeyNames(HKCU, UNINSTALL_KEY, Names) then
@@ -1316,6 +1347,9 @@ begin
         if Comma > 0 then
           Exe := RemoveQuotes(Copy(Exe, 1, Comma + 3));
       end;
+      { The exe sits in InstallLocation, beside the uninstaller. }
+      if (Exe = '') and RegQueryStringValue(HKCU, Key, 'InstallLocation', Location) then
+        Exe := BeeperExeIn(RemoveQuotes(Location));
       Result := True;
       exit;
     end;
@@ -1342,16 +1376,24 @@ begin
   Params := Trim(Params);
 end;
 
+{ Beeper has been removed: its uninstaller deleted its uninstall entry, and
+  the exe, when known, is gone too. A missing exe alone is not enough: it says
+  nothing when the exe was never found. }
+function BeeperGone(Key, Exe: String): Boolean;
+begin
+  Result := not RegKeyExists(HKCU, Key) and ((Exe = '') or not FileExists(Exe));
+end;
+
 { Offer to remove Beeper too, with its data: its own uninstaller leaves
   %APPDATA%\BeeperTexts behind. Off by default: it is the user's messaging
   app, and the folder holds their local chats. }
 procedure OfferBeeperUninstall();
 var
   Labels: TArrayOfString;
-  Command, Exe, FileName, Params: String;
+  Key, Command, Exe, FileName, Params: String;
   ResultCode, Waited: Integer;
 begin
-  if UninstallSilent() or not FindBeeper(Command, Exe) then
+  if UninstallSilent() or not FindBeeper(Key, Command, Exe) then
     exit;
   SetArrayLength(Labels, 2);
   Labels[0] := 'Yes';
@@ -1366,18 +1408,20 @@ begin
     Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /T /IM "' + ExtractFileName(Exe) + '"', '',
       SW_HIDE, ewWaitUntilTerminated, ResultCode);
   SplitCommand(Command, FileName, Params);
+  if Exe = '' then
+    Exe := BeeperExeIn(ExtractFileDir(FileName));
   if not Exec(FileName, Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
     exit;
   { An NSIS uninstaller copies itself to %TEMP% and returns at once, so wait for
-    the app itself to go. }
+    Beeper itself to go. }
   Waited := 0;
-  while (Exe <> '') and FileExists(Exe) and (Waited < 60) do
+  while not BeeperGone(Key, Exe) and (Waited < 60) do
   begin
     Sleep(1000);
     Waited := Waited + 1;
   end;
   { Only once Beeper is gone: its data without the app just signs the user out. }
-  if (Exe = '') or not FileExists(Exe) then
+  if BeeperGone(Key, Exe) then
     DelTree(ExpandConstant('{userappdata}\BeeperTexts'), True, True, True);
 end;
 
