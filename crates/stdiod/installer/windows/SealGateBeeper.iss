@@ -118,7 +118,11 @@ const
     asking again after a missed Allow (Allow page). }
   STEP_RESTART = 4;
   STEP_RESTART_ALLOW = 5;
+  { Waiting for an admin to approve Beeper in the dashboard. }
+  STEP_WAIT_APPROVED = 6;
   APPROVE_TIMEOUT = 180;
+  APPROVED_TIMEOUT = 900;
+  EXIT_DECLINED = 3;
   { What the Beeper page found, which decides its text and big button. }
   BEEPER_CHECKING = 0;
   BEEPER_READY = 1;
@@ -173,6 +177,8 @@ var
   Advancing: Boolean;
   { What each page achieved, for the last page. }
   SignInDone, BeeperDone, AllowDone: Boolean;
+  { The backend queued Beeper for an admin, and whether it was approved. }
+  ServerPending, ServerApproved: Boolean;
   BeeperState, BeeperStage: Integer;
   { Beeper had never run on this account when setup started. Its first-run
     setup swallows SealGate's request to be let in, and only a restart clears
@@ -194,6 +200,7 @@ var
   RowLogin, RowStart: Integer;
   RowCheck, RowDownload, RowInstall, RowSignIn, RowRestartBeeper, RowMcp: Integer;
   RowRegister, RowAllow, RowRestart: Integer;
+  RowApproveServer: Integer;
   RowSummary: Integer;
   LaidOut: Boolean;
 #ifdef DebugUi
@@ -358,7 +365,7 @@ begin
     exit;
   LayoutActionPage(SignInPage, SignInButton, OtherAccountButton, RowLogin, RowStart);
   LayoutActionPage(BeeperPage, BeeperButton, nil, RowCheck, RowMcp);
-  LayoutActionPage(AllowPage, AllowButton, nil, RowRegister, RowRestart);
+  LayoutActionPage(AllowPage, AllowButton, nil, RowRegister, RowApproveServer);
 end;
 
 procedure SetRow(I, State: Integer; Detail: String);
@@ -449,7 +456,7 @@ begin
     Last := RowMcp;
   end else begin
     First := RowRegister;
-    Last := RowRestart;
+    Last := RowApproveServer;
   end;
 end;
 
@@ -594,6 +601,7 @@ begin
         else
           SetRow(StepRow, RS_BUSY, ApproveCountdown());
       STEP_RESTART, STEP_RESTART_ALLOW: SetRow(StepRow, RS_BUSY, 'restarting Beeper');
+      STEP_WAIT_APPROVED: SetRow(StepRow, RS_BUSY, 'waiting');
     end;
     exit;
   end;
@@ -900,6 +908,14 @@ var
   Output: String;
   Code: Integer;
 begin
+  { Allowed, and the backend queued Beeper for an admin: the button now opens
+    the dashboard's request list and waits for the approval. }
+  if AllowDone and ServerPending then
+  begin
+    StartStep(AllowPage, STEP_WAIT_APPROVED, 'setup wait-approved --open --timeout ' +
+      IntToStr(APPROVED_TIMEOUT), RowApproveServer);
+    exit;
+  end;
   { Cleared only once the restart succeeds, so a stopped or failed one is
     tried again on the next click, as the message promised. }
   if AllowMissed then
@@ -910,6 +926,7 @@ begin
   Show(AllowPage, '');
   SetRow(RowAllow, RS_PENDING, '');
   SetRow(RowRestart, RS_PENDING, '');
+  SetRow(RowApproveServer, RS_PENDING, '');
   SetRow(RowRegister, RS_BUSY, '');
   WizardForm.Refresh;
   Code := Stdiod('setup register', Output);
@@ -920,6 +937,8 @@ begin
       'Click Connect Beeper with SealGate to try again.' + #13#10#13#10 + Output);
     exit;
   end;
+  { Not yet: the backend queued it for an admin (the next page). }
+  ServerPending := Code = EXIT_NOT_YET;
   SetRow(RowRegister, RS_DONE, '');
   StartStep(AllowPage, STEP_APPROVE, 'setup approve --timeout ' + IntToStr(APPROVE_TIMEOUT),
     RowAllow);
@@ -974,11 +993,22 @@ begin
         SetRow(RowAllow, RS_DONE, '');
         SetRow(RowRestart, RS_DONE, '');
         AllowDone := True;
-        MoveOn();
+        if ServerPending then
+        begin
+          AllowButton.Caption := 'Approve in SealGate';
+          Show(AllowPage, 'Finally, approve adding the Beeper server in SealGate: click ' +
+            'Approve in SealGate, then click the green tick next to the new server ' +
+            'request on the page that opens. Not an admin? Ask yours; this window ' +
+            'carries on once they have.');
+          FocusButton(AllowButton);
+        end else begin
+          SetRow(RowApproveServer, RS_SKIPPED, 'not needed');
+          MoveOn();
+        end;
       end else begin
         SetRow(RowAllow, RS_FAILED, 'timed out');
         AllowMissed := True;
-        Show(AllowPage, 'Beeper did not get your Allow in time. Click Connect Beeper with ' +
+        Show(AllowPage, 'Beeper did not get your approval in time. Click Connect Beeper with ' +
           'SealGate to try again: Beeper restarts first, so its pop-up can show. Look ' +
           'for the pop-up behind your other windows too.' + #13#10#13#10 + Output);
       end;
@@ -1005,6 +1035,20 @@ begin
         SetRow(RowMcp, RS_BUSY, '');
         SetBeeperState(BEEPER_NOT_READY, 'Beeper restarted. ' + BEEPER_TURN_ON_MCP, 'Continue');
       end;
+    STEP_WAIT_APPROVED:
+      if Code = EXIT_OK then
+      begin
+        SetRow(RowApproveServer, RS_DONE, '');
+        ServerApproved := True;
+        MoveOn();
+      end else if Code = EXIT_DECLINED then
+      begin
+        SetRow(RowApproveServer, RS_FAILED, 'declined');
+        Show(AllowPage, 'Beeper was declined in SealGate. Ask your admin to approve it, ' +
+          'then click Approve in SealGate.' + #13#10#13#10 + Output);
+      end else
+        Show(AllowPage, 'Beeper is not approved yet. Click Approve in SealGate to open ' +
+          'your dashboard again.' + #13#10#13#10 + Output);
     STEP_RESTART_ALLOW:
       if Code = EXIT_OK then
       begin
@@ -1026,7 +1070,7 @@ var
   Top, I: Integer;
   Done: Boolean;
 begin
-  if SignInDone and BeeperDone and AllowDone then
+  if SignInDone and BeeperDone and AllowDone and (ServerApproved or not ServerPending) then
   begin
     WizardForm.FinishedHeadingLabel.Caption := 'Beeper is connected to SealGate';
     WizardForm.FinishedLabel.Caption :=
@@ -1038,13 +1082,14 @@ begin
       'Beeper is not connected yet because a step was skipped. Run SealGate for ' +
       'Beeper Setup again to finish.';
   end;
-  for I := RowSummary to RowSummary + 2 do
+  for I := RowSummary to RowSummary + 3 do
   begin
     case I - RowSummary of
       0: Done := SignInDone;
       1: Done := BeeperDone;
+      2: Done := AllowDone;
     else
-      Done := AllowDone;
+      Done := AllowDone and (ServerApproved or not ServerPending);
     end;
     if Done then
       SetRow(I, RS_DONE, '')
@@ -1054,7 +1099,7 @@ begin
   WizardForm.FinishedHeadingLabel.AdjustHeight();
   Top := WizardForm.FinishedHeadingLabel.Top + WizardForm.FinishedHeadingLabel.Height +
     ScaleY(16);
-  Top := LayoutRows(RowSummary, RowSummary + 2, Top);
+  Top := LayoutRows(RowSummary, RowSummary + 3, Top);
   WizardForm.FinishedLabel.Top := Top + ScaleY(10);
   WizardForm.FinishedLabel.AdjustHeight();
 end;
@@ -1103,7 +1148,7 @@ begin
     'One click in Beeper.',
     'Click Connect Beeper with SealGate to allow SealGate to access Beeper. ' +
     'Beeper then shows a pop-up asking whether SealGate may access it: click ' +
-    'Allow in that pop-up.' + #13#10#13#10 +
+    'Approve in that pop-up.' + #13#10#13#10 +
     'If you do not see the pop-up, check behind your other windows.', '');
 
   SignInButton := AddActionButton(SignInPage, 'Sign in', @SignInClick);
@@ -1142,15 +1187,18 @@ begin
   RowRegister := AddRow(AllowPage.Surface, Left, W - Left,
     'Register Beeper with SealGate', GLYPH_SYNC, False);
   RowAllow := AddRow(AllowPage.Surface, Left, W - Left,
-    'Click Allow in the Beeper pop-up', GLYPH_WAIT, True);
+    'Click Approve in the Beeper pop-up', GLYPH_WAIT, True);
   RowRestart := AddRow(AllowPage.Surface, Left, W - Left,
     'Restart SealGate with the new access', GLYPH_SYNC, False);
+  RowApproveServer := AddRow(AllowPage.Surface, Left, W - Left,
+    'Approve Beeper in your SealGate dashboard', GLYPH_BROWSER, False);
   Left := WizardForm.FinishedLabel.Left;
   W := Left + WizardForm.FinishedLabel.Width;
   RowSummary := AddRow(WizardForm.FinishedPage, Left, W,
     'This computer is signed in to SealGate', GLYPH_DONE, False);
   AddRow(WizardForm.FinishedPage, Left, W, 'Beeper is installed and ready', GLYPH_DONE, False);
   AddRow(WizardForm.FinishedPage, Left, W, 'SealGate may access Beeper', GLYPH_DONE, False);
+  AddRow(WizardForm.FinishedPage, Left, W, 'Beeper is approved in SealGate', GLYPH_DONE, False);
   for W := 0 to RowCount - 1 do
     SetRow(W, RS_PENDING, '');
 
