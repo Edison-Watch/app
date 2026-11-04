@@ -55,6 +55,8 @@ const BACKOFF_MAX: Duration = Duration::from_secs(30);
 const CONFIG_POLL_INTERVAL: Duration = Duration::from_secs(1);
 
 pub async fn run(args: RunArgs) -> Result<()> {
+    #[cfg(windows)]
+    crate::platform::windows::kill_children_on_exit();
     let initial = ResolvedRun::from_args(&args);
     let writer = StateWriter::new(State {
         backend_url: initial.as_ref().ok().map(|value| value.backend.clone()),

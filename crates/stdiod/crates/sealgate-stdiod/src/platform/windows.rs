@@ -313,6 +313,40 @@ fn running_processes() -> Vec<(u32, std::path::PathBuf)> {
     found
 }
 
+/// Put this process in a job that kills everything it started when it exits.
+/// Without it a stopped daemon leaves its children's children running: it
+/// starts `cmd /c npx`, and killing cmd orphans the Node process under it.
+pub fn kill_children_on_exit() {
+    use windows_sys::Win32::Foundation::CloseHandle;
+    use windows_sys::Win32::System::JobObjects::{
+        AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation,
+        SetInformationJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
+        JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+    };
+    use windows_sys::Win32::System::Threading::GetCurrentProcess;
+    // SAFETY: the job handle is checked; `info` is sized and passed with its size.
+    // The handle is kept open on success: closing it is what kills the children.
+    unsafe {
+        let job = CreateJobObjectW(std::ptr::null(), std::ptr::null());
+        if job.is_null() {
+            warn!("could not create a job object; children may outlive the daemon");
+            return;
+        }
+        let mut info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = std::mem::zeroed();
+        info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        let set = SetInformationJobObject(
+            job,
+            JobObjectExtendedLimitInformation,
+            &info as *const _ as *const std::ffi::c_void,
+            std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+        );
+        if set == 0 || AssignProcessToJobObject(job, GetCurrentProcess()) == 0 {
+            warn!("could not join a job object; children may outlive the daemon");
+            CloseHandle(job);
+        }
+    }
+}
+
 fn terminate(pid: u32) {
     use windows_sys::Win32::Foundation::CloseHandle;
     use windows_sys::Win32::System::Threading::{OpenProcess, TerminateProcess, PROCESS_TERMINATE};
@@ -394,6 +428,66 @@ fn wait_for_state(want: bool, timeout: Duration) -> Wait {
     }
 }
 
+/// End the running instance and wait for it to go away. Returns whether that
+/// was confirmed: false when the run state could not be read and a fixed grace
+/// period stood in for it.
+fn end_and_wait() -> Result<bool> {
+    // `/end` "fails" both when nothing was running (benign) and for real
+    // problems like access denied, and its message is localized - so neither
+    // the exit code nor the text is a reliable signal. The task's actual state
+    // is the arbiter instead; the message is kept only to enrich the error if
+    // the task never stops, which is the case a genuine /end failure produces.
+    let end = schtasks(&["/end", "/tn", &task_name()])?;
+    let end_msg = String::from_utf8_lossy(&end.stderr).trim().to_owned();
+
+    // Whether the stop can be stated as fact. It drops to false the moment the
+    // run state stops being readable, and restart's closing message says so
+    // rather than claiming a confirmation that never happened.
+    let mut verified = true;
+
+    match wait_for_state(false, STOP_TIMEOUT) {
+        Wait::Reached => {}
+        Wait::TimedOut => {
+            let detail = if end_msg.is_empty() {
+                String::new()
+            } else {
+                format!("\nschtasks /end reported: {end_msg}")
+            };
+            return Err(anyhow!(
+                "the running instance did not stop within {}s; starting a new one now would be \
+                 ignored (the task sets MultipleInstancesPolicy=IgnoreNew){detail}\n\
+                 hint: check for a stuck sealgate-stdiod process, or run `sealgate-stdiod \
+                 uninstall` followed by `sealgate-stdiod install`",
+                STOP_TIMEOUT.as_secs()
+            ));
+        }
+        Wait::Unreadable => {
+            // No signal to wait on. Erroring out here would make `restart`
+            // permanently impossible on a non-English Windows, which is worse
+            // than the risk it avoids - so settle for a fixed grace period,
+            // proceed, and stop claiming the outcome is confirmed.
+            verified = false;
+            warn!(
+                task = %task_name(),
+                settle_ms = BLIND_SETTLE.as_millis() as u64,
+                "task run state is unreadable (localized status field); \
+                 waiting a fixed grace period instead of polling"
+            );
+            std::thread::sleep(BLIND_SETTLE);
+        }
+    }
+    Ok(verified)
+}
+
+/// Stop the daemon until the next `restart` or logon. A task that is not
+/// registered is already stopped.
+pub fn stop() -> Result<()> {
+    if !is_loaded()? {
+        return Ok(());
+    }
+    end_and_wait().map(|_| ())
+}
+
 /// Restart the daemon: end the running instance, wait for it to actually go
 /// away, then run it again.
 ///
@@ -422,51 +516,7 @@ pub fn restart() -> Result<()> {
         ));
     }
 
-    // `/end` "fails" both when nothing was running (benign) and for real
-    // problems like access denied, and its message is localized - so neither
-    // the exit code nor the text is a reliable signal. The task's actual state
-    // is the arbiter instead; the message is kept only to enrich the error if
-    // the task never stops, which is the case a genuine /end failure produces.
-    let end = schtasks(&["/end", "/tn", &task_name()])?;
-    let end_msg = String::from_utf8_lossy(&end.stderr).trim().to_owned();
-
-    // Tracks whether this restart can be stated as fact. It drops to false the
-    // moment the run state stops being readable, and the closing message says
-    // so rather than claiming a confirmation that never happened.
-    let mut verified = true;
-
-    match wait_for_state(false, STOP_TIMEOUT) {
-        Wait::Reached => {}
-        Wait::TimedOut => {
-            let detail = if end_msg.is_empty() {
-                String::new()
-            } else {
-                format!("\nschtasks /end reported: {end_msg}")
-            };
-            return Err(anyhow!(
-                "the running instance did not stop within {}s, so starting a new one would be \
-                 ignored (the task sets MultipleInstancesPolicy=IgnoreNew) and this would \
-                 report a restart that never happened{detail}\n\
-                 hint: check for a stuck sealgate-stdiod process, or run `sealgate-stdiod \
-                 uninstall` followed by `sealgate-stdiod install`",
-                STOP_TIMEOUT.as_secs()
-            ));
-        }
-        Wait::Unreadable => {
-            // No signal to wait on. Erroring out here would make `restart`
-            // permanently impossible on a non-English Windows, which is worse
-            // than the risk it avoids - so settle for a fixed grace period,
-            // proceed, and stop claiming the outcome is confirmed.
-            verified = false;
-            warn!(
-                task = %task_name(),
-                settle_ms = BLIND_SETTLE.as_millis() as u64,
-                "task run state is unreadable (localized status field); \
-                 waiting a fixed grace period instead of polling"
-            );
-            std::thread::sleep(BLIND_SETTLE);
-        }
-    }
+    let mut verified = end_and_wait()?;
 
     let out = schtasks(&["/run", "/tn", &task_name()])?;
     if !out.status.success() {

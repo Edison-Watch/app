@@ -905,6 +905,7 @@ function Restart-BeeperDesktop([string]$App) {
 }
 
 $script:PREAUTH_RETRIED = $false
+$script:DAEMON_PAUSED = $false
 
 # Record that SealGate installed Beeper, so "SealGate for Beeper"'s uninstaller
 # offers to remove it ticked (SEALGATE_KEY in installer/windows/SealGateBeeper.iss).
@@ -1002,7 +1003,40 @@ function Read-SharedFile([string]$Path) {
 # That child then defers to ours for the approval and freezes when ours exits,
 # so every mount times out. Restarting the daemon gives it a fresh child that
 # finds the approval already saved.
-function Restart-DaemonAfterGrant {
+# The proxy skips its sign-in lock on Windows, so the daemon's own copy would
+# sign in alongside the probe and take the browser's callback, leaving the
+# probe's pop-up dead. Pause the daemon's task; Restart-DaemonAfterGrant starts it.
+function Suspend-DaemonForGrant {
+    $sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+    $task = $null
+    foreach ($name in @("SealGate stdiod $sid", 'SealGate stdiod')) {
+        $task = Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($task) { break }
+    }
+    if (-not $task) { return }
+    $script:DAEMON_PAUSED = $true
+    if ($task.State -eq 'Running') {
+        Stop-ScheduledTask -InputObject $task -ErrorAction SilentlyContinue
+        $i = 0
+        while ($i -lt 60 -and (Get-ScheduledTask -TaskName $task.TaskName -TaskPath $task.TaskPath -ErrorAction SilentlyContinue).State -eq 'Running') {
+            Start-Sleep -Milliseconds 250
+            $i++
+        }
+        if ($i -ge 60) { Warn 'could not pause the daemon; if the Beeper pop-up does nothing, run preauth again' }
+    }
+    # Older daemons left their proxy running when stopped, still signing in.
+    # Stop proxies whose parent is gone; one another app started is left alone.
+    $all = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue)
+    $alive = @{}
+    foreach ($p in $all) { $alive[[int]$p.ProcessId] = $true }
+    foreach ($p in $all) {
+        if ($p.CommandLine -like '*@beeper?mcp-remote*' -and -not $alive[[int]$p.ParentProcessId]) {
+            $null = Invoke-Native 'taskkill' @('/PID', "$($p.ProcessId)", '/T', '/F')
+        }
+    }
+}
+
+function Restart-DaemonAfterGrant([switch]$Again) {
     if (-not (Test-Command 'sealgate-stdiod')) { return }
     # Skip only when no task is installed (exit 4). Exit 3 is not trusted: on a
     # non-English Windows the run state is unreadable and a live task reports 3,
@@ -1011,7 +1045,7 @@ function Restart-DaemonAfterGrant {
     if ($script:LastRc -eq 4) { return }
     $null = Invoke-Native 'sealgate-stdiod' @('restart')
     if ($script:LastRc -eq 0) {
-        Ok 'restarted the daemon so it connects to Beeper with the approval'
+        if ($Again) { Ok 'started the daemon again' } else { Ok 'restarted the daemon so it connects to Beeper with the approval' }
     } else {
         Warn 'could not restart the daemon'
         Todo 'run: sealgate-stdiod restart'
@@ -1099,6 +1133,7 @@ function Invoke-PrimeOauthGrant {
         Warn "ignoring BEEPER_DESKTOP_BASE_URL ($($env:BEEPER_DESKTOP_BASE_URL)): SealGate's background service should not use it"
         Todo 'remove it from your environment so the background service agrees with this step'
     }
+    Suspend-DaemonForGrant
     $dir = Join-Path ([System.IO.Path]::GetTempPath()) ("install-beeper-" + [System.IO.Path]::GetRandomFileName())
     New-Item -ItemType Directory -Path $dir -Force | Out-Null
     $outFile = Join-Path $dir 'out'
@@ -1161,6 +1196,7 @@ function Invoke-PrimeOauthGrant {
             return
         }
     }
+    if ($script:DAEMON_PAUSED) { Restart-DaemonAfterGrant -Again }
     Warn "you didn't allow access in Beeper within $($script:OAUTH_WAIT)s, so SealGate can't read your Beeper chats yet"
     Info 'the pop-up was probably hidden behind your other windows'
     Todo 'to try again, run this and click Allow when the pop-up appears:'
