@@ -33,7 +33,7 @@ pub use macos::{is_installed, is_loaded, is_running};
 pub mod windows;
 
 #[cfg(target_os = "windows")]
-pub use windows::{install, restart, uninstall};
+pub use windows::{install, restart, stop, uninstall};
 
 #[cfg(target_os = "windows")]
 #[allow(unused_imports)]

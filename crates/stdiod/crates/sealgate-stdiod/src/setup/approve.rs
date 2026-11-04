@@ -5,6 +5,10 @@
 //! in Beeper's pop-up. Beeper caches the grant per user, so the daemon's own
 //! child reuses it. The daemon is then restarted: a child it started while the
 //! approval was pending defers to ours and freezes once ours exits.
+//!
+//! On Windows the proxy skips the lock that keeps two copies from signing in
+//! at once, so the daemon's own copy would run a second sign-in and take the
+//! browser's callback, leaving our pop-up dead. The daemon is paused instead.
 
 use std::process::Stdio;
 use std::time::{Duration, Instant};
@@ -31,8 +35,22 @@ pub async fn run(rep: &Reporter, timeout: Duration) -> Result<i32> {
         rep.result(json!({ "approved": false, "beeper_running": false }));
         return Ok(EXIT_NOT_YET);
     };
+    let paused = pause_daemon(rep);
+    let approved = wait_for_allow(rep, &base, timeout).await;
+    // Paused, it comes back either way; otherwise only for the approval.
+    let restarted = (paused || matches!(approved, Ok(true))) && restart_daemon(rep, paused);
+    if !approved? {
+        rep.result(json!({ "approved": false, "beeper_running": true }));
+        return Ok(EXIT_NOT_YET);
+    }
+    rep.result(json!({ "approved": true, "daemon_restarted": restarted }));
+    Ok(EXIT_OK)
+}
+
+/// Run the proxy until Beeper answers its `initialize`, or `timeout`.
+async fn wait_for_allow(rep: &Reporter, base: &str, timeout: Duration) -> Result<bool> {
     let mut args = vec!["-y".to_string(), beeper::MCP_PKG.to_string()];
-    if let Some(endpoint) = beeper::mcp_endpoint(&base) {
+    if let Some(endpoint) = beeper::mcp_endpoint(base) {
         args.push(endpoint);
     }
     let mut cmd = crate::proc::build_child_command("npx", &args);
@@ -124,28 +142,70 @@ pub async fn run(rep: &Reporter, timeout: Duration) -> Result<i32> {
         if !last_errors.is_empty() {
             rep.info(&format!("technical detail: {}", last_errors.join(" ")));
         }
-        rep.result(json!({ "approved": false, "beeper_running": true }));
-        return Ok(EXIT_NOT_YET);
+        return Ok(false);
     }
     if started.elapsed() <= Duration::from_secs(3) {
         rep.ok("Beeper had already allowed SealGate");
     } else {
         rep.ok("Beeper allowed SealGate");
     }
-    let restarted = restart_daemon(rep);
-    rep.result(json!({ "approved": true, "daemon_restarted": restarted }));
-    Ok(EXIT_OK)
+    Ok(true)
+}
+
+/// Pause the daemon on Windows so its Beeper child is not signing in too.
+/// True when it was paused, and so must be started again.
+#[cfg(windows)]
+fn pause_daemon(rep: &Reporter) -> bool {
+    // Installed, not running: a non-English Windows reads every task as stopped.
+    if !crate::platform::is_installed().unwrap_or(false) {
+        return false;
+    }
+    if let Err(e) = crate::platform::stop() {
+        rep.warn(&format!("could not pause the daemon: {e}"));
+    }
+    stop_orphaned_proxies();
+    true
+}
+
+/// Daemons before `kill_children_on_exit` left their Beeper proxy running when
+/// stopped, still signing in. Stop those: matching proxies whose parent is gone,
+/// so one another app started is left alone.
+#[cfg(windows)]
+fn stop_orphaned_proxies() {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    const SCRIPT: &str = "$all = Get-CimInstance Win32_Process; \
+        $alive = @{}; foreach ($p in $all) { $alive[[int]$p.ProcessId] = $true }; \
+        foreach ($p in $all) { \
+          if ($p.CommandLine -like '*@beeper?mcp-remote*' -and -not $alive[[int]$p.ParentProcessId]) { \
+            taskkill /PID $p.ProcessId /T /F | Out-Null } }";
+    let _ = std::process::Command::new("powershell")
+        .args(["-NoProfile", "-NonInteractive", "-Command", SCRIPT])
+        .creation_flags(CREATE_NO_WINDOW)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
+}
+
+#[cfg(not(windows))]
+fn pause_daemon(_rep: &Reporter) -> bool {
+    false
 }
 
 /// Restart the daemon when its supervisor unit exists, so its Beeper child
 /// starts over with the approval in place.
-fn restart_daemon(rep: &Reporter) -> bool {
+fn restart_daemon(rep: &Reporter, paused: bool) -> bool {
     if !crate::platform::is_installed().unwrap_or(false) {
         return false;
     }
     match crate::platform::restart() {
         Ok(()) => {
-            rep.ok("restarted the daemon so it connects to Beeper with the approval");
+            rep.ok(if paused {
+                "started the daemon again"
+            } else {
+                "restarted the daemon so it connects to Beeper with the approval"
+            });
             true
         }
         Err(e) => {
