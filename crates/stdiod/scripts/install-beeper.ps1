@@ -893,6 +893,13 @@ function Test-CanAsk {
 # again. A request made during Beeper's first-run setup never shows, and only a
 # fresh start clears it. Waiting matters: Beeper refuses to start while the old
 # instance is still exiting.
+# Start Beeper with its output in temp files. Electron writes its logs to the
+# console that started it when nothing is redirected, which floods this window.
+function Start-BeeperDesktop([string]$App) {
+    $log = Join-Path ([System.IO.Path]::GetTempPath()) ('sealgate-beeper-' + [System.IO.Path]::GetRandomFileName())
+    Start-Process -FilePath $App -RedirectStandardOutput "$log.out.log" -RedirectStandardError "$log.err.log" -ErrorAction Stop | Out-Null
+}
+
 function Restart-BeeperDesktop([string]$App) {
     Info 'restarting Beeper'
     $name = [System.IO.Path]::GetFileNameWithoutExtension($App)
@@ -901,7 +908,7 @@ function Restart-BeeperDesktop([string]$App) {
         if (-not (Get-Process -Name $name -ErrorAction SilentlyContinue)) { break }
         Start-Sleep -Milliseconds 500
     }
-    try { Start-Process -FilePath $App | Out-Null } catch { Warn "could not start Beeper: $($_.Exception.Message)" }
+    try { Start-BeeperDesktop $App } catch { Warn "could not start Beeper: $($_.Exception.Message)" }
 }
 
 $script:PREAUTH_RETRIED = $false
@@ -952,7 +959,7 @@ function Ensure-BeeperDesktop {
     }
     if ($app -and $fresh -and (Test-CanAsk)) {
         Info "opening $app"
-        try { Start-Process -FilePath $app | Out-Null } catch { Warn "could not start Beeper: $($_.Exception.Message)" }
+        try { Start-BeeperDesktop $app } catch { Warn "could not start Beeper: $($_.Exception.Message)" }
         Todo 'finish setting up Beeper: sign in, then turn on Settings > Developers > MCP'
         $null = Read-Host "   press Enter here when that is done (Beeper restarts once so it can show SealGate's request)"
         Restart-BeeperDesktop $app
@@ -966,7 +973,7 @@ function Ensure-BeeperDesktop {
     } elseif ($app) {
         Info "opening $app"
         $opened = $false
-        try { Start-Process -FilePath $app | Out-Null; $opened = $true } catch { Warn "could not start Beeper: $($_.Exception.Message)" }
+        try { Start-BeeperDesktop $app; $opened = $true } catch { Warn "could not start Beeper: $($_.Exception.Message)" }
         if ($opened -and $script:BEEPER_WAIT -gt 0) {
             Info "waiting up to $($script:BEEPER_WAIT)s for the client API"
             $base = Wait-BeeperApi $script:BEEPER_WAIT
