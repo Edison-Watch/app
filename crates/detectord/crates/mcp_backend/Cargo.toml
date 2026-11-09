@@ -3,7 +3,7 @@ name = "mcp_backend"
 version.workspace = true
 publish = false        # internal crate; not published to crates.io
 edition = "2024"
-rust-version = "1.88"
+rust-version = "1.89"
 license = "AGPL-3.0-only"
 description = "SealGate backend REST client (policy, known fingerprints, server submit)."
 

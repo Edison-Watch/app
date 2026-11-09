@@ -2,7 +2,7 @@
 name = "sealgate-detectord"
 version.workspace = true
 edition = "2024"
-rust-version = "1.88"
+rust-version = "1.89"
 description = "Watches MCP (Model Context Protocol) client configs and reports added or removed servers as they happen."
 license = "AGPL-3.0-only"
 readme = "../../README.md"
@@ -44,7 +44,7 @@ chatgpt = []
 dirs = "6.0.0"
 notify = "8.2.0"
 notify-debouncer-full = "0.7.0"
-rusqlite = { version = "0.40.1", features = ["bundled"], optional = true }
+rusqlite = { version = "0.41", features = ["bundled"], optional = true }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
 sha2 = "0.10.8"
