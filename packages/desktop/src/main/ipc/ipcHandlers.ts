@@ -29,6 +29,7 @@ import {
 } from '../stdiod/accountSwitch'
 import { registerMcpSubmitHandlers } from './ipcHandlersMcpSubmit'
 import { registerStdiodHandlers } from './ipcHandlersStdiod'
+import { registerMessagingHandlers } from './ipcHandlersMessaging'
 import {
   ENV_DOCS_URL,
   type SetupData,
@@ -407,6 +408,9 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   // sealgate-stdiod daemon control (install / login / uninstall / status).
   registerStdiodHandlers()
+
+  // Local messaging bridges (sealgate-messaging): enable + account logins.
+  registerMessagingHandlers()
 
   ipcMain.handle('mcp:getHookStatus', async () => {
     const claudeCodeMcpStatus = await checkClaudeCodeMcpConnection()

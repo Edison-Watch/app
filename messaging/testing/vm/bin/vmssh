@@ -1,0 +1,13 @@
+#!/bin/bash
+# vmssh [--ip] [ssh args...] [command]  - SSH into the Linux test VM.
+# The IP comes from libvirt's DHCP lease on every call.
+# Env: VM (default deb-proto), VM_USER (default ilia), VM_DIR (default ~/vms).
+VM=${VM:-deb-proto}
+VM_USER=${VM_USER:-ilia}
+VM_DIR=${VM_DIR:-$HOME/vms}
+URI=${LIBVIRT_DEFAULT_URI:-qemu:///system}
+IP=$(virsh -c "$URI" domifaddr "$VM" --source lease 2>/dev/null | awk '/ipv4/{split($4,a,"/"); print a[1]; exit}')
+[ -n "$IP" ] || { echo "vmssh: no DHCP lease for $VM yet" >&2; exit 1; }
+if [ "$1" = "--ip" ]; then echo "$IP"; exit 0; fi
+exec ssh -i "$VM_DIR/ssh/$VM"_ed25519 -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new \
+  -o UserKnownHostsFile="$VM_DIR/ssh/known_hosts" -o ConnectTimeout=10 "$VM_USER@$IP" "$@"

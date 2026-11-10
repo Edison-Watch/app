@@ -5,6 +5,7 @@ import { getActiveEnvName, getEnv } from "@sealgate/shared/config";
 import sealgateIcon from "../../assets/sealgate-icon.png";
 import ClientsView from "./ClientsView";
 import MyMcpsView from "./MyMcpsView";
+import MessagingView from "./MessagingView";
 import StdiodEnableCard from "../StdiodEnableCard";
 import UpdateBanner from "../UpdateBanner";
 import DaemonWarningBanner from "../DaemonWarningBanner";
@@ -21,7 +22,7 @@ async function resolveApiBaseUrl(): Promise<string> {
   return getEnv().API_BASE_URL;
 }
 
-type MenuTab = "home" | "clients" | "my-mcps";
+type MenuTab = "home" | "clients" | "my-mcps" | "messaging";
 
 interface SetupData {
   completed?: boolean;
@@ -233,6 +234,7 @@ export default function MainMenu(): React.ReactNode {
             {([
               { key: "clients" as const, label: "Home", icon: "M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" },
               { key: "my-mcps" as const, label: "My MCPs", icon: "M4 5a1 1 0 011-1h14a1 1 0 011 1v3a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h14a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zM8 6.5h.01M8 16.5h.01" },
+              { key: "messaging" as const, label: "Messaging", icon: "M8 10h8M8 14h5M21 12c0 4.418-4.03 8-9 8a9.86 9.86 0 01-4-.83L3 20l1.4-3.72A7.5 7.5 0 013 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" },
               { key: "home" as const, label: "Config", icon: "M3 9.5L12 3l9 6.5V20a1 1 0 01-1 1H4a1 1 0 01-1-1V9.5z" },
             ]).map((tab) => (
               <button
@@ -241,7 +243,7 @@ export default function MainMenu(): React.ReactNode {
                 onClick={() => {
                   setActiveTab(tab.key);
                   // Resize window for list-heavy tabs (taller to fit list)
-                  const needsTallWindow = tab.key === "clients" || tab.key === "my-mcps";
+                  const needsTallWindow = tab.key === "clients" || tab.key === "my-mcps" || tab.key === "messaging";
                   const height = needsTallWindow ? 749 : (setupData.mcpBaseUrl && setupData.apiKey ? 605 : 547);
                   window.api.menu.resizeWindow(461, height);
                 }}
@@ -262,6 +264,8 @@ export default function MainMenu(): React.ReactNode {
           {activeTab === "clients" && <ClientsView />}
 
           {activeTab === "my-mcps" && <MyMcpsView />}
+
+          {activeTab === "messaging" && <MessagingView apiBaseUrl={setupData.apiBaseUrl} apiKey={setupData.apiKey} />}
 
           {activeTab === "home" && (<>
           {/* Account switcher */}

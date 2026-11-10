@@ -33,6 +33,7 @@ const FS_ALLOWLIST: Record<string, string> = {
   'main/stdiod/controller.ts': "/dev/fd probe + SealGate's own stdiod state",
   'main/stdiod/state.ts': "SealGate's own stdiod state file",
   'main/stdiod/installStamp.ts': "SealGate's own stdiod install stamp in userData",
+  'main/messaging/controller.ts': "the app's own bundled sealgate-messaging binary (staging + hash) and its control.json",
   'main/stdiod/installRefresh.ts': "SealGate's own stdiod LaunchAgent plist",
   'main/stdiod/stdiodLog.ts': "SealGate's own stdiod log file"
 }

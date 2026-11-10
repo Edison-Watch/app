@@ -70,7 +70,7 @@ interface SpawnResult {
   stderr: string
 }
 
-async function runStdiod(args: string[]): Promise<SpawnResult> {
+export async function runStdiod(args: string[]): Promise<SpawnResult> {
   const binary = getStdiodBinaryPath()
   return new Promise<SpawnResult>((resolve, reject) => {
     const child = spawn(binary, args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true })

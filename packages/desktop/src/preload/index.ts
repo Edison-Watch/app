@@ -4,6 +4,7 @@ import { electronAPI } from '@electron-toolkit/preload'
 import type { DetectordHealth } from '../main/detectord/health'
 import type { StdiodLoginInput, StdiodResult, StdiodStatus } from '../main/stdiod/types'
 import type { UpdateState } from '../main/infra/updateManager'
+import type { IrcNetwork, LoginState, MessagingStatus } from '../main/messaging/controller'
 import type { UpdateSettings } from '../main/infra/updateSettings'
 
 /**
@@ -277,6 +278,27 @@ const api = {
       ipcRenderer.on('stdiod:changed', handler)
       return () => ipcRenderer.removeListener('stdiod:changed', handler)
     }
+  },
+
+  /** Local messaging bridges (chat apps offered to agents as one MCP server) */
+  messaging: {
+    status: (): Promise<MessagingStatus> => ipcRenderer.invoke('messaging:status'),
+    enable: (): Promise<{ ok: boolean; autoApproved?: boolean; message: string } | { error: string }> =>
+      ipcRenderer.invoke('messaging:enable'),
+    startLogin: (network: string, flow?: string): Promise<LoginState | { error: string }> =>
+      ipcRenderer.invoke('messaging:startLogin', network, flow),
+    submitLogin: (network: string, id: string, values: Record<string, string>): Promise<LoginState | { error: string }> =>
+      ipcRenderer.invoke('messaging:submitLogin', network, id, values),
+    getLogin: (network: string, id: string): Promise<LoginState | { error: string }> =>
+      ipcRenderer.invoke('messaging:getLogin', network, id),
+    cancelLogin: (network: string, id: string): Promise<{ ok: boolean } | { error: string }> =>
+      ipcRenderer.invoke('messaging:cancelLogin', network, id),
+    removeAccount: (accountId: string): Promise<{ ok: boolean } | { error: string }> =>
+      ipcRenderer.invoke('messaging:removeAccount', accountId),
+    listIrcNetworks: (): Promise<Record<string, IrcNetwork> | { error: string }> =>
+      ipcRenderer.invoke('messaging:listIrcNetworks'),
+    setIrcNetwork: (name: string, net: IrcNetwork): Promise<{ ok: boolean } | { error: string }> =>
+      ipcRenderer.invoke('messaging:setIrcNetwork', name, net)
   },
 
   /** App version */

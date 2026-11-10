@@ -4,6 +4,7 @@ import type { DetectordHealth } from '../main/detectord/health'
 import type { StdiodLoginInput, StdiodResult, StdiodStatus } from '../main/stdiod/types'
 import type { UpdateState } from '../main/infra/updateManager'
 import type { UpdateSettings } from '../main/infra/updateSettings'
+import type { IrcNetwork, LoginState, MessagingStatus } from '../main/messaging/controller'
 
 /** Typed IPC API matching the api object in preload/index.ts */
 interface SealGateAPI {
@@ -198,6 +199,17 @@ interface SealGateAPI {
     uninstall: (opts?: { purge?: boolean }) => Promise<{ ok: boolean; stdout: string; stderr: string }>
     health: () => Promise<DetectordHealth>
     onHealth: (callback: (h: DetectordHealth) => void) => () => void
+  }
+  messaging: {
+    status: () => Promise<MessagingStatus>
+    enable: () => Promise<{ ok: boolean; autoApproved?: boolean; message: string } | { error: string }>
+    startLogin: (network: string, flow?: string) => Promise<LoginState | { error: string }>
+    submitLogin: (network: string, id: string, values: Record<string, string>) => Promise<LoginState | { error: string }>
+    getLogin: (network: string, id: string) => Promise<LoginState | { error: string }>
+    cancelLogin: (network: string, id: string) => Promise<{ ok: boolean } | { error: string }>
+    removeAccount: (accountId: string) => Promise<{ ok: boolean } | { error: string }>
+    listIrcNetworks: () => Promise<Record<string, IrcNetwork> | { error: string }>
+    setIrcNetwork: (name: string, net: IrcNetwork) => Promise<{ ok: boolean } | { error: string }>
   }
   stdiod: {
     status: () => Promise<StdiodStatus>

@@ -1,3 +1,4 @@
+import { stageMessagingBinary } from './messaging/controller'
 import {
   app,
   BrowserWindow,
@@ -458,6 +459,7 @@ app.whenReady().then(async () => {
   // there breaks the moment the app exits (status=203/EXEC -> crash-loop). No-op
   // on mac/win/dev. See runtime/stdiodBinary.ts and detectord/binary.ts.
   stageStdiodBinary()
+  stageMessagingBinary()
   stageDetectordBinary()
 
   // Linux/AppImage: self-install a .desktop entry + icon so the dock/taskbar

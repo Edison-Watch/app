@@ -46,6 +46,9 @@ win:
     # scripts/stage-runtimes.ps1 -> resources/runtimes/{node,uv}.
     - from: bin/runtimes/${arch}
       to: runtimes
+    # Local messaging bridges (scripts/build-messaging.sh) -> resources/bin/.
+    - from: bin/messaging/${arch}/sealgate-messaging.exe
+      to: bin/sealgate-messaging.exe
   target:
     - target: nsis
       arch:
@@ -80,6 +83,8 @@ mac:
       to: bin/sealgate-stdiod
     - from: bin/sealgate-detectord
       to: bin/sealgate-detectord
+    - from: bin/messaging/${arch}/sealgate-messaging
+      to: bin/sealgate-messaging
   # arm64 only - Intel Macs are not supported. Artifact names still carry
   # ${arch}, which is what electron-updater matches against process.arch when
   # picking a download out of latest-mac.yml; keeping it means the manifest
@@ -167,6 +172,8 @@ linux:
       to: bin/sealgate-stdiod
     - from: bin/detectord/${arch}/sealgate-detectord
       to: bin/sealgate-detectord
+    - from: bin/messaging/${arch}/sealgate-messaging
+      to: bin/sealgate-messaging
   target:
     - target: AppImage
       arch:
