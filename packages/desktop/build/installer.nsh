@@ -74,6 +74,12 @@
   ; Transient startup log - always removed on a real uninstall.
   Delete "$TEMP\sg-startup.log"
 
+  ; Installer telemetry leftovers (see installerTelemetry.nsh). Only on a real,
+  ; non-silent uninstall: during an upgrade the old uninstaller runs silently
+  ; while the new installer's in-progress record is live.
+  DeleteRegKey HKCU "Software\SealGate\InstallTelemetry"
+  Delete "$LOCALAPPDATA\SealGate\install-telemetry.json"
+
   ; Stop + remove the stdiod daemon (scheduled task + its credentials/logs).
   ; `uninstall --purge` handles the SID-named task (and the legacy name).
   MessageBox MB_YESNO|MB_ICONQUESTION "Stop and remove the SealGate stdiod daemon (background tunnel + its saved credentials)?" /SD IDNO IDNO sg_skipDaemon

@@ -8,6 +8,9 @@
 ;   installer_step       step = install_clicked | old_version_checked | files_installed
 ;   installer_finished   outcome = success | failed | cancelled, with last_step,
 ;                        exit_code (old uninstaller) or error_level (NSIS)
+;   installer_previous_run_incomplete
+;                        the last run never reported installer_finished
+;                        (HKCU\Software\SealGate\InstallTelemetry keeps its id/step)
 ;
 ; On success it also leaves %LOCALAPPDATA%\SealGate\install-telemetry.json so
 ; the app can send app_first_launch with the same install_id (see
@@ -67,7 +70,10 @@
   !define SG_IT_PKG_ARCH "x64"
 !endif
 
-Var sgItOn        ; "1" when this run may send
+!define SG_IT_RUN_KEY "Software\SealGate\InstallTelemetry"
+
+Var sgItAllowed   ; "1" when telemetry is not opted out for this run
+Var sgItOn        ; "1" while sends are live (cleared after the first network failure)
 Var sgItId        ; random GUID for this installer run
 Var sgItStep      ; last step reached
 Var sgItOutcome   ; "" until installer_finished was sent
@@ -78,7 +84,7 @@ Var sgItOsBuild   ; Windows build number, e.g. 22631
 Var sgItOsArch    ; x64 | arm64 | x86
 
 ; POST the JSON in $R9 to the configured endpoint. Synchronous, short timeouts,
-; result ignored. Clobbers nothing (all registers saved).
+; result ignored apart from the circuit breaker. Clobbers nothing.
 Function sgItPost
   ${If} $sgItOn != "1"
     Return
@@ -89,20 +95,33 @@ Function sgItPost
   Push $4
   StrCpy $2 0
   StrCpy $3 0
-  System::Call 'winhttp::WinHttpOpen(w "SealGate-Installer", i 0, p 0, p 0, i 0) p.r1'
+  StrCpy $4 0
+  ; 4 = WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY (the user's proxy settings, Windows
+  ; 8.1+). Falls back to 0 (WinHTTP's own proxy config) on older systems.
+  System::Call 'winhttp::WinHttpOpen(w "SealGate-Installer", i 4, p 0, p 0, i 0) p.r1'
+  ${If} $1 == 0
+    System::Call 'winhttp::WinHttpOpen(w "SealGate-Installer", i 0, p 0, p 0, i 0) p.r1'
+  ${EndIf}
   ${If} $1 != 0
-    System::Call 'winhttp::WinHttpSetTimeouts(p r1, i 1500, i 1500, i 1500, i 1500)'
+    ; resolve, connect, send, receive (ms)
+    System::Call 'winhttp::WinHttpSetTimeouts(p r1, i 1000, i 1000, i 1000, i 1500)'
     System::Call 'winhttp::WinHttpConnect(p r1, w "${SG_IT_HOST}", i ${SG_IT_PORT}, i 0) p.r2'
   ${EndIf}
   ${If} $2 != 0
     System::Call 'winhttp::WinHttpOpenRequest(p r2, w "POST", w "${SG_IT_PATH}", p 0, p 0, p 0, i ${SG_IT_FLAGS}) p.r3'
   ${EndIf}
   ${If} $3 != 0
+    ; Also on the request handle: some WinHTTP implementations do not pass the
+    ; session timeouts down to the request.
+    System::Call 'winhttp::WinHttpSetTimeouts(p r3, i 1000, i 1000, i 1000, i 1500)'
+    ; WINHTTP_OPTION_RECEIVE_RESPONSE_TIMEOUT (7): the wait for response
+    ; headers has its own timeout, 90 s by default. Cap it too.
+    System::Call 'winhttp::WinHttpSetOption(p r3, i 7, *i 1500, i 4)'
     StrLen $4 $R9
     ; The body is plain ASCII, so the ANSI (m) conversion is byte-exact.
     System::Call 'winhttp::WinHttpSendRequest(p r3, w "Content-Type: application/json", i -1, m R9, i r4, i r4, p 0) i.r4'
     ${If} $4 != 0
-      System::Call 'winhttp::WinHttpReceiveResponse(p r3, p 0)'
+      System::Call 'winhttp::WinHttpReceiveResponse(p r3, p 0) i.r4'
     ${EndIf}
     System::Call 'winhttp::WinHttpCloseHandle(p r3)'
   ${EndIf}
@@ -111,6 +130,12 @@ Function sgItPost
   ${EndIf}
   ${If} $1 != 0
     System::Call 'winhttp::WinHttpCloseHandle(p r1)'
+  ${EndIf}
+  ; Circuit breaker: after one failed send (offline, blocked, proxy refused),
+  ; skip the network for the rest of this run, so the worst case costs one
+  ; timeout and not one per event.
+  ${If} $4 == 0
+    StrCpy $sgItOn "0"
   ${EndIf}
   Pop $4
   Pop $3
@@ -124,6 +149,9 @@ FunctionEnd
   Push $R8
   System::Call 'kernel32::GetTickCount() i.R8'
   IntOp $R8 $R8 - $sgItT0
+  ${If} $sgItAllowed == "1"
+    WriteRegStr HKCU "${SG_IT_RUN_KEY}" "Step" "$sgItStep"
+  ${EndIf}
   StrCpy $R9 '{"api_key":"${SG_IT_KEY}","event":"${EVENT}","distinct_id":"$sgItId","properties":{"install_id":"$sgItId","source":"nsis_installer","app_version":"${VERSION}","pkg_arch":"${SG_IT_PKG_ARCH}","os_arch":"$sgItOsArch","os_build":"$sgItOsBuild","upgrade":$sgItUpgrade,"silent":$sgItSilent,"step":"$sgItStep","duration_ms":$R8,"$$process_person_profile":false,"$$geoip_disable":true${EXTRA}}}'
   Call sgItPost
   Pop $R8
@@ -134,21 +162,22 @@ FunctionEnd
 !macro sgItOnInit
   Push $R0
   Push $R1
-  StrCpy $sgItOn "1"
+  StrCpy $sgItAllowed "1"
   ${GetParameters} $R0
   ClearErrors
   ${GetOptions} $R0 "/NOTELEMETRY" $R1
   ${IfNot} ${Errors}
-    StrCpy $sgItOn "0"
+    StrCpy $sgItAllowed "0"
   ${EndIf}
   ReadEnvStr $R1 DO_NOT_TRACK
   ${If} $R1 == "1"
-    StrCpy $sgItOn "0"
+    StrCpy $sgItAllowed "0"
   ${EndIf}
   ReadEnvStr $R1 SEALGATE_NO_TELEMETRY
   ${If} $R1 == "1"
-    StrCpy $sgItOn "0"
+    StrCpy $sgItAllowed "0"
   ${EndIf}
+  StrCpy $sgItOn $sgItAllowed
 
   System::Call 'ole32::CoCreateGuid(g.R1)'
   StrCpy $sgItId $R1 36 1 ; strip the braces
@@ -175,9 +204,29 @@ FunctionEnd
     StrCpy $sgItOsArch "x64"
   ${EndIf}
 
+  ; A run that started but never reached installer_finished left its record
+  ; behind: electron-builder's hard Quit paths (app cannot be closed, files
+  ; locked, disk full, decompression failed) skip every callback, and so does
+  ; a killed process. Report it now, under the old run's install_id.
+  ${If} $sgItAllowed == "1"
+    ReadRegStr $R0 HKCU "${SG_IT_RUN_KEY}" "RunId"
+    ${If} $R0 != ""
+      ReadRegStr $R1 HKCU "${SG_IT_RUN_KEY}" "Step"
+      !insertmacro sgItSend "installer_previous_run_incomplete" ',"previous_install_id":"$R0","previous_step":"$R1"'
+    ${EndIf}
+    WriteRegStr HKCU "${SG_IT_RUN_KEY}" "RunId" "$sgItId"
+  ${EndIf}
+
   !insertmacro sgItSend "installer_started" ""
   Pop $R1
   Pop $R0
+!macroend
+
+; The run reported its end: drop the in-progress record.
+!macro sgItRunDone
+  ${If} $sgItAllowed == "1"
+    DeleteRegKey HKCU "${SG_IT_RUN_KEY}"
+  ${EndIf}
 !macroend
 
 ; Shared body of customUnInstallCheck / customUnInstallCheckCurrentUser.
@@ -193,7 +242,10 @@ FunctionEnd
   ${ElseIf} $R0 != 0
     StrCpy $sgItStep "old_version_checked"
     StrCpy $sgItOutcome "failed"
-    !insertmacro sgItSend "installer_finished" ',"outcome":"failed","exit_code":$R0'
+    ; In a silent run the dialog below still shows (electron-builder passes no
+    ; /SD), so a silent auto-update waits on it: blocking_dialog makes that visible.
+    !insertmacro sgItSend "installer_finished" ',"outcome":"failed","exit_code":$R0,"blocking_dialog":$sgItSilent'
+    !insertmacro sgItRunDone
     MessageBox MB_OK|MB_ICONEXCLAMATION "$(uninstallFailed): $R0"
     DetailPrint `Uninstall was not successful. Uninstaller error code: $R0.`
     SetErrorLevel 2
@@ -236,7 +288,7 @@ FunctionEnd
 ; Hand the install_id to the app for app_first_launch. Only written when this
 ; run may send; the app deletes it after reporting.
 Function sgItWriteMarker
-  ${If} $sgItOn != "1"
+  ${If} $sgItAllowed != "1"
     Return
   ${EndIf}
   Push $0
@@ -257,6 +309,7 @@ FunctionEnd
 Function .onInstSuccess
   StrCpy $sgItOutcome "success"
   !insertmacro sgItSend "installer_finished" ',"outcome":"success"'
+  !insertmacro sgItRunDone
 FunctionEnd
 
 Function .onInstFailed
@@ -264,6 +317,7 @@ Function .onInstFailed
   Push $R7
   GetErrorLevel $R7
   !insertmacro sgItSend "installer_finished" ',"outcome":"failed","error_level":$R7'
+  !insertmacro sgItRunDone
   Pop $R7
 FunctionEnd
 
@@ -273,6 +327,7 @@ Function .onGUIEnd
   ${If} $sgItOutcome == ""
     StrCpy $sgItOutcome "cancelled"
     !insertmacro sgItSend "installer_finished" ',"outcome":"cancelled"'
+    !insertmacro sgItRunDone
   ${EndIf}
 FunctionEnd
 

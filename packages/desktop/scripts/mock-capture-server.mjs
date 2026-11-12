@@ -12,6 +12,8 @@
 // Every POST body is printed as one line and appended to events.jsonl in the
 // working directory. GET / shows a live table of the received events.
 // On a Windows VM, listen on all interfaces with MOCK_CAPTURE_HOST=0.0.0.0.
+// MOCK_CAPTURE_HANG=1 accepts each POST and never answers (a "black hole"
+// endpoint), to check that the installer times out and stops sending.
 
 import { appendFileSync } from 'node:fs'
 import { createServer } from 'node:http'
@@ -19,6 +21,7 @@ import { createServer } from 'node:http'
 const port = Number(process.argv[2] ?? 8787)
 const host = process.env.MOCK_CAPTURE_HOST ?? '127.0.0.1'
 const events = []
+const hang = process.env.MOCK_CAPTURE_HANG === '1'
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`)
 
@@ -53,6 +56,10 @@ createServer((req, res) => {
       return res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(events))
     }
     return res.writeHead(200, { 'content-type': 'text/html' }).end(page())
+  }
+  if (hang) {
+    console.log(`[mock-capture] hanging on POST ${req.url} at ${new Date().toISOString().slice(11, 23)}`)
+    return
   }
   let body = ''
   req.on('data', (c) => (body += c))
