@@ -8,7 +8,7 @@ Users log in on the dashboard, but some never get the desktop app installed and 
 
 | # | Event | Sent by | When |
 |---|-------|---------|------|
-| 0 | `desktop_installer_download_clicked` | dashboard (frontend-v2) | The user clicks "Download the installer". This is a proposed change in the other repository, see below. |
+| 0 | `desktop_installer_download_clicked` | dashboard (frontend-v2) | The user clicks a desktop app download button. Properties: `platform`, `found`, `app_version`, `asset`. See Edison-Watch/edison-watch#1846. |
 | 1 | `installer_started` | NSIS installer | End of `.onInit`, before any page shows. |
 | 2 | `installer_step` `step=install_clicked` | NSIS installer | The user leaves the folder page with Install. |
 | 3 | `installer_step` `step=old_version_checked` | NSIS installer | The uninstaller of the previous version finished (`exit_code`). It also runs on a fresh install. |
