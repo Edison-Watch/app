@@ -1,3 +1,7 @@
+; Installer funnel telemetry (off unless enabled at build time). Defines the
+; sgItInit macro used in customInit below plus its own hook macros.
+!include "${BUILD_RESOURCES_DIR}/installerTelemetry.nsh"
+
 !macro customInstallMode
   StrCpy $isForceCurrentInstall "1"
 !macroend
@@ -56,6 +60,9 @@
   ; pre-existing behaviour, not a regression - detectord, the one that actually
   ; broke, is fully stopped above.
   Sleep 1500
+
+  ; Report installer_started. Empty unless telemetry was compiled in.
+  !insertmacro sgItInit
 !macroend
 
 ; SealGate uninstall hook. Two independent opt-in prompts (default No = keep).

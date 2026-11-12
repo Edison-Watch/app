@@ -8,7 +8,8 @@ import {
   Menu,
   nativeImage,
   nativeTheme,
-  dialog
+  dialog,
+  net
 } from 'electron'
 import type { MenuItemConstructorOptions } from 'electron'
 import { join } from 'path'
@@ -48,6 +49,7 @@ const optimizer = {
 }
 import windowStateKeeper from 'electron-window-state'
 import { initSentry } from './infra/sentry'
+import { reportFirstLaunch } from './infra/installTelemetry'
 import { initUpdateManager, stopUpdateManager } from './infra/updateManager'
 import {
   getBuildDefaultEnv,
@@ -464,6 +466,18 @@ app.whenReady().then(async () => {
   // shows the SealGate icon and the app is pinnable. No-op on mac/win/dev and for
   // non-AppImage runs. See runtime/desktopIntegration.ts.
   integrateDesktopEntry(appIconPath)
+
+  // Windows installer funnel: one anonymous app_first_launch event if the
+  // installer was built with telemetry and left its marker file. Fire and
+  // forget; never blocks or fails startup. See infra/installTelemetry.ts.
+  void reportFirstLaunch({
+    localAppData: process.env.LOCALAPPDATA,
+    appVersion: app.getVersion(),
+    activeEnv: getActiveEnv(),
+    env: process.env,
+    fetchImpl: net.fetch.bind(net) as typeof fetch,
+    log: slog
+  }).then((r) => slog(`[install-telemetry] first-launch: ${r}`))
 
   // Loopback auth-callback server - started in dev AND packaged builds. Chrome
   // silently blocks gesture-less redirects to custom protocols (sealgate://),
