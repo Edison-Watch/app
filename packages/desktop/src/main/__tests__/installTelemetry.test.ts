@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { execFileSync } from 'child_process'
@@ -160,6 +160,22 @@ describe('reportFirstLaunch', () => {
     }
     expect(await reportFirstLaunch(deps({ fetchImpl: boom }))).toBe('gave-up')
     expect(existsSync(markerPath())).toBe(false)
+  })
+
+  it('keeps the install time across retries', async () => {
+    writeMarker(MARKER)
+    const installedAt = Date.now() - 60_000
+    utimesSync(markerPath(), installedAt / 1000, installedAt / 1000)
+    const boom = vi.fn(async () => {
+      throw new Error('offline')
+    })
+    await reportFirstLaunch(deps({ fetchImpl: boom, now: () => installedAt + 60_000 }))
+    // the rewrite moved the file time; the marker must still carry the original
+    const f = okFetch()
+    await reportFirstLaunch(deps({ fetchImpl: f, now: () => installedAt + 120_000 }))
+    const sent = JSON.parse((f.mock.calls[0] as [string, RequestInit])[1].body as string)
+    expect(sent.properties.seconds_since_install).toBe(120)
+    expect(sent.properties.attempt).toBe(2)
   })
 
   it('treats a non-2xx response as a failed attempt', async () => {

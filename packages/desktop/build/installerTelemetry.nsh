@@ -5,7 +5,8 @@
 ; anonymous events straight to PostHog's capture API:
 ;
 ;   installer_started    .onInit finished (fresh install or upgrade, silent or not)
-;   installer_step       step = install_clicked | old_version_checked | files_installed
+;   installer_step       step = install_clicked | old_version_handled | files_installed
+;                        (old_version_handled also fires on a fresh install)
 ;   installer_finished   outcome = success | failed | cancelled, with last_step,
 ;                        exit_code (old uninstaller) or error_level (NSIS)
 ;   installer_previous_run_incomplete
@@ -93,6 +94,8 @@ Function sgItPost
   Push $2
   Push $3
   Push $4
+  Push $5
+  System::Call 'kernel32::GetTickCount() i.r5'
   StrCpy $2 0
   StrCpy $3 0
   StrCpy $4 0
@@ -131,12 +134,16 @@ Function sgItPost
   ${If} $1 != 0
     System::Call 'winhttp::WinHttpCloseHandle(p r1)'
   ${EndIf}
-  ; Circuit breaker: after one failed send (offline, blocked, proxy refused),
-  ; skip the network for the rest of this run, so the worst case costs one
-  ; timeout and not one per event.
+  ; Circuit breaker: after one failed or slow send (offline, blocked, proxy
+  ; refused, slow proxy discovery), skip the network for the rest of this run,
+  ; so the worst case costs one wait and not one per event.
+  System::Call 'kernel32::GetTickCount() i.r2'
+  IntOp $5 $2 - $5
   ${If} $4 == 0
+  ${OrIf} $5 > 1000
     StrCpy $sgItOn "0"
   ${EndIf}
+  Pop $5
   Pop $4
   Pop $3
   Pop $2
@@ -159,7 +166,7 @@ FunctionEnd
 !macroend
 
 ; Called at the end of customInit (.onInit), after initMultiUser.
-!macro sgItOnInit
+!macro sgItInit
   Push $R0
   Push $R1
   StrCpy $sgItAllowed "1"
@@ -187,8 +194,10 @@ FunctionEnd
   StrCpy $sgItOutcome ""
 
   StrCpy $sgItUpgrade "false"
-  ${If} $hasPerUserInstallation == "1"
-  ${OrIf} $hasPerMachineInstallation == "1"
+  ; The folders come straight from the registry; the has*Installation flags
+  ; are also set by /currentuser and /allusers on a fresh machine.
+  ${If} $perUserInstallationFolder != ""
+  ${OrIf} $perMachineInstallationFolder != ""
     StrCpy $sgItUpgrade "true"
   ${EndIf}
   StrCpy $sgItSilent "false"
@@ -208,7 +217,10 @@ FunctionEnd
   ; behind: electron-builder's hard Quit paths (app cannot be closed, files
   ; locked, disk full, decompression failed) skip every callback, and so does
   ; a killed process. Report it now, under the old run's install_id.
+  ; Not in the elevated inner instance of a per-machine upgrade: the outer
+  ; process already wrote this run's record.
   ${If} $sgItAllowed == "1"
+  ${AndIfNot} ${UAC_IsInnerInstance}
     ReadRegStr $R0 HKCU "${SG_IT_RUN_KEY}" "RunId"
     ${If} $R0 != ""
       ReadRegStr $R1 HKCU "${SG_IT_RUN_KEY}" "Step"
@@ -230,6 +242,9 @@ FunctionEnd
 !macroend
 
 ; Shared body of customUnInstallCheck / customUnInstallCheckCurrentUser.
+; These two stay defined here (not in installer.nsh): an empty definition would
+; switch off electron-builder's default handling. A test pins the upstream
+; handleUninstallResult body (src/main/__tests__/nsisUninstallCheck.test.ts).
 ; Defining those macros REPLACES electron-builder's default handling in
 ; handleUninstallResult (installUtil.nsh, app-builder-lib 26.x), so the default
 ; behaviour is reproduced below unchanged: a launch error is only logged, and a
@@ -240,7 +255,7 @@ FunctionEnd
     StrCpy $sgItStep "old_version_uninstaller_missing"
     !insertmacro sgItSend "installer_step" ""
   ${ElseIf} $R0 != 0
-    StrCpy $sgItStep "old_version_checked"
+    StrCpy $sgItStep "old_version_handled"
     StrCpy $sgItOutcome "failed"
     ; In a silent run the dialog below still shows (electron-builder passes no
     ; /SD), so a silent auto-update waits on it: blocking_dialog makes that visible.
@@ -251,7 +266,7 @@ FunctionEnd
     SetErrorLevel 2
     Quit
   ${Else}
-    StrCpy $sgItStep "old_version_checked"
+    StrCpy $sgItStep "old_version_handled"
     !insertmacro sgItSend "installer_step" ',"exit_code":0'
   ${EndIf}
 !macroend
@@ -266,7 +281,7 @@ FunctionEnd
 
 ; Invisible page between the directory page and the install page: it only
 ; records that the user pressed "Install", then skips itself.
-!macro customPageAfterChangeDir
+!macro sgItPageAfterChangeDir
   Page custom sgItInstallClicked
 !macroend
 
@@ -277,7 +292,7 @@ Function sgItInstallClicked
 FunctionEnd
 
 ; End of the install section: files, registry and shortcuts are in place.
-!macro customInstall
+!macro sgItInstallDone
   StrCpy $sgItStep "files_installed"
   !insertmacro sgItSend "installer_step" ""
   ; Written here, not in .onInstSuccess: that callback only runs when the
@@ -331,14 +346,18 @@ Function .onGUIEnd
   ${EndIf}
 FunctionEnd
 
-!define SG_IT_HOOK_INIT "!insertmacro sgItOnInit"
+!define SG_IT_ACTIVE
 
 !endif ; BUILD_UNINSTALLER
 !endif ; SG_IT_ENABLED
 
-; Used by customInit in installer.nsh; empty when telemetry is compiled out.
-!macro sgItInit
-  !ifdef SG_IT_HOOK_INIT
-    !insertmacro sgItOnInit
-  !endif
-!macroend
+; Telemetry compiled out (or the uninstaller build): the hook bodies that
+; installer.nsh calls are empty, so the installer is exactly electron-builder's.
+!ifndef SG_IT_ACTIVE
+  !macro sgItInit
+  !macroend
+  !macro sgItPageAfterChangeDir
+  !macroend
+  !macro sgItInstallDone
+  !macroend
+!endif

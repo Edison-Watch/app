@@ -30,7 +30,15 @@ export interface InstallMarker {
   url: string
   key: string
   attempts?: number
+  /** Set by the app on the first failed send, so retries keep the install time. */
+  installed_at_ms?: number
 }
+
+/** The part of fetch this module uses (Electron's net.fetch in the app). */
+export type PostFn = (
+  url: string,
+  init: { method: string; headers: Record<string, string>; body: string; signal: AbortSignal }
+) => Promise<{ ok: boolean }>
 
 export interface FirstLaunchDeps {
   /** %LOCALAPPDATA% (process.env.LOCALAPPDATA on Windows). */
@@ -39,10 +47,9 @@ export interface FirstLaunchDeps {
   /** Active backend env ("release", "demo", "custom", ...). */
   activeEnv: string
   env: NodeJS.ProcessEnv
-  /** Electron's net.fetch in the app (Chromium stack, system proxy); global fetch in tests. */
-  fetchImpl?: typeof fetch
+  /** Electron's net.fetch in the app (Chromium stack, system proxy); global fetch by default. */
+  fetchImpl?: PostFn
   now?: () => number
-  log?: (msg: string) => void
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -118,7 +125,6 @@ function safeUnlink(path: string): void {
 export async function reportFirstLaunch(
   deps: FirstLaunchDeps
 ): Promise<'no-marker' | 'opted-out' | 'invalid' | 'sent' | 'failed' | 'gave-up'> {
-  const log = deps.log ?? (() => {})
   try {
     if (!deps.localAppData) return 'no-marker'
     const path = join(deps.localAppData, 'SealGate', MARKER_FILE_NAME)
@@ -135,42 +141,36 @@ export async function reportFirstLaunch(
     }
 
     const now = deps.now ?? Date.now
-    let seconds: number | null = null
-    try {
-      seconds = Math.max(0, Math.round((now() - statSync(path).mtimeMs) / 1000))
-    } catch {
-      seconds = null
+    // The installer writes the marker at install time; a retry rewrites it, so
+    // from then on the original time travels inside the marker.
+    let installedAt: number | null = marker.installed_at_ms ?? null
+    if (installedAt === null) {
+      try {
+        installedAt = statSync(path).mtimeMs
+      } catch {
+        installedAt = null
+      }
     }
+    const seconds =
+      installedAt === null ? null : Math.max(0, Math.round((now() - installedAt) / 1000))
 
     const body = buildFirstLaunchEvent(marker, deps.appVersion, seconds)
-    const fetchImpl = deps.fetchImpl ?? fetch
+    const fetchImpl: PostFn = deps.fetchImpl ?? fetch
     let ok = false
-    let timer: ReturnType<typeof setTimeout> | undefined
     try {
-      // Belt and braces: the abort signal is the normal path, the race is the
-      // backstop for a fetch implementation that ignores it.
-      const deadline = new Promise<never>((_, reject) => {
-        timer = setTimeout(() => reject(new Error('timeout')), SEND_TIMEOUT_MS + 500)
+      const res = await fetchImpl(marker.url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(SEND_TIMEOUT_MS)
       })
-      const res = await Promise.race([
-        fetchImpl(marker.url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-          signal: AbortSignal.timeout(SEND_TIMEOUT_MS)
-        }),
-        deadline
-      ])
       ok = res.ok
     } catch {
       ok = false
-    } finally {
-      if (timer) clearTimeout(timer)
     }
 
     if (ok) {
       safeUnlink(path)
-      log('[install-telemetry] app_first_launch sent')
       return 'sent'
     }
     const attempts = (marker.attempts ?? 0) + 1
@@ -179,7 +179,9 @@ export async function reportFirstLaunch(
       return 'gave-up'
     }
     try {
-      writeFileSync(path, JSON.stringify({ ...marker, attempts }))
+      const next: InstallMarker = { ...marker, attempts }
+      if (installedAt !== null) next.installed_at_ms = installedAt
+      writeFileSync(path, JSON.stringify(next))
     } catch {
       safeUnlink(path)
     }

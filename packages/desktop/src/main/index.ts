@@ -475,8 +475,7 @@ app.whenReady().then(async () => {
     appVersion: app.getVersion(),
     activeEnv: getActiveEnv(),
     env: process.env,
-    fetchImpl: net.fetch.bind(net) as typeof fetch,
-    log: slog
+    fetchImpl: (url, init) => net.fetch(url, init)
   }).then((r) => slog(`[install-telemetry] first-launch: ${r}`))
 
   // Loopback auth-callback server - started in dev AND packaged builds. Chrome

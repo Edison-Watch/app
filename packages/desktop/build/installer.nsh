@@ -1,6 +1,17 @@
 ; Installer funnel telemetry (off unless enabled at build time). Defines the
-; sgItInit macro used in customInit below plus its own hook macros.
+; sgIt* macros used by the hooks below; they are empty when it is off.
 !include "${BUILD_RESOURCES_DIR}/installerTelemetry.nsh"
+
+; Invisible page after the folder page: records "install_clicked".
+!macro customPageAfterChangeDir
+  !insertmacro sgItPageAfterChangeDir
+!macroend
+
+; End of the install section: records "files_installed" and leaves the marker
+; for the app's first launch.
+!macro customInstall
+  !insertmacro sgItInstallDone
+!macroend
 
 !macro customInstallMode
   StrCpy $isForceCurrentInstall "1"
