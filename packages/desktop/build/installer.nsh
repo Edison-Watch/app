@@ -1,3 +1,18 @@
+; Installer funnel telemetry (off unless enabled at build time). Defines the
+; sgIt* macros used by the hooks below; they are empty when it is off.
+!include "${BUILD_RESOURCES_DIR}/installerTelemetry.nsh"
+
+; Invisible page after the folder page: records "install_clicked".
+!macro customPageAfterChangeDir
+  !insertmacro sgItPageAfterChangeDir
+!macroend
+
+; End of the install section: records "files_installed" and leaves the marker
+; for the app's first launch.
+!macro customInstall
+  !insertmacro sgItInstallDone
+!macroend
+
 !macro customInstallMode
   StrCpy $isForceCurrentInstall "1"
 !macroend
@@ -56,6 +71,9 @@
   ; pre-existing behaviour, not a regression - detectord, the one that actually
   ; broke, is fully stopped above.
   Sleep 1500
+
+  ; Report installer_started. Empty unless telemetry was compiled in.
+  !insertmacro sgItInit
 !macroend
 
 ; SealGate uninstall hook. Two independent opt-in prompts (default No = keep).
@@ -66,6 +84,12 @@
 
   ; Transient startup log - always removed on a real uninstall.
   Delete "$TEMP\sg-startup.log"
+
+  ; Installer telemetry leftovers (see installerTelemetry.nsh). Only on a real,
+  ; non-silent uninstall: during an upgrade the old uninstaller runs silently
+  ; while the new installer's in-progress record is live.
+  DeleteRegKey HKCU "Software\SealGate\InstallTelemetry"
+  Delete "$LOCALAPPDATA\SealGate\install-telemetry.json"
 
   ; Stop + remove the stdiod daemon (scheduled task + its credentials/logs).
   ; `uninstall --purge` handles the SID-named task (and the legacy name).
