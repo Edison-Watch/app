@@ -58,6 +58,37 @@
   Sleep 1500
 !macroend
 
+; Result of the previous version's uninstaller, which runs before the new files
+; are extracted (upgrades and auto-updates).
+;
+; electron-builder's default (handleUninstallResult in installUtil.nsh) shows
+; "Failed to uninstall old application files" with a MessageBox that has no /SD
+; default, so the box also appears in a SILENT install. A silent auto-update then
+; waits on a dialog the user did not ask for, and the update looks stuck until
+; someone clicks OK. Defining these two macros replaces that default; the body
+; below is the same apart from /SD IDOK, which lets a silent run fail at once
+; with error level 2. Interactive installs still show the dialog.
+; src/main/__tests__/nsisUninstallCheck.test.ts pins the upstream function, so an
+; electron-builder upgrade that changes it fails the test.
+!macro sgHandleOldUninstallResult
+  ${If} ${Errors}
+    DetailPrint `Uninstall was not successful. Not able to launch uninstaller!`
+  ${ElseIf} $R0 != 0
+    MessageBox MB_OK|MB_ICONEXCLAMATION "$(uninstallFailed): $R0" /SD IDOK
+    DetailPrint `Uninstall was not successful. Uninstaller error code: $R0.`
+    SetErrorLevel 2
+    Quit
+  ${EndIf}
+!macroend
+
+!macro customUnInstallCheck
+  !insertmacro sgHandleOldUninstallResult
+!macroend
+
+!macro customUnInstallCheckCurrentUser
+  !insertmacro sgHandleOldUninstallResult
+!macroend
+
 ; SealGate uninstall hook. Two independent opt-in prompts (default No = keep).
 ; No-op on silent runs so auto-update keeps everything. Runs before the app files
 ; are removed, so the daemon binary is still present for `uninstall --purge`.
