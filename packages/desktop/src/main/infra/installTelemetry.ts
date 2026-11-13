@@ -27,6 +27,9 @@ export interface InstallMarker {
   app_version?: string
   upgrade?: boolean
   silent?: boolean
+  /** Per-download id from the installer's file name (16 hex), when there was one. */
+  download_id?: string
+  download_id_source?: 'filename' | 'zone_identifier'
   url: string
   key: string
   attempts?: number
@@ -52,6 +55,7 @@ export interface FirstLaunchDeps {
   now?: () => number
 }
 
+const DOWNLOAD_ID_RE = /^[0-9a-f]{16}$/i
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 /** Accept only an https endpoint, or plain http to a loopback mock. */
@@ -72,6 +76,14 @@ export function parseMarker(text: string): InstallMarker | null {
     if (typeof m.install_id !== 'string' || !UUID_RE.test(m.install_id)) return null
     if (typeof m.url !== 'string' || !isAllowedEndpoint(m.url)) return null
     if (typeof m.key !== 'string' || !/^[A-Za-z0-9_-]+$/.test(m.key)) return null
+    // A malformed download id is dropped, not fatal: the event still goes out.
+    if (m.download_id !== undefined && !DOWNLOAD_ID_RE.test(String(m.download_id))) {
+      delete m.download_id
+      delete m.download_id_source
+    }
+    if (m.download_id_source !== 'filename' && m.download_id_source !== 'zone_identifier') {
+      delete m.download_id_source
+    }
     return m as InstallMarker
   } catch {
     return null
@@ -104,6 +116,12 @@ export function buildFirstLaunchEvent(
       attempt: (marker.attempts ?? 0) + 1,
       os_platform: process.platform,
       os_arch: process.arch,
+      ...(marker.download_id
+        ? {
+            download_id: marker.download_id.toLowerCase(),
+            download_id_source: marker.download_id_source ?? null
+          }
+        : {}),
       $process_person_profile: false,
       $geoip_disable: true
     }

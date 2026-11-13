@@ -83,6 +83,8 @@ Var sgItUpgrade   ; "true" | "false"
 Var sgItSilent    ; "true" | "false"
 Var sgItOsBuild   ; Windows build number, e.g. 22631
 Var sgItOsArch    ; x64 | arm64 | x86
+Var sgItDlId      ; per-download id (16 hex) or ""
+Var sgItDlJson    ; ',"download_id":"...","download_id_source":"..."' or ""
 
 ; POST the JSON in $R9 to the configured endpoint. Synchronous, short timeouts,
 ; result ignored apart from the circuit breaker. Clobbers nothing.
@@ -150,6 +152,139 @@ Function sgItPost
   Pop $1
 FunctionEnd
 
+; Find "_dl-" followed by exactly 16 hex digits in the string on the stack.
+; Pushes the 16 digits, or "" when there is none. Only hex digits can come out,
+; so the result is safe inside JSON. Clobbers nothing.
+Function sgItFindDlId
+  Exch $0   ; input
+  Push $1   ; position
+  Push $2   ; length
+  Push $3   ; scratch
+  Push $4   ; result
+  Push $5   ; digit index
+  StrCpy $4 ""
+  StrLen $2 $0
+  StrCpy $1 0
+  ${DoWhile} $1 < $2
+    StrCpy $3 $0 4 $1
+    ${If} $3 == "_dl-"
+      IntOp $3 $1 + 4
+      StrCpy $4 $0 16 $3
+      ; exactly 16 hex digits, and no 17th one
+      StrLen $5 $4
+      ${If} $5 != 16
+        StrCpy $4 ""
+      ${Else}
+        StrCpy $5 0
+        ${DoWhile} $5 < 16
+          StrCpy $3 $4 1 $5
+          Push $4
+          Push $3
+          Call sgItIsHex
+          Pop $3
+          Pop $4
+          ${If} $3 != "1"
+            StrCpy $4 ""
+            ${ExitDo}
+          ${EndIf}
+          IntOp $5 $5 + 1
+        ${Loop}
+        ${If} $4 != ""
+          IntOp $3 $1 + 20
+          StrCpy $3 $0 1 $3
+          Push $4
+          Push $3
+          Call sgItIsHex
+          Pop $3
+          Pop $4
+          ${If} $3 == "1"
+            StrCpy $4 ""
+          ${EndIf}
+        ${EndIf}
+      ${EndIf}
+      ${If} $4 != ""
+        ${ExitDo}
+      ${EndIf}
+    ${EndIf}
+    IntOp $1 $1 + 1
+  ${Loop}
+  StrCpy $0 $4
+  Pop $5
+  Pop $4
+  Pop $3
+  Pop $2
+  Pop $1
+  Exch $0
+FunctionEnd
+
+; Stack in: one character. Stack out: "1" if it is a hex digit, else "0".
+Function sgItIsHex
+  Exch $0
+  Push $1
+  Push $2
+  Push $R0
+  StrCpy $1 0
+  StrCpy $2 "0"
+  ${If} $0 != ""
+    ${DoWhile} $1 < 16
+      StrCpy $R0 "0123456789abcdef" 1 $1
+      ${If} $0 == $R0   ; NSIS == ignores case, so A-F match too
+        StrCpy $2 "1"
+        ${ExitDo}
+      ${EndIf}
+      IntOp $1 $1 + 1
+    ${Loop}
+  ${EndIf}
+  StrCpy $0 $2
+  Pop $R0
+  Pop $2
+  Pop $1
+  Exch $0
+FunctionEnd
+
+; Read HostUrl and ReferrerUrl from this installer's Zone.Identifier stream
+; (the mark of the web) and look for the same "_dl-" token. Pushes the id or "".
+Function sgItDlIdFromZone
+  Push $0   ; file handle
+  Push $1   ; line
+  Push $2   ; result
+  Push $R0
+  Push $R1
+  StrCpy $2 ""
+  ClearErrors
+  StrCpy $0 ""
+  FileOpen $0 "$EXEPATH:Zone.Identifier" r
+  ${If} $0 != ""
+    ; Plain labels: LogicLib's ${Errors} test clears the flag it reads.
+    sgItZoneLine:
+      ClearErrors
+      FileRead $0 $1
+      IfErrors sgItZoneDone
+      StrCpy $R0 $1 8
+      StrCpy $R1 $1 12
+      ${If} $R0 == "HostUrl="
+      ${OrIf} $R1 == "ReferrerUrl="
+        Push $1
+        Call sgItFindDlId
+        Pop $R0
+        ${If} $R0 != ""
+        ${AndIf} $2 == ""
+          StrCpy $2 $R0
+        ${EndIf}
+      ${EndIf}
+      Goto sgItZoneLine
+    sgItZoneDone:
+    FileClose $0
+  ${EndIf}
+  ClearErrors
+  StrCpy $0 $2
+  Pop $R1
+  Pop $R0
+  Pop $2
+  Pop $1
+  Exch $0
+FunctionEnd
+
 ; Send EVENT with EXTRA (a JSON fragment that starts with a comma, or "").
 !macro sgItSend EVENT EXTRA
   Push $R9
@@ -159,7 +294,7 @@ FunctionEnd
   ${If} $sgItAllowed == "1"
     WriteRegStr HKCU "${SG_IT_RUN_KEY}" "Step" "$sgItStep"
   ${EndIf}
-  StrCpy $R9 '{"api_key":"${SG_IT_KEY}","event":"${EVENT}","distinct_id":"$sgItId","properties":{"install_id":"$sgItId","source":"nsis_installer","app_version":"${VERSION}","pkg_arch":"${SG_IT_PKG_ARCH}","os_arch":"$sgItOsArch","os_build":"$sgItOsBuild","upgrade":$sgItUpgrade,"silent":$sgItSilent,"step":"$sgItStep","duration_ms":$R8,"$$process_person_profile":false,"$$geoip_disable":true${EXTRA}}}'
+  StrCpy $R9 '{"api_key":"${SG_IT_KEY}","event":"${EVENT}","distinct_id":"$sgItId","properties":{"install_id":"$sgItId","source":"nsis_installer","app_version":"${VERSION}","pkg_arch":"${SG_IT_PKG_ARCH}","os_arch":"$sgItOsArch","os_build":"$sgItOsBuild","upgrade":$sgItUpgrade,"silent":$sgItSilent,"step":"$sgItStep","duration_ms":$R8,"$$process_person_profile":false,"$$geoip_disable":true$sgItDlJson${EXTRA}}}'
   Call sgItPost
   Pop $R8
   Pop $R9
@@ -211,6 +346,23 @@ FunctionEnd
     StrCpy $sgItOsArch "arm64"
   ${ElseIf} ${IsNativeAMD64}
     StrCpy $sgItOsArch "x64"
+  ${EndIf}
+
+  ; Per-download id: the dashboard serves the installer as
+  ; SealGate-<ver>-<arch>-setup_dl-<16 hex>.exe. Fall back to the download URL
+  ; that the browser recorded in the Zone.Identifier stream. No id = no field.
+  StrCpy $sgItDlJson ""
+  Push $EXEFILE
+  Call sgItFindDlId
+  Pop $sgItDlId
+  StrCpy $R1 "filename"
+  ${If} $sgItDlId == ""
+    Call sgItDlIdFromZone
+    Pop $sgItDlId
+    StrCpy $R1 "zone_identifier"
+  ${EndIf}
+  ${If} $sgItDlId != ""
+    StrCpy $sgItDlJson ',"download_id":"$sgItDlId","download_id_source":"$R1"'
   ${EndIf}
 
   ; A run that started but never reached installer_finished left its record
@@ -314,7 +466,7 @@ Function sgItWriteMarker
   StrCpy $0 ""
   FileOpen $0 "$LOCALAPPDATA\SealGate\install-telemetry.json" w
   ${If} $0 != ""
-    FileWrite $0 '{"install_id":"$sgItId","app_version":"${VERSION}","upgrade":$sgItUpgrade,"silent":$sgItSilent,"url":"${SG_IT_URL_FOR_APP}","key":"${SG_IT_KEY}"}'
+    FileWrite $0 '{"install_id":"$sgItId","app_version":"${VERSION}","upgrade":$sgItUpgrade,"silent":$sgItSilent,"url":"${SG_IT_URL_FOR_APP}","key":"${SG_IT_KEY}"$sgItDlJson}'
     FileClose $0
   ${EndIf}
   ClearErrors

@@ -23,6 +23,17 @@ All installer events carry these properties:
 - `os_build`, the Windows build number.
 - `upgrade`, and `silent` (true for auto-updates).
 - The last `step`, and `duration_ms` since the installer started.
+- `download_id` and `download_id_source`, only when the installer has a per-download id (see below).
+
+### Per-download id
+
+The dashboard can serve the installer under a name that carries a random id: `SealGate-<version>-<arch>-setup_dl-<16 hex digits>.exe`. The backend makes the id for each download, does not store it, and does not link it to the user. The edison-watch side builds this endpoint.
+
+- The installer reads the id from its own file name. A browser suffix such as ` (1)` does not matter.
+- If the name has no id, the installer looks for the same `_dl-<id>` token in the `HostUrl` and `ReferrerUrl` lines of its Zone.Identifier stream (the mark of the web). This works only if the download URL contains the token, for example as the last path segment.
+- If it finds an id, every installer event carries `download_id` and `download_id_source` (`filename` or `zone_identifier`), and the marker passes both to `app_first_launch`.
+- If it finds no id, or the id is not exactly 16 hex digits, no field is sent and nothing else changes.
+- The dashboard event that is linked to the logged-in user does not carry the id. This keeps the per-download funnel anonymous.
 
 ### How to read a run
 
@@ -126,6 +137,8 @@ Run each case from the clean snapshot unless the case says otherwise. Write down
 | G4. Slow proxy discovery | Turn on "Automatically detect settings" on a network without a WPAD server. Run case A. | The first send can be slow. After one send over 1 s, the run sends nothing more. |
 | J. Killed run | Run the installer and end it in Task Manager during "Installing". Run it again to the end. | The second run sends `installer_previous_run_incomplete` with the first `install_id`. |
 | K. Start menu launch | Run case A, but clear "Run SealGate" on the finish page. Start SealGate from the Start menu. Close it and start it again. | One `app_first_launch` only. |
+| M. Download id | Rename the installer to `SealGate-0.6.23-x64-setup_dl-0123456789abcdef.exe`. Run case A. | Every event and `app_first_launch` carry `download_id=0123456789abcdef`, `download_id_source=filename`. With a plain name, or `_dl-` followed by 15 or 17 digits, no event has the field. |
+| N. Download id from Zone.Identifier | Use the plain file name. In PowerShell: `Set-Content -Path .\SealGate-0.6.23-x64-setup.exe -Stream Zone.Identifier -Value "[ZoneTransfer]`nZoneId=3`nHostUrl=https://example.test/x_dl-feedfacecafebeef.exe"`. Run case A. | Every event carries `download_id=feedfacecafebeef`, `download_id_source=zone_identifier`. Wine cannot run this case. |
 | L. Locked file | After case A, open `resources\app.asar` in the install folder with a program that locks it. Run the installer, click Next, then Cancel on the retry dialog. Run it again. | No `installer_finished` in the first run. The second run sends `installer_previous_run_incomplete` with `previous_step=old_version_handled`. |
 | H. Opt-out | Run the installer with `/NOTELEMETRY`. Then repeat with `DO_NOT_TRACK=1` set. | No events. No marker file. |
 | I. Telemetry off | Build without the two variables. Run case A. | No events. No marker file. |

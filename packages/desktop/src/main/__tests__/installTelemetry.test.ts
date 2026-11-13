@@ -112,6 +112,32 @@ describe('buildFirstLaunchEvent', () => {
   })
 })
 
+describe('download_id', () => {
+  it('passes a valid download id from the marker to app_first_launch', () => {
+    const m = parseMarker(
+      JSON.stringify({ ...MARKER, download_id: '0123456789ABCDEF', download_id_source: 'filename' })
+    )!
+    const props = buildFirstLaunchEvent(m, '0.6.23', 1).properties as Record<string, unknown>
+    expect(props.download_id).toBe('0123456789abcdef')
+    expect(props.download_id_source).toBe('filename')
+  })
+
+  it('sends no download fields when the marker has none', () => {
+    const props = buildFirstLaunchEvent(MARKER, '0.6.23', 1).properties as Record<string, unknown>
+    expect(props).not.toHaveProperty('download_id')
+    expect(props).not.toHaveProperty('download_id_source')
+  })
+
+  it('drops a malformed download id but keeps the marker', () => {
+    for (const bad of ['xyz', '0123456789abcdef0', 'me@example.com', 42]) {
+      const m = parseMarker(JSON.stringify({ ...MARKER, download_id: bad, download_id_source: 'filename' }))
+      expect(m?.install_id).toBe(ID)
+      expect(m).not.toHaveProperty('download_id')
+      expect(m).not.toHaveProperty('download_id_source')
+    }
+  })
+})
+
 describe('reportFirstLaunch', () => {
   it('does nothing without a marker', async () => {
     const f = okFetch()
