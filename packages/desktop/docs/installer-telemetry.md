@@ -37,7 +37,7 @@ All installer events carry these properties:
 
 - `install_id` is a random GUID that the installer makes for each run. It is not linked to the dashboard user or to any account.
 - No user name, machine name, path, e-mail, account id or IP-derived location is sent. Every event sets `$process_person_profile: false` (PostHog makes no person) and `$geoip_disable: true`.
-- PostHog still receives the client IP at the HTTP level. To drop it, set "Discard client IP data" in the PostHog project settings. This is for the compliance review.
+- PostHog still receives the client IP at the HTTP level. The installer project must have "Discard client IP data" turned on (see "Setting up the PostHog project").
 - Opt-out: the installer flag `/NOTELEMETRY`, or `DO_NOT_TRACK=1` or `SEALGATE_NO_TELEMETRY=1` in the environment. If the app backend is `custom`, `local` or `dev`, the app sends nothing.
 
 ## Safety
@@ -62,16 +62,29 @@ npx electron-builder --win --x64
 
 If either variable is empty, the script deletes `build/installer-telemetry.config.nsh` and the build has no telemetry. The script accepts plain `http` only for `127.0.0.1` and `localhost`.
 
-No CI workflow sets these variables, so dev, demo and release builds all stay off until the compliance review. The proposal for each build after the review:
+No CI workflow sets these variables, so dev, demo and release builds all stay off until the compliance review.
 
-| Build | PostHog project and key | State |
-|-------|-------------------------|-------|
+The installer and first-launch events go to their own PostHog project. They never use the dashboard key in `packages/shared/src/config/env-config.ts`. The app reads the endpoint and key from the marker that the installer wrote, so both always report to the same project.
+
+| Build | PostHog project | State |
+|-------|-----------------|-------|
 | Local and test builds | none, the mock server | Use `scripts/mock-capture-server.mjs`. |
-| Demo (`desktop-release-demo.yml`) | The existing SealGate project (`phc_KNuu...`, the key in `packages/shared/src/config/env-config.ts`) | Off. Turn on first, after the review. |
-| Release (`desktop-release.yml`) | The same project, on `https://us.i.posthog.com` like the dashboard | Off until the review. |
+| Demo (`desktop-release-demo.yml`) | The installer funnel project | Off. Turn on first, after the review. |
+| Release (`desktop-release.yml`) | The same project | Off until the review. |
 | Custom or self-hosted backend | none | The app never sends. The installer cannot know the backend, so a build for a self-hosted customer must leave the variables unset. |
 
-Demo and release share one PostHog project today. Each event carries `app_version`, so the channel can be told apart. A separate test project is an option for the first weeks.
+Each event carries `app_version`, so demo and release events can be told apart in one project.
+
+### Setting up the PostHog project
+
+Somebody with PostHog admin rights does these steps once. Claude cannot create the project.
+
+1. Create a new project, for example "SealGate installer funnel". Choose the region on purpose: the EU cloud (`eu.i.posthog.com`) keeps the data in the EU, and the dashboard project uses the US cloud.
+2. In the project settings, turn on "Discard client IP data". PostHog then drops the IP before it stores the event, and GeoIP has nothing to use.
+3. Leave autocapture, session replay, heatmaps and surveys off. They do not apply to this project, and only the capture API is used.
+4. Set the data retention to the shortest period that the funnel analysis needs, for example 12 months.
+5. Copy the project API key (`phc_...`). It is a write-only key, but keep it out of the repository: store it as a GitHub Actions secret, for example `SG_INSTALL_TELEMETRY_KEY`.
+6. To turn telemetry on for one workflow, set `SG_INSTALL_TELEMETRY_URL` (for example `https://eu.i.posthog.com/i/v0/e/`) and `SG_INSTALL_TELEMETRY_KEY` from the secret, and run `node scripts/installer-telemetry-config.mjs` before electron-builder.
 
 The `build:win`, `build:win:x64` and `build:win:arm64` scripts in `package.json` run the config script first. With the variables unset, it deletes a config file left over from an earlier test build, so a local build never ships a stale test endpoint.
 
