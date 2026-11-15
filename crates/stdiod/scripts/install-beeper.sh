@@ -660,13 +660,20 @@ install_stdiod_prebuilt() {
     warn "downloaded $asset does not run on this machine ('--version' failed)"
     rm -rf "$dir"; return 1
   fi
-  mkdir -p "$dest"
-  # Unlink first. Writing over a signed Mach-O in place keeps the inode, and the
-  # kernel's cached signing state for that vnode goes stale - the binary then
-  # dies with SIGKILL. `mv` across filesystems degrades to a copy, so this is
-  # not hypothetical.
-  rm -f "$dest/sealgate-stdiod"
-  mv "$dir/$asset" "$dest/sealgate-stdiod"
+  # Copy the verified file into $dest under a temporary name, then rename it
+  # over the old one. The temp dir is usually another filesystem, where `mv`
+  # is a copy that can fail halfway. A rename inside $dest is atomic, so
+  # $dest/sealgate-stdiod is always the old binary or the new one, never
+  # missing or half-written. The rename also gives the path a new inode.
+  # Writing over a signed Mach-O in place keeps the inode, the kernel's cached
+  # signing state for it goes stale, and the binary then dies with SIGKILL.
+  local staged="$dest/.sealgate-stdiod.new.$$"
+  if ! mkdir -p "$dest" || ! cp "$dir/$asset" "$staged" || ! chmod +x "$staged" \
+      || ! mv -f "$staged" "$dest/sealgate-stdiod"; then
+    rm -f "$staged"; rm -rf "$dir"
+    warn "could not put the new sealgate-stdiod in $dest (disk full or not writable?)"
+    return 1
+  fi
   rm -rf "$dir"
   PATH="$dest:$PATH"
   ok "installed prebuilt sealgate-stdiod $tag -> $dest/sealgate-stdiod (sha256 verified)"

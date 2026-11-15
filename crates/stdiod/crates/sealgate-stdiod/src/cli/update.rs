@@ -357,14 +357,89 @@ pub async fn run(args: UpdateArgs) -> Result<()> {
 }
 
 /// Whether a unit definition (plist, systemd unit, task XML) names `exe`.
+/// Whether the supervisor unit runs `exe`. Compares the program the unit
+/// names, decoded from its format, not a search through the raw text: the
+/// Task Scheduler XML and the launchd plist escape `&`, `<` and `>`, so a path
+/// like `C:\Users\A&B\...` is stored as `A&amp;B` there.
 fn unit_runs(unit: &str, exe: &Path) -> bool {
+    let Some(program) = unit_program(unit) else {
+        return false;
+    };
     let exe = exe.to_string_lossy();
     if cfg!(windows) {
-        unit.to_ascii_lowercase()
-            .contains(&exe.to_ascii_lowercase())
+        // Windows paths are case-insensitive.
+        program.to_lowercase() == exe.to_lowercase()
     } else {
-        unit.contains(exe.as_ref())
+        program == exe.as_ref()
     }
+}
+
+/// The program a unit definition starts, in any of the three formats
+/// `platform::unit_definition` returns:
+/// - Task Scheduler XML: `<Command>...</Command>`.
+/// - launchd plist: the first `<string>` after `<key>ProgramArguments</key>`.
+/// - systemd unit: `ExecStart="..."` (or unquoted, up to the first space).
+fn unit_program(unit: &str) -> Option<String> {
+    fn between<'a>(text: &'a str, open: &str, close: &str) -> Option<&'a str> {
+        let start = text.find(open)? + open.len();
+        let len = text[start..].find(close)?;
+        Some(&text[start..start + len])
+    }
+    if let Some(command) = between(unit, "<Command>", "</Command>") {
+        return Some(xml_unescape(command.trim()));
+    }
+    if let Some(at) = unit.find("<key>ProgramArguments</key>") {
+        return between(&unit[at..], "<string>", "</string>").map(|s| xml_unescape(s.trim()));
+    }
+    let exec = unit
+        .lines()
+        .find_map(|line| line.trim_start().strip_prefix("ExecStart="))?
+        .trim_start();
+    let program = match exec.strip_prefix('"') {
+        Some(rest) => rest.split('"').next()?,
+        None => exec.split_whitespace().next()?,
+    };
+    (!program.is_empty()).then(|| program.to_string())
+}
+
+/// Decodes the five predefined XML entities and numeric character references.
+/// Anything else is kept as written.
+fn xml_unescape(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut rest = s;
+    while let Some(amp) = rest.find('&') {
+        out.push_str(&rest[..amp]);
+        rest = &rest[amp..];
+        let decoded = rest.find(';').and_then(|semi| {
+            let entity = &rest[1..semi];
+            let ch = match entity {
+                "amp" => Some('&'),
+                "lt" => Some('<'),
+                "gt" => Some('>'),
+                "quot" => Some('"'),
+                "apos" => Some('\''),
+                _ => entity
+                    .strip_prefix("#x")
+                    .or_else(|| entity.strip_prefix("#X"))
+                    .map(|hex| u32::from_str_radix(hex, 16).ok())
+                    .unwrap_or_else(|| entity.strip_prefix('#').and_then(|d| d.parse().ok()))
+                    .and_then(char::from_u32),
+            };
+            ch.map(|c| (c, semi + 1))
+        });
+        match decoded {
+            Some((c, used)) => {
+                out.push(c);
+                rest = &rest[used..];
+            }
+            None => {
+                out.push('&');
+                rest = &rest[1..];
+            }
+        }
+    }
+    out.push_str(rest);
+    out
 }
 
 fn hex(bytes: &[u8]) -> String {
@@ -374,6 +449,49 @@ fn hex(bytes: &[u8]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn unit_program_reads_each_unit_format() {
+        let task = "<Exec>\n      <Command>C:\\Users\\A&amp;B\\AppData\\Local\\Programs\\sealgate-stdiod\\sealgate-stdiod.exe</Command>\n      <Arguments>run</Arguments>\n    </Exec>";
+        assert_eq!(
+            unit_program(task).as_deref(),
+            Some(r"C:\Users\A&B\AppData\Local\Programs\sealgate-stdiod\sealgate-stdiod.exe")
+        );
+        let plist = "<key>Label</key>\n  <string>com.sealgate.stdiod</string>\n  <key>ProgramArguments</key>\n  <array>\n    <string>/Users/a&amp;b/.local/bin/sealgate-stdiod</string>\n    <string>run</string>\n  </array>";
+        assert_eq!(
+            unit_program(plist).as_deref(),
+            Some("/Users/a&b/.local/bin/sealgate-stdiod")
+        );
+        let quoted = "[Service]\nExecStart=\"/home/a b/.local/bin/sealgate-stdiod\" run\n";
+        assert_eq!(
+            unit_program(quoted).as_deref(),
+            Some("/home/a b/.local/bin/sealgate-stdiod")
+        );
+        let bare = "[Service]\nExecStart=/usr/bin/sealgate-stdiod run\n";
+        assert_eq!(
+            unit_program(bare).as_deref(),
+            Some("/usr/bin/sealgate-stdiod")
+        );
+        assert_eq!(unit_program("[Service]\nRestart=on-failure\n"), None);
+    }
+
+    #[test]
+    fn unit_runs_matches_the_decoded_path_exactly() {
+        let task = "<Command>/opt/a&amp;b/sealgate-stdiod</Command>";
+        assert!(unit_runs(task, Path::new("/opt/a&b/sealgate-stdiod")));
+        // A longer path that merely contains this one is a different program.
+        assert!(!unit_runs(task, Path::new("/a&b/sealgate-stdiod")));
+        assert!(!unit_runs(task, Path::new("/opt/a&b/sealgate-stdiod.old")));
+    }
+
+    #[test]
+    fn xml_unescape_decodes_entities_and_keeps_the_rest() {
+        assert_eq!(xml_unescape("a&amp;b&lt;c&gt;&quot;&apos;"), "a&b<c>\"'");
+        assert_eq!(xml_unescape("&#38;&#x26;&#X26;"), "&&&");
+        assert_eq!(xml_unescape("a & b &unknown; &"), "a & b &unknown; &");
+        // One pass: an escaped entity stays an entity.
+        assert_eq!(xml_unescape("&amp;lt;"), "&lt;");
+    }
 
     fn rel(tag: &str, prerelease: bool, draft: bool) -> Release {
         Release {

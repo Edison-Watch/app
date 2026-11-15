@@ -599,20 +599,39 @@ function Install-StdiodPrebuilt {
         if ($script:LastRc -ne 0) { Warn "downloaded $asset does not run on this machine ('--version' failed)"; return $false }
         New-Item -ItemType Directory -Path $script:INSTALL_DIR -Force | Out-Null
         Remove-StaleStdiodExes
+        # Never leave INSTALL_DIR without a working exe. Copy the verified exe
+        # in under a temporary name first (%TEMP% can be another volume, where
+        # a move is a copy that can fail halfway). Then rename the old exe
+        # aside and the new one into place: both are renames in one folder.
+        # Renaming works even while the daemon runs the old exe (deleting or
+        # overwriting it does not). The process keeps running from the renamed
+        # file, and a restart moves it onto the new one. If the second rename
+        # fails, the old exe is renamed back.
+        $rand = [System.IO.Path]::GetRandomFileName()
+        $staged = Join-Path $script:INSTALL_DIR "sealgate-stdiod.exe.new-$rand"
+        try { Copy-Item -Path $exe -Destination $staged -Force -ErrorAction Stop } catch {
+            Remove-Item $staged -Force -ErrorAction SilentlyContinue
+            Warn "could not put the new sealgate-stdiod in $($script:INSTALL_DIR): $($_.Exception.Message)"
+            return $false
+        }
+        $aside = ''
         if (Test-Path $script:STDIOD_EXE) {
-            try { Remove-Item $script:STDIOD_EXE -Force } catch {
-                # A running exe cannot be deleted or overwritten, but it CAN be
-                # renamed: the process keeps running from the renamed file, the
-                # new exe takes the real name, and a restart moves onto it. The
-                # renamed copy is deleted on the next run, once nothing runs it.
-                try {
-                    Rename-Item -Path $script:STDIOD_EXE -NewName ("sealgate-stdiod.exe.old-" + [System.IO.Path]::GetRandomFileName()) -Force
-                } catch {
-                    Die "cannot replace $($script:STDIOD_EXE): it is in use (the daemon may be running)" "stop it first ('sealgate-stdiod uninstall'), then re-run: $($script:RERUN) install"
-                }
+            $aside = Join-Path $script:INSTALL_DIR "sealgate-stdiod.exe.old-$rand"
+            try { Rename-Item -Path $script:STDIOD_EXE -NewName (Split-Path -Leaf $aside) -Force -ErrorAction Stop } catch {
+                Remove-Item $staged -Force -ErrorAction SilentlyContinue
+                Die "cannot replace $($script:STDIOD_EXE): $($_.Exception.Message)" "stop the daemon first ('sealgate-stdiod uninstall'), then re-run: $($script:RERUN) install"
             }
         }
-        Move-Item -Path $exe -Destination $script:STDIOD_EXE
+        try { Rename-Item -Path $staged -NewName (Split-Path -Leaf $script:STDIOD_EXE) -Force -ErrorAction Stop } catch {
+            $why = $_.Exception.Message
+            if ($aside) { try { Rename-Item -Path $aside -NewName (Split-Path -Leaf $script:STDIOD_EXE) -Force -ErrorAction Stop } catch { Warn "could not restore the old exe from $aside" } }
+            Remove-Item $staged -Force -ErrorAction SilentlyContinue
+            Warn "could not move the new sealgate-stdiod into place: $why"
+            return $false
+        }
+        # Gone now unless the daemon still runs it; Remove-StaleStdiodExes
+        # retries on the next run.
+        if ($aside) { Remove-Item $aside -Force -ErrorAction SilentlyContinue }
     } finally {
         Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
     }
@@ -759,10 +778,12 @@ function Get-StdiodUpdateHint([string]$Owner) {
     }
 }
 
-# Exes renamed aside by an earlier update while they were running. Deleting
-# fails harmlessly for one that still runs; the next run gets it.
+# Leftovers of earlier updates: old exes renamed aside while they were
+# running (.old-*), and staged copies from a run that was cut off (.new-*).
+# Deleting fails harmlessly for one that still runs; the next run gets it.
 function Remove-StaleStdiodExes {
-    Get-ChildItem -Path $script:INSTALL_DIR -Filter 'sealgate-stdiod.exe.old-*' -ErrorAction SilentlyContinue |
+    Get-ChildItem -Path $script:INSTALL_DIR -Filter 'sealgate-stdiod.exe.*-*' -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -match '^sealgate-stdiod\.exe\.(old|new)-' } |
         ForEach-Object { Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue }
 }
 
