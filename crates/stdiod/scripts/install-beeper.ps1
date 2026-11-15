@@ -1093,9 +1093,55 @@ function Test-CanAsk {
 # instance is still exiting.
 # Start Beeper with its output in temp files. Electron writes its logs to the
 # console that started it when nothing is redirected, which floods this window.
+#
+# With -RedirectStandard*, Start-Process starts the child with handle
+# inheritance on, so Beeper would also inherit this script's own stdin, stdout
+# and stderr. Anything that reads the script's output through a pipe (a
+# wrapper, the CI tests) then never sees it end and waits until Beeper exits.
+# So the three handles are made non-inheritable for the launch and put back
+# after. ELECTRON_NO_ATTACH_CONSOLE (child only) also stops Electron from
+# attaching to this console.
+function Set-StdHandleInherit([hashtable]$Restore) {
+    # $null: clear the inherit flag on each std handle, return the old flags.
+    # A hashtable: put those flags back.
+    if (-not ('SealGate.StdHandles' -as [type])) {
+        Add-Type -Namespace SealGate -Name StdHandles -MemberDefinition @'
+[DllImport("kernel32.dll")] public static extern IntPtr GetStdHandle(int nStdHandle);
+[DllImport("kernel32.dll")] public static extern bool GetHandleInformation(IntPtr hObject, out uint lpdwFlags);
+[DllImport("kernel32.dll")] public static extern bool SetHandleInformation(IntPtr hObject, uint dwMask, uint dwFlags);
+'@
+    }
+    $old = @{}
+    foreach ($id in -10, -11, -12) {
+        $h = [SealGate.StdHandles]::GetStdHandle($id)
+        if ($h -eq [IntPtr]::Zero -or $h -eq [IntPtr](-1)) { continue }
+        if ($Restore) {
+            if ($Restore.ContainsKey($id)) { [void][SealGate.StdHandles]::SetHandleInformation($h, 1, $Restore[$id]) }
+            continue
+        }
+        [uint32]$flags = 0
+        if ([SealGate.StdHandles]::GetHandleInformation($h, [ref]$flags)) {
+            $old[$id] = [uint32]($flags -band 1)
+            [void][SealGate.StdHandles]::SetHandleInformation($h, 1, 0)
+        }
+    }
+    return $old
+}
+
 function Start-BeeperDesktop([string]$App) {
     $log = Join-Path ([System.IO.Path]::GetTempPath()) ('sealgate-beeper-' + [System.IO.Path]::GetRandomFileName())
-    Start-Process -FilePath $App -RedirectStandardOutput "$log.out.log" -RedirectStandardError "$log.err.log" -ErrorAction Stop | Out-Null
+    $prevAttach = $env:ELECTRON_NO_ATTACH_CONSOLE
+    $env:ELECTRON_NO_ATTACH_CONSOLE = '1'
+    $saved = $null
+    try {
+        # Best effort: without Add-Type (constrained language mode) Beeper
+        # still starts with its output in the files.
+        try { $saved = Set-StdHandleInherit $null } catch { Vlog "could not detach std handles from Beeper: $($_.Exception.Message)" }
+        Start-Process -FilePath $App -RedirectStandardOutput "$log.out.log" -RedirectStandardError "$log.err.log" -ErrorAction Stop | Out-Null
+    } finally {
+        if ($saved) { try { $null = Set-StdHandleInherit $saved } catch { Vlog "could not restore std handle flags: $($_.Exception.Message)" } }
+        if ($null -eq $prevAttach) { Remove-Item Env:ELECTRON_NO_ATTACH_CONSOLE -ErrorAction SilentlyContinue } else { $env:ELECTRON_NO_ATTACH_CONSOLE = $prevAttach }
+    }
 }
 
 function Restart-BeeperDesktop([string]$App) {
