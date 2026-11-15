@@ -129,6 +129,7 @@ $script:STDIOD_CHANNEL_SET = [bool]$env:STDIOD_PRERELEASE
 $script:STDIOD_PRERELEASE = ($env:STDIOD_PRERELEASE -eq '1')
 
 $script:DRY_RUN = $false
+$script:CHECK_ONLY = $false
 $script:INSTALL_DEPS = $true
 $script:ASSUME_YES = $false
 $script:YES_SET = $false
@@ -305,6 +306,7 @@ function Parse-Flags([string[]]$List) {
             '--stdiod-tag' { $script:STDIOD_TAG = Get-FlagValue $List $i $a; $n = 2 }
             '--stdiod-prerelease' { $script:STDIOD_PRERELEASE = $true; $script:STDIOD_CHANNEL_SET = $true }
             '--stdiod-release' { $script:STDIOD_PRERELEASE = $false; $script:STDIOD_CHANNEL_SET = $true }
+            '--check' { $script:CHECK_ONLY = $true }
             '--dry-run' { $script:DRY_RUN = $true }
             '-y' { $script:ASSUME_YES = $true; $script:YES_SET = $true }
             '--yes' { $script:ASSUME_YES = $true; $script:YES_SET = $true }
@@ -572,10 +574,9 @@ function Install-StdiodPrebuilt {
     if ($null -eq $pair) { Info "no prebuilt sealgate-stdiod for this architecture ($env:PROCESSOR_ARCHITECTURE)"; return $false }
     $asset = $pair.Asset
     $sums = $pair.Sums
-    $tag = $script:STDIOD_TAG
-    if (-not $tag) { $tag = Get-LatestStdiodTag }
-    $channel = if ($script:STDIOD_PRERELEASE) { 'demo (-beta)' } else { 'stable' }
-    if (-not $tag) { Warn "no $channel release found on $($script:STDIOD_REPO) (or the GitHub API is unreachable)"; return $false }
+    Resolve-StdiodTargetTag
+    $tag = $script:STDIOD_TARGET_TAG
+    if (-not $tag) { Warn "no $(Get-StdiodChannelName) release found on $($script:STDIOD_REPO) (or the GitHub API is unreachable)"; return $false }
     $base = "https://github.com/$($script:STDIOD_REPO)/releases/download/$tag"
     Step "downloading prebuilt sealgate-stdiod ($tag)"
     $tmp = Join-Path ([System.IO.Path]::GetTempPath()) ("install-beeper-stdiod-" + [System.IO.Path]::GetRandomFileName())
@@ -597,9 +598,18 @@ function Install-StdiodPrebuilt {
         $null = Invoke-Native $exe @('--version')
         if ($script:LastRc -ne 0) { Warn "downloaded $asset does not run on this machine ('--version' failed)"; return $false }
         New-Item -ItemType Directory -Path $script:INSTALL_DIR -Force | Out-Null
+        Remove-StaleStdiodExes
         if (Test-Path $script:STDIOD_EXE) {
             try { Remove-Item $script:STDIOD_EXE -Force } catch {
-                Die "cannot replace $($script:STDIOD_EXE): it is in use (the daemon may be running)" "stop it first ('sealgate-stdiod uninstall'), then re-run: $($script:RERUN) install"
+                # A running exe cannot be deleted or overwritten, but it CAN be
+                # renamed: the process keeps running from the renamed file, the
+                # new exe takes the real name, and a restart moves onto it. The
+                # renamed copy is deleted on the next run, once nothing runs it.
+                try {
+                    Rename-Item -Path $script:STDIOD_EXE -NewName ("sealgate-stdiod.exe.old-" + [System.IO.Path]::GetRandomFileName()) -Force
+                } catch {
+                    Die "cannot replace $($script:STDIOD_EXE): it is in use (the daemon may be running)" "stop it first ('sealgate-stdiod uninstall'), then re-run: $($script:RERUN) install"
+                }
             }
         }
         Move-Item -Path $exe -Destination $script:STDIOD_EXE
@@ -608,11 +618,199 @@ function Install-StdiodPrebuilt {
     }
     Add-UserPath $script:INSTALL_DIR
     Ok "installed prebuilt sealgate-stdiod $tag -> $($script:STDIOD_EXE) (sha256 verified)"
+    Write-InstallReceipt $tag
+    return $true
+}
+
+# ---------------------------------------------------------------------------
+# Updates (same model as install-beeper.sh; see its "Updates" section)
+# ---------------------------------------------------------------------------
+# The app, sealgate-stdiod and sealgate-detectord ship as ONE version. An
+# update moves the daemon to the newest release on this device's channel when
+# that release is NEWER, never to an older one; a daemon at or ahead of it is
+# current.
+#
+# Owners: 'oneliner' is the exe this script put in INSTALL_DIR. 'installer' is
+# the exe the Windows setup program put in the same folder (its receipt says
+# so); it updates only by running a newer setup program, which installs the
+# version it carries. 'desktop' is the copy inside the SealGate desktop app,
+# updated with the app. 'other' is anything else. This script only replaces
+# the exe it owns.
+$script:STDIOD_TARGET_TAG = ''
+$script:STDIOD_TARGET_RESOLVED = $false
+$script:STDIOD_UPGRADED = $false
+
+function Get-StdiodChannelName { if ($script:STDIOD_PRERELEASE) { return 'demo (-beta)' } else { return 'stable' } }
+
+# The pinned --stdiod-tag, else the newest release on the channel; resolved
+# once per run so the check and the download agree.
+function Resolve-StdiodTargetTag {
+    if ($script:STDIOD_TARGET_RESOLVED) { return }
+    $script:STDIOD_TARGET_TAG = if ($script:STDIOD_TAG) { $script:STDIOD_TAG } else { Get-LatestStdiodTag }
+    $script:STDIOD_TARGET_RESOLVED = $true
+}
+
+# 'sealgate-stdiod 0.6.23' -> '0.6.23'. Pre-stamp builds report 0.0.1, which
+# never matches a release, so they count as outdated.
+function Get-StdiodInstalledVersion {
+    $out = Invoke-Native 'sealgate-stdiod' @('--version')
+    if ($script:LastRc -ne 0 -or -not $out) { return '' }
+    return (($out -split "`n")[0].Trim() -split '\s+')[-1]
+}
+
+function Get-TagVersion([string]$Tag) { return ($Tag -replace '^v', '') }
+
+# -1, 0 or 1 in SemVer order (same rules as version_cmp in install-beeper.sh):
+# X.Y.Z numerically, a release above its own prereleases, prerelease parts
+# numerically where numeric. A non-version sorts below every version.
+function Compare-StdiodVersion([string]$A, [string]$B) {
+    $re = '^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.]+))?$'
+    $ma = [regex]::Match(($A -replace '^v', ''), $re)
+    $mb = [regex]::Match(($B -replace '^v', ''), $re)
+    if (-not $ma.Success -or -not $mb.Success) { return ([int]$ma.Success - [int]$mb.Success) }
+    for ($i = 1; $i -le 3; $i++) {
+        $x = [long]$ma.Groups[$i].Value; $y = [long]$mb.Groups[$i].Value
+        if ($x -ne $y) { if ($x -gt $y) { return 1 } else { return -1 } }
+    }
+    $pa = $ma.Groups[4].Value; $pb = $mb.Groups[4].Value
+    if ($pa -eq $pb) { return 0 }
+    if (-not $pa) { return 1 }
+    if (-not $pb) { return -1 }
+    $ia = $pa.Split('.'); $ib = $pb.Split('.')
+    for ($i = 0; $i -lt [Math]::Min($ia.Count, $ib.Count); $i++) {
+        $x = $ia[$i]; $y = $ib[$i]
+        if ($x -match '^\d+$' -and $y -match '^\d+$') {
+            if ([long]$x -ne [long]$y) { if ([long]$x -gt [long]$y) { return 1 } else { return -1 } }
+        } elseif ($x -cne $y) {
+            if ([string]::CompareOrdinal($x, $y) -gt 0) { return 1 } else { return -1 }
+        }
+    }
+    if ($ia.Count -eq $ib.Count) { return 0 }
+    if ($ia.Count -gt $ib.Count) { return 1 } else { return -1 }
+}
+
+# True only when release $Want is newer than $Installed. Equal or older is
+# current: this script never downgrades (a deliberate downgrade is
+# 'sealgate-stdiod update --tag <tag> --allow-downgrade').
+function Test-StdiodNewer([string]$Installed, [string]$Want) { return ((Compare-StdiodVersion $Want $Installed) -eq 1) }
+
+function Get-StdiodCurrentLine([string]$Installed, [string]$Want) {
+    if ($Installed -eq $Want) { return "sealgate-stdiod $Installed is current" }
+    return "sealgate-stdiod $Installed is newer than the newest $(Get-StdiodChannelName) release ($Want); left as is"
+}
+
+# The exe the per-user Scheduled Task runs ('SealGate stdiod <SID>'), or ''.
+# The task lives in the machine-wide root folder, named per user by SID (see
+# platform/windows.rs, task_name), so look up this user's name exactly rather
+# than by wildcard, which could match another account's task.
+function Get-StdiodSupervisedExe {
+    $names = @('SealGate stdiod')
+    try { $names = @("SealGate stdiod $([System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value)") + $names } catch {}
+    foreach ($n in $names) {
+        try {
+            $t = Get-ScheduledTask -TaskName $n -ErrorAction Stop | Select-Object -First 1
+            if ($t) { return [string]($t.Actions | Select-Object -First 1).Execute }
+        } catch {
+            Vlog "no Scheduled Task '$n': $($_.Exception.Message)"
+        }
+    }
+    return ''
+}
+
+function Get-StdiodOwner {
+    $exe = Get-StdiodSupervisedExe
+    if (-not $exe) {
+        $cmd = Get-Command 'sealgate-stdiod' -ErrorAction SilentlyContinue
+        if ($cmd) { $exe = [string]$cmd.Source }
+    }
+    if (-not $exe) { return 'none' }
+    $exe = $exe.Trim('"')
+    if ($exe -ieq $script:STDIOD_EXE) {
+        # Same folder for this script and the Windows setup program; the
+        # receipt says which one put the exe there. The setup program's daemon
+        # updates only by running a newer setup program.
+        $receipt = $null
+        try { $receipt = Get-Content -Raw (Join-Path (Split-Path -Parent (Get-StdiodConfigPath)) 'install-receipt.json') -ErrorAction Stop | ConvertFrom-Json } catch {}
+        if ($receipt -and $receipt.source -eq 'windows-installer' -and ([string]$receipt.bin -ieq $exe)) { return 'installer' }
+        return 'oneliner'
+    }
+    if ($exe -match '(?i)\\resources\\bin\\sealgate-stdiod\.exe$') { return 'desktop' }
+    return 'other'
+}
+
+function Get-StdiodUpdateHint([string]$Owner) {
+    switch ($Owner) {
+        'oneliner' { return "run: $($script:RERUN) update" }
+        'desktop' { return 'update the SealGate desktop app (tray icon > Check for Updates); it ships the daemon at the same version' }
+        'installer' { return 'it was installed by the SealGate for Beeper setup program; run a newer setup program to update it' }
+        default { return "it is not managed by this script ($((Get-Command 'sealgate-stdiod' -ErrorAction SilentlyContinue).Source)); update it the way it was installed" }
+    }
+}
+
+# Exes renamed aside by an earlier update while they were running. Deleting
+# fails harmlessly for one that still runs; the next run gets it.
+function Remove-StaleStdiodExes {
+    Get-ChildItem -Path $script:INSTALL_DIR -Filter 'sealgate-stdiod.exe.old-*' -ErrorAction SilentlyContinue |
+        ForEach-Object { Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue }
+}
+
+# How the daemon got here, next to its config; read by later runs and by the
+# daemon (it reports the install source to the backend).
+function Write-InstallReceipt([string]$Tag) {
+    if ($script:DRY_RUN) { return }
+    try {
+        $dir = Split-Path -Parent (Get-StdiodConfigPath)
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        $obj = [ordered]@{
+            source       = 'oneliner'
+            tag          = $Tag
+            version      = (Get-TagVersion $Tag)
+            channel      = $(if ($script:STDIOD_PRERELEASE) { 'beta' } else { 'stable' })
+            repo         = $script:STDIOD_REPO
+            bin          = $script:STDIOD_EXE
+            script_url   = $script:SCRIPT_URL
+            installed_at = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
+        }
+        Set-Content -Path (Join-Path $dir 'install-receipt.json') -Value (ConvertTo-Json -InputObject $obj -Compress) -Encoding ASCII
+    } catch {
+        Vlog "could not write the install receipt: $($_.Exception.Message)"
+    }
+}
+
+# Called by Ensure-StdiodBin when a daemon is installed: brings the one this
+# script owns to the target release; only reports on the others. A failed
+# lookup keeps the installed daemon.
+function Ensure-StdiodCurrent {
+    $owner = Get-StdiodOwner
+    $installed = Get-StdiodInstalledVersion
+    $shown = if ($installed) { $installed } else { '?' }
+    if ($owner -ne 'oneliner') { Ok "sealgate-stdiod $shown ($owner install; this script leaves it as is)"; return }
+    Resolve-StdiodTargetTag
+    if (-not $script:STDIOD_TARGET_TAG) { Warn "could not look up the newest $(Get-StdiodChannelName) release; keeping sealgate-stdiod $shown"; return }
+    $want = Get-TagVersion $script:STDIOD_TARGET_TAG
+    if (-not (Test-StdiodNewer $installed $want)) { Ok (Get-StdiodCurrentLine $installed $want); return }
+    if ($script:DRY_RUN) { Info "would update sealgate-stdiod $shown -> $want"; return }
+    Info "updating sealgate-stdiod $shown -> $want"
+    if (-not (Install-StdiodPrebuilt)) {
+        Die "could not update sealgate-stdiod to $($script:STDIOD_TARGET_TAG) (see the warnings above); $shown is still installed" "retry, or pin a release with --stdiod-tag <tag> (list them: $($script:RERUN) tags)"
+    }
+    $script:STDIOD_UPGRADED = $true
+}
+
+# Restart the Scheduled Task onto a freshly swapped exe. $false when there is
+# no task yet.
+function Restart-StdiodIfSupervised {
+    $null = Invoke-Native 'sealgate-stdiod' @('status')
+    if ($script:LastRc -eq 4) { Info "no Scheduled Task yet; 'install' registers one"; return $false }
+    if (-not $script:DRY_RUN) { Remove-Item (Get-StdiodStatePath) -Force -ErrorAction SilentlyContinue }
+    $rc = Invoke-Live 'sealgate-stdiod' @('restart')
+    if ($rc -ne 0) { Die 'sealgate-stdiod restart failed' 'check: sealgate-stdiod logs --follow' }
+    Ok 'daemon restarted'
     return $true
 }
 
 function Ensure-StdiodBin {
-    if (Test-Command 'sealgate-stdiod') { return }
+    if (Test-Command 'sealgate-stdiod') { Ensure-StdiodCurrent; return }
     if ($script:DRY_RUN) {
         Info "dep 'sealgate-stdiod' missing; would download the prebuilt release exe into $($script:INSTALL_DIR)"
         return
@@ -1415,6 +1613,13 @@ function Ensure-StdiodSupervised {
         Die 'sealgate-stdiod install could not register the Scheduled Task' "the daemon registers a per-user logon task via schtasks (no admin needed). Run this from a normal signed-in user session (not a service or a bare WinRM shell), then re-run: $($script:RERUN) install"
     }
     Ok 'daemon installed and supervised'
+    # 'install' recreates the task, but the old process (running from the exe
+    # renamed aside) is only reliably gone after 'restart', which ends the task
+    # and waits for it before starting the new exe.
+    if ($script:STDIOD_UPGRADED) {
+        $rc = Invoke-Live 'sealgate-stdiod' @('restart')
+        if ($rc -ne 0) { Warn 'could not restart the daemon onto the new exe; run: sealgate-stdiod restart' }
+    }
     if ($script:DRY_RUN) { return }
     Info "waiting up to $($script:CONNECT_WAIT)s for the daemon to register with the backend"
     if (Wait-StdiodConnected $script:CONNECT_WAIT) {
@@ -1557,6 +1762,71 @@ function Invoke-CmdInstall {
     Write-Result
 }
 
+# update: bring sealgate-stdiod to the newest release on its channel (or to
+# --stdiod-tag) and restart it. --check only reports: exit 0 current, 10 update
+# available. --json writes one object to the pipeline either way.
+function Invoke-CmdUpdate {
+    if (-not $script:YES_SET) { $script:ASSUME_YES = $true }
+    Require-SupportedPlatform
+    if (-not (Test-Command 'sealgate-stdiod')) { Die 'sealgate-stdiod is not installed' "install it: $($script:RERUN) install" }
+    $owner = Get-StdiodOwner
+    $installed = Get-StdiodInstalledVersion
+    $shown = if ($installed) { $installed } else { '?' }
+    Resolve-StdiodTargetTag
+    if (-not $script:STDIOD_TARGET_TAG) {
+        Die "could not look up the newest $(Get-StdiodChannelName) release on $($script:STDIOD_REPO)" "check connectivity to api.github.com, or pin one: $($script:RERUN) update --stdiod-tag <tag>"
+    }
+    $want = Get-TagVersion $script:STDIOD_TARGET_TAG
+    $current = -not (Test-StdiodNewer $installed $want)
+    if ($script:JSON) {
+        $obj = [ordered]@{
+            installed        = $installed
+            latest           = $want
+            channel          = $(if ($script:STDIOD_PRERELEASE) { 'beta' } else { 'stable' })
+            owner            = $owner
+            update_available = (-not $current)
+        }
+        Write-Output (ConvertTo-Json -InputObject $obj -Compress)
+    }
+    Step "sealgate-stdiod $shown installed; newest $(Get-StdiodChannelName): $want"
+    if ($current) { Ok (Get-StdiodCurrentLine $installed $want); return }
+    if ($script:CHECK_ONLY) {
+        Warn "update available: $shown -> $want"
+        Todo (Get-StdiodUpdateHint $owner)
+        $script:ExitCode = 10
+        return
+    }
+    if ($owner -ne 'oneliner') { Die "this sealgate-stdiod was not installed by this script ($owner), so it is left alone" (Get-StdiodUpdateHint $owner) }
+    if (-not (Confirm-Action "update sealgate-stdiod $shown -> $want and restart the daemon?")) { Die 'aborted' '' }
+    if ($script:DRY_RUN) { Info "would download $($script:STDIOD_TARGET_TAG), replace $($script:STDIOD_EXE) and restart the daemon"; return }
+    if (-not (Install-StdiodPrebuilt)) {
+        Die "could not update sealgate-stdiod to $($script:STDIOD_TARGET_TAG) (see the warnings above); $shown is still installed" "retry, or pin a release with --stdiod-tag <tag> (list them: $($script:RERUN) tags)"
+    }
+    if (Restart-StdiodIfSupervised) {
+        Info "waiting up to $($script:CONNECT_WAIT)s for the daemon to reconnect"
+        if (Wait-StdiodConnected $script:CONNECT_WAIT) { Ok "daemon reconnected on $want" }
+        else {
+            Warn "the daemon has not reconnected yet (state: $(Get-StdiodStateField 'connection_state'))"
+            Todo 'check: sealgate-stdiod status, sealgate-stdiod logs --follow'
+        }
+    }
+}
+
+# One doctor line on the daemon version; informational, never fails doctor.
+function Show-DoctorStdiodVersion {
+    $owner = Get-StdiodOwner
+    $installed = Get-StdiodInstalledVersion
+    $shown = if ($installed) { $installed } else { '?' }
+    Resolve-StdiodTargetTag
+    if (-not $script:STDIOD_TARGET_TAG) { Info "sealgate-stdiod $shown; could not look up the newest $(Get-StdiodChannelName) release"; return }
+    $want = Get-TagVersion $script:STDIOD_TARGET_TAG
+    if (-not (Test-StdiodNewer $installed $want)) { Ok (Get-StdiodCurrentLine $installed $want) }
+    else {
+        Warn "sealgate-stdiod $shown is outdated: newest $(Get-StdiodChannelName) is $want"
+        Todo (Get-StdiodUpdateHint $owner)
+    }
+}
+
 function Invoke-CmdDoctor {
     Step 'Doctor'
     $allgood = $true
@@ -1587,6 +1857,7 @@ function Invoke-CmdDoctor {
             4 { Warn "no Scheduled Task installed (run: $($script:RERUN) install)"; $allgood = $false }
             default { Warn "sealgate-stdiod status failed (exit $($script:LastRc))"; $allgood = $false }
         }
+        Show-DoctorStdiodVersion
     }
     if ($cred -eq 'live') {
         if (Test-ServerRegistered $script:SERVER_NAME) { Ok "server '$($script:SERVER_NAME)' approved on this device" }
@@ -1669,8 +1940,11 @@ Usage (from PowerShell):
   $p [command] [flags]        (from a saved copy)
 
 Commands:
-  install     Deps, Beeper check, device auth, supervise daemon, submit Beeper server, prime OAuth
-  doctor      Check prerequisites and current state (read-only)
+  install     Deps, Beeper check, device auth, supervise daemon, submit Beeper server, prime OAuth.
+              Re-running it also updates a daemon this script installed.
+  update      Update sealgate-stdiod to the newest release on its channel and restart it
+              (--check: report only; exit 10 when an update is available)
+  doctor      Check prerequisites and current state, including the daemon version (read-only)
   status      Show stdiod daemon + Beeper Client API status
   tags        List releases the sealgate-stdiod exe can be pulled from
   preauth     Prime the Beeper OAuth grant (approve once in Beeper)
@@ -1725,7 +1999,10 @@ Examples:
   # Re-run the one-time Beeper OAuth approval (e.g. after enabling MCP later)
   & ([scriptblock]::Create((irm $($script:SCRIPT_URL)))) preauth
 
-Exit codes: 0 ok, 1 error (message + fix printed).
+  # Update the daemon (same version as the desktop app, always)
+  & ([scriptblock]::Create((irm $($script:SCRIPT_URL)))) update
+
+Exit codes: 0 ok, 1 error (message + fix printed), 10 'update --check' found an update.
 "@
 }
 
@@ -1734,6 +2011,7 @@ function Show-SubcommandHelp([string]$Cmd) {
         'install' { Log 'install - wire the SealGate side and print remaining human steps. Idempotent; safe to re-run.'; Log '  optional: --sg-backend, --no-open, --install-deps, --yes, --dry-run, --no-preauth, --oauth-wait, --stdiod-tag <tag>' }
         'preauth' { Log "preauth - drive one MCP handshake through 'npx $($script:MCP_PKG)' so Beeper raises its approve/deny prompt and caches the OAuth grant. Idempotent; optional --oauth-wait." }
         'mcp-url' { Log 'mcp-url - print the gateway URL + client snippet. pass --sg-api-key for a ready-to-run snippet. supports --json.' }
+        'update' { Log 'update - bring sealgate-stdiod to the newest release on its channel and restart it. Only replaces the exe this script (or the setup program) installed; one from the desktop app updates with the app.'; Log '  optional: --check (report only, exit 10 if outdated), --json, --stdiod-tag <tag>, --stdiod-release / --stdiod-prerelease, --dry-run' }
         'status' { Log 'status - show stdiod daemon + Beeper Client API status.' }
         'doctor' { Log 'doctor - verify prerequisites and current state (read-only).' }
         'uninstall' { Log 'uninstall - withdraw the server and remove the Scheduled Task. pass --yes to skip the prompt.' }
@@ -1767,6 +2045,7 @@ function Invoke-Main([string[]]$Argv) {
     Resolve-StdiodChannel
     switch ($cmd) {
         'install' { Invoke-CmdInstall }
+        'update' { Invoke-CmdUpdate }
         'doctor' { Invoke-CmdDoctor }
         'status' { Invoke-CmdStatus }
         'preauth' { Invoke-CmdPreauth }

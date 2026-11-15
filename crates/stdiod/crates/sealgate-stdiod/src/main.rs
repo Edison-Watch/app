@@ -28,6 +28,7 @@ mod setup;
 mod state;
 mod supervisor;
 mod tunnel;
+mod update;
 
 /// The daemon's reported release version.
 ///
@@ -79,6 +80,11 @@ enum Command {
     Status(cli::status::StatusArgs),
     /// Print the daemon log. Pass `--follow` to tail in real time.
     Logs(cli::logs::LogsArgs),
+    /// Update this binary to the newest release on its channel and restart
+    /// the daemon. Only for a binary the install scripts placed; the desktop
+    /// app's copy updates with the app. `--check` only reports (exit 10 when
+    /// an update is available).
+    Update(cli::update::UpdateArgs),
     /// Register, list, or remove stdio_tunnel servers for this device.
     #[command(subcommand)]
     Server(cli::server::ServerCommand),
@@ -168,6 +174,7 @@ async fn main() -> anyhow::Result<()> {
         Command::Restart(args) => cli::install::restart(args),
         Command::Status(args) => cli::status::run(args),
         Command::Logs(args) => cli::logs::run(args),
+        Command::Update(args) => cli::update::run(args).await,
         Command::Server(args) => cli::server::run(cli::server::ServerArgs { command: args }).await,
         Command::Setup(command) => setup::stepio::exit(setup::run(command).await),
     };

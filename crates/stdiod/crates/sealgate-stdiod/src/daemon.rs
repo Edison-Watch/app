@@ -413,12 +413,21 @@ async fn drain_incoming(
             TunnelFrame::ServerHello(ServerHello {
                 protocol_version,
                 servers,
+                update,
             }) => {
                 info!(
                     protocol_version,
                     server_count = servers.len(),
                     "received server_hello"
                 );
+                if let Some(hint) = &update {
+                    warn!(
+                        latest = %hint.latest,
+                        "{} ({})",
+                        crate::update::describe(hint),
+                        crate::update::install_source().how_to_update()
+                    );
+                }
                 // The backend is the source of truth on version compatibility:
                 // it accepts a client_hello whose protocol_version falls inside
                 // its supported window and closes with 1008 otherwise. Reaching
@@ -441,6 +450,9 @@ async fn drain_incoming(
                         s.connection_state = ConnectionState::Connected;
                         s.last_connected_at = Some(chrono::Utc::now());
                         s.last_error = None;
+                        // Every hello replaces it: an absent hint means the
+                        // daemon is current, so a stale one must not linger.
+                        s.update = update;
                     })
                     .await;
                 sup.apply_snapshot(servers).await;

@@ -41,6 +41,17 @@ use crate::paths;
 const LABEL: &str = "com.sealgate.stdiod";
 const PLIST_FILENAME: &str = "com.sealgate.stdiod.plist";
 
+/// The installed plist's text, or `None` when there is none. Lets callers
+/// see which binary the unit runs before acting on it (`update`).
+pub fn unit_definition() -> Result<Option<String>> {
+    let path = plist_path()?;
+    match std::fs::read_to_string(&path) {
+        Ok(body) => Ok(Some(body)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(e).with_context(|| format!("reading {}", path.display())),
+    }
+}
+
 /// `~/Library/LaunchAgents/com.sealgate.stdiod.plist`.
 fn plist_path() -> Result<PathBuf> {
     let home = dirs::home_dir().ok_or_else(|| anyhow!("HOME not set"))?;

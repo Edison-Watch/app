@@ -62,6 +62,36 @@ pub struct DesiredServer {
 pub struct ServerHello {
     pub protocol_version: u32,
     pub servers: Vec<DesiredServer>,
+    /// Advisory: a newer daemon exists on this daemon's channel. Absent when
+    /// it is current or its version is unknown. Never enforced by the backend.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub update: Option<UpdateHint>,
+}
+
+/// See `UpdateHint` in `schema/tunnel-protocol.json`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UpdateHint {
+    pub latest: String,
+    #[serde(default)]
+    pub min: Option<String>,
+    pub level: UpdateLevel,
+    pub channel: UpdateChannel,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum UpdateLevel {
+    /// Older than the newest release on the channel.
+    Recommended,
+    /// Older than the deployment's configured minimum.
+    Required,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum UpdateChannel {
+    Stable,
+    Beta,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

@@ -360,6 +360,27 @@ fn terminate(pid: u32) {
     }
 }
 
+/// The registered task's XML, or `None` when there is no task. Lets callers
+/// see which exe the task runs before acting on it (`update`).
+pub fn unit_definition() -> Result<Option<String>> {
+    let out = schtasks(&["/query", "/tn", &task_name(), "/xml"])?;
+    if !out.status.success() {
+        return Ok(None);
+    }
+    // schtasks writes the XML as UTF-16 on some locales; decode either.
+    let bytes = &out.stdout;
+    let text = if bytes.len() >= 2 && bytes[0] == 0xFF && bytes[1] == 0xFE {
+        let units: Vec<u16> = bytes[2..]
+            .chunks_exact(2)
+            .map(|c| u16::from_le_bytes([c[0], c[1]]))
+            .collect();
+        String::from_utf16_lossy(&units)
+    } else {
+        String::from_utf8_lossy(bytes).into_owned()
+    };
+    Ok(Some(text))
+}
+
 /// True iff the scheduled task exists.
 #[allow(dead_code)] // consumed by the `status` subcommand
 pub fn is_installed() -> Result<bool> {

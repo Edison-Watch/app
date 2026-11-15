@@ -260,6 +260,45 @@ Check 'Ensure-Deps is idempotent (second run downloads nothing)' {
     Ensure-Deps
     Assert ((Get-Item (Join-Path $installDir 'sealgate-stdiod.exe')).LastWriteTimeUtc -eq $stamp) 'binary was re-downloaded'
 }
+Check 'update --check: current right after install, exit 0' {
+    $r = Run @('update', '--check', '--json')
+    Assert ($r.Rc -eq 0) "rc=$($r.Rc) out=$($r.Out)"
+    Assert ($r.Out -match '"update_available":false') $r.Out
+    Assert ($r.Out -match '"owner":"oneliner"') $r.Out
+}
+Check 'update --check: a newer pinned release is an update, exit 10' {
+    $r = Run @('update', '--check', '--json', '--stdiod-tag', 'v99.0.0')
+    Assert ($r.Rc -eq 10) "rc=$($r.Rc) out=$($r.Out)"
+    Assert ($r.Out -match '"update_available":true') $r.Out
+    Assert ($r.Out -match "action: run: .* update") $r.Out
+}
+Check 'update never downgrades: an older pinned release is not an update' {
+    $r = Run @('update', '--check', '--json', '--stdiod-tag', 'v0.0.1')
+    Assert ($r.Rc -eq 0) "rc=$($r.Rc) out=$($r.Out)"
+    Assert ($r.Out -match '"update_available":false') $r.Out
+    Assert ($r.Out -match 'left as is') $r.Out
+}
+Check 'from the previous release, update moves to the newest and writes the install receipt' {
+    # The previous stable release that carries a Windows exe for this machine,
+    # installed directly (update itself never goes backwards).
+    $asset = (Get-StdiodReleaseAsset).Asset
+    $rels = Invoke-RestMethod -Uri "https://api.github.com/repos/$($script:STDIOD_REPO)/releases?per_page=100" -UseBasicParsing -TimeoutSec 20
+    $stable = @($rels | Where-Object { -not $_.draft -and -not $_.prerelease -and (@($_.assets | Where-Object { $_.name -eq $asset }).Count -gt 0) } |
+            Sort-Object { Get-TagSortKey ([string]$_.tag_name) } -Descending | ForEach-Object { [string]$_.tag_name })
+    if ($stable.Count -lt 2) { Write-Host '       skipped: fewer than two stable releases carry this exe'; return }
+    $latest = $stable[0]; $prev = $stable[1]
+    $script:STDIOD_TAG = $prev; $script:STDIOD_TARGET_RESOLVED = $false
+    try { Assert (Install-StdiodPrebuilt) "could not install $prev" }
+    finally { $script:STDIOD_TAG = ''; $script:STDIOD_TARGET_RESOLVED = $false }
+    $v = Invoke-Native (Join-Path $installDir 'sealgate-stdiod.exe') @('--version')
+    Assert ($v -match [regex]::Escape(($prev -replace '^v', ''))) "after installing ${prev}: $v"
+    $r = Run @('update')
+    Assert ($r.Rc -eq 0) "to newest: rc=$($r.Rc) out=$($r.Out)"
+    $v = Invoke-Native (Join-Path $installDir 'sealgate-stdiod.exe') @('--version')
+    Assert ($v -match [regex]::Escape(($latest -replace '^v', ''))) "after update to ${latest}: $v"
+    $receipt = Get-Content -Raw (Join-Path (Split-Path -Parent (Get-StdiodConfigPath)) 'install-receipt.json') | ConvertFrom-Json
+    Assert ($receipt.tag -eq $latest -and $receipt.source -eq 'oneliner') "receipt: $($receipt | ConvertTo-Json -Compress)"
+}
 Check 'sealgate-stdiod install refuses without a credential (no task registered)' {
     $out = Invoke-Native 'sealgate-stdiod' @('install')
     Assert ($script:LastRc -ne 0) "install unexpectedly succeeded: $out"

@@ -1,0 +1,11 @@
+{
+  "type": "server_hello",
+  "protocol_version": 2,
+  "servers": [],
+  "update": {
+    "latest": "0.6.24",
+    "min": null,
+    "level": "recommended",
+    "channel": "stable"
+  }
+}

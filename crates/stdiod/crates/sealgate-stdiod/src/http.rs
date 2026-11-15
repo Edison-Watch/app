@@ -112,6 +112,7 @@ impl BackendClient {
         let base = config::normalize_backend_url(&base)?;
         let http = Client::builder()
             .timeout(std::time::Duration::from_secs(20))
+            .user_agent(crate::update::user_agent())
             .build()
             .context("building HTTP client")?;
         Ok(Self {
@@ -141,6 +142,7 @@ impl BackendClient {
                 operation: format!("GET {path}"),
                 source,
             })?;
+        crate::update::observe_response(&resp);
         decode_json(resp, format!("GET {path}")).await
     }
 
@@ -158,6 +160,7 @@ impl BackendClient {
                 operation: format!("POST {path}"),
                 source,
             })?;
+        crate::update::observe_response(&resp);
         decode_json(resp, format!("POST {path}")).await
     }
 
@@ -172,6 +175,7 @@ impl BackendClient {
                 operation: format!("DELETE {path}"),
                 source,
             })?;
+        crate::update::observe_response(&resp);
         match resp.status() {
             StatusCode::NO_CONTENT => Ok(true),
             StatusCode::NOT_FOUND => Ok(false),

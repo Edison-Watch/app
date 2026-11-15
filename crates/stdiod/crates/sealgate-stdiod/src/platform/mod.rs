@@ -20,7 +20,7 @@
 pub mod macos;
 
 #[cfg(target_os = "macos")]
-pub use macos::{install, restart, uninstall};
+pub use macos::{install, restart, uninstall, unit_definition};
 
 // is_installed / is_running are consumed by the `status` subcommand
 // (next commit). Pull them through with an allow so the unused-import
@@ -33,7 +33,7 @@ pub use macos::{is_installed, is_loaded, is_running};
 pub mod windows;
 
 #[cfg(target_os = "windows")]
-pub use windows::{install, restart, stop, uninstall};
+pub use windows::{install, restart, stop, uninstall, unit_definition};
 
 #[cfg(target_os = "windows")]
 #[allow(unused_imports)]
@@ -43,7 +43,7 @@ pub use windows::{is_installed, is_loaded, is_running};
 pub mod linux;
 
 #[cfg(target_os = "linux")]
-pub use linux::{install, restart, uninstall};
+pub use linux::{install, restart, uninstall, unit_definition};
 
 #[cfg(target_os = "linux")]
 #[allow(unused_imports)]
@@ -77,6 +77,10 @@ mod stub {
         Ok(false)
     }
 
+    pub fn unit_definition() -> Result<Option<String>> {
+        Ok(None)
+    }
+
     pub fn is_loaded() -> Result<bool> {
         Ok(false)
     }
@@ -87,4 +91,4 @@ mod stub {
 }
 
 #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
-pub use stub::{install, is_installed, is_loaded, is_running, restart, uninstall};
+pub use stub::{install, is_installed, is_loaded, is_running, restart, uninstall, unit_definition};
