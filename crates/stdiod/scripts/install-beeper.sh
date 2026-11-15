@@ -714,9 +714,15 @@ resolve_stdiod_target_tag() {
 
 # The version the installed daemon reports ('sealgate-stdiod 0.6.23' -> 0.6.23).
 # Builds before the version stamp report 0.0.1, which never matches a release,
-# so they always count as outdated - correctly.
+# so they always count as outdated - correctly. Asks the binary that actually
+# runs (stdiod_active_bin), the same one stdiod_owner judges, not whichever
+# copy happens to be first on PATH.
 stdiod_installed_version() {
-  sealgate-stdiod --version 2>/dev/null | awk 'NR == 1 { print $NF }'
+  local bin
+  bin="$(stdiod_active_bin)"
+  # A unit can name a file that is gone; that daemon has no version.
+  [ -n "$bin" ] && [ -x "$bin" ] || return 0
+  "$bin" --version 2>/dev/null | awk 'NR == 1 { print $NF }'
 }
 
 # v0.6.23 -> 0.6.23; v0.6.23-beta.4 -> 0.6.23-beta.4
@@ -777,14 +783,21 @@ stdiod_supervised_bin() {
   esac
 }
 
+# The daemon binary that matters: the one the supervisor unit runs when there
+# is a unit (even one whose file is gone: that unit is still in charge),
+# else the first on PATH, else empty. Owner and version both come from this
+# binary, so another copy earlier on PATH cannot hide an outdated daemon.
+stdiod_active_bin() {
+  local bin
+  bin="$(stdiod_supervised_bin)"
+  [ -n "$bin" ] || bin="$(command -v sealgate-stdiod 2>/dev/null || true)"
+  printf '%s' "$bin"
+}
+
 stdiod_owner() {
   local mine="$HOME/.local/bin/sealgate-stdiod" cargo_bin="$HOME/.cargo/bin/sealgate-stdiod"
-  local unit_bin on_path
-  unit_bin="$(stdiod_supervised_bin)"
-  on_path="$(command -v sealgate-stdiod 2>/dev/null || true)"
-  # The supervisor unit decides when there is one: that is the daemon that
-  # actually runs, whatever happens to be first on PATH.
-  local bin="${unit_bin:-$on_path}"
+  local bin
+  bin="$(stdiod_active_bin)"
   case "$bin" in
     "")             printf 'none';;
     "$mine")        printf 'oneliner';;
@@ -802,7 +815,7 @@ stdiod_update_hint() {
     oneliner) printf 'run: %s update' "$PROG";;
     desktop)  printf 'update the SealGate desktop app (menu bar > Check for Updates); it ships the daemon at the same version';;
     source)   printf 'rebuild it from an up-to-date checkout: %s install --from-source' "$PROG";;
-    *)        printf 'it is not managed by this script (%s); update it the way it was installed' "$(command -v sealgate-stdiod 2>/dev/null)";;
+    *)        printf 'it is not managed by this script (%s); update it the way it was installed' "$(stdiod_active_bin)";;
   esac
 }
 

@@ -651,9 +651,13 @@ function Resolve-StdiodTargetTag {
 }
 
 # 'sealgate-stdiod 0.6.23' -> '0.6.23'. Pre-stamp builds report 0.0.1, which
-# never matches a release, so they count as outdated.
+# never matches a release, so they count as outdated. Asks the exe that
+# actually runs (Get-StdiodActiveExe), the same one Get-StdiodOwner judges,
+# not whichever copy happens to be first on PATH.
 function Get-StdiodInstalledVersion {
-    $out = Invoke-Native 'sealgate-stdiod' @('--version')
+    $exe = Get-StdiodActiveExe
+    if (-not $exe) { return '' }
+    $out = Invoke-Native $exe @('--version')
     if ($script:LastRc -ne 0 -or -not $out) { return '' }
     return (($out -split "`n")[0].Trim() -split '\s+')[-1]
 }
@@ -717,14 +721,22 @@ function Get-StdiodSupervisedExe {
     return ''
 }
 
-function Get-StdiodOwner {
-    $exe = Get-StdiodSupervisedExe
+# The daemon exe that matters: the one the Scheduled Task runs when there is
+# a task (even one whose file is gone: that task is still in charge), else the
+# first on PATH, else ''. Owner and version both come from this exe, so another
+# copy earlier on PATH cannot hide an outdated daemon.
+function Get-StdiodActiveExe {
+    $exe = (Get-StdiodSupervisedExe).Trim('"')
     if (-not $exe) {
         $cmd = Get-Command 'sealgate-stdiod' -ErrorAction SilentlyContinue
         if ($cmd) { $exe = [string]$cmd.Source }
     }
+    return $exe
+}
+
+function Get-StdiodOwner {
+    $exe = Get-StdiodActiveExe
     if (-not $exe) { return 'none' }
-    $exe = $exe.Trim('"')
     if ($exe -ieq $script:STDIOD_EXE) {
         # Same folder for this script and the Windows setup program; the
         # receipt says which one put the exe there. The setup program's daemon
@@ -743,7 +755,7 @@ function Get-StdiodUpdateHint([string]$Owner) {
         'oneliner' { return "run: $($script:RERUN) update" }
         'desktop' { return 'update the SealGate desktop app (tray icon > Check for Updates); it ships the daemon at the same version' }
         'installer' { return 'it was installed by the SealGate for Beeper setup program; run a newer setup program to update it' }
-        default { return "it is not managed by this script ($((Get-Command 'sealgate-stdiod' -ErrorAction SilentlyContinue).Source)); update it the way it was installed" }
+        default { return "it is not managed by this script ($(Get-StdiodActiveExe)); update it the way it was installed" }
     }
 }
 

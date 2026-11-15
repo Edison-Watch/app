@@ -518,10 +518,15 @@ Check 'OAuth priming against a fake Beeper listener ends within its wait and lea
         $l.Prefixes.Add('http://127.0.0.1:23373/')
         $l.Start()
         $end = (Get-Date).AddSeconds(120)
+        # One pending BeginGetContext at a time: a new one per idle second
+        # would leave the old ones pending, the next request would go to the
+        # oldest (which nothing ends), and the probe would never get an answer.
+        $ar = $null
         while ((Get-Date) -lt $end) {
-            $ar = $l.BeginGetContext($null, $null)
+            if (-not $ar) { $ar = $l.BeginGetContext($null, $null) }
             if (-not $ar.AsyncWaitHandle.WaitOne(1000)) { continue }
             $ctx = $l.EndGetContext($ar)
+            $ar = $null
             $ctx.Response.StatusCode = 404
             $ctx.Response.Close()
         }

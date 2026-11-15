@@ -115,9 +115,27 @@ check "--dry-run previews the update" grep -q 'would download v0.6.23' <<<"$out"
 check "--dry-run leaves the binary alone" \
   test "$(STUB_VERSION=0.6.20 "$FAKE_HOME/.local/bin/sealgate-stdiod" --version)" = "sealgate-stdiod 0.6.20"
 
-# A supervisor unit that runs the desktop app's copy: both shapes are written so
-# the check holds on whichever OS runs it.
+# Units in both shapes (launchd plist, systemd unit), so a check holds on
+# whichever OS runs it.
 mkdir -p "$FAKE_HOME/Library/LaunchAgents" "$FAKE_HOME/.config/systemd/user"
+write_units() {
+  printf '<plist version="1.0">\n<dict>\n  <key>ProgramArguments</key>\n  <array>\n    <string>%s</string>\n    <string>run</string>\n  </array>\n</dict>\n</plist>\n' \
+    "$1" >"$FAKE_HOME/Library/LaunchAgents/com.sealgate.stdiod.plist"
+  printf '[Service]\nExecStart="%s" run\n' "$1" >"$FAKE_HOME/.config/systemd/user/sealgate-stdiod.service"
+}
+
+# The unit runs this script's copy, but another, newer copy comes first on
+# PATH (~/.local/bin is already on PATH, so the script does not move it to the
+# front): the version must come from the copy the unit runs.
+mkdir -p "$TMP/decoy"
+printf '#!/bin/sh\necho "sealgate-stdiod 9.9.9"\n' >"$TMP/decoy/sealgate-stdiod"
+chmod +x "$TMP/decoy/sealgate-stdiod"
+write_units "$FAKE_HOME/.local/bin/sealgate-stdiod"
+out="$(PATH="$TMP/decoy:$FAKE_HOME/.local/bin:$PATH" STUB_VERSION=0.6.20 upd --check --json 2>/dev/null)"; rc=$?
+check "the version comes from the copy the unit runs, not the first on PATH" grep -q '"installed":"0.6.20"' <<<"$out"
+check "so that daemon is still reported outdated (exit 10)" test "$rc" -eq 10
+
+# A supervisor unit that runs the desktop app's copy.
 cat >"$FAKE_HOME/Library/LaunchAgents/com.sealgate.stdiod.plist" <<'EOF'
 <plist version="1.0">
 <dict>
