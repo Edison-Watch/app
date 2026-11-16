@@ -34,6 +34,17 @@ use crate::paths;
 
 const UNIT_NAME: &str = "sealgate-stdiod.service";
 
+/// The installed unit's text, or `None` when there is none. Lets callers
+/// see which binary the unit runs before acting on it (`update`).
+pub fn unit_definition() -> Result<Option<String>> {
+    let path = unit_path()?;
+    match std::fs::read_to_string(&path) {
+        Ok(body) => Ok(Some(body)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(e).with_context(|| format!("reading {}", path.display())),
+    }
+}
+
 /// `~/.config/systemd/user/sealgate-stdiod.service`.
 fn unit_path() -> Result<PathBuf> {
     let home = dirs::home_dir().ok_or_else(|| anyhow!("HOME not set"))?;

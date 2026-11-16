@@ -166,6 +166,14 @@ fn print_state(s: &State, running: bool) {
     if let Some(err) = &s.last_error {
         println!("Last error:      {}", err);
     }
+    match &s.update {
+        Some(hint) => println!(
+            "Version:         {} ({})",
+            crate::update::describe(hint),
+            crate::update::install_source().how_to_update()
+        ),
+        None => println!("Version:         {}", crate::DAEMON_VERSION),
+    }
     if s.servers.is_empty() {
         println!("Servers:         (none)");
     } else {

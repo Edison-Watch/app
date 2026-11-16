@@ -167,6 +167,10 @@ fn build_request(
         "X-SealGate-Device-Id",
         HeaderValue::from_str(device_id).context("invalid device_id header")?,
     );
+    headers.insert(
+        "User-Agent",
+        HeaderValue::from_str(crate::update::user_agent()).context("invalid User-Agent header")?,
+    );
     Ok(request)
 }
 

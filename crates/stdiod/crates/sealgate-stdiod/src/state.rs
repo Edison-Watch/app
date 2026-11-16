@@ -79,6 +79,11 @@ pub struct State {
     pub last_error: Option<String>,
     #[serde(default)]
     pub servers: Vec<ServerEntry>,
+    /// The backend's latest update hint from `server_hello`: a newer daemon
+    /// exists on this daemon's channel. Absent when it is current. Read by
+    /// `status`, the install scripts' `doctor` and the desktop app.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub update: Option<sealgate_tunnel_protocol::UpdateHint>,
     /// Bumped on every write so readers polling the file can cheaply
     /// detect "nothing changed since I last looked."
     pub generation: u64,
@@ -94,6 +99,7 @@ impl Default for State {
             last_connected_at: None,
             last_error: None,
             servers: Vec::new(),
+            update: None,
             generation: 0,
         }
     }
@@ -200,6 +206,7 @@ mod tests {
                 state: ServerStatus::Running,
                 pid: Some(12345),
             }],
+            update: None,
             generation: 7,
         };
         let json = serde_json::to_string(&s).unwrap();

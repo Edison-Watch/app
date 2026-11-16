@@ -11,3 +11,4 @@ pub mod logout;
 pub mod logs;
 pub mod server;
 pub mod status;
+pub mod update;

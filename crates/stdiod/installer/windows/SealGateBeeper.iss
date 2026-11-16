@@ -7,8 +7,14 @@
 ; script only asks for them in order and shows what they report.
 ;
 ; Built by build.ps1, which stages the files and passes the defines below. The
-; install folder is the one scripts/install-beeper.ps1 uses, so either one
-; upgrades the other.
+; install folder is the one scripts/install-beeper.ps1 uses.
+;
+; Updates: this setup installs only the daemon it carries (AppVersion), never
+; one from the internet, and never over a NEWER daemon already installed - an
+; older setup keeps the newer exe. It records itself as the daemon's source
+; (install-receipt.json, source "windows-installer"), so 'sealgate-stdiod
+; update' and install-beeper.ps1 leave that daemon alone: it is updated by
+; running a newer setup program.
 
 ; ExecAndCaptureOutput, which shows each step's output, arrived in 6.3.
 #if Ver < EncodeVer(6, 3, 0)
@@ -82,8 +88,9 @@ ClickNext=Click Install to continue, or Exit to close Setup.
 [Files]
 ; IsArm64 rather than the architecture filter: x64compatible also matches an
 ; ARM PC, which must get the native build.
-Source: "{#Stage}\x64\sealgate-stdiod.exe"; DestDir: "{app}"; Check: not IsArm64; Flags: ignoreversion{#SignFlag}
-Source: "{#Stage}\arm64\sealgate-stdiod.exe"; DestDir: "{app}"; Check: IsArm64; Flags: ignoreversion{#SignFlag}
+; BundledDaemonWanted: never over a newer daemon (see the Updates note above).
+Source: "{#Stage}\x64\sealgate-stdiod.exe"; DestDir: "{app}"; Check: (not IsArm64) and BundledDaemonWanted; Flags: ignoreversion{#SignFlag}
+Source: "{#Stage}\arm64\sealgate-stdiod.exe"; DestDir: "{app}"; Check: IsArm64 and BundledDaemonWanted; Flags: ignoreversion{#SignFlag}
 ; The daemon looks for npx in <exe dir>\runtimes\node on its own.
 Source: "{#Stage}\x64\node\*"; DestDir: "{app}\runtimes\node"; Check: not IsArm64; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#Stage}\arm64\node\*"; DestDir: "{app}\runtimes\node"; Check: IsArm64; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -207,6 +214,10 @@ var
   DebugButton: TNewButton;
   DebugState: Integer;
 #endif
+  { The daemon version found before installing ('' when none ran), and
+    whether it is newer than the one this setup carries, so it is kept. }
+  InstalledDaemonAtStart: String;
+  KeepInstalledDaemon: Boolean;
 
 function SetTimer(hWnd, nIDEvent, uElapse, lpTimerFunc: LongWord): LongWord;
   external 'SetTimer@user32.dll stdcall';
@@ -259,6 +270,229 @@ begin
   for I := 0 to GetArrayLength(Captured.StdErr) - 1 do
     Output := Output + Captured.StdErr[I] + #13#10;
   Result := ResultCode;
+end;
+
+{ ---- Daemon version: install only what this setup carries, never older ---- }
+
+{ The version the installed exe reports ('sealgate-stdiod 0.6.23' -> '0.6.23');
+  '' when there is none or it does not run. }
+function InstalledDaemonVersion(): String;
+var
+  Output: String;
+  P: Integer;
+begin
+  Result := '';
+  if not FileExists(DaemonExe()) then
+    exit;
+  if Stdiod('--version', Output) <> 0 then
+    exit;
+  Output := Trim(Output);
+  P := Pos(#13, Output);
+  if P > 0 then
+    Output := Copy(Output, 1, P - 1);
+  P := Pos(' ', Output);
+  while P > 0 do
+  begin
+    Output := Copy(Output, P + 1, Length(Output));
+    P := Pos(' ', Output);
+  end;
+  Result := Output;
+end;
+
+{ The dot-separated part of S starting at P; moves P past it and its dot. }
+function NextVersionPart(S: String; var P: Integer): String;
+begin
+  Result := '';
+  while (P <= Length(S)) and (S[P] <> '.') do
+  begin
+    Result := Result + S[P];
+    P := P + 1;
+  end;
+  P := P + 1;
+end;
+
+function IsDigits(S: String): Boolean;
+var
+  I: Integer;
+begin
+  Result := Length(S) > 0;
+  for I := 1 to Length(S) do
+    if (S[I] < '0') or (S[I] > '9') then
+      Result := False;
+end;
+
+{ Dot-separated identifiers: numeric ones numerically, others as text; with
+  the shared parts equal, more parts sorts later. -1, 0 or 1. }
+function CompareDotted(A, B: String): Integer;
+var
+  PA, PB: Integer;
+  X, Y: String;
+begin
+  Result := 0;
+  PA := 1;
+  PB := 1;
+  while Result = 0 do
+  begin
+    if (PA > Length(A)) and (PB > Length(B)) then
+      exit;
+    if PA > Length(A) then
+    begin
+      Result := -1;
+      exit;
+    end;
+    if PB > Length(B) then
+    begin
+      Result := 1;
+      exit;
+    end;
+    X := NextVersionPart(A, PA);
+    Y := NextVersionPart(B, PB);
+    if IsDigits(X) and IsDigits(Y) then
+    begin
+      if StrToInt64Def(X, 0) > StrToInt64Def(Y, 0) then
+        Result := 1
+      else if StrToInt64Def(X, 0) < StrToInt64Def(Y, 0) then
+        Result := -1;
+    end
+    else if CompareStr(X, Y) > 0 then
+      Result := 1
+    else if CompareStr(X, Y) < 0 then
+      Result := -1;
+  end;
+end;
+
+{ Drops SemVer build metadata ('0.6.9+build' -> '0.6.9'); build.ps1 accepts
+  a +suffix, and it must not take part in the order. }
+function StripBuildMetadata(V: String): String;
+var
+  P: Integer;
+begin
+  Result := V;
+  P := Pos('+', V);
+  if P > 0 then
+    Result := Copy(V, 1, P - 1);
+end;
+
+{ SemVer order, the same rules as the install scripts and the daemon: X.Y.Z
+  numerically, then a release above its own prereleases (0.6.23-beta.4 <
+  0.6.23), then the prerelease parts. Build metadata (+...) is ignored.
+  '' (no daemon) sorts below everything. }
+function CompareVersions(A, B: String): Integer;
+var
+  DA, DB: Integer;
+  CoreA, CoreB, PreA, PreB: String;
+begin
+  A := StripBuildMetadata(A);
+  B := StripBuildMetadata(B);
+  if (A = '') or (B = '') then
+  begin
+    if A = B then
+      Result := 0
+    else if A = '' then
+      Result := -1
+    else
+      Result := 1;
+    exit;
+  end;
+  DA := Pos('-', A);
+  DB := Pos('-', B);
+  CoreA := A; PreA := '';
+  CoreB := B; PreB := '';
+  if DA > 0 then
+  begin
+    CoreA := Copy(A, 1, DA - 1);
+    PreA := Copy(A, DA + 1, Length(A));
+  end;
+  if DB > 0 then
+  begin
+    CoreB := Copy(B, 1, DB - 1);
+    PreB := Copy(B, DB + 1, Length(B));
+  end;
+  Result := CompareDotted(CoreA, CoreB);
+  if Result <> 0 then
+    exit;
+  if PreA = PreB then
+    Result := 0
+  else if PreA = '' then
+    Result := 1
+  else if PreB = '' then
+    Result := -1
+  else
+    Result := CompareDotted(PreA, PreB);
+end;
+
+{ [Files] Check for the daemon exe: false when a newer one is installed. }
+function BundledDaemonWanted(): Boolean;
+begin
+  Result := not KeepInstalledDaemon;
+end;
+
+{ Next to the daemon's config, as the install scripts do: who installed the
+  daemon, at which version. 'sealgate-stdiod update' and install-beeper.ps1
+  read it and leave a setup-installed daemon alone. }
+{ S as the inside of a JSON string, in plain ASCII: backslash and quote
+  escaped, anything outside ASCII as \uXXXX. SaveStringToFile writes the
+  ANSI code page, so a profile folder with an accented or non-Latin name
+  written as is would not be UTF-8, and the daemon and the PowerShell script could not
+  read the receipt (and would then treat this daemon as their own). }
+function JsonEscape(S: String): String;
+var
+  I, Code: Integer;
+begin
+  Result := '';
+  for I := 1 to Length(S) do begin
+    Code := Ord(S[I]);
+    if (S[I] = '\') or (S[I] = '"') then
+      Result := Result + '\' + S[I]
+    else if (Code < 32) or (Code > 126) then
+      Result := Result + Format('\u%.4x', [Code])
+    else
+      Result := Result + S[I];
+  end;
+end;
+
+{ Records that this setup program installed the daemon, so neither
+  'sealgate-stdiod update' nor install-beeper.ps1 replaces it (they share this
+  folder). The old receipt goes first: one from install-beeper.ps1 names the
+  same exe with source "oneliner" and would hand the exe to the script.
+  Without any receipt, the uninstaller next to the exe still marks it as this
+  program's. A failed write is logged and shown, not ignored. }
+procedure WriteInstallReceipt();
+var
+  Dir, Path, Bin, Channel: String;
+begin
+  Dir := ExpandConstant('{%USERPROFILE}') + '\.config\sealgate-stdiod';
+  Path := Dir + '\install-receipt.json';
+  Bin := JsonEscape(DaemonExe());
+  if Pos('-', '{#AppVersion}') > 0 then
+    Channel := 'beta'
+  else
+    Channel := 'stable';
+  if FileExists(Path) and not DeleteFile(Path) then
+    Log('Could not remove the old install receipt ' + Path);
+  if ForceDirectories(Dir) and SaveStringToFile(Path,
+    '{"source":"windows-installer","tag":"v{#AppVersion}","version":"{#AppVersion}","channel":"' +
+    Channel + '","bin":"' + Bin + '","installed_at":"' +
+    GetDateTimeString('yyyy/mm/dd hh:nn:ss', '-', ':') + '"}' + #13#10, False) then
+    exit;
+  Log('Could not write the install receipt ' + Path);
+  if FileExists(Path) then
+    SuppressibleMsgBox('SealGate could not record that this setup program installed ' +
+      'sealgate-stdiod (' + Path + ' could not be written), and an older record ' +
+      'is still there. The install-beeper script or "sealgate-stdiod update" may ' +
+      'then replace this copy. Delete that file, then run this setup program again.',
+      mbError, MB_OK, IDOK)
+  else
+    SuppressibleMsgBox('SealGate could not record that this setup program installed ' +
+      'sealgate-stdiod (' + Path + ' could not be written). It still works and stays ' +
+      'managed by this setup program; to update it, run a newer setup program.',
+      mbInformation, MB_OK, IDOK);
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if (CurStep = ssPostInstall) and not KeepInstalledDaemon then
+    WriteInstallReceipt();
 end;
 
 { ---- Tick lists ---- }
@@ -1623,6 +1857,13 @@ var
   ResultCode: Integer;
 begin
   Result := '';
+  { Before stopping it: which version is installed, and is it newer than the
+    one this setup carries? Then it stays (BundledDaemonWanted). }
+  InstalledDaemonAtStart := InstalledDaemonVersion();
+  KeepInstalledDaemon := CompareVersions(InstalledDaemonAtStart, '{#AppVersion}') > 0;
+  if KeepInstalledDaemon then
+    Log('keeping the installed sealgate-stdiod ' + InstalledDaemonAtStart +
+      ': it is newer than the ' + '{#AppVersion}' + ' this setup carries');
   if FileExists(DaemonExe()) then
     Exec(DaemonExe(), 'uninstall', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
 end;

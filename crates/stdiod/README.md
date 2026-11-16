@@ -67,6 +67,22 @@ To pass a command or flags on Windows, use the scriptblock form (or the matching
 & ([scriptblock]::Create((irm https://raw.githubusercontent.com/Edison-Watch/app/main/crates/stdiod/scripts/install-beeper.ps1))) install --demo --no-open
 ```
 
+### Updating
+
+The daemon has the same version as the desktop app, always: every app release carries `sealgate-stdiod` at the same number, on two separate channels (stable `vX.Y.Z`, demo `vX.Y.Z-beta.N`). To move a one-liner install to the newest release on its channel, run the same script with `update`. It downloads and verifies the new binary, replaces it and restarts the daemon. Running `install` again does the same as part of its normal steps. An update only ever moves to a NEWER release: a daemon at or ahead of the newest release is left as is. Moving to an older release is deliberate and only in the binary: `sealgate-stdiod update --tag <tag> --allow-downgrade`.
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Edison-Watch/app/main/crates/stdiod/scripts/install-beeper.sh | bash -s -- update
+```
+
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/Edison-Watch/app/main/crates/stdiod/scripts/install-beeper.ps1))) update
+```
+
+Releases from now on also carry `sealgate-stdiod update`, which does the same without the script. Older releases lack it, so the first update onto one that has it goes through the script. The daemon sends `User-Agent: sealgate-stdiod/<version> (<os>; <arch>; <channel>; <source>)`; the backend answers with an update hint (`X-SealGate-Update` on REST responses, `update` in `server_hello`), which the daemon keeps in `state.json` and CLI commands print once.
+
+`update --check` only reports: exit 0 when current, 10 when an update is available (`--json` for a machine-readable line). `doctor` reports the version too. The scripts only replace a daemon they installed (`~/.local/bin`, or `%LOCALAPPDATA%\Programs\sealgate-stdiod` on Windows, which the setup program shares). A daemon that runs from the desktop app is updated by updating the app. Each install writes `install-receipt.json` next to `config.toml`, recording the source, tag and channel.
+
 ### Windows setup program (Beeper connector)
 
 A wizard alternative to the PowerShell one-liner: installs the daemon and Node, then walks through approving the PC, Beeper and Allow. See [`installer/windows/`](./installer/windows/README.md).
@@ -150,7 +166,8 @@ TLDR: `sealgate-stdiod --help` (and `sealgate-stdiod <command> --help` for any s
 | `install` | Register the OS supervisor unit (macOS LaunchAgent, Windows per-user Scheduled Task, Linux systemd `--user` unit) so the daemon starts at login and restarts on crash. Requires `login` first. |
 | `uninstall` | Stop and remove the supervisor unit. Pass `--purge` to also delete the persisted config and logs. |
 | `run` | Run the daemon in the foreground (normally invoked by the service unit). Reads the client credential from config. `--backend` may only canonically match the saved credential's backend unless an explicit legacy `--api-key` is supplied. Legacy device/secret overrides are not inherited across that boundary. |
-| `status` | Print a one-shot summary of supervisor-unit status, connection state, and currently-running child servers. |
+| `status` | Print a one-shot summary of supervisor-unit status, connection state, and currently-running child servers. Its `Version` line shows the backend's update hint when a newer release exists. |
+| `update` | Replace this binary with the newest release on its channel (stable, or beta for a `-beta.N` build; `--channel` overrides, `--tag` pins), only when that release is newer. It never downgrades unless given `--tag <tag> --allow-downgrade`. The new binary (`sealgate-stdiod-<platform>-<arch>`, with `.exe` on Windows) is verified against that release's `SHA256SUMS-<platform>-<arch>` asset, where `<platform>-<arch>` is `macos-arm64`, `linux-x64`, `linux-arm64`, `windows-x64` or `windows-arm64`; and the supervised daemon is restarted if its unit runs this exact file. Refuses a copy inside the desktop app (update the app) or a cargo build. `--check` only reports: exit 0 current, 10 update available; `--json` for one JSON line. |
 | `logs` | Print the daemon log. `-f`/`--follow` to tail in real time; `-n`/`--lines N` to set the backscroll (default 200). |
 | `server add <name>` | Submit a stdio request and print its pending or auto-approved status. Browser auth uses the exact-device-scoped client request endpoint; legacy API keys use `/api/v1/mcp-requests` with the local hostname. `--command <exe>`, repeatable `--arg <a>`, and optional `--display-name` are supported. `--working-dir` is rejected because requests cannot persist it. |
 | `server list` | With browser auth, list only approved stdio_tunnel servers bound to this exact client device. `--json` for raw output. Legacy API keys retain the compatibility listing flow. |

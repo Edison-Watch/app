@@ -129,6 +129,7 @@ $script:STDIOD_CHANNEL_SET = [bool]$env:STDIOD_PRERELEASE
 $script:STDIOD_PRERELEASE = ($env:STDIOD_PRERELEASE -eq '1')
 
 $script:DRY_RUN = $false
+$script:CHECK_ONLY = $false
 $script:INSTALL_DEPS = $true
 $script:ASSUME_YES = $false
 $script:YES_SET = $false
@@ -305,6 +306,7 @@ function Parse-Flags([string[]]$List) {
             '--stdiod-tag' { $script:STDIOD_TAG = Get-FlagValue $List $i $a; $n = 2 }
             '--stdiod-prerelease' { $script:STDIOD_PRERELEASE = $true; $script:STDIOD_CHANNEL_SET = $true }
             '--stdiod-release' { $script:STDIOD_PRERELEASE = $false; $script:STDIOD_CHANNEL_SET = $true }
+            '--check' { $script:CHECK_ONLY = $true }
             '--dry-run' { $script:DRY_RUN = $true }
             '-y' { $script:ASSUME_YES = $true; $script:YES_SET = $true }
             '--yes' { $script:ASSUME_YES = $true; $script:YES_SET = $true }
@@ -535,7 +537,7 @@ function Get-LatestStdiodTag {
     try {
         if ($script:STDIOD_PRERELEASE) {
             $rels = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases?per_page=100" -UseBasicParsing -TimeoutSec 15
-            $tags = @($rels | ForEach-Object { [string]$_.tag_name } | Where-Object { $_ -match '^v[0-9]+\.[0-9]+\.[0-9]+-[0-9A-Za-z.]+$' })
+            $tags = @($rels | ForEach-Object { [string]$_.tag_name } | Where-Object { $_ -match '^v[0-9]+\.[0-9]+\.[0-9]+-beta\.[0-9]+$' })
             if ($tags.Count -gt 0) {
                 return ($tags | Sort-Object { Get-TagSortKey $_ } | Select-Object -Last 1)
             }
@@ -572,10 +574,9 @@ function Install-StdiodPrebuilt {
     if ($null -eq $pair) { Info "no prebuilt sealgate-stdiod for this architecture ($env:PROCESSOR_ARCHITECTURE)"; return $false }
     $asset = $pair.Asset
     $sums = $pair.Sums
-    $tag = $script:STDIOD_TAG
-    if (-not $tag) { $tag = Get-LatestStdiodTag }
-    $channel = if ($script:STDIOD_PRERELEASE) { 'demo (-beta)' } else { 'stable' }
-    if (-not $tag) { Warn "no $channel release found on $($script:STDIOD_REPO) (or the GitHub API is unreachable)"; return $false }
+    Resolve-StdiodTargetTag
+    $tag = $script:STDIOD_TARGET_TAG
+    if (-not $tag) { Warn "no $(Get-StdiodChannelName) release found on $($script:STDIOD_REPO) (or the GitHub API is unreachable)"; return $false }
     $base = "https://github.com/$($script:STDIOD_REPO)/releases/download/$tag"
     Step "downloading prebuilt sealgate-stdiod ($tag)"
     $tmp = Join-Path ([System.IO.Path]::GetTempPath()) ("install-beeper-stdiod-" + [System.IO.Path]::GetRandomFileName())
@@ -597,22 +598,264 @@ function Install-StdiodPrebuilt {
         $null = Invoke-Native $exe @('--version')
         if ($script:LastRc -ne 0) { Warn "downloaded $asset does not run on this machine ('--version' failed)"; return $false }
         New-Item -ItemType Directory -Path $script:INSTALL_DIR -Force | Out-Null
+        Remove-StaleStdiodExes
+        # Never leave INSTALL_DIR without a working exe. Copy the verified exe
+        # in under a temporary name first (%TEMP% can be another volume, where
+        # a move is a copy that can fail halfway). Then rename the old exe
+        # aside and the new one into place: both are renames in one folder.
+        # Renaming works even while the daemon runs the old exe (deleting or
+        # overwriting it does not). The process keeps running from the renamed
+        # file, and a restart moves it onto the new one. If the second rename
+        # fails, the old exe is renamed back.
+        $rand = [System.IO.Path]::GetRandomFileName()
+        $staged = Join-Path $script:INSTALL_DIR "sealgate-stdiod.exe.new-$rand"
+        try { Copy-Item -Path $exe -Destination $staged -Force -ErrorAction Stop } catch {
+            Remove-Item $staged -Force -ErrorAction SilentlyContinue
+            Warn "could not put the new sealgate-stdiod in $($script:INSTALL_DIR): $($_.Exception.Message)"
+            return $false
+        }
+        $aside = ''
         if (Test-Path $script:STDIOD_EXE) {
-            try { Remove-Item $script:STDIOD_EXE -Force } catch {
-                Die "cannot replace $($script:STDIOD_EXE): it is in use (the daemon may be running)" "stop it first ('sealgate-stdiod uninstall'), then re-run: $($script:RERUN) install"
+            $aside = Join-Path $script:INSTALL_DIR "sealgate-stdiod.exe.old-$rand"
+            try { Rename-Item -Path $script:STDIOD_EXE -NewName (Split-Path -Leaf $aside) -Force -ErrorAction Stop } catch {
+                Remove-Item $staged -Force -ErrorAction SilentlyContinue
+                Die "cannot replace $($script:STDIOD_EXE): $($_.Exception.Message)" "stop the daemon first ('sealgate-stdiod uninstall'), then re-run: $($script:RERUN) install"
             }
         }
-        Move-Item -Path $exe -Destination $script:STDIOD_EXE
+        try { Rename-Item -Path $staged -NewName (Split-Path -Leaf $script:STDIOD_EXE) -Force -ErrorAction Stop } catch {
+            $why = $_.Exception.Message
+            if ($aside) { try { Rename-Item -Path $aside -NewName (Split-Path -Leaf $script:STDIOD_EXE) -Force -ErrorAction Stop } catch { Warn "could not restore the old exe from $aside" } }
+            Remove-Item $staged -Force -ErrorAction SilentlyContinue
+            Warn "could not move the new sealgate-stdiod into place: $why"
+            return $false
+        }
+        # Gone now unless the daemon still runs it; Remove-StaleStdiodExes
+        # retries on the next run.
+        if ($aside) { Remove-Item $aside -Force -ErrorAction SilentlyContinue }
     } finally {
         Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
     }
     Add-UserPath $script:INSTALL_DIR
     Ok "installed prebuilt sealgate-stdiod $tag -> $($script:STDIOD_EXE) (sha256 verified)"
+    Write-InstallReceipt $tag
+    return $true
+}
+
+# ---------------------------------------------------------------------------
+# Updates (same model as install-beeper.sh; see its "Updates" section)
+# ---------------------------------------------------------------------------
+# The app, sealgate-stdiod and sealgate-detectord ship as ONE version. An
+# update moves the daemon to the newest release on this device's channel when
+# that release is NEWER, never to an older one; a daemon at or ahead of it is
+# current.
+#
+# Owners: 'oneliner' is the exe this script put in INSTALL_DIR. 'installer' is
+# the exe the Windows setup program put in the same folder (its receipt says
+# so); it updates only by running a newer setup program, which installs the
+# version it carries. 'desktop' is the copy inside the SealGate desktop app,
+# updated with the app. 'other' is anything else. This script only replaces
+# the exe it owns.
+$script:STDIOD_TARGET_TAG = ''
+$script:STDIOD_TARGET_RESOLVED = $false
+$script:STDIOD_UPGRADED = $false
+
+function Get-StdiodChannelName { if ($script:STDIOD_PRERELEASE) { return 'demo (-beta)' } else { return 'stable' } }
+
+# The pinned --stdiod-tag, else the newest release on the channel; resolved
+# once per run so the check and the download agree.
+function Resolve-StdiodTargetTag {
+    if ($script:STDIOD_TARGET_RESOLVED) { return }
+    $script:STDIOD_TARGET_TAG = if ($script:STDIOD_TAG) { $script:STDIOD_TAG } else { Get-LatestStdiodTag }
+    $script:STDIOD_TARGET_RESOLVED = $true
+}
+
+# 'sealgate-stdiod 0.6.23' -> '0.6.23'. Pre-stamp builds report 0.0.1, which
+# never matches a release, so they count as outdated. Asks the exe that
+# actually runs (Get-StdiodActiveExe), the same one Get-StdiodOwner judges,
+# not whichever copy happens to be first on PATH.
+function Get-StdiodInstalledVersion {
+    $exe = Get-StdiodActiveExe
+    if (-not $exe) { return '' }
+    $out = Invoke-Native $exe @('--version')
+    if ($script:LastRc -ne 0 -or -not $out) { return '' }
+    return (($out -split "`n")[0].Trim() -split '\s+')[-1]
+}
+
+function Get-TagVersion([string]$Tag) { return ($Tag -replace '^v', '') }
+
+# -1, 0 or 1 in SemVer order (same rules as version_cmp in install-beeper.sh):
+# X.Y.Z numerically, a release above its own prereleases, prerelease parts
+# numerically where numeric. A non-version sorts below every version.
+function Compare-StdiodVersion([string]$A, [string]$B) {
+    $re = '^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.]+))?$'
+    # Build metadata (+...) never takes part in the order (SemVer).
+    $ma = [regex]::Match(($A -replace '^v', '' -replace '\+.*$', ''), $re)
+    $mb = [regex]::Match(($B -replace '^v', '' -replace '\+.*$', ''), $re)
+    if (-not $ma.Success -or -not $mb.Success) { return ([int]$ma.Success - [int]$mb.Success) }
+    for ($i = 1; $i -le 3; $i++) {
+        $x = [long]$ma.Groups[$i].Value; $y = [long]$mb.Groups[$i].Value
+        if ($x -ne $y) { if ($x -gt $y) { return 1 } else { return -1 } }
+    }
+    $pa = $ma.Groups[4].Value; $pb = $mb.Groups[4].Value
+    if ($pa -eq $pb) { return 0 }
+    if (-not $pa) { return 1 }
+    if (-not $pb) { return -1 }
+    $ia = $pa.Split('.'); $ib = $pb.Split('.')
+    for ($i = 0; $i -lt [Math]::Min($ia.Count, $ib.Count); $i++) {
+        $x = $ia[$i]; $y = $ib[$i]
+        if ($x -match '^\d+$' -and $y -match '^\d+$') {
+            if ([long]$x -ne [long]$y) { if ([long]$x -gt [long]$y) { return 1 } else { return -1 } }
+        } elseif ($x -cne $y) {
+            if ([string]::CompareOrdinal($x, $y) -gt 0) { return 1 } else { return -1 }
+        }
+    }
+    if ($ia.Count -eq $ib.Count) { return 0 }
+    if ($ia.Count -gt $ib.Count) { return 1 } else { return -1 }
+}
+
+# True only when release $Want is newer than $Installed. Equal or older is
+# current: this script never downgrades (a deliberate downgrade is
+# 'sealgate-stdiod update --tag <tag> --allow-downgrade').
+function Test-StdiodNewer([string]$Installed, [string]$Want) { return ((Compare-StdiodVersion $Want $Installed) -eq 1) }
+
+function Get-StdiodCurrentLine([string]$Installed, [string]$Want) {
+    if ($Installed -eq $Want) { return "sealgate-stdiod $Installed is current" }
+    return "sealgate-stdiod $Installed is newer than the newest $(Get-StdiodChannelName) release ($Want); left as is"
+}
+
+# The exe the per-user Scheduled Task runs ('SealGate stdiod <SID>'), or ''.
+# The task lives in the machine-wide root folder, named per user by SID (see
+# platform/windows.rs, task_name), so look up this user's name exactly rather
+# than by wildcard, which could match another account's task.
+function Get-StdiodSupervisedExe {
+    $names = @('SealGate stdiod')
+    try { $names = @("SealGate stdiod $([System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value)") + $names } catch {}
+    foreach ($n in $names) {
+        try {
+            $t = Get-ScheduledTask -TaskName $n -ErrorAction Stop | Select-Object -First 1
+            if ($t) { return [string]($t.Actions | Select-Object -First 1).Execute }
+        } catch {
+            Vlog "no Scheduled Task '$n': $($_.Exception.Message)"
+        }
+    }
+    return ''
+}
+
+# The daemon exe that matters: the one the Scheduled Task runs when there is
+# a task (even one whose file is gone: that task is still in charge), else the
+# first on PATH, else ''. Owner and version both come from this exe, so another
+# copy earlier on PATH cannot hide an outdated daemon.
+function Get-StdiodActiveExe {
+    $exe = (Get-StdiodSupervisedExe).Trim('"')
+    if (-not $exe) {
+        $cmd = Get-Command 'sealgate-stdiod' -ErrorAction SilentlyContinue
+        if ($cmd) { $exe = [string]$cmd.Source }
+    }
+    return $exe
+}
+
+function Get-StdiodOwner {
+    $exe = Get-StdiodActiveExe
+    if (-not $exe) { return 'none' }
+    if ($exe -ieq $script:STDIOD_EXE) {
+        # Same folder for this script and the Windows setup program; the
+        # receipt says which one put the exe there. The setup program's daemon
+        # updates only by running a newer setup program.
+        $receipt = $null
+        try { $receipt = Get-Content -Raw (Join-Path (Split-Path -Parent (Get-StdiodConfigPath)) 'install-receipt.json') -ErrorAction Stop | ConvertFrom-Json } catch {}
+        if ($receipt -and ([string]$receipt.bin -ieq $exe)) {
+            if ($receipt.source -eq 'windows-installer') { return 'installer' }
+            if ($receipt.source -eq 'oneliner') { return 'oneliner' }
+        }
+        # No receipt for this exe (missing, unreadable, or from a setup
+        # program that wrote none): the setup program's uninstaller next to
+        # the exe says it installed it. Never replace that exe by mistake.
+        if (Get-ChildItem -Path (Split-Path -Parent $exe) -Filter 'unins*.exe' -ErrorAction SilentlyContinue | Select-Object -First 1) { return 'installer' }
+        return 'oneliner'
+    }
+    if ($exe -match '(?i)\\resources\\bin\\sealgate-stdiod\.exe$') { return 'desktop' }
+    return 'other'
+}
+
+function Get-StdiodUpdateHint([string]$Owner) {
+    switch ($Owner) {
+        'oneliner' { return "run: $($script:RERUN) update" }
+        'desktop' { return 'update the SealGate desktop app (tray icon > Check for Updates); it ships the daemon at the same version' }
+        'installer' { return 'it was installed by the SealGate for Beeper setup program; run a newer setup program to update it' }
+        default { return "it is not managed by this script ($(Get-StdiodActiveExe)); update it the way it was installed" }
+    }
+}
+
+# Leftovers of earlier updates: old exes renamed aside while they were
+# running (.old-*), and staged copies from a run that was cut off (.new-*).
+# Deleting fails harmlessly for one that still runs; the next run gets it.
+function Remove-StaleStdiodExes {
+    Get-ChildItem -Path $script:INSTALL_DIR -Filter 'sealgate-stdiod.exe.*-*' -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -match '^sealgate-stdiod\.exe\.(old|new)-' } |
+        ForEach-Object { Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue }
+}
+
+# How the daemon got here, next to its config; read by later runs and by the
+# daemon (it reports the install source to the backend).
+function Write-InstallReceipt([string]$Tag) {
+    if ($script:DRY_RUN) { return }
+    try {
+        $dir = Split-Path -Parent (Get-StdiodConfigPath)
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        $obj = [ordered]@{
+            source       = 'oneliner'
+            tag          = $Tag
+            version      = (Get-TagVersion $Tag)
+            channel      = $(if ($script:STDIOD_PRERELEASE) { 'beta' } else { 'stable' })
+            repo         = $script:STDIOD_REPO
+            bin          = $script:STDIOD_EXE
+            script_url   = $script:SCRIPT_URL
+            installed_at = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
+        }
+        # Plain ASCII on every PowerShell: anything else as a \uXXXX escape.
+        # -Encoding ASCII alone would turn a profile folder like
+        # C:\Users\Jos<e-acute> into '?', and 'bin' would no longer match the exe.
+        $json = [regex]::Replace((ConvertTo-Json -InputObject $obj -Compress), '[^\x20-\x7e]', { param($m) '\u{0:x4}' -f [int][char]$m.Value })
+        Set-Content -Path (Join-Path $dir 'install-receipt.json') -Value $json -Encoding ASCII
+    } catch {
+        Vlog "could not write the install receipt: $($_.Exception.Message)"
+    }
+}
+
+# Called by Ensure-StdiodBin when a daemon is installed: brings the one this
+# script owns to the target release; only reports on the others. A failed
+# lookup keeps the installed daemon.
+function Ensure-StdiodCurrent {
+    $owner = Get-StdiodOwner
+    $installed = Get-StdiodInstalledVersion
+    $shown = if ($installed) { $installed } else { '?' }
+    if ($owner -ne 'oneliner') { Ok "sealgate-stdiod $shown ($owner install; this script leaves it as is)"; return }
+    Resolve-StdiodTargetTag
+    if (-not $script:STDIOD_TARGET_TAG) { Warn "could not look up the newest $(Get-StdiodChannelName) release; keeping sealgate-stdiod $shown"; return }
+    $want = Get-TagVersion $script:STDIOD_TARGET_TAG
+    if (-not (Test-StdiodNewer $installed $want)) { Ok (Get-StdiodCurrentLine $installed $want); return }
+    if ($script:DRY_RUN) { Info "would update sealgate-stdiod $shown -> $want"; return }
+    Info "updating sealgate-stdiod $shown -> $want"
+    if (-not (Install-StdiodPrebuilt)) {
+        Die "could not update sealgate-stdiod to $($script:STDIOD_TARGET_TAG) (see the warnings above); $shown is still installed" "retry, or pin a release with --stdiod-tag <tag> (list them: $($script:RERUN) tags)"
+    }
+    $script:STDIOD_UPGRADED = $true
+}
+
+# Restart the Scheduled Task onto a freshly swapped exe. $false when there is
+# no task yet.
+function Restart-StdiodIfSupervised {
+    $null = Invoke-Native 'sealgate-stdiod' @('status')
+    if ($script:LastRc -eq 4) { Info "no Scheduled Task yet; 'install' registers one"; return $false }
+    if (-not $script:DRY_RUN) { Remove-Item (Get-StdiodStatePath) -Force -ErrorAction SilentlyContinue }
+    $rc = Invoke-Live 'sealgate-stdiod' @('restart')
+    if ($rc -ne 0) { Die 'sealgate-stdiod restart failed' 'check: sealgate-stdiod logs --follow' }
+    Ok 'daemon restarted'
     return $true
 }
 
 function Ensure-StdiodBin {
-    if (Test-Command 'sealgate-stdiod') { return }
+    if (Test-Command 'sealgate-stdiod') { Ensure-StdiodCurrent; return }
     if ($script:DRY_RUN) {
         Info "dep 'sealgate-stdiod' missing; would download the prebuilt release exe into $($script:INSTALL_DIR)"
         return
@@ -889,17 +1132,161 @@ function Test-CanAsk {
     try { return -not [Console]::IsInputRedirected } catch { return $false }
 }
 
+# Start Beeper with its output in temp files. Electron writes its logs to the
+# console that started it when nothing is redirected, which floods this window.
+#
+# Start-Process -RedirectStandard* is only the fallback for that: it starts the child
+# with handle inheritance on, and the child then gets every inheritable handle
+# this process holds, not only stdin/stdout/stderr. When the script's output
+# goes through a pipe (a wrapper, the CI tests), Beeper keeps a copy of that
+# pipe, and the reader waits until Beeper exits. Clearing the inherit flag on
+# the three std handles does not stop that, because other copies stay
+# inheritable. So the launch calls CreateProcess with an explicit handle list:
+# Beeper inherits the two log files and NUL for stdin, and nothing else.
+# ELECTRON_NO_ATTACH_CONSOLE (child only) also stops Electron from attaching
+# to this console. Returns the new process id.
+$script:LAUNCH_SRC = @'
+using System;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+using System.Text;
+
+namespace SealGate {
+public static class Launch {
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    struct STARTUPINFO {
+        public int cb; public string lpReserved; public string lpDesktop; public string lpTitle;
+        public int dwX; public int dwY; public int dwXSize; public int dwYSize;
+        public int dwXCountChars; public int dwYCountChars; public int dwFillAttribute; public int dwFlags;
+        public short wShowWindow; public short cbReserved2; public IntPtr lpReserved2;
+        public IntPtr hStdInput; public IntPtr hStdOutput; public IntPtr hStdError;
+    }
+    [StructLayout(LayoutKind.Sequential)]
+    struct STARTUPINFOEX { public STARTUPINFO StartupInfo; public IntPtr lpAttributeList; }
+    [StructLayout(LayoutKind.Sequential)]
+    struct PROCESS_INFORMATION { public IntPtr hProcess; public IntPtr hThread; public int dwProcessId; public int dwThreadId; }
+    [StructLayout(LayoutKind.Sequential)]
+    struct SECURITY_ATTRIBUTES { public int nLength; public IntPtr lpSecurityDescriptor; public int bInheritHandle; }
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    static extern IntPtr CreateFileW(string name, uint access, uint share, ref SECURITY_ATTRIBUTES sa, uint disposition, uint flags, IntPtr template);
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern bool InitializeProcThreadAttributeList(IntPtr list, int count, int flags, ref IntPtr size);
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern bool UpdateProcThreadAttribute(IntPtr list, uint flags, IntPtr attribute, IntPtr value, IntPtr size, IntPtr prev, IntPtr retSize);
+    [DllImport("kernel32.dll")]
+    static extern void DeleteProcThreadAttributeList(IntPtr list);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    static extern bool CreateProcessW(string app, StringBuilder cmd, IntPtr pa, IntPtr ta, bool inherit, uint flags, IntPtr env, string cwd, ref STARTUPINFOEX si, out PROCESS_INFORMATION pi);
+    [DllImport("kernel32.dll")]
+    static extern bool CloseHandle(IntPtr h);
+
+    static IntPtr Open(string path, bool write) {
+        SECURITY_ATTRIBUTES sa = new SECURITY_ATTRIBUTES();
+        sa.nLength = Marshal.SizeOf(typeof(SECURITY_ATTRIBUTES));
+        sa.bInheritHandle = 1;
+        // GENERIC_WRITE + CREATE_ALWAYS for a log, GENERIC_READ + OPEN_EXISTING for NUL;
+        // shared read/write/delete so the logs can be read and cleaned up while Beeper runs.
+        IntPtr h = CreateFileW(path, write ? 0x40000000u : 0x80000000u, 7, ref sa, write ? 2u : 3u, 0x80, IntPtr.Zero);
+        if (h == new IntPtr(-1)) { throw new Win32Exception(Marshal.GetLastWin32Error(), "open " + path); }
+        return h;
+    }
+
+    public static int Start(string app, string cmdLine, string cwd, string outLog, string errLog) {
+        IntPtr hin = IntPtr.Zero, hout = IntPtr.Zero, herr = IntPtr.Zero, list = IntPtr.Zero, handles = IntPtr.Zero;
+        bool listReady = false;
+        try {
+            hin = Open("NUL", false);
+            hout = Open(outLog, true);
+            herr = Open(errLog, true);
+            IntPtr size = IntPtr.Zero;
+            InitializeProcThreadAttributeList(IntPtr.Zero, 1, 0, ref size);
+            list = Marshal.AllocHGlobal(size);
+            if (!InitializeProcThreadAttributeList(list, 1, 0, ref size)) { throw new Win32Exception(Marshal.GetLastWin32Error(), "InitializeProcThreadAttributeList"); }
+            listReady = true;
+            handles = Marshal.AllocHGlobal(IntPtr.Size * 3);
+            Marshal.WriteIntPtr(handles, 0, hin);
+            Marshal.WriteIntPtr(handles, IntPtr.Size, hout);
+            Marshal.WriteIntPtr(handles, IntPtr.Size * 2, herr);
+            // PROC_THREAD_ATTRIBUTE_HANDLE_LIST: the only handles the child inherits.
+            if (!UpdateProcThreadAttribute(list, 0, new IntPtr(0x20002), handles, new IntPtr(IntPtr.Size * 3), IntPtr.Zero, IntPtr.Zero)) {
+                throw new Win32Exception(Marshal.GetLastWin32Error(), "UpdateProcThreadAttribute");
+            }
+            STARTUPINFOEX si = new STARTUPINFOEX();
+            si.StartupInfo.cb = Marshal.SizeOf(typeof(STARTUPINFOEX));
+            si.StartupInfo.dwFlags = 0x100; // STARTF_USESTDHANDLES
+            si.StartupInfo.hStdInput = hin;
+            si.StartupInfo.hStdOutput = hout;
+            si.StartupInfo.hStdError = herr;
+            si.lpAttributeList = list;
+            PROCESS_INFORMATION pi;
+            // EXTENDED_STARTUPINFO_PRESENT | CREATE_NO_WINDOW (a console app gets no
+            // window and none of this console; a GUI app ignores the flag).
+            if (!CreateProcessW(app, new StringBuilder(cmdLine), IntPtr.Zero, IntPtr.Zero, true, 0x00080000u | 0x08000000u, IntPtr.Zero, cwd, ref si, out pi)) {
+                throw new Win32Exception(Marshal.GetLastWin32Error(), "CreateProcess " + app);
+            }
+            CloseHandle(pi.hThread);
+            CloseHandle(pi.hProcess);
+            return pi.dwProcessId;
+        } finally {
+            if (listReady) { DeleteProcThreadAttributeList(list); }
+            if (list != IntPtr.Zero) { Marshal.FreeHGlobal(list); }
+            if (handles != IntPtr.Zero) { Marshal.FreeHGlobal(handles); }
+            if (hin != IntPtr.Zero) { CloseHandle(hin); }
+            if (hout != IntPtr.Zero) { CloseHandle(hout); }
+            if (herr != IntPtr.Zero) { CloseHandle(herr); }
+        }
+    }
+}
+}
+'@
+
+# One argument for a Windows command line: quoted when it has a space, a tab
+# or a quote, with backslashes before a quote doubled (CommandLineToArgvW rules).
+function ConvertTo-CmdLineArg([string]$Arg) {
+    if ($Arg -and $Arg -notmatch '[\s"]') { return $Arg }
+    $q = [regex]::Replace($Arg, '(\\*)"', { param($m) $m.Groups[1].Value + $m.Groups[1].Value + '\"' })
+    $q = [regex]::Replace($q, '(\\+)$', { param($m) $m.Groups[1].Value + $m.Groups[1].Value })
+    return '"' + $q + '"'
+}
+
+# $Arguments is for the CI tests, which start a stand-in in Beeper's place.
+function Start-BeeperDesktop([string]$App, [string[]]$Arguments = @()) {
+    $log = Join-Path ([System.IO.Path]::GetTempPath()) ('sealgate-beeper-' + [System.IO.Path]::GetRandomFileName())
+    $prevAttach = $env:ELECTRON_NO_ATTACH_CONSOLE
+    $env:ELECTRON_NO_ATTACH_CONSOLE = '1'
+    try {
+        $native = $true
+        try {
+            if (-not ('SealGate.Launch' -as [type])) { Add-Type -TypeDefinition $script:LAUNCH_SRC }
+        } catch {
+            $native = $false
+            Vlog "could not load the launcher ($($_.Exception.Message)); starting Beeper through Start-Process"
+        }
+        if ($native) {
+            $cmd = (@($App) + @($Arguments) | ForEach-Object { ConvertTo-CmdLineArg $_ }) -join ' '
+            $id = [SealGate.Launch]::Start($App, $cmd, (Split-Path -Parent $App), "$log.out.log", "$log.err.log")
+            Vlog "started $App (pid $id), output in $log.out.log / $log.err.log"
+            return $id
+        }
+        # Constrained language mode has no Add-Type. Beeper's output still
+        # goes to the files, never to this window. The cost: Beeper may then
+        # hold a pipe this script writes to, so a wrapper reading the output
+        # through a pipe waits for Beeper. A terminal run is not affected.
+        $sp = @{ FilePath = $App; RedirectStandardOutput = "$log.out.log"; RedirectStandardError = "$log.err.log"; PassThru = $true; ErrorAction = 'Stop' }
+        if ($Arguments.Count) { $sp.ArgumentList = $Arguments }
+        $p = Start-Process @sp
+        Vlog "started $App (pid $($p.Id)), output in $log.out.log / $log.err.log"
+        return $p.Id
+    } finally {
+        if ($null -eq $prevAttach) { Remove-Item Env:ELECTRON_NO_ATTACH_CONSOLE -ErrorAction SilentlyContinue } else { $env:ELECTRON_NO_ATTACH_CONSOLE = $prevAttach }
+    }
+}
+
 # Close Beeper Desktop ($App, its exe), wait for it to be gone, and start it
 # again. A request made during Beeper's first-run setup never shows, and only a
 # fresh start clears it. Waiting matters: Beeper refuses to start while the old
 # instance is still exiting.
-# Start Beeper with its output in temp files. Electron writes its logs to the
-# console that started it when nothing is redirected, which floods this window.
-function Start-BeeperDesktop([string]$App) {
-    $log = Join-Path ([System.IO.Path]::GetTempPath()) ('sealgate-beeper-' + [System.IO.Path]::GetRandomFileName())
-    Start-Process -FilePath $App -RedirectStandardOutput "$log.out.log" -RedirectStandardError "$log.err.log" -ErrorAction Stop | Out-Null
-}
-
 function Restart-BeeperDesktop([string]$App) {
     Info 'restarting Beeper'
     $name = [System.IO.Path]::GetFileNameWithoutExtension($App)
@@ -908,7 +1295,7 @@ function Restart-BeeperDesktop([string]$App) {
         if (-not (Get-Process -Name $name -ErrorAction SilentlyContinue)) { break }
         Start-Sleep -Milliseconds 500
     }
-    try { Start-BeeperDesktop $App } catch { Warn "could not start Beeper: $($_.Exception.Message)" }
+    try { $null = Start-BeeperDesktop $App } catch { Warn "could not start Beeper: $($_.Exception.Message)" }
 }
 
 $script:PREAUTH_RETRIED = $false
@@ -959,7 +1346,7 @@ function Ensure-BeeperDesktop {
     }
     if ($app -and $fresh -and (Test-CanAsk)) {
         Info "opening $app"
-        try { Start-BeeperDesktop $app } catch { Warn "could not start Beeper: $($_.Exception.Message)" }
+        try { $null = Start-BeeperDesktop $app } catch { Warn "could not start Beeper: $($_.Exception.Message)" }
         Todo 'finish setting up Beeper: sign in, then turn on Settings > Developers > MCP'
         $null = Read-Host "   press Enter here when that is done (Beeper restarts once so it can show SealGate's request)"
         Restart-BeeperDesktop $app
@@ -973,7 +1360,7 @@ function Ensure-BeeperDesktop {
     } elseif ($app) {
         Info "opening $app"
         $opened = $false
-        try { Start-BeeperDesktop $app; $opened = $true } catch { Warn "could not start Beeper: $($_.Exception.Message)" }
+        try { $null = Start-BeeperDesktop $app; $opened = $true } catch { Warn "could not start Beeper: $($_.Exception.Message)" }
         if ($opened -and $script:BEEPER_WAIT -gt 0) {
             Info "waiting up to $($script:BEEPER_WAIT)s for the client API"
             $base = Wait-BeeperApi $script:BEEPER_WAIT
@@ -1415,6 +1802,13 @@ function Ensure-StdiodSupervised {
         Die 'sealgate-stdiod install could not register the Scheduled Task' "the daemon registers a per-user logon task via schtasks (no admin needed). Run this from a normal signed-in user session (not a service or a bare WinRM shell), then re-run: $($script:RERUN) install"
     }
     Ok 'daemon installed and supervised'
+    # 'install' recreates the task, but the old process (running from the exe
+    # renamed aside) is only reliably gone after 'restart', which ends the task
+    # and waits for it before starting the new exe.
+    if ($script:STDIOD_UPGRADED) {
+        $rc = Invoke-Live 'sealgate-stdiod' @('restart')
+        if ($rc -ne 0) { Warn 'could not restart the daemon onto the new exe; run: sealgate-stdiod restart' }
+    }
     if ($script:DRY_RUN) { return }
     Info "waiting up to $($script:CONNECT_WAIT)s for the daemon to register with the backend"
     if (Wait-StdiodConnected $script:CONNECT_WAIT) {
@@ -1557,6 +1951,74 @@ function Invoke-CmdInstall {
     Write-Result
 }
 
+# update: bring sealgate-stdiod to the newest release on its channel (or to
+# --stdiod-tag) and restart it. --check only reports: exit 0 current, 10 update
+# available. --json writes one object to the pipeline either way.
+function Invoke-CmdUpdate {
+    if (-not $script:YES_SET) { $script:ASSUME_YES = $true }
+    Require-SupportedPlatform
+    # The supervised exe counts even when it is not on PATH: the desktop
+    # app's copy (resources\bin) never is, and update must still name its
+    # owner and the right way to update it.
+    if (-not (Get-StdiodActiveExe)) { Die 'sealgate-stdiod is not installed' "install it: $($script:RERUN) install" }
+    $owner = Get-StdiodOwner
+    $installed = Get-StdiodInstalledVersion
+    $shown = if ($installed) { $installed } else { '?' }
+    Resolve-StdiodTargetTag
+    if (-not $script:STDIOD_TARGET_TAG) {
+        Die "could not look up the newest $(Get-StdiodChannelName) release on $($script:STDIOD_REPO)" "check connectivity to api.github.com, or pin one: $($script:RERUN) update --stdiod-tag <tag>"
+    }
+    $want = Get-TagVersion $script:STDIOD_TARGET_TAG
+    $current = -not (Test-StdiodNewer $installed $want)
+    if ($script:JSON) {
+        $obj = [ordered]@{
+            installed        = $installed
+            latest           = $want
+            channel          = $(if ($script:STDIOD_PRERELEASE) { 'beta' } else { 'stable' })
+            owner            = $owner
+            update_available = (-not $current)
+        }
+        Write-Output (ConvertTo-Json -InputObject $obj -Compress)
+    }
+    Step "sealgate-stdiod $shown installed; newest $(Get-StdiodChannelName): $want"
+    if ($current) { Ok (Get-StdiodCurrentLine $installed $want); return }
+    if ($script:CHECK_ONLY) {
+        Warn "update available: $shown -> $want"
+        Todo (Get-StdiodUpdateHint $owner)
+        $script:ExitCode = 10
+        return
+    }
+    if ($owner -ne 'oneliner') { Die "this sealgate-stdiod was not installed by this script ($owner), so it is left alone" (Get-StdiodUpdateHint $owner) }
+    if (-not (Confirm-Action "update sealgate-stdiod $shown -> $want and restart the daemon?")) { Die 'aborted' '' }
+    if ($script:DRY_RUN) { Info "would download $($script:STDIOD_TARGET_TAG), replace $($script:STDIOD_EXE) and restart the daemon"; return }
+    if (-not (Install-StdiodPrebuilt)) {
+        Die "could not update sealgate-stdiod to $($script:STDIOD_TARGET_TAG) (see the warnings above); $shown is still installed" "retry, or pin a release with --stdiod-tag <tag> (list them: $($script:RERUN) tags)"
+    }
+    if (Restart-StdiodIfSupervised) {
+        Info "waiting up to $($script:CONNECT_WAIT)s for the daemon to reconnect"
+        if (Wait-StdiodConnected $script:CONNECT_WAIT) { Ok "daemon reconnected on $want" }
+        else {
+            Warn "the daemon has not reconnected yet (state: $(Get-StdiodStateField 'connection_state'))"
+            Todo 'check: sealgate-stdiod status, sealgate-stdiod logs --follow'
+        }
+    }
+}
+
+# One doctor line on the daemon version; informational, never fails doctor.
+function Show-DoctorStdiodVersion {
+    $owner = Get-StdiodOwner
+    $installed = Get-StdiodInstalledVersion
+    $shown = if ($installed) { $installed } else { '?' }
+    Resolve-StdiodTargetTag
+    if (-not $script:STDIOD_TARGET_TAG) { Info "sealgate-stdiod $shown; could not look up the newest $(Get-StdiodChannelName) release"; return }
+    $want = Get-TagVersion $script:STDIOD_TARGET_TAG
+    if (-not (Test-StdiodNewer $installed $want)) { Ok (Get-StdiodCurrentLine $installed $want) }
+    else {
+        Warn "sealgate-stdiod $shown is outdated: newest $(Get-StdiodChannelName) is $want"
+        Todo (Get-StdiodUpdateHint $owner)
+    }
+}
+
 function Invoke-CmdDoctor {
     Step 'Doctor'
     $allgood = $true
@@ -1587,6 +2049,7 @@ function Invoke-CmdDoctor {
             4 { Warn "no Scheduled Task installed (run: $($script:RERUN) install)"; $allgood = $false }
             default { Warn "sealgate-stdiod status failed (exit $($script:LastRc))"; $allgood = $false }
         }
+        Show-DoctorStdiodVersion
     }
     if ($cred -eq 'live') {
         if (Test-ServerRegistered $script:SERVER_NAME) { Ok "server '$($script:SERVER_NAME)' approved on this device" }
@@ -1669,8 +2132,11 @@ Usage (from PowerShell):
   $p [command] [flags]        (from a saved copy)
 
 Commands:
-  install     Deps, Beeper check, device auth, supervise daemon, submit Beeper server, prime OAuth
-  doctor      Check prerequisites and current state (read-only)
+  install     Deps, Beeper check, device auth, supervise daemon, submit Beeper server, prime OAuth.
+              Re-running it also updates a daemon this script installed.
+  update      Update sealgate-stdiod to the newest release on its channel and restart it
+              (--check: report only; exit 10 when an update is available)
+  doctor      Check prerequisites and current state, including the daemon version (read-only)
   status      Show stdiod daemon + Beeper Client API status
   tags        List releases the sealgate-stdiod exe can be pulled from
   preauth     Prime the Beeper OAuth grant (approve once in Beeper)
@@ -1725,7 +2191,10 @@ Examples:
   # Re-run the one-time Beeper OAuth approval (e.g. after enabling MCP later)
   & ([scriptblock]::Create((irm $($script:SCRIPT_URL)))) preauth
 
-Exit codes: 0 ok, 1 error (message + fix printed).
+  # Update the daemon (same version as the desktop app, always)
+  & ([scriptblock]::Create((irm $($script:SCRIPT_URL)))) update
+
+Exit codes: 0 ok, 1 error (message + fix printed), 10 'update --check' found an update.
 "@
 }
 
@@ -1734,6 +2203,7 @@ function Show-SubcommandHelp([string]$Cmd) {
         'install' { Log 'install - wire the SealGate side and print remaining human steps. Idempotent; safe to re-run.'; Log '  optional: --sg-backend, --no-open, --install-deps, --yes, --dry-run, --no-preauth, --oauth-wait, --stdiod-tag <tag>' }
         'preauth' { Log "preauth - drive one MCP handshake through 'npx $($script:MCP_PKG)' so Beeper raises its approve/deny prompt and caches the OAuth grant. Idempotent; optional --oauth-wait." }
         'mcp-url' { Log 'mcp-url - print the gateway URL + client snippet. pass --sg-api-key for a ready-to-run snippet. supports --json.' }
+        'update' { Log 'update - bring sealgate-stdiod to the newest release on its channel and restart it. Only replaces the exe this script (or the setup program) installed; one from the desktop app updates with the app.'; Log '  optional: --check (report only, exit 10 if outdated), --json, --stdiod-tag <tag>, --stdiod-release / --stdiod-prerelease, --dry-run' }
         'status' { Log 'status - show stdiod daemon + Beeper Client API status.' }
         'doctor' { Log 'doctor - verify prerequisites and current state (read-only).' }
         'uninstall' { Log 'uninstall - withdraw the server and remove the Scheduled Task. pass --yes to skip the prompt.' }
@@ -1767,6 +2237,7 @@ function Invoke-Main([string[]]$Argv) {
     Resolve-StdiodChannel
     switch ($cmd) {
         'install' { Invoke-CmdInstall }
+        'update' { Invoke-CmdUpdate }
         'doctor' { Invoke-CmdDoctor }
         'status' { Invoke-CmdStatus }
         'preauth' { Invoke-CmdPreauth }

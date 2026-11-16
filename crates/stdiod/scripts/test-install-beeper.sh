@@ -72,6 +72,126 @@ check "a served copy is not blamed on --sg-backend" \
 check "a flag is named as the flag" \
   grep -q 'drop --demo to keep https://saved.example' <<<"$(mismatch --demo)"
 
+echo "== update (offline: a stub daemon in a throwaway HOME, the tag pinned)"
+# The stub answers --version with $STUB_VERSION and reports "no supervisor unit"
+# (status exit 4), so nothing restarts and nothing is downloaded: every check
+# below stops at the version comparison or at --check / --dry-run.
+FAKE_HOME="$TMP/home"
+mkdir -p "$FAKE_HOME/.local/bin" "$FAKE_HOME/.config/sealgate-stdiod"
+cat >"$FAKE_HOME/.local/bin/sealgate-stdiod" <<'EOF'
+#!/bin/sh
+case "$1" in
+  --version) echo "sealgate-stdiod ${STUB_VERSION:-0.0.1}";;
+  status)    exit 4;;
+  *)         exit 0;;
+esac
+EOF
+chmod +x "$FAKE_HOME/.local/bin/sealgate-stdiod"
+upd() {
+  HOME="$FAKE_HOME" XDG_CONFIG_HOME="$FAKE_HOME/.config" \
+    SEALGATE_STDIOD_CONFIG="$FAKE_HOME/.config/sealgate-stdiod/config.toml" \
+    NO_COLOR=1 bash "$SCRIPT" update --stdiod-tag v0.6.23 "$@"
+}
+
+out="$(STUB_VERSION=0.6.20 upd --check --json 2>/dev/null)"; rc=$?
+check "--check exits 10 when outdated" test "$rc" -eq 10
+check "--check --json reports the versions and that this script owns it" \
+  grep -q '"installed":"0.6.20","latest":"0.6.23","channel":"stable","owner":"oneliner","update_available":true' <<<"$out"
+out="$(STUB_VERSION=0.6.23 upd --check --json 2>/dev/null)"; rc=$?
+check "--check exits 0 when current" test "$rc" -eq 0
+check "--check --json says no update when current" grep -q '"update_available":false' <<<"$out"
+out="$(STUB_VERSION=0.0.1 upd --check 2>&1)"; rc=$?
+check "a pre-stamp build (0.0.1) counts as outdated" test "$rc" -eq 10
+check "the outdated hint names the update command" grep -q 'action: run: .* update' <<<"$out"
+out="$(STUB_VERSION=0.6.24 upd --check --json 2>&1)"; rc=$?
+check "a daemon ahead of the release is current: never a downgrade" test "$rc" -eq 0
+check "and --json says no update" grep -q '"update_available":false' <<<"$out"
+out="$(STUB_VERSION=0.6.24 upd --dry-run 2>&1)"; rc=$?
+check "update leaves a newer daemon alone" grep -q 'newer than the newest stable release (0.6.23); left as is' <<<"$out"
+out="$(STUB_VERSION=0.6.23-beta.4 upd --check 2>&1)"; rc=$?
+check "a beta of the same version is older than the release" test "$rc" -eq 10
+out="$(STUB_VERSION=0.6.20 upd --dry-run 2>&1)"; rc=$?
+check "--dry-run previews the update" grep -q 'would download v0.6.23' <<<"$out"
+check "--dry-run leaves the binary alone" \
+  test "$(STUB_VERSION=0.6.20 "$FAKE_HOME/.local/bin/sealgate-stdiod" --version)" = "sealgate-stdiod 0.6.20"
+
+# Units in both shapes (launchd plist, systemd unit), so a check holds on
+# whichever OS runs it.
+mkdir -p "$FAKE_HOME/Library/LaunchAgents" "$FAKE_HOME/.config/systemd/user"
+write_units() {
+  printf '<plist version="1.0">\n<dict>\n  <key>ProgramArguments</key>\n  <array>\n    <string>%s</string>\n    <string>run</string>\n  </array>\n</dict>\n</plist>\n' \
+    "$1" >"$FAKE_HOME/Library/LaunchAgents/com.sealgate.stdiod.plist"
+  printf '[Service]\nExecStart="%s" run\n' "$1" >"$FAKE_HOME/.config/systemd/user/sealgate-stdiod.service"
+}
+
+# The unit runs this script's copy, but another, newer copy comes first on
+# PATH (~/.local/bin is already on PATH, so the script does not move it to the
+# front): the version must come from the copy the unit runs.
+mkdir -p "$TMP/decoy"
+printf '#!/bin/sh\necho "sealgate-stdiod 9.9.9"\n' >"$TMP/decoy/sealgate-stdiod"
+chmod +x "$TMP/decoy/sealgate-stdiod"
+write_units "$FAKE_HOME/.local/bin/sealgate-stdiod"
+out="$(PATH="$TMP/decoy:$FAKE_HOME/.local/bin:$PATH" STUB_VERSION=0.6.20 upd --check --json 2>/dev/null)"; rc=$?
+check "the version comes from the copy the unit runs, not the first on PATH" grep -q '"installed":"0.6.20"' <<<"$out"
+check "so that daemon is still reported outdated (exit 10)" test "$rc" -eq 10
+
+# A supervisor unit that runs the desktop app's copy.
+cat >"$FAKE_HOME/Library/LaunchAgents/com.sealgate.stdiod.plist" <<'EOF'
+<plist version="1.0">
+<dict>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Applications/SealGate.app/Contents/Resources/bin/sealgate-stdiod</string>
+    <string>run</string>
+  </array>
+</dict>
+</plist>
+EOF
+printf '[Service]\nExecStart="%s/.local/share/sealgate/bin/sealgate-stdiod" run\n' "$FAKE_HOME" \
+  >"$FAKE_HOME/.config/systemd/user/sealgate-stdiod.service"
+out="$(STUB_VERSION=0.6.20 upd --check --json 2>&1)"; rc=$?
+check "a daemon the desktop app supervises is reported as the app's" grep -q '"owner":"desktop"' <<<"$out"
+check "its hint is to update the desktop app" grep -q 'action: update the SealGate desktop app' <<<"$out"
+out="$(STUB_VERSION=0.6.20 upd 2>&1)"; rc=$?
+check "update refuses to replace the desktop app's daemon" test "$rc" -eq 1
+check "and says why" grep -q 'not installed by this script (desktop)' <<<"$out"
+
+# The desktop app's daemon is never on PATH; update finds it through the unit.
+DESK_HOME="$TMP/desk-home"
+desk_bin="$DESK_HOME/.local/share/sealgate/bin/sealgate-stdiod"
+mkdir -p "$(dirname "$desk_bin")" "$DESK_HOME/Library/LaunchAgents" "$DESK_HOME/.config/systemd/user"
+printf '#!/bin/sh\ncase "$1" in --version) echo "sealgate-stdiod 0.6.20";; *) exit 0;; esac\n' >"$desk_bin"
+chmod +x "$desk_bin"
+printf '<plist version="1.0">\n<dict>\n  <key>ProgramArguments</key>\n  <array>\n    <string>%s</string>\n    <string>run</string>\n  </array>\n</dict>\n</plist>\n' \
+  "$desk_bin" >"$DESK_HOME/Library/LaunchAgents/com.sealgate.stdiod.plist"
+printf '[Service]\nExecStart="%s" run\n' "$desk_bin" >"$DESK_HOME/.config/systemd/user/sealgate-stdiod.service"
+out="$(HOME="$DESK_HOME" XDG_CONFIG_HOME="$DESK_HOME/.config" NO_COLOR=1 \
+  bash "$SCRIPT" update --stdiod-tag v0.6.23 --check --json 2>&1)"; rc=$?
+check "update finds the desktop app's daemon through its unit, off PATH" grep -q '"owner":"desktop"' <<<"$out"
+check "and reports it outdated with the desktop app's hint (exit 10)" \
+  bash -c '[ "$1" -eq 10 ] && grep -q "action: update the SealGate desktop app" <<<"$2"' _ "$rc" "$out"
+
+# install --from-source is the fix stdiod_update_hint gives for a cargo-built
+# daemon, so it must rebuild one that is already there; any other owner's copy
+# is not its to replace. One HOME per owner, with no units, so the daemon is
+# whatever is on PATH (the script puts ~/.local/bin first when it holds a
+# daemon, so a one-liner copy there would win over the cargo one).
+src_home() {
+  local home="$TMP/src-$1" bin="$TMP/src-$1/$2"
+  mkdir -p "$bin"
+  printf '#!/bin/sh\ncase "$1" in --version) echo "sealgate-stdiod 0.6.20";; status) exit 4;; *) exit 0;; esac\n' \
+    >"$bin/sealgate-stdiod"
+  chmod +x "$bin/sealgate-stdiod"
+  HOME="$home" XDG_CONFIG_HOME="$home/.config" NO_COLOR=1 PATH="$bin:$PATH" \
+    bash "$SCRIPT" install --from-source --dry-run --sg-backend https://127.0.0.1:9 </dev/null 2>&1
+}
+out="$(src_home cargo .cargo/bin)"
+check "install --from-source rebuilds a cargo-built daemon that is already installed" \
+  grep -q 'would rebuild sealgate-stdiod 0.6.20 from this checkout' <<<"$out"
+out="$(src_home oneliner .local/bin)"
+check "install --from-source leaves the one-liner's daemon alone" \
+  grep -q 'oneliner install; --from-source only rebuilds a cargo-built daemon' <<<"$out"
+
 echo
 if [ "$FAILURES" -gt 0 ]; then echo "$FAILURES check(s) failed"; exit 1; fi
 echo "all checks passed"

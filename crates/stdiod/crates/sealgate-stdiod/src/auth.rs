@@ -147,6 +147,7 @@ impl AuthClient {
         // configured backend.
         let http = Client::builder()
             .timeout(Duration::from_secs(20))
+            .user_agent(crate::update::user_agent())
             .redirect(reqwest::redirect::Policy::none())
             .build()
             .map_err(|source| HttpError::Request {
@@ -186,6 +187,7 @@ impl AuthClient {
                 operation: format!("POST {path}"),
                 source,
             })?;
+        crate::update::observe_response(&response);
         let code: DeviceCodeResponse = http::decode_json(response, format!("POST {path}")).await?;
         validate_device_code(&code)?;
         Ok(code)
@@ -242,6 +244,8 @@ impl AuthClient {
                     operation: format!("POST {path}"),
                     source,
                 })?;
+
+            crate::update::observe_response(&response);
             let status = response.status();
             if status == StatusCode::TOO_MANY_REQUESTS {
                 interval = retry_after(&response)
@@ -305,6 +309,7 @@ impl AuthClient {
                 operation: format!("POST {path}"),
                 source,
             })?;
+        crate::update::observe_response(&response);
         http::expect_success(response, format!("POST {path}")).await
     }
 }

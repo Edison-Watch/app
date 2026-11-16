@@ -38,9 +38,25 @@
         "servers": {
           "type": "array",
           "items": { "$ref": "#/definitions/DesiredServer" }
+        },
+        "update": {
+          "description": "Optional advisory update hint for the daemon, omitted when it is up to date or its version is unknown. Never enforced.",
+          "oneOf": [{ "$ref": "#/definitions/UpdateHint" }, { "type": "null" }]
         }
       },
       "required": ["type", "protocol_version", "servers"],
+      "additionalProperties": false
+    },
+    "UpdateHint": {
+      "type": "object",
+      "description": "A newer sealgate-stdiod exists on the daemon's own channel (beta for a prerelease client_version, stable otherwise). level=recommended: older than latest; level=required: older than the deployment's configured minimum (advisory - the backend still serves it).",
+      "properties": {
+        "latest": { "type": "string" },
+        "min": { "type": ["string", "null"] },
+        "level": { "type": "string", "enum": ["recommended", "required"] },
+        "channel": { "type": "string", "enum": ["stable", "beta"] }
+      },
+      "required": ["latest", "level", "channel"],
       "additionalProperties": false
     },
     "DesiredServer": {
@@ -121,7 +137,10 @@
         "type": { "type": "string", "enum": ["server_spec_update"] },
         "server_id": { "type": "string" },
         "env": { "type": ["object", "null"], "additionalProperties": { "type": "string" } },
-        "templated_args": { "type": ["object", "null"], "additionalProperties": { "type": "string" } }
+        "templated_args": {
+          "type": ["object", "null"],
+          "additionalProperties": { "type": "string" }
+        }
       },
       "required": ["type", "server_id"],
       "additionalProperties": false

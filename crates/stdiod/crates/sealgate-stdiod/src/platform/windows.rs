@@ -360,6 +360,49 @@ fn terminate(pid: u32) {
     }
 }
 
+/// The registered task's XML, or `None` when there is no task. Lets callers
+/// see which exe the task runs before acting on it (`update`).
+///
+/// `schtasks` exits 1 both for a task that does not exist and for any other
+/// failure (access denied, the Task Scheduler service unavailable), and its
+/// message is in the system language. So a failed query is only `None` when
+/// the task list, read separately, does not have the task; anything else is
+/// an error, never a silent "no task".
+pub fn unit_definition() -> Result<Option<String>> {
+    let task = task_name();
+    let out = schtasks(&["/query", "/tn", &task, "/xml"])?;
+    if !out.status.success() {
+        let why = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        let list = schtasks(&["/query", "/fo", "csv", "/nh"])?;
+        if !list.status.success() {
+            return Err(anyhow!(
+                "could not read the scheduled task {task} ({why}), nor the task list ({})",
+                String::from_utf8_lossy(&list.stderr).trim()
+            ));
+        }
+        if super::schtasks_csv_lists(&String::from_utf8_lossy(&list.stdout), &task) {
+            return Err(anyhow!(
+                "the scheduled task {task} exists but could not be read: {why}"
+            ));
+        }
+        return Ok(None);
+    }
+    // schtasks writes the XML as UTF-16 on some locales; decode either.
+    let bytes = &out.stdout;
+    let text = if bytes.len() >= 2 && bytes[0] == 0xFF && bytes[1] == 0xFE {
+        let units: Vec<u16> = bytes[2..]
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|&pair| u16::from_le_bytes(pair))
+            .collect();
+        String::from_utf16_lossy(&units)
+    } else {
+        String::from_utf8_lossy(bytes).into_owned()
+    };
+    Ok(Some(text))
+}
+
 /// True iff the scheduled task exists.
 #[allow(dead_code)] // consumed by the `status` subcommand
 pub fn is_installed() -> Result<bool> {

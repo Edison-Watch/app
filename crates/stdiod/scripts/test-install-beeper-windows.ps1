@@ -260,6 +260,53 @@ Check 'Ensure-Deps is idempotent (second run downloads nothing)' {
     Ensure-Deps
     Assert ((Get-Item (Join-Path $installDir 'sealgate-stdiod.exe')).LastWriteTimeUtc -eq $stamp) 'binary was re-downloaded'
 }
+Check 'update --check: current right after install, exit 0' {
+    $r = Run @('update', '--check', '--json')
+    Assert ($r.Rc -eq 0) "rc=$($r.Rc) out=$($r.Out)"
+    Assert ($r.Out -match '"update_available":false') $r.Out
+    Assert ($r.Out -match '"owner":"oneliner"') $r.Out
+}
+Check 'update --check: a newer pinned release is an update, exit 10' {
+    $r = Run @('update', '--check', '--json', '--stdiod-tag', 'v99.0.0')
+    Assert ($r.Rc -eq 10) "rc=$($r.Rc) out=$($r.Out)"
+    Assert ($r.Out -match '"update_available":true') $r.Out
+    Assert ($r.Out -match "action: run: .* update") $r.Out
+}
+Check 'update never downgrades: an older pinned release is not an update' {
+    $r = Run @('update', '--check', '--json', '--stdiod-tag', 'v0.0.1')
+    Assert ($r.Rc -eq 0) "rc=$($r.Rc) out=$($r.Out)"
+    Assert ($r.Out -match '"update_available":false') $r.Out
+    Assert ($r.Out -match 'left as is') $r.Out
+}
+Check 'from the previous release, update moves to the newest and writes the install receipt' {
+    # "Newest" is whatever update itself targets: GitHub's Latest release,
+    # resolved by the same function. That need not be the highest version
+    # (a hotfix on an older line, or Latest set by hand), so the test must
+    # not pick it on its own. Start from the highest stable release older
+    # than it that carries an exe for this machine, installed directly
+    # (update itself never goes backwards).
+    $latest = Get-LatestStdiodTag
+    if (-not $latest) { throw 'could not resolve the Latest stable release' }
+    $asset = (Get-StdiodReleaseAsset).Asset
+    $rels = Invoke-RestMethod -Uri "https://api.github.com/repos/$($script:STDIOD_REPO)/releases?per_page=100" -UseBasicParsing -TimeoutSec 20
+    $withExe = @($rels | Where-Object { -not $_.draft -and -not $_.prerelease -and (@($_.assets | Where-Object { $_.name -eq $asset }).Count -gt 0) } |
+            ForEach-Object { [string]$_.tag_name })
+    if ($withExe -notcontains $latest) { Write-Host "       skipped: the Latest release ($latest) carries no $asset"; return }
+    $older = @($withExe | Where-Object { Test-StdiodNewer $_ $latest } | Sort-Object { Get-TagSortKey $_ } -Descending)
+    if ($older.Count -lt 1) { Write-Host "       skipped: no stable release older than $latest carries $asset"; return }
+    $prev = $older[0]
+    $script:STDIOD_TAG = $prev; $script:STDIOD_TARGET_RESOLVED = $false
+    try { Assert (Install-StdiodPrebuilt) "could not install $prev" }
+    finally { $script:STDIOD_TAG = ''; $script:STDIOD_TARGET_RESOLVED = $false }
+    $v = Invoke-Native (Join-Path $installDir 'sealgate-stdiod.exe') @('--version')
+    Assert ($v -match [regex]::Escape(($prev -replace '^v', ''))) "after installing ${prev}: $v"
+    $r = Run @('update')
+    Assert ($r.Rc -eq 0) "to newest: rc=$($r.Rc) out=$($r.Out)"
+    $v = Invoke-Native (Join-Path $installDir 'sealgate-stdiod.exe') @('--version')
+    Assert ($v -match [regex]::Escape(($latest -replace '^v', ''))) "after update to ${latest}: $v"
+    $receipt = Get-Content -Raw (Join-Path (Split-Path -Parent (Get-StdiodConfigPath)) 'install-receipt.json') | ConvertFrom-Json
+    Assert ($receipt.tag -eq $latest -and $receipt.source -eq 'oneliner') "receipt: $($receipt | ConvertTo-Json -Compress)"
+}
 Check 'sealgate-stdiod install refuses without a credential (no task registered)' {
     $out = Invoke-Native 'sealgate-stdiod' @('install')
     Assert ($script:LastRc -ne 0) "install unexpectedly succeeded: $out"
@@ -449,6 +496,49 @@ Check 'sealgate-stdiod uninstall removes the task' {
     Assert ($script:LastRc -ne 0) 'task still registered after uninstall'
 }
 
+Check 'Beeper starts with no handle on the caller''s output pipe, its output in the log' {
+    # A run whose output goes through a pipe must end when the installer
+    # does, not when Beeper exits. A stand-in that prints a marker and sleeps
+    # is started the way Beeper is, from a child whose stdout and stderr are
+    # piped here; the pipes must close while the stand-in still runs.
+    $marker = 'standin-' + [guid]::NewGuid().ToString('N')
+    $inner = ". '$Script'; `$id = Start-BeeperDesktop '$shell' @('-NoProfile', '-NonInteractive', '-Command', 'Write-Output $marker; Start-Sleep 60'); Write-Output `"pid=`$id`""
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = $shell
+    $psi.Arguments = '-NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand ' + [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($inner))
+    $psi.UseShellExecute = $false
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    try {
+        $p = [System.Diagnostics.Process]::Start($psi)
+        $out = $p.StandardOutput.ReadToEndAsync()
+        $err = $p.StandardError.ReadToEndAsync()
+        $closed = [System.Threading.Tasks.Task]::WaitAll([System.Threading.Tasks.Task[]]@($out, $err), 30000)
+        Assert $closed 'the output pipes were still open 30s after the launch: the stand-in inherited them'
+        $p.WaitForExit()
+        Assert ($p.ExitCode -eq 0) "launcher rc=$($p.ExitCode): $($err.Result.Trim())"
+        Assert ($out.Result -match 'pid=(\d+)') "no pid printed: $($out.Result.Trim()) $($err.Result.Trim())"
+        $standin = Get-Process -Id ([int]$Matches[1]) -ErrorAction SilentlyContinue
+        Assert ($null -ne $standin) 'the stand-in was not running when the pipes closed'
+        Assert (-not ("$($out.Result)$($err.Result)" -match $marker)) "the stand-in's output reached the caller"
+        $logged = $false
+        $deadline = (Get-Date).AddSeconds(30)
+        while (-not $logged -and (Get-Date) -lt $deadline) {
+            foreach ($f in @(Get-ChildItem -Path ([System.IO.Path]::GetTempPath()) -Filter 'sealgate-beeper-*.out.log' -ErrorAction SilentlyContinue)) {
+                try {
+                    $fs = [System.IO.File]::Open($f.FullName, 'Open', 'Read', 'ReadWrite, Delete')
+                    try { if ((New-Object System.IO.StreamReader($fs)).ReadToEnd() -match $marker) { $logged = $true } } finally { $fs.Close() }
+                } catch { Write-Verbose "skipping $($f.Name): $($_.Exception.Message)" }
+            }
+            if (-not $logged) { Start-Sleep -Milliseconds 500 }
+        }
+        Assert $logged "the stand-in's output is not in a sealgate-beeper-*.out.log file"
+    } finally {
+        Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like "*$marker*" } |
+            ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+    }
+}
+
 Check 'full install run: every step past login, against a backend that answers nothing' {
     # The saved session points at a closed port, so the credential reads as
     # unknown (kept, not re-logged) and the run proceeds through supervisor,
@@ -479,10 +569,15 @@ Check 'OAuth priming against a fake Beeper listener ends within its wait and lea
         $l.Prefixes.Add('http://127.0.0.1:23373/')
         $l.Start()
         $end = (Get-Date).AddSeconds(120)
+        # One pending BeginGetContext at a time: a new one per idle second
+        # would leave the old ones pending, the next request would go to the
+        # oldest (which nothing ends), and the probe would never get an answer.
+        $ar = $null
         while ((Get-Date) -lt $end) {
-            $ar = $l.BeginGetContext($null, $null)
+            if (-not $ar) { $ar = $l.BeginGetContext($null, $null) }
             if (-not $ar.AsyncWaitHandle.WaitOne(1000)) { continue }
             $ctx = $l.EndGetContext($ar)
+            $ar = $null
             $ctx.Response.StatusCode = 404
             $ctx.Response.Close()
         }

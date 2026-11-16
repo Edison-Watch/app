@@ -137,6 +137,7 @@ BEEPER_READY=0      # set by ensure_beeper_desktop when Beeper's client API answ
 PREAUTH_RETRIED=0   # prime_oauth_grant restarts Beeper and asks again at most once
 STDIOD_CONNECTED=0  # set by ensure_stdiod_supervised once the daemon registers
 FROM_SOURCE=0       # cargo-build sealgate-stdiod instead of downloading the release binary
+CHECK_ONLY=0        # update --check: report whether an update exists, change nothing
 
 # How to run this script again, printed in every "re-run: ..." hint. Run
 # from a file it is that file; piped from curl, $0 is just "bash", so the
@@ -269,6 +270,7 @@ parse_flags() {
       # --build-from-source is the pre-rename spelling, kept so existing
       # invocations and docs do not break.
       --from-source|--build-from-source) FROM_SOURCE=1; shift;;
+      --check)        CHECK_ONLY=1; shift;;
       --dry-run)      DRY_RUN=1; shift;;
       -y|--yes)       ASSUME_YES=1; YES_SET=1; shift;;
       --interactive)  INTERACTIVE=1; ASSUME_YES=0; YES_SET=1; shift;;
@@ -579,8 +581,9 @@ stdiod_release_asset() {
 latest_stdiod_tag() {
   local tag tag_re='^v[0-9]+\.[0-9]+\.[0-9]+$'
   if [ "$STDIOD_PRERELEASE" = "1" ]; then
-    # Require the prerelease suffix: this pool is betas only.
-    tag_re='^v[0-9]+\.[0-9]+\.[0-9]+-[0-9A-Za-z.]+$'
+    # Betas only, exactly vX.Y.Z-beta.N: another prerelease (-rc.1,
+    # -alpha.1) is not this channel, even with a higher version.
+    tag_re='^v[0-9]+\.[0-9]+\.[0-9]+-beta\.[0-9]+$'
     # The list endpoint carries prereleases (and, unauthenticated, no drafts),
     # but it is ordered by the release's created_at - the TAG date, not the
     # publish date - so its order does not track "newest" at all: this repo
@@ -628,10 +631,10 @@ install_stdiod_prebuilt() {
   pair="$(stdiod_release_asset)" \
     || { info "no prebuilt sealgate-stdiod for $(uname -s)/$(uname -m)"; return 1; }
   asset="${pair%% *}"; sums="${pair##* }"
-  tag="${STDIOD_TAG:-$(latest_stdiod_tag)}"
-  local channel="stable"; [ "$STDIOD_PRERELEASE" = "1" ] && channel="demo (-beta)"
+  resolve_stdiod_target_tag
+  tag="$STDIOD_TARGET_TAG"
   [ -n "$tag" ] \
-    || { warn "no $channel release found on $STDIOD_REPO (or the GitHub API is unreachable)"; return 1; }
+    || { warn "no $(stdiod_channel_name) release found on $STDIOD_REPO (or the GitHub API is unreachable)"; return 1; }
   base="https://github.com/$STDIOD_REPO/releases/download/$tag"
   step "downloading prebuilt sealgate-stdiod ($tag)"
   dir="$(mktemp -d)"
@@ -658,20 +661,268 @@ install_stdiod_prebuilt() {
     warn "downloaded $asset does not run on this machine ('--version' failed)"
     rm -rf "$dir"; return 1
   fi
-  mkdir -p "$dest"
-  # Unlink first. Writing over a signed Mach-O in place keeps the inode, and the
-  # kernel's cached signing state for that vnode goes stale - the binary then
-  # dies with SIGKILL. `mv` across filesystems degrades to a copy, so this is
-  # not hypothetical.
-  rm -f "$dest/sealgate-stdiod"
-  mv "$dir/$asset" "$dest/sealgate-stdiod"
+  # Copy the verified file into $dest under a temporary name, then rename it
+  # over the old one. The temp dir is usually another filesystem, where `mv`
+  # is a copy that can fail halfway. A rename inside $dest is atomic, so
+  # $dest/sealgate-stdiod is always the old binary or the new one, never
+  # missing or half-written. The rename also gives the path a new inode.
+  # Writing over a signed Mach-O in place keeps the inode, the kernel's cached
+  # signing state for it goes stale, and the binary then dies with SIGKILL.
+  local staged="$dest/.sealgate-stdiod.new.$$"
+  # mv onto a directory (or a symlink to one) moves the file INTO it and
+  # still succeeds, leaving no runnable binary at the path; portable mv has
+  # no flag against that (GNU -T is not on macOS), so refuse such a target.
+  if [ -d "$dest/sealgate-stdiod" ]; then
+    rm -rf "$dir"
+    warn "$dest/sealgate-stdiod is a directory, not the daemon binary; move it out of the way and re-run"
+    return 1
+  fi
+  if ! mkdir -p "$dest" || ! cp "$dir/$asset" "$staged" || ! chmod +x "$staged" \
+      || ! mv -f "$staged" "$dest/sealgate-stdiod" || [ ! -x "$dest/sealgate-stdiod" ]; then
+    rm -f "$staged"; rm -rf "$dir"
+    warn "could not put the new sealgate-stdiod in $dest (disk full or not writable?)"
+    return 1
+  fi
   rm -rf "$dir"
   PATH="$dest:$PATH"
   ok "installed prebuilt sealgate-stdiod $tag -> $dest/sealgate-stdiod (sha256 verified)"
+  write_install_receipt "$tag" "$dest/sealgate-stdiod"
   case ":$PATH_AT_LAUNCH:" in
     *":$dest:"*) ;;
     *) todo "add $dest to your PATH (e.g. append 'export PATH=\"\$HOME/.local/bin:\$PATH\"' to your shell profile)";;
   esac
+  return 0
+}
+
+# ---------------------------------------------------------------------------
+# Updates
+# ---------------------------------------------------------------------------
+# The app, sealgate-stdiod and sealgate-detectord ship as ONE version: every
+# app release carries the daemon at the same number. An update moves the
+# daemon to the newest release on this device's channel whenever that release
+# is NEWER; there is deliberately no checksum shortcut that keeps an older
+# binary because its bytes did not change. Nothing here ever moves a daemon to
+# an OLDER version: a daemon at or ahead of the newest release is current. A
+# deliberate downgrade is 'sealgate-stdiod update --tag <tag> --allow-downgrade'.
+#
+# Who updates the daemon depends on who installed it (stdiod_owner):
+#   oneliner  this script, into ~/.local/bin   -> 'update' / re-running 'install'
+#   desktop   the SealGate desktop app bundle  -> updating the desktop app
+#   source    cargo, into ~/.cargo/bin         -> rebuilding with --from-source
+#   other     anything else on PATH            -> whoever put it there
+# This script only ever replaces the binary it owns.
+
+stdiod_channel_name() {
+  if [ "$STDIOD_PRERELEASE" = "1" ]; then printf 'demo (-beta)'; else printf 'stable'; fi
+}
+
+# Sets STDIOD_TARGET_TAG once per run: the pinned --stdiod-tag, else the newest
+# release on the channel. Empty when neither is known (GitHub unreachable).
+# Cached so install, the version check and the download agree on one tag even
+# if a release is published mid-run.
+STDIOD_TARGET_TAG=""
+STDIOD_TARGET_RESOLVED=0
+resolve_stdiod_target_tag() {
+  [ "$STDIOD_TARGET_RESOLVED" -eq 1 ] && return 0
+  STDIOD_TARGET_TAG="${STDIOD_TAG:-$(latest_stdiod_tag || true)}"
+  STDIOD_TARGET_RESOLVED=1
+}
+
+# The version the installed daemon reports ('sealgate-stdiod 0.6.23' -> 0.6.23).
+# Builds before the version stamp report 0.0.1, which never matches a release,
+# so they always count as outdated - correctly. Asks the binary that actually
+# runs (stdiod_active_bin), the same one stdiod_owner judges, not whichever
+# copy happens to be first on PATH.
+stdiod_installed_version() {
+  local bin
+  bin="$(stdiod_active_bin)"
+  # A unit can name a file that is gone; that daemon has no version.
+  [ -n "$bin" ] && [ -x "$bin" ] || return 0
+  "$bin" --version 2>/dev/null | awk 'NR == 1 { print $NF }'
+}
+
+# v0.6.23 -> 0.6.23; v0.6.23-beta.4 -> 0.6.23-beta.4
+tag_version() { printf '%s' "${1#v}"; }
+
+# version_cmp A B prints -1, 0 or 1 in SemVer order: X.Y.Z numerically, then
+# a release above its own prereleases (0.6.23-beta.4 < 0.6.23), then the
+# prerelease parts, numeric ones numerically (beta.9 < beta.10). Something
+# that is not a version sorts below every version, so a broken or missing
+# daemon always counts as older.
+version_cmp() {
+  # Build metadata (+...) never takes part in the order (SemVer).
+  local a="${1#v}" b="${2#v}"
+  awk -v a="${a%%+*}" -v b="${b%%+*}" '
+    function valid(v) { return v ~ /^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$/ }
+    function num(s) { return s ~ /^[0-9]+$/ }
+    function cmp(a, b,   ia, ib, ca, cb, pa, pb, A, B, n, i, x, y) {
+      if (!valid(a) || !valid(b)) return valid(a) - valid(b)
+      ia = index(a, "-"); ib = index(b, "-")
+      ca = ia ? substr(a, 1, ia - 1) : a; pa = ia ? substr(a, ia + 1) : ""
+      cb = ib ? substr(b, 1, ib - 1) : b; pb = ib ? substr(b, ib + 1) : ""
+      split(ca, A, "."); split(cb, B, ".")
+      for (i = 1; i <= 3; i++) if (A[i] + 0 != B[i] + 0) return (A[i] + 0 > B[i] + 0) ? 1 : -1
+      if (pa == pb) return 0
+      if (pa == "") return 1
+      if (pb == "") return -1
+      na = split(pa, A, "."); nb = split(pb, B, ".")
+      for (i = 1; i <= na && i <= nb; i++) {
+        x = A[i]; y = B[i]
+        if (num(x) && num(y)) { if (x + 0 != y + 0) return (x + 0 > y + 0) ? 1 : -1 }
+        else if (x != y) return (x > y) ? 1 : -1
+      }
+      return (na == nb) ? 0 : ((na > nb) ? 1 : -1)
+    }
+    BEGIN { print cmp(a, b) }'
+}
+
+# True when release B is newer than installed A: the only case that is an
+# update. Equal or older is "current" - this script never downgrades; a
+# deliberate downgrade is 'sealgate-stdiod update --tag <tag> --allow-downgrade'.
+version_newer() { [ "$(version_cmp "$2" "$1")" = "1" ]; }
+
+# The binary the supervisor unit (launchd plist / systemd user unit) runs, or
+# empty when there is no unit. Written by 'sealgate-stdiod install' from its own
+# path, so this names whichever copy last registered the daemon.
+stdiod_supervised_bin() {
+  case "$(uname -s)" in
+    Darwin)
+      local plist="$HOME/Library/LaunchAgents/com.sealgate.stdiod.plist"
+      [ -f "$plist" ] || return 0
+      # The first <string> inside ProgramArguments is the binary.
+      awk '/<key>ProgramArguments<\/key>/ { f = 1; next }
+           f && /<string>/ { sub(/.*<string>/, ""); sub(/<\/string>.*/, ""); print; exit }' "$plist"
+      ;;
+    Linux)
+      local unit="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/sealgate-stdiod.service"
+      [ -f "$unit" ] || return 0
+      sed -n 's/^ExecStart="\{0,1\}\([^" ]*\)"\{0,1\} .*/\1/p' "$unit" | head -n 1
+      ;;
+  esac
+}
+
+# The daemon binary that matters: the one the supervisor unit runs when there
+# is a unit (even one whose file is gone: that unit is still in charge),
+# else the first on PATH, else empty. Owner and version both come from this
+# binary, so another copy earlier on PATH cannot hide an outdated daemon.
+stdiod_active_bin() {
+  local bin
+  bin="$(stdiod_supervised_bin)"
+  [ -n "$bin" ] || bin="$(command -v sealgate-stdiod 2>/dev/null || true)"
+  printf '%s' "$bin"
+}
+
+stdiod_owner() {
+  local mine="$HOME/.local/bin/sealgate-stdiod" cargo_bin="$HOME/.cargo/bin/sealgate-stdiod"
+  local bin
+  bin="$(stdiod_active_bin)"
+  case "$bin" in
+    "")             printf 'none';;
+    "$mine")        printf 'oneliner';;
+    "$cargo_bin")   printf 'source';;
+    # macOS: inside the app bundle. Linux: the AppImage copies it out to a
+    # stable path (packages/desktop/src/main/runtime/stdiodBinary.ts).
+    *.app/Contents/*|"$HOME/.local/share/sealgate/bin/"*) printf 'desktop';;
+    *)              printf 'other';;
+  esac
+}
+
+# The fix line for an outdated daemon this script does not own.
+stdiod_update_hint() {
+  case "$1" in
+    oneliner) printf 'run: %s update' "$PROG";;
+    desktop)  printf 'update the SealGate desktop app (menu bar > Check for Updates); it ships the daemon at the same version';;
+    source)   printf 'rebuild it from an up-to-date checkout: %s install --from-source' "$PROG";;
+    *)        printf 'it is not managed by this script (%s); update it the way it was installed' "$(stdiod_active_bin)";;
+  esac
+}
+
+# Records how the daemon got here, next to its config. Read by later runs and
+# by the daemon itself (it reports the install source to the backend, so the
+# dashboard can tell an outdated device how to update).
+write_install_receipt() {
+  local tag="$1" bin="$2" dir
+  [ "$DRY_RUN" -eq 1 ] && return 0
+  dir="$(dirname "$(stdiod_config)")"
+  mkdir -p "$dir" 2>/dev/null || return 0
+  printf '{"source":"oneliner","tag":"%s","version":"%s","channel":"%s","repo":"%s","bin":"%s","script_url":"%s","installed_at":"%s"}\n' \
+    "$(json_escape "$tag")" "$(json_escape "$(tag_version "$tag")")" \
+    "$([ "$STDIOD_PRERELEASE" = "1" ] && printf beta || printf stable)" \
+    "$(json_escape "$STDIOD_REPO")" "$(json_escape "$bin")" "$(json_escape "$SCRIPT_URL")" \
+    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >"$dir/install-receipt.json" 2>/dev/null || true
+}
+
+# Called by ensure_stdiod_bin when a daemon is already installed: brings one
+# this script owns to the target release, and only reports on the others.
+# A failed version lookup keeps the installed daemon; 'install' is not the
+# place to fail on a GitHub outage.
+STDIOD_UPGRADED=0
+ensure_stdiod_current() {
+  local owner installed want
+  owner="$(stdiod_owner)"
+  installed="$(stdiod_installed_version)"
+  if [ "$FROM_SOURCE" -eq 1 ]; then
+    # --from-source is how a cargo-built daemon updates (stdiod_update_hint
+    # says so): rebuild it from this checkout. The copy any other installer
+    # owns is not this flag's to replace.
+    if [ "$owner" != "source" ]; then
+      ok "sealgate-stdiod ${installed:-?} (${owner} install; --from-source only rebuilds a cargo-built daemon, so this one is left as is)"
+      return 0
+    fi
+    if [ "$DRY_RUN" -eq 1 ]; then
+      info "would rebuild sealgate-stdiod ${installed:-?} from this checkout (cargo install)"
+      return 0
+    fi
+    info "rebuilding sealgate-stdiod ${installed:-?} from this checkout"
+    build_stdiod_from_source
+    STDIOD_UPGRADED=1
+    return 0
+  fi
+  if [ "$owner" != "oneliner" ]; then
+    ok "sealgate-stdiod ${installed:-?} (${owner} install; this script leaves it as is)"
+    return 0
+  fi
+  resolve_stdiod_target_tag
+  if [ -z "$STDIOD_TARGET_TAG" ]; then
+    warn "could not look up the newest $(stdiod_channel_name) release; keeping sealgate-stdiod ${installed:-?}"
+    return 0
+  fi
+  want="$(tag_version "$STDIOD_TARGET_TAG")"
+  if ! version_newer "$installed" "$want"; then
+    ok "$(stdiod_current_line "$installed" "$want")"
+    return 0
+  fi
+  if [ "$DRY_RUN" -eq 1 ]; then
+    info "would update sealgate-stdiod ${installed:-?} -> $want"
+    return 0
+  fi
+  info "updating sealgate-stdiod ${installed:-?} -> $want"
+  install_stdiod_prebuilt \
+    || die "could not update sealgate-stdiod to $STDIOD_TARGET_TAG (see the warnings above); ${installed:-the old version} is still installed" \
+           "retry, or pin a release with --stdiod-tag <tag> (list them: $PROG tags)"
+  STDIOD_UPGRADED=1
+}
+
+# "is current", or, for a local build ahead of every release, says so: the
+# script never moves a daemon to an older version.
+stdiod_current_line() {
+  if [ "$1" = "$2" ]; then
+    printf 'sealgate-stdiod %s is current' "$1"
+  else
+    printf 'sealgate-stdiod %s is newer than the newest %s release (%s); left as is' "$1" "$(stdiod_channel_name)" "$2"
+  fi
+}
+
+# Restart the supervised daemon onto a freshly swapped binary, if it is
+# supervised at all. The unit runs ~/.local/bin/sealgate-stdiod by path, so the
+# new file is picked up on restart without re-registering anything.
+restart_stdiod_if_supervised() {
+  local st
+  sealgate-stdiod status >/dev/null 2>&1 && st=0 || st=$?
+  [ "$st" -eq 4 ] && { info "no supervisor unit yet; 'install' registers one"; return 1; }
+  [ "$DRY_RUN" -eq 0 ] && rm -f "${SEALGATE_STDIOD_STATE:-$HOME/.config/sealgate-stdiod/state.json}"
+  run sealgate-stdiod restart || die "sealgate-stdiod restart failed" "check: sealgate-stdiod logs --follow"
+  ok "daemon restarted"
   return 0
 }
 
@@ -708,7 +959,10 @@ build_stdiod_from_source() {
 # an automatic fallback would spring a multi-minute toolchain install on someone
 # who never asked for one. It fails instead, naming --from-source.
 ensure_stdiod_bin() {
-  command -v sealgate-stdiod >/dev/null 2>&1 && return 0
+  if command -v sealgate-stdiod >/dev/null 2>&1; then
+    ensure_stdiod_current
+    return 0
+  fi
   if [ "$DRY_RUN" -eq 1 ]; then
     if [ "$FROM_SOURCE" -eq 1 ]; then
       info "dep 'sealgate-stdiod' missing; would build it from source (needs Rust + a C toolchain + a checkout)"
@@ -1423,6 +1677,12 @@ ensure_stdiod_supervised() {
     die "sealgate-stdiod install could not register the supervisor unit" "$supervisor_fix"
   fi
   ok "daemon installed and supervised"
+  # On macOS 'install' boots the unit out and back in, which already restarts
+  # it onto the new binary. systemd's 'enable --now' leaves a running unit
+  # alone, so an updated binary there needs an explicit restart.
+  if [ "$STDIOD_UPGRADED" -eq 1 ] && [ "$(uname -s)" != "Darwin" ]; then
+    run sealgate-stdiod restart || warn "could not restart the daemon onto the new binary; run: sealgate-stdiod restart"
+  fi
   [ "$DRY_RUN" -eq 1 ] && return 0
   info "waiting up to ${CONNECT_WAIT}s for the daemon to register with the backend"
   if wait_stdiod_connected "$CONNECT_WAIT"; then
@@ -1615,6 +1875,89 @@ cmd_install() {
   print_result
 }
 
+# update: bring sealgate-stdiod to the newest release on this device's channel
+# (or to --stdiod-tag), then restart the supervised daemon onto it, when that
+# release is newer than the installed one. Never downgrades. Touches only the
+# daemon binary: no Beeper, login or server steps. See "Updates" above.
+#
+# --check only reports: exit 0 when current, 10 when an update is available,
+# 1 on error. 10, not 2: 2 is what argument parsers (and 'sealgate-stdiod'
+# itself, for a mistyped flag) exit with, so a caller could not tell them apart.
+# --json prints one object on stdout either way.
+cmd_update() {
+  [ "$YES_SET" -eq 0 ] && ASSUME_YES=1
+  require_supported_platform
+  need_cmd curl
+  # The supervised daemon counts even when it is not on PATH: the desktop
+  # app's copy never is (app bundle, ~/.local/share/sealgate/bin), and update
+  # must still name its owner and the right way to update it.
+  [ -n "$(stdiod_active_bin)" ] \
+    || die "sealgate-stdiod is not installed" "install it: $PROG install"
+  local owner installed want
+  owner="$(stdiod_owner)"
+  installed="$(stdiod_installed_version)"
+  resolve_stdiod_target_tag
+  [ -n "$STDIOD_TARGET_TAG" ] \
+    || die "could not look up the newest $(stdiod_channel_name) release on $STDIOD_REPO" \
+           "check connectivity to api.github.com, or pin one: $PROG update --stdiod-tag <tag>"
+  want="$(tag_version "$STDIOD_TARGET_TAG")"
+  local current=1; version_newer "$installed" "$want" && current=0
+  if [ "$JSON" -eq 1 ]; then
+    printf '{"installed":"%s","latest":"%s","channel":"%s","owner":"%s","update_available":%s}\n' \
+      "$(json_escape "$installed")" "$(json_escape "$want")" \
+      "$([ "$STDIOD_PRERELEASE" = "1" ] && printf beta || printf stable)" \
+      "$owner" "$([ "$current" -eq 1 ] && printf false || printf true)"
+  fi
+  step "sealgate-stdiod ${installed:-?} installed; newest $(stdiod_channel_name): $want"
+  if [ "$current" -eq 1 ]; then ok "$(stdiod_current_line "$installed" "$want")"; return 0; fi
+  if [ "$CHECK_ONLY" -eq 1 ]; then
+    warn "update available: ${installed:-?} -> $want"
+    todo "$(stdiod_update_hint "$owner")"
+    exit 10
+  fi
+  [ "$owner" = "oneliner" ] \
+    || die "this sealgate-stdiod was not installed by this script ($owner), so it is left alone" \
+           "$(stdiod_update_hint "$owner")"
+  confirm "update sealgate-stdiod ${installed:-?} -> $want and restart the daemon?" || die "aborted" ""
+  if [ "$DRY_RUN" -eq 1 ]; then
+    info "would download $STDIOD_TARGET_TAG, replace $HOME/.local/bin/sealgate-stdiod and restart the daemon"
+    return 0
+  fi
+  install_stdiod_prebuilt \
+    || die "could not update sealgate-stdiod to $STDIOD_TARGET_TAG (see the warnings above); ${installed:-the old version} is still installed" \
+           "retry, or pin a release with --stdiod-tag <tag> (list them: $PROG tags)"
+  if restart_stdiod_if_supervised; then
+    info "waiting up to ${CONNECT_WAIT}s for the daemon to reconnect"
+    if wait_stdiod_connected "$CONNECT_WAIT"; then
+      ok "daemon reconnected on $want"
+    else
+      warn "the daemon has not reconnected yet (state: $(stdiod_state_field connection_state))"
+      todo "check: sealgate-stdiod status, sealgate-stdiod logs --follow"
+    fi
+  fi
+}
+
+# One doctor line on the daemon's version. Informational: an outdated daemon
+# still works, so it does not fail the checks, it says how to update.
+doctor_stdiod_version() {
+  [ -n "$(stdiod_active_bin)" ] || return 0
+  local owner installed want
+  owner="$(stdiod_owner)"
+  installed="$(stdiod_installed_version)"
+  resolve_stdiod_target_tag
+  if [ -z "$STDIOD_TARGET_TAG" ]; then
+    info "sealgate-stdiod ${installed:-?}; could not look up the newest $(stdiod_channel_name) release"
+    return 0
+  fi
+  want="$(tag_version "$STDIOD_TARGET_TAG")"
+  if ! version_newer "$installed" "$want"; then
+    ok "$(stdiod_current_line "$installed" "$want")"
+  else
+    warn "sealgate-stdiod ${installed:-?} is outdated: newest $(stdiod_channel_name) is $want"
+    todo "$(stdiod_update_hint "$owner")"
+  fi
+}
+
 cmd_doctor() {
   step "Doctor"
   local allgood=1
@@ -1653,6 +1996,7 @@ cmd_doctor() {
       4) warn "no supervisor unit installed (run: $PROG install)"; allgood=0;;
       *) warn "sealgate-stdiod status failed (exit $st)"; allgood=0;;
     esac
+    doctor_stdiod_version
   fi
   # Only meaningful once the credential works: server_registered lists servers
   # over the same API, so with a dead credential it fails for auth reasons and
@@ -1784,8 +2128,11 @@ Usage:
   $PROG [command] [flags]        (no command runs 'install')
 
 Commands:
-  install     Deps, Beeper check, device auth, supervise daemon, submit Beeper server, prime OAuth
-  doctor      Check prerequisites and current state (read-only)
+  install     Deps, Beeper check, device auth, supervise daemon, submit Beeper server, prime OAuth.
+              Re-running it also updates a daemon this script installed.
+  update      Update sealgate-stdiod to the newest release on its channel and restart it
+              (--check: report only; exit 10 when an update is available)
+  doctor      Check prerequisites and current state, including the daemon version (read-only)
   status      Show stdiod daemon + Beeper Client API status
   tags        List releases the sealgate-stdiod binary can be pulled from
   preauth     Prime the Beeper OAuth grant (approve once in Beeper)
@@ -1881,7 +2228,11 @@ Examples:
   # Re-run the one-time Beeper OAuth approval (e.g. after enabling MCP later)
   $PROG preauth
 
-Exit codes: 0 ok, 1 error (message + fix printed to stderr).
+  # Update the daemon (same version as the desktop app, always)
+  $PROG update
+
+Exit codes: 0 ok, 1 error (message + fix printed to stderr),
+            10 'update --check' found an update.
 EOF
 }
 
@@ -1893,6 +2244,10 @@ subcmd_help() {
     preauth)  log "preauth - drive one MCP handshake through 'npx $MCP_PKG' so Beeper raises its"
               log "  approve/deny prompt and caches the OAuth grant. Idempotent; optional --oauth-wait.";;
     mcp-url)  log "mcp-url - print the gateway URL + client snippet. pass --sg-api-key for a ready-to-run snippet. supports --json.";;
+    update)   log "update - bring sealgate-stdiod to the newest release on its channel and restart it."
+              log "  Only replaces a daemon this script installed (~/.local/bin); one from the desktop app"
+              log "  updates with the app. optional: --check (report only, exit 10 if outdated), --json,"
+              log "  --stdiod-tag <tag>, --stdiod-release / --stdiod-prerelease, --dry-run.";;
     status)   log "status - show stdiod daemon + Beeper Client API status.";;
     doctor)   log "doctor - verify prerequisites and current state (read-only).";;
     uninstall)log "uninstall - withdraw the server and remove the supervisor unit. pass --yes to skip the prompt.";;
@@ -1938,6 +2293,7 @@ main() {
 
   case "$cmd" in
     install)    cmd_install;;
+    update)     cmd_update;;
     doctor)     cmd_doctor;;
     status)     cmd_status;;
     preauth)    cmd_preauth;;
