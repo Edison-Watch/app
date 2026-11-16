@@ -496,6 +496,49 @@ Check 'sealgate-stdiod uninstall removes the task' {
     Assert ($script:LastRc -ne 0) 'task still registered after uninstall'
 }
 
+Check 'Beeper starts with no handle on the caller''s output pipe, its output in the log' {
+    # A run whose output goes through a pipe must end when the installer
+    # does, not when Beeper exits. A stand-in that prints a marker and sleeps
+    # is started the way Beeper is, from a child whose stdout and stderr are
+    # piped here; the pipes must close while the stand-in still runs.
+    $marker = 'standin-' + [guid]::NewGuid().ToString('N')
+    $inner = ". '$Script'; `$id = Start-BeeperDesktop '$shell' @('-NoProfile', '-NonInteractive', '-Command', 'Write-Output $marker; Start-Sleep 60'); Write-Output `"pid=`$id`""
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = $shell
+    $psi.Arguments = '-NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand ' + [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($inner))
+    $psi.UseShellExecute = $false
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    try {
+        $p = [System.Diagnostics.Process]::Start($psi)
+        $out = $p.StandardOutput.ReadToEndAsync()
+        $err = $p.StandardError.ReadToEndAsync()
+        $closed = [System.Threading.Tasks.Task]::WaitAll([System.Threading.Tasks.Task[]]@($out, $err), 30000)
+        Assert $closed 'the output pipes were still open 30s after the launch: the stand-in inherited them'
+        $p.WaitForExit()
+        Assert ($p.ExitCode -eq 0) "launcher rc=$($p.ExitCode): $($err.Result.Trim())"
+        Assert ($out.Result -match 'pid=(\d+)') "no pid printed: $($out.Result.Trim()) $($err.Result.Trim())"
+        $standin = Get-Process -Id ([int]$Matches[1]) -ErrorAction SilentlyContinue
+        Assert ($null -ne $standin) 'the stand-in was not running when the pipes closed'
+        Assert (-not ("$($out.Result)$($err.Result)" -match $marker)) "the stand-in's output reached the caller"
+        $logged = $false
+        $deadline = (Get-Date).AddSeconds(30)
+        while (-not $logged -and (Get-Date) -lt $deadline) {
+            foreach ($f in @(Get-ChildItem -Path ([System.IO.Path]::GetTempPath()) -Filter 'sealgate-beeper-*.out.log' -ErrorAction SilentlyContinue)) {
+                try {
+                    $fs = [System.IO.File]::Open($f.FullName, 'Open', 'Read', 'ReadWrite, Delete')
+                    try { if ((New-Object System.IO.StreamReader($fs)).ReadToEnd() -match $marker) { $logged = $true } } finally { $fs.Close() }
+                } catch { Write-Verbose "skipping $($f.Name): $($_.Exception.Message)" }
+            }
+            if (-not $logged) { Start-Sleep -Milliseconds 500 }
+        }
+        Assert $logged "the stand-in's output is not in a sealgate-beeper-*.out.log file"
+    } finally {
+        Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like "*$marker*" } |
+            ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+    }
+}
+
 Check 'full install run: every step past login, against a backend that answers nothing' {
     # The saved session points at a closed port, so the credential reads as
     # unknown (kept, not re-logged) and the run proceeds through supervisor,

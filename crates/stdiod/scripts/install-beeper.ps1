@@ -814,7 +814,7 @@ function Write-InstallReceipt([string]$Tag) {
         }
         # Plain ASCII on every PowerShell: anything else as a \uXXXX escape.
         # -Encoding ASCII alone would turn a profile folder like
-        # C:\Users\José into '?', and 'bin' would no longer match the exe.
+        # C:\Users\Jos<e-acute> into '?', and 'bin' would no longer match the exe.
         $json = [regex]::Replace((ConvertTo-Json -InputObject $obj -Compress), '[^\x20-\x7e]', { param($m) '\u{0:x4}' -f [int][char]$m.Value })
         Set-Content -Path (Join-Path $dir 'install-receipt.json') -Value $json -Encoding ASCII
     } catch {
@@ -1132,63 +1132,161 @@ function Test-CanAsk {
     try { return -not [Console]::IsInputRedirected } catch { return $false }
 }
 
-# Close Beeper Desktop ($App, its exe), wait for it to be gone, and start it
-# again. A request made during Beeper's first-run setup never shows, and only a
-# fresh start clears it. Waiting matters: Beeper refuses to start while the old
-# instance is still exiting.
 # Start Beeper with its output in temp files. Electron writes its logs to the
 # console that started it when nothing is redirected, which floods this window.
 #
-# With -RedirectStandard*, Start-Process starts the child with handle
-# inheritance on, so Beeper would also inherit this script's own stdin, stdout
-# and stderr. Anything that reads the script's output through a pipe (a
-# wrapper, the CI tests) then never sees it end and waits until Beeper exits.
-# So the three handles are made non-inheritable for the launch and put back
-# after. ELECTRON_NO_ATTACH_CONSOLE (child only) also stops Electron from
-# attaching to this console.
-function Set-StdHandleInherit([hashtable]$Restore) {
-    # $null: clear the inherit flag on each std handle, return the old flags.
-    # A hashtable: put those flags back.
-    if (-not ('SealGate.StdHandles' -as [type])) {
-        Add-Type -Namespace SealGate -Name StdHandles -MemberDefinition @'
-[DllImport("kernel32.dll")] public static extern IntPtr GetStdHandle(int nStdHandle);
-[DllImport("kernel32.dll")] public static extern bool GetHandleInformation(IntPtr hObject, out uint lpdwFlags);
-[DllImport("kernel32.dll")] public static extern bool SetHandleInformation(IntPtr hObject, uint dwMask, uint dwFlags);
+# Start-Process -RedirectStandard* is only the fallback for that: it starts the child
+# with handle inheritance on, and the child then gets every inheritable handle
+# this process holds, not only stdin/stdout/stderr. When the script's output
+# goes through a pipe (a wrapper, the CI tests), Beeper keeps a copy of that
+# pipe, and the reader waits until Beeper exits. Clearing the inherit flag on
+# the three std handles does not stop that, because other copies stay
+# inheritable. So the launch calls CreateProcess with an explicit handle list:
+# Beeper inherits the two log files and NUL for stdin, and nothing else.
+# ELECTRON_NO_ATTACH_CONSOLE (child only) also stops Electron from attaching
+# to this console. Returns the new process id.
+$script:LAUNCH_SRC = @'
+using System;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+using System.Text;
+
+namespace SealGate {
+public static class Launch {
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    struct STARTUPINFO {
+        public int cb; public string lpReserved; public string lpDesktop; public string lpTitle;
+        public int dwX; public int dwY; public int dwXSize; public int dwYSize;
+        public int dwXCountChars; public int dwYCountChars; public int dwFillAttribute; public int dwFlags;
+        public short wShowWindow; public short cbReserved2; public IntPtr lpReserved2;
+        public IntPtr hStdInput; public IntPtr hStdOutput; public IntPtr hStdError;
+    }
+    [StructLayout(LayoutKind.Sequential)]
+    struct STARTUPINFOEX { public STARTUPINFO StartupInfo; public IntPtr lpAttributeList; }
+    [StructLayout(LayoutKind.Sequential)]
+    struct PROCESS_INFORMATION { public IntPtr hProcess; public IntPtr hThread; public int dwProcessId; public int dwThreadId; }
+    [StructLayout(LayoutKind.Sequential)]
+    struct SECURITY_ATTRIBUTES { public int nLength; public IntPtr lpSecurityDescriptor; public int bInheritHandle; }
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    static extern IntPtr CreateFileW(string name, uint access, uint share, ref SECURITY_ATTRIBUTES sa, uint disposition, uint flags, IntPtr template);
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern bool InitializeProcThreadAttributeList(IntPtr list, int count, int flags, ref IntPtr size);
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern bool UpdateProcThreadAttribute(IntPtr list, uint flags, IntPtr attribute, IntPtr value, IntPtr size, IntPtr prev, IntPtr retSize);
+    [DllImport("kernel32.dll")]
+    static extern void DeleteProcThreadAttributeList(IntPtr list);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    static extern bool CreateProcessW(string app, StringBuilder cmd, IntPtr pa, IntPtr ta, bool inherit, uint flags, IntPtr env, string cwd, ref STARTUPINFOEX si, out PROCESS_INFORMATION pi);
+    [DllImport("kernel32.dll")]
+    static extern bool CloseHandle(IntPtr h);
+
+    static IntPtr Open(string path, bool write) {
+        SECURITY_ATTRIBUTES sa = new SECURITY_ATTRIBUTES();
+        sa.nLength = Marshal.SizeOf(typeof(SECURITY_ATTRIBUTES));
+        sa.bInheritHandle = 1;
+        // GENERIC_WRITE + CREATE_ALWAYS for a log, GENERIC_READ + OPEN_EXISTING for NUL;
+        // shared read/write/delete so the logs can be read and cleaned up while Beeper runs.
+        IntPtr h = CreateFileW(path, write ? 0x40000000u : 0x80000000u, 7, ref sa, write ? 2u : 3u, 0x80, IntPtr.Zero);
+        if (h == new IntPtr(-1)) { throw new Win32Exception(Marshal.GetLastWin32Error(), "open " + path); }
+        return h;
+    }
+
+    public static int Start(string app, string cmdLine, string cwd, string outLog, string errLog) {
+        IntPtr hin = IntPtr.Zero, hout = IntPtr.Zero, herr = IntPtr.Zero, list = IntPtr.Zero, handles = IntPtr.Zero;
+        bool listReady = false;
+        try {
+            hin = Open("NUL", false);
+            hout = Open(outLog, true);
+            herr = Open(errLog, true);
+            IntPtr size = IntPtr.Zero;
+            InitializeProcThreadAttributeList(IntPtr.Zero, 1, 0, ref size);
+            list = Marshal.AllocHGlobal(size);
+            if (!InitializeProcThreadAttributeList(list, 1, 0, ref size)) { throw new Win32Exception(Marshal.GetLastWin32Error(), "InitializeProcThreadAttributeList"); }
+            listReady = true;
+            handles = Marshal.AllocHGlobal(IntPtr.Size * 3);
+            Marshal.WriteIntPtr(handles, 0, hin);
+            Marshal.WriteIntPtr(handles, IntPtr.Size, hout);
+            Marshal.WriteIntPtr(handles, IntPtr.Size * 2, herr);
+            // PROC_THREAD_ATTRIBUTE_HANDLE_LIST: the only handles the child inherits.
+            if (!UpdateProcThreadAttribute(list, 0, new IntPtr(0x20002), handles, new IntPtr(IntPtr.Size * 3), IntPtr.Zero, IntPtr.Zero)) {
+                throw new Win32Exception(Marshal.GetLastWin32Error(), "UpdateProcThreadAttribute");
+            }
+            STARTUPINFOEX si = new STARTUPINFOEX();
+            si.StartupInfo.cb = Marshal.SizeOf(typeof(STARTUPINFOEX));
+            si.StartupInfo.dwFlags = 0x100; // STARTF_USESTDHANDLES
+            si.StartupInfo.hStdInput = hin;
+            si.StartupInfo.hStdOutput = hout;
+            si.StartupInfo.hStdError = herr;
+            si.lpAttributeList = list;
+            PROCESS_INFORMATION pi;
+            // EXTENDED_STARTUPINFO_PRESENT | CREATE_NO_WINDOW (a console app gets no
+            // window and none of this console; a GUI app ignores the flag).
+            if (!CreateProcessW(app, new StringBuilder(cmdLine), IntPtr.Zero, IntPtr.Zero, true, 0x00080000u | 0x08000000u, IntPtr.Zero, cwd, ref si, out pi)) {
+                throw new Win32Exception(Marshal.GetLastWin32Error(), "CreateProcess " + app);
+            }
+            CloseHandle(pi.hThread);
+            CloseHandle(pi.hProcess);
+            return pi.dwProcessId;
+        } finally {
+            if (listReady) { DeleteProcThreadAttributeList(list); }
+            if (list != IntPtr.Zero) { Marshal.FreeHGlobal(list); }
+            if (handles != IntPtr.Zero) { Marshal.FreeHGlobal(handles); }
+            if (hin != IntPtr.Zero) { CloseHandle(hin); }
+            if (hout != IntPtr.Zero) { CloseHandle(hout); }
+            if (herr != IntPtr.Zero) { CloseHandle(herr); }
+        }
+    }
+}
+}
 '@
-    }
-    $old = @{}
-    foreach ($id in -10, -11, -12) {
-        $h = [SealGate.StdHandles]::GetStdHandle($id)
-        if ($h -eq [IntPtr]::Zero -or $h -eq [IntPtr](-1)) { continue }
-        if ($Restore) {
-            if ($Restore.ContainsKey($id)) { [void][SealGate.StdHandles]::SetHandleInformation($h, 1, $Restore[$id]) }
-            continue
-        }
-        [uint32]$flags = 0
-        if ([SealGate.StdHandles]::GetHandleInformation($h, [ref]$flags)) {
-            $old[$id] = [uint32]($flags -band 1)
-            [void][SealGate.StdHandles]::SetHandleInformation($h, 1, 0)
-        }
-    }
-    return $old
+
+# One argument for a Windows command line: quoted when it has a space, a tab
+# or a quote, with backslashes before a quote doubled (CommandLineToArgvW rules).
+function ConvertTo-CmdLineArg([string]$Arg) {
+    if ($Arg -and $Arg -notmatch '[\s"]') { return $Arg }
+    $q = [regex]::Replace($Arg, '(\\*)"', { param($m) $m.Groups[1].Value + $m.Groups[1].Value + '\"' })
+    $q = [regex]::Replace($q, '(\\+)$', { param($m) $m.Groups[1].Value + $m.Groups[1].Value })
+    return '"' + $q + '"'
 }
 
-function Start-BeeperDesktop([string]$App) {
+# $Arguments is for the CI tests, which start a stand-in in Beeper's place.
+function Start-BeeperDesktop([string]$App, [string[]]$Arguments = @()) {
     $log = Join-Path ([System.IO.Path]::GetTempPath()) ('sealgate-beeper-' + [System.IO.Path]::GetRandomFileName())
     $prevAttach = $env:ELECTRON_NO_ATTACH_CONSOLE
     $env:ELECTRON_NO_ATTACH_CONSOLE = '1'
-    $saved = $null
     try {
-        # Best effort: without Add-Type (constrained language mode) Beeper
-        # still starts with its output in the files.
-        try { $saved = Set-StdHandleInherit $null } catch { Vlog "could not detach std handles from Beeper: $($_.Exception.Message)" }
-        Start-Process -FilePath $App -RedirectStandardOutput "$log.out.log" -RedirectStandardError "$log.err.log" -ErrorAction Stop | Out-Null
+        $native = $true
+        try {
+            if (-not ('SealGate.Launch' -as [type])) { Add-Type -TypeDefinition $script:LAUNCH_SRC }
+        } catch {
+            $native = $false
+            Vlog "could not load the launcher ($($_.Exception.Message)); starting Beeper through Start-Process"
+        }
+        if ($native) {
+            $cmd = (@($App) + @($Arguments) | ForEach-Object { ConvertTo-CmdLineArg $_ }) -join ' '
+            $id = [SealGate.Launch]::Start($App, $cmd, (Split-Path -Parent $App), "$log.out.log", "$log.err.log")
+            Vlog "started $App (pid $id), output in $log.out.log / $log.err.log"
+            return $id
+        }
+        # Constrained language mode has no Add-Type. Beeper's output still
+        # goes to the files, never to this window. The cost: Beeper may then
+        # hold a pipe this script writes to, so a wrapper reading the output
+        # through a pipe waits for Beeper. A terminal run is not affected.
+        $sp = @{ FilePath = $App; RedirectStandardOutput = "$log.out.log"; RedirectStandardError = "$log.err.log"; PassThru = $true; ErrorAction = 'Stop' }
+        if ($Arguments.Count) { $sp.ArgumentList = $Arguments }
+        $p = Start-Process @sp
+        Vlog "started $App (pid $($p.Id)), output in $log.out.log / $log.err.log"
+        return $p.Id
     } finally {
-        if ($saved) { try { $null = Set-StdHandleInherit $saved } catch { Vlog "could not restore std handle flags: $($_.Exception.Message)" } }
         if ($null -eq $prevAttach) { Remove-Item Env:ELECTRON_NO_ATTACH_CONSOLE -ErrorAction SilentlyContinue } else { $env:ELECTRON_NO_ATTACH_CONSOLE = $prevAttach }
     }
 }
 
+# Close Beeper Desktop ($App, its exe), wait for it to be gone, and start it
+# again. A request made during Beeper's first-run setup never shows, and only a
+# fresh start clears it. Waiting matters: Beeper refuses to start while the old
+# instance is still exiting.
 function Restart-BeeperDesktop([string]$App) {
     Info 'restarting Beeper'
     $name = [System.IO.Path]::GetFileNameWithoutExtension($App)
@@ -1197,7 +1295,7 @@ function Restart-BeeperDesktop([string]$App) {
         if (-not (Get-Process -Name $name -ErrorAction SilentlyContinue)) { break }
         Start-Sleep -Milliseconds 500
     }
-    try { Start-BeeperDesktop $App } catch { Warn "could not start Beeper: $($_.Exception.Message)" }
+    try { $null = Start-BeeperDesktop $App } catch { Warn "could not start Beeper: $($_.Exception.Message)" }
 }
 
 $script:PREAUTH_RETRIED = $false
@@ -1248,7 +1346,7 @@ function Ensure-BeeperDesktop {
     }
     if ($app -and $fresh -and (Test-CanAsk)) {
         Info "opening $app"
-        try { Start-BeeperDesktop $app } catch { Warn "could not start Beeper: $($_.Exception.Message)" }
+        try { $null = Start-BeeperDesktop $app } catch { Warn "could not start Beeper: $($_.Exception.Message)" }
         Todo 'finish setting up Beeper: sign in, then turn on Settings > Developers > MCP'
         $null = Read-Host "   press Enter here when that is done (Beeper restarts once so it can show SealGate's request)"
         Restart-BeeperDesktop $app
@@ -1262,7 +1360,7 @@ function Ensure-BeeperDesktop {
     } elseif ($app) {
         Info "opening $app"
         $opened = $false
-        try { Start-BeeperDesktop $app; $opened = $true } catch { Warn "could not start Beeper: $($_.Exception.Message)" }
+        try { $null = Start-BeeperDesktop $app; $opened = $true } catch { Warn "could not start Beeper: $($_.Exception.Message)" }
         if ($opened -and $script:BEEPER_WAIT -gt 0) {
             Info "waiting up to $($script:BEEPER_WAIT)s for the client API"
             $base = Wait-BeeperApi $script:BEEPER_WAIT
