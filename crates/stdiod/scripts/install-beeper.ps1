@@ -806,7 +806,7 @@ function Write-InstallReceipt([string]$Tag) {
             source       = 'oneliner'
             tag          = $Tag
             version      = (Get-TagVersion $Tag)
-            channel      = $(if ($script:STDIOD_PRERELEASE) { 'beta' } else { 'stable' })
+            channel      = $(if ($Tag -match '-beta\.') { 'beta' } else { 'stable' })
             repo         = $script:STDIOD_REPO
             bin          = $script:STDIOD_EXE
             script_url   = $script:SCRIPT_URL
