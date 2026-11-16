@@ -236,14 +236,15 @@ fn remove_stale_copies(exe: &Path) {
     }
 }
 
-/// Keep the scripts' receipt in step with what is now installed.
+/// Record this update in the receipt: `source` says who last put the binary
+/// there, now this command. Written even when there was no receipt (an older
+/// setup program wrote none), and keeps the fields only the scripts know.
 fn refresh_receipt(exe: &Path, tag: &str) {
     let Some(path) = update::receipt_path() else {
         return;
     };
-    let Some(mut r) = update::read_receipt() else {
-        return;
-    };
+    let mut r = update::read_receipt().unwrap_or_default();
+    r.source = Some("self-update".to_string());
     r.tag = Some(tag.to_string());
     r.version = Some(tag.trim_start_matches('v').to_string());
     r.channel = Some(update::channel_str(update::channel_of(tag)).to_string());

@@ -649,12 +649,13 @@ function Install-StdiodPrebuilt {
 # that release is NEWER, never to an older one; a daemon at or ahead of it is
 # current.
 #
-# Owners: 'oneliner' is the exe this script put in INSTALL_DIR. 'installer' is
-# the exe the Windows setup program put in the same folder (its receipt says
-# so); it updates only by running a newer setup program, which installs the
-# version it carries. 'desktop' is the copy inside the SealGate desktop app,
-# updated with the app. 'other' is anything else. This script only replaces
-# the exe it owns.
+# Owners: 'oneliner' is the exe this script (or 'sealgate-stdiod update') put
+# in INSTALL_DIR. 'installer' is the exe the Windows setup program put in the
+# same folder (its receipt says so). Both are a plain exe in that folder, so
+# this script updates either one and its receipt then records that it did.
+# 'desktop' is the copy inside the SealGate desktop app: it ships at the app's
+# version and the app's own update replaces it, so it is left alone. 'other'
+# is anything else, also left alone.
 $script:STDIOD_TARGET_TAG = ''
 $script:STDIOD_TARGET_RESOLVED = $false
 $script:STDIOD_UPGRADED = $false
@@ -759,17 +760,16 @@ function Get-StdiodOwner {
     if (-not $exe) { return 'none' }
     if ($exe -ieq $script:STDIOD_EXE) {
         # Same folder for this script and the Windows setup program; the
-        # receipt says which one put the exe there. The setup program's daemon
-        # updates only by running a newer setup program.
+        # receipt says which one put the exe there last.
         $receipt = $null
         try { $receipt = Get-Content -Raw (Join-Path (Split-Path -Parent (Get-StdiodConfigPath)) 'install-receipt.json') -ErrorAction Stop | ConvertFrom-Json } catch {}
         if ($receipt -and ([string]$receipt.bin -ieq $exe)) {
             if ($receipt.source -eq 'windows-installer') { return 'installer' }
-            if ($receipt.source -eq 'oneliner') { return 'oneliner' }
+            if ($receipt.source -eq 'oneliner' -or $receipt.source -eq 'self-update') { return 'oneliner' }
         }
         # No receipt for this exe (missing, unreadable, or from a setup
         # program that wrote none): the setup program's uninstaller next to
-        # the exe says it installed it. Never replace that exe by mistake.
+        # the exe says it installed it.
         if (Get-ChildItem -Path (Split-Path -Parent $exe) -Filter 'unins*.exe' -ErrorAction SilentlyContinue | Select-Object -First 1) { return 'installer' }
         return 'oneliner'
     }
@@ -781,7 +781,7 @@ function Get-StdiodUpdateHint([string]$Owner) {
     switch ($Owner) {
         'oneliner' { return "run: $($script:RERUN) update" }
         'desktop' { return 'update the SealGate desktop app (tray icon > Check for Updates); it ships the daemon at the same version' }
-        'installer' { return 'it was installed by the SealGate for Beeper setup program; run a newer setup program to update it' }
+        'installer' { return "run: $($script:RERUN) update (or a newer SealGate for Beeper setup program)" }
         default { return "it is not managed by this script ($(Get-StdiodActiveExe)); update it the way it was installed" }
     }
 }
@@ -823,13 +823,17 @@ function Write-InstallReceipt([string]$Tag) {
 }
 
 # Called by Ensure-StdiodBin when a daemon is installed: brings the one this
-# script owns to the target release; only reports on the others. A failed
+# script may update ('oneliner', 'installer') to the target release; only
+# reports on the others. A failed
 # lookup keeps the installed daemon.
+# The owners whose exe this script replaces (see "Owners" above).
+function Test-StdiodUpdatable([string]$Owner) { return ($Owner -eq 'oneliner' -or $Owner -eq 'installer') }
+
 function Ensure-StdiodCurrent {
     $owner = Get-StdiodOwner
     $installed = Get-StdiodInstalledVersion
     $shown = if ($installed) { $installed } else { '?' }
-    if ($owner -ne 'oneliner') { Ok "sealgate-stdiod $shown ($owner install; this script leaves it as is)"; return }
+    if (-not (Test-StdiodUpdatable $owner)) { Ok "sealgate-stdiod $shown ($owner install; this script leaves it as is)"; return }
     Resolve-StdiodTargetTag
     if (-not $script:STDIOD_TARGET_TAG) { Warn "could not look up the newest $(Get-StdiodChannelName) release; keeping sealgate-stdiod $shown"; return }
     $want = Get-TagVersion $script:STDIOD_TARGET_TAG
@@ -1988,7 +1992,7 @@ function Invoke-CmdUpdate {
         $script:ExitCode = 10
         return
     }
-    if ($owner -ne 'oneliner') { Die "this sealgate-stdiod was not installed by this script ($owner), so it is left alone" (Get-StdiodUpdateHint $owner) }
+    if (-not (Test-StdiodUpdatable $owner)) { Die "this sealgate-stdiod is not one this script updates ($owner), so it is left alone" (Get-StdiodUpdateHint $owner) }
     if (-not (Confirm-Action "update sealgate-stdiod $shown -> $want and restart the daemon?")) { Die 'aborted' '' }
     if ($script:DRY_RUN) { Info "would download $($script:STDIOD_TARGET_TAG), replace $($script:STDIOD_EXE) and restart the daemon"; return }
     if (-not (Install-StdiodPrebuilt)) {
