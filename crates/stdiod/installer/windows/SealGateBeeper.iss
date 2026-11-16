@@ -361,14 +361,29 @@ begin
   end;
 end;
 
+{ Drops SemVer build metadata ('0.6.9+build' -> '0.6.9'); build.ps1 accepts
+  a +suffix, and it must not take part in the order. }
+function StripBuildMetadata(V: String): String;
+var
+  P: Integer;
+begin
+  Result := V;
+  P := Pos('+', V);
+  if P > 0 then
+    Result := Copy(V, 1, P - 1);
+end;
+
 { SemVer order, the same rules as the install scripts and the daemon: X.Y.Z
   numerically, then a release above its own prereleases (0.6.23-beta.4 <
-  0.6.23), then the prerelease parts. '' (no daemon) sorts below everything. }
+  0.6.23), then the prerelease parts. Build metadata (+...) is ignored.
+  '' (no daemon) sorts below everything. }
 function CompareVersions(A, B: String): Integer;
 var
   DA, DB: Integer;
   CoreA, CoreB, PreA, PreB: String;
 begin
+  A := StripBuildMetadata(A);
+  B := StripBuildMetadata(B);
   if (A = '') or (B = '') then
   begin
     if A = B then
@@ -415,23 +430,63 @@ end;
 { Next to the daemon's config, as the install scripts do: who installed the
   daemon, at which version. 'sealgate-stdiod update' and install-beeper.ps1
   read it and leave a setup-installed daemon alone. }
+{ S as the inside of a JSON string, in plain ASCII: backslash and quote
+  escaped, anything outside ASCII as \uXXXX. SaveStringToFile writes the
+  ANSI code page, so a profile folder with an accented or non-Latin name
+  written as is would not be UTF-8, and the daemon and the PowerShell script could not
+  read the receipt (and would then treat this daemon as their own). }
+function JsonEscape(S: String): String;
+var
+  I, Code: Integer;
+begin
+  Result := '';
+  for I := 1 to Length(S) do begin
+    Code := Ord(S[I]);
+    if (S[I] = '\') or (S[I] = '"') then
+      Result := Result + '\' + S[I]
+    else if (Code < 32) or (Code > 126) then
+      Result := Result + Format('\u%.4x', [Code])
+    else
+      Result := Result + S[I];
+  end;
+end;
+
+{ Records that this setup program installed the daemon, so neither
+  'sealgate-stdiod update' nor install-beeper.ps1 replaces it (they share this
+  folder). The old receipt goes first: one from install-beeper.ps1 names the
+  same exe with source "oneliner" and would hand the exe to the script.
+  Without any receipt, the uninstaller next to the exe still marks it as this
+  program's. A failed write is logged and shown, not ignored. }
 procedure WriteInstallReceipt();
 var
-  Dir, Bin, Channel: String;
+  Dir, Path, Bin, Channel: String;
 begin
   Dir := ExpandConstant('{%USERPROFILE}') + '\.config\sealgate-stdiod';
-  if not ForceDirectories(Dir) then
-    exit;
-  Bin := DaemonExe();
-  StringChangeEx(Bin, '\', '\\', True);
+  Path := Dir + '\install-receipt.json';
+  Bin := JsonEscape(DaemonExe());
   if Pos('-', '{#AppVersion}') > 0 then
     Channel := 'beta'
   else
     Channel := 'stable';
-  SaveStringToFile(Dir + '\install-receipt.json',
+  if FileExists(Path) and not DeleteFile(Path) then
+    Log('Could not remove the old install receipt ' + Path);
+  if ForceDirectories(Dir) and SaveStringToFile(Path,
     '{"source":"windows-installer","tag":"v{#AppVersion}","version":"{#AppVersion}","channel":"' +
     Channel + '","bin":"' + Bin + '","installed_at":"' +
-    GetDateTimeString('yyyy/mm/dd hh:nn:ss', '-', ':') + '"}' + #13#10, False);
+    GetDateTimeString('yyyy/mm/dd hh:nn:ss', '-', ':') + '"}' + #13#10, False) then
+    exit;
+  Log('Could not write the install receipt ' + Path);
+  if FileExists(Path) then
+    SuppressibleMsgBox('SealGate could not record that this setup program installed ' +
+      'sealgate-stdiod (' + Path + ' could not be written), and an older record ' +
+      'is still there. The install-beeper script or "sealgate-stdiod update" may ' +
+      'then replace this copy. Delete that file, then run this setup program again.',
+      mbError, MB_OK, IDOK)
+  else
+    SuppressibleMsgBox('SealGate could not record that this setup program installed ' +
+      'sealgate-stdiod (' + Path + ' could not be written). It still works and stays ' +
+      'managed by this setup program; to update it, run a newer setup program.',
+      mbInformation, MB_OK, IDOK);
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);

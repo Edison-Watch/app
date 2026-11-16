@@ -581,8 +581,9 @@ stdiod_release_asset() {
 latest_stdiod_tag() {
   local tag tag_re='^v[0-9]+\.[0-9]+\.[0-9]+$'
   if [ "$STDIOD_PRERELEASE" = "1" ]; then
-    # Require the prerelease suffix: this pool is betas only.
-    tag_re='^v[0-9]+\.[0-9]+\.[0-9]+-[0-9A-Za-z.]+$'
+    # Betas only, exactly vX.Y.Z-beta.N: another prerelease (-rc.1,
+    # -alpha.1) is not this channel, even with a higher version.
+    tag_re='^v[0-9]+\.[0-9]+\.[0-9]+-beta\.[0-9]+$'
     # The list endpoint carries prereleases (and, unauthenticated, no drafts),
     # but it is ordered by the release's created_at - the TAG date, not the
     # publish date - so its order does not track "newest" at all: this repo
@@ -668,8 +669,16 @@ install_stdiod_prebuilt() {
   # Writing over a signed Mach-O in place keeps the inode, the kernel's cached
   # signing state for it goes stale, and the binary then dies with SIGKILL.
   local staged="$dest/.sealgate-stdiod.new.$$"
+  # mv onto a directory (or a symlink to one) moves the file INTO it and
+  # still succeeds, leaving no runnable binary at the path; portable mv has
+  # no flag against that (GNU -T is not on macOS), so refuse such a target.
+  if [ -d "$dest/sealgate-stdiod" ]; then
+    rm -rf "$dir"
+    warn "$dest/sealgate-stdiod is a directory, not the daemon binary; move it out of the way and re-run"
+    return 1
+  fi
   if ! mkdir -p "$dest" || ! cp "$dir/$asset" "$staged" || ! chmod +x "$staged" \
-      || ! mv -f "$staged" "$dest/sealgate-stdiod"; then
+      || ! mv -f "$staged" "$dest/sealgate-stdiod" || [ ! -x "$dest/sealgate-stdiod" ]; then
     rm -f "$staged"; rm -rf "$dir"
     warn "could not put the new sealgate-stdiod in $dest (disk full or not writable?)"
     return 1
@@ -741,7 +750,9 @@ tag_version() { printf '%s' "${1#v}"; }
 # that is not a version sorts below every version, so a broken or missing
 # daemon always counts as older.
 version_cmp() {
-  awk -v a="${1#v}" -v b="${2#v}" '
+  # Build metadata (+...) never takes part in the order (SemVer).
+  local a="${1#v}" b="${2#v}"
+  awk -v a="${a%%+*}" -v b="${b%%+*}" '
     function valid(v) { return v ~ /^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$/ }
     function num(s) { return s ~ /^[0-9]+$/ }
     function cmp(a, b,   ia, ib, ca, cb, pa, pb, A, B, n, i, x, y) {
@@ -850,7 +861,24 @@ ensure_stdiod_current() {
   local owner installed want
   owner="$(stdiod_owner)"
   installed="$(stdiod_installed_version)"
-  if [ "$owner" != "oneliner" ] || [ "$FROM_SOURCE" -eq 1 ]; then
+  if [ "$FROM_SOURCE" -eq 1 ]; then
+    # --from-source is how a cargo-built daemon updates (stdiod_update_hint
+    # says so): rebuild it from this checkout. The copy any other installer
+    # owns is not this flag's to replace.
+    if [ "$owner" != "source" ]; then
+      ok "sealgate-stdiod ${installed:-?} (${owner} install; --from-source only rebuilds a cargo-built daemon, so this one is left as is)"
+      return 0
+    fi
+    if [ "$DRY_RUN" -eq 1 ]; then
+      info "would rebuild sealgate-stdiod ${installed:-?} from this checkout (cargo install)"
+      return 0
+    fi
+    info "rebuilding sealgate-stdiod ${installed:-?} from this checkout"
+    build_stdiod_from_source
+    STDIOD_UPGRADED=1
+    return 0
+  fi
+  if [ "$owner" != "oneliner" ]; then
     ok "sealgate-stdiod ${installed:-?} (${owner} install; this script leaves it as is)"
     return 0
   fi
@@ -1860,7 +1888,10 @@ cmd_update() {
   [ "$YES_SET" -eq 0 ] && ASSUME_YES=1
   require_supported_platform
   need_cmd curl
-  command -v sealgate-stdiod >/dev/null 2>&1 \
+  # The supervised daemon counts even when it is not on PATH: the desktop
+  # app's copy never is (app bundle, ~/.local/share/sealgate/bin), and update
+  # must still name its owner and the right way to update it.
+  [ -n "$(stdiod_active_bin)" ] \
     || die "sealgate-stdiod is not installed" "install it: $PROG install"
   local owner installed want
   owner="$(stdiod_owner)"
@@ -1909,7 +1940,7 @@ cmd_update() {
 # One doctor line on the daemon's version. Informational: an outdated daemon
 # still works, so it does not fail the checks, it says how to update.
 doctor_stdiod_version() {
-  command -v sealgate-stdiod >/dev/null 2>&1 || return 0
+  [ -n "$(stdiod_active_bin)" ] || return 0
   local owner installed want
   owner="$(stdiod_owner)"
   installed="$(stdiod_installed_version)"

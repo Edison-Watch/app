@@ -537,7 +537,7 @@ function Get-LatestStdiodTag {
     try {
         if ($script:STDIOD_PRERELEASE) {
             $rels = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases?per_page=100" -UseBasicParsing -TimeoutSec 15
-            $tags = @($rels | ForEach-Object { [string]$_.tag_name } | Where-Object { $_ -match '^v[0-9]+\.[0-9]+\.[0-9]+-[0-9A-Za-z.]+$' })
+            $tags = @($rels | ForEach-Object { [string]$_.tag_name } | Where-Object { $_ -match '^v[0-9]+\.[0-9]+\.[0-9]+-beta\.[0-9]+$' })
             if ($tags.Count -gt 0) {
                 return ($tags | Sort-Object { Get-TagSortKey $_ } | Select-Object -Last 1)
             }
@@ -688,8 +688,9 @@ function Get-TagVersion([string]$Tag) { return ($Tag -replace '^v', '') }
 # numerically where numeric. A non-version sorts below every version.
 function Compare-StdiodVersion([string]$A, [string]$B) {
     $re = '^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.]+))?$'
-    $ma = [regex]::Match(($A -replace '^v', ''), $re)
-    $mb = [regex]::Match(($B -replace '^v', ''), $re)
+    # Build metadata (+...) never takes part in the order (SemVer).
+    $ma = [regex]::Match(($A -replace '^v', '' -replace '\+.*$', ''), $re)
+    $mb = [regex]::Match(($B -replace '^v', '' -replace '\+.*$', ''), $re)
     if (-not $ma.Success -or -not $mb.Success) { return ([int]$ma.Success - [int]$mb.Success) }
     for ($i = 1; $i -le 3; $i++) {
         $x = [long]$ma.Groups[$i].Value; $y = [long]$mb.Groups[$i].Value
@@ -762,7 +763,14 @@ function Get-StdiodOwner {
         # updates only by running a newer setup program.
         $receipt = $null
         try { $receipt = Get-Content -Raw (Join-Path (Split-Path -Parent (Get-StdiodConfigPath)) 'install-receipt.json') -ErrorAction Stop | ConvertFrom-Json } catch {}
-        if ($receipt -and $receipt.source -eq 'windows-installer' -and ([string]$receipt.bin -ieq $exe)) { return 'installer' }
+        if ($receipt -and ([string]$receipt.bin -ieq $exe)) {
+            if ($receipt.source -eq 'windows-installer') { return 'installer' }
+            if ($receipt.source -eq 'oneliner') { return 'oneliner' }
+        }
+        # No receipt for this exe (missing, unreadable, or from a setup
+        # program that wrote none): the setup program's uninstaller next to
+        # the exe says it installed it. Never replace that exe by mistake.
+        if (Get-ChildItem -Path (Split-Path -Parent $exe) -Filter 'unins*.exe' -ErrorAction SilentlyContinue | Select-Object -First 1) { return 'installer' }
         return 'oneliner'
     }
     if ($exe -match '(?i)\\resources\\bin\\sealgate-stdiod\.exe$') { return 'desktop' }
@@ -804,7 +812,11 @@ function Write-InstallReceipt([string]$Tag) {
             script_url   = $script:SCRIPT_URL
             installed_at = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
         }
-        Set-Content -Path (Join-Path $dir 'install-receipt.json') -Value (ConvertTo-Json -InputObject $obj -Compress) -Encoding ASCII
+        # Plain ASCII on every PowerShell: anything else as a \uXXXX escape.
+        # -Encoding ASCII alone would turn a profile folder like
+        # C:\Users\José into '?', and 'bin' would no longer match the exe.
+        $json = [regex]::Replace((ConvertTo-Json -InputObject $obj -Compress), '[^\x20-\x7e]', { param($m) '\u{0:x4}' -f [int][char]$m.Value })
+        Set-Content -Path (Join-Path $dir 'install-receipt.json') -Value $json -Encoding ASCII
     } catch {
         Vlog "could not write the install receipt: $($_.Exception.Message)"
     }
@@ -1847,7 +1859,10 @@ function Invoke-CmdInstall {
 function Invoke-CmdUpdate {
     if (-not $script:YES_SET) { $script:ASSUME_YES = $true }
     Require-SupportedPlatform
-    if (-not (Test-Command 'sealgate-stdiod')) { Die 'sealgate-stdiod is not installed' "install it: $($script:RERUN) install" }
+    # The supervised exe counts even when it is not on PATH: the desktop
+    # app's copy (resources\bin) never is, and update must still name its
+    # owner and the right way to update it.
+    if (-not (Get-StdiodActiveExe)) { Die 'sealgate-stdiod is not installed' "install it: $($script:RERUN) install" }
     $owner = Get-StdiodOwner
     $installed = Get-StdiodInstalledVersion
     $shown = if ($installed) { $installed } else { '?' }

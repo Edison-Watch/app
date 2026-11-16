@@ -92,3 +92,31 @@ mod stub {
 
 #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
 pub use stub::{install, is_installed, is_loaded, is_running, restart, uninstall, unit_definition};
+
+/// Whether `schtasks /query /fo csv /nh` output lists the task `name` in the
+/// root folder (first column `"\<name>"`). Pure, so the parsing is tested on
+/// every platform; the task names this daemon uses are ASCII, so the output's
+/// code page does not matter.
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+pub(crate) fn schtasks_csv_lists(csv: &str, name: &str) -> bool {
+    let want = format!("\"\\{name}\"");
+    csv.lines()
+        .any(|line| line.trim_start().split(',').next() == Some(want.as_str()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn schtasks_csv_lists_matches_the_exact_root_task() {
+        let csv = "\"\\SealGate stdiod S-1-5-21-1-500\",\"N/A\",\"Running\"\r\n\
+                   \"\\Other\",\"N/A\",\"Ready\"\r\n\
+                   \"\\Microsoft\\SealGate stdiod\",\"N/A\",\"Ready\"\r\n";
+        assert!(schtasks_csv_lists(csv, "SealGate stdiod S-1-5-21-1-500"));
+        // Another account's task, a prefix, or one in a subfolder is not ours.
+        assert!(!schtasks_csv_lists(csv, "SealGate stdiod S-1-5-21-1-501"));
+        assert!(!schtasks_csv_lists(csv, "SealGate stdiod"));
+        assert!(!schtasks_csv_lists("", "SealGate stdiod S-1-5-21-1-500"));
+    }
+}

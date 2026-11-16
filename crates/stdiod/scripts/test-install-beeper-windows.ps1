@@ -279,14 +279,22 @@ Check 'update never downgrades: an older pinned release is not an update' {
     Assert ($r.Out -match 'left as is') $r.Out
 }
 Check 'from the previous release, update moves to the newest and writes the install receipt' {
-    # The previous stable release that carries a Windows exe for this machine,
-    # installed directly (update itself never goes backwards).
+    # "Newest" is whatever update itself targets: GitHub's Latest release,
+    # resolved by the same function. That need not be the highest version
+    # (a hotfix on an older line, or Latest set by hand), so the test must
+    # not pick it on its own. Start from the highest stable release older
+    # than it that carries an exe for this machine, installed directly
+    # (update itself never goes backwards).
+    $latest = Get-LatestStdiodTag
+    if (-not $latest) { throw 'could not resolve the Latest stable release' }
     $asset = (Get-StdiodReleaseAsset).Asset
     $rels = Invoke-RestMethod -Uri "https://api.github.com/repos/$($script:STDIOD_REPO)/releases?per_page=100" -UseBasicParsing -TimeoutSec 20
-    $stable = @($rels | Where-Object { -not $_.draft -and -not $_.prerelease -and (@($_.assets | Where-Object { $_.name -eq $asset }).Count -gt 0) } |
-            Sort-Object { Get-TagSortKey ([string]$_.tag_name) } -Descending | ForEach-Object { [string]$_.tag_name })
-    if ($stable.Count -lt 2) { Write-Host '       skipped: fewer than two stable releases carry this exe'; return }
-    $latest = $stable[0]; $prev = $stable[1]
+    $withExe = @($rels | Where-Object { -not $_.draft -and -not $_.prerelease -and (@($_.assets | Where-Object { $_.name -eq $asset }).Count -gt 0) } |
+            ForEach-Object { [string]$_.tag_name })
+    if ($withExe -notcontains $latest) { Write-Host "       skipped: the Latest release ($latest) carries no $asset"; return }
+    $older = @($withExe | Where-Object { Test-StdiodNewer $_ $latest } | Sort-Object { Get-TagSortKey $_ } -Descending)
+    if ($older.Count -lt 1) { Write-Host "       skipped: no stable release older than $latest carries $asset"; return }
+    $prev = $older[0]
     $script:STDIOD_TAG = $prev; $script:STDIOD_TARGET_RESOLVED = $false
     try { Assert (Install-StdiodPrebuilt) "could not install $prev" }
     finally { $script:STDIOD_TAG = ''; $script:STDIOD_TARGET_RESOLVED = $false }

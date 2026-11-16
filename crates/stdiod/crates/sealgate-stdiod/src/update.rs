@@ -180,11 +180,39 @@ pub fn install_source() -> InstallSource {
     }
     let home = dirs::home_dir().unwrap_or_default();
     let lad = std::env::var_os("LOCALAPPDATA").map(PathBuf::from);
-    classify_path(&exe, &home, lad.as_deref())
+    match classify_path(&exe, &home, lad.as_deref()) {
+        // No receipt for this file (missing, unreadable, or from a setup
+        // program that wrote none). The Windows setup program leaves its
+        // uninstaller next to the exe; that exe updates only by running a
+        // newer setup program, never by replacing it from here.
+        InstallSource::Oneliner if cfg!(windows) && has_setup_uninstaller(&exe) => {
+            InstallSource::Installer
+        }
+        source => source,
+    }
+}
+
+/// Whether Inno Setup's uninstaller (`unins000.exe`, ...) sits next to `exe`.
+fn has_setup_uninstaller(exe: &Path) -> bool {
+    let Some(Ok(entries)) = exe.parent().map(std::fs::read_dir) else {
+        return false;
+    };
+    entries
+        .flatten()
+        .any(|e| is_setup_uninstaller(&e.file_name().to_string_lossy()))
+}
+
+fn is_setup_uninstaller(name: &str) -> bool {
+    let name = name.to_ascii_lowercase();
+    name.strip_prefix("unins")
+        .and_then(|rest| rest.strip_suffix(".exe"))
+        .is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
 }
 
 /// The channel a version belongs to: any prerelease suffix is beta.
 pub fn channel_of(version: &str) -> UpdateChannel {
+    // A '-' in build metadata (0.6.23+build-1) does not make a prerelease.
+    let version = version.split_once('+').map_or(version, |(v, _)| v);
     if version.contains('-') {
         UpdateChannel::Beta
     } else {
@@ -294,24 +322,19 @@ pub fn observe_response(resp: &reqwest::Response) {
     );
 }
 
-/// `[0, 6, 24, 10]` for `v0.6.24-beta.10`: numeric, so beta.10 > beta.9.
-pub fn version_key(tag: &str) -> Vec<u64> {
-    tag.split(|c: char| !c.is_ascii_digit())
-        .filter(|s| !s.is_empty())
-        .filter_map(|s| s.parse().ok())
-        .collect()
-}
-
 /// SemVer order for `X.Y.Z[-pre]`, a leading `v` allowed: the core
 /// numerically, then a release above its own prereleases
 /// (`0.6.23-beta.4 < 0.6.23`), then prerelease parts, numeric ones
-/// numerically. Something that is not a version sorts below every version.
+/// numerically. Build metadata (`+...`) is ignored. Something that is not a version sorts
+/// below every version.
 /// The install scripts carry the same rules (`version_cmp`,
 /// `Compare-StdiodVersion`).
 pub fn compare_versions(a: &str, b: &str) -> std::cmp::Ordering {
     use std::cmp::Ordering;
     fn parse(v: &str) -> Option<([u64; 3], Vec<&str>)> {
         let v = v.trim().trim_start_matches('v');
+        // Build metadata (+...) never takes part in the order (SemVer).
+        let v = v.split_once('+').map_or(v, |(v, _)| v);
         let (core, pre) = match v.split_once('-') {
             Some((c, p)) if !p.is_empty() => (c, p.split('.').collect()),
             Some(_) => return None,
@@ -351,6 +374,23 @@ pub fn compare_versions(a: &str, b: &str) -> std::cmp::Ordering {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn setup_uninstaller_names() {
+        assert!(is_setup_uninstaller("unins000.exe"));
+        assert!(is_setup_uninstaller("UNINS001.EXE"));
+        assert!(!is_setup_uninstaller("unins.exe"));
+        assert!(!is_setup_uninstaller("uninstall.exe"));
+        assert!(!is_setup_uninstaller("unins000.dat"));
+    }
+
+    #[test]
+    fn receipt_with_escaped_non_ascii_path_parses() {
+        let body =
+            r#"{"source":"windows-installer","bin":"C:\\Users\\Jos\u00e9\\sealgate-stdiod.exe"}"#;
+        let r: Receipt = serde_json::from_str(body).unwrap();
+        assert_eq!(r.bin.as_deref(), Some(r"C:\Users\José\sealgate-stdiod.exe"));
+    }
 
     #[test]
     fn header_parses_with_and_without_min() {
@@ -423,11 +463,10 @@ mod tests {
     }
 
     #[test]
-    fn channel_and_version_keys() {
+    fn channels() {
         assert_eq!(channel_of("0.6.23"), UpdateChannel::Stable);
         assert_eq!(channel_of("0.6.23-beta.4"), UpdateChannel::Beta);
-        assert!(version_key("v0.6.24-beta.10") > version_key("v0.6.24-beta.9"));
-        assert!(version_key("v0.6.10") > version_key("v0.6.9"));
+        assert_eq!(channel_of("0.6.23+build-1"), UpdateChannel::Stable);
     }
 
     #[test]
@@ -443,6 +482,10 @@ mod tests {
             ("", "0.0.1", Less),
             ("garbage", "0.6.1", Less),
             ("0.6", "0.6.1", Less),
+            // Build metadata is ignored, never ordered.
+            ("0.6.9+build", "0.6.10", Less),
+            ("0.6.10+build.5", "0.6.10", Equal),
+            ("0.6.10+build-1", "0.6.10-beta.1", Greater),
         ] {
             assert_eq!(compare_versions(a, b), want, "{a} vs {b}");
         }

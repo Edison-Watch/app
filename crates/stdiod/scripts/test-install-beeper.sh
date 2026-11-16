@@ -156,6 +156,42 @@ out="$(STUB_VERSION=0.6.20 upd 2>&1)"; rc=$?
 check "update refuses to replace the desktop app's daemon" test "$rc" -eq 1
 check "and says why" grep -q 'not installed by this script (desktop)' <<<"$out"
 
+# The desktop app's daemon is never on PATH; update finds it through the unit.
+DESK_HOME="$TMP/desk-home"
+desk_bin="$DESK_HOME/.local/share/sealgate/bin/sealgate-stdiod"
+mkdir -p "$(dirname "$desk_bin")" "$DESK_HOME/Library/LaunchAgents" "$DESK_HOME/.config/systemd/user"
+printf '#!/bin/sh\ncase "$1" in --version) echo "sealgate-stdiod 0.6.20";; *) exit 0;; esac\n' >"$desk_bin"
+chmod +x "$desk_bin"
+printf '<plist version="1.0">\n<dict>\n  <key>ProgramArguments</key>\n  <array>\n    <string>%s</string>\n    <string>run</string>\n  </array>\n</dict>\n</plist>\n' \
+  "$desk_bin" >"$DESK_HOME/Library/LaunchAgents/com.sealgate.stdiod.plist"
+printf '[Service]\nExecStart="%s" run\n' "$desk_bin" >"$DESK_HOME/.config/systemd/user/sealgate-stdiod.service"
+out="$(HOME="$DESK_HOME" XDG_CONFIG_HOME="$DESK_HOME/.config" NO_COLOR=1 \
+  bash "$SCRIPT" update --stdiod-tag v0.6.23 --check --json 2>&1)"; rc=$?
+check "update finds the desktop app's daemon through its unit, off PATH" grep -q '"owner":"desktop"' <<<"$out"
+check "and reports it outdated with the desktop app's hint (exit 10)" \
+  bash -c '[ "$1" -eq 10 ] && grep -q "action: update the SealGate desktop app" <<<"$2"' _ "$rc" "$out"
+
+# install --from-source is the fix stdiod_update_hint gives for a cargo-built
+# daemon, so it must rebuild one that is already there; any other owner's copy
+# is not its to replace. One HOME per owner, with no units, so the daemon is
+# whatever is on PATH (the script puts ~/.local/bin first when it holds a
+# daemon, so a one-liner copy there would win over the cargo one).
+src_home() {
+  local home="$TMP/src-$1" bin="$TMP/src-$1/$2"
+  mkdir -p "$bin"
+  printf '#!/bin/sh\ncase "$1" in --version) echo "sealgate-stdiod 0.6.20";; status) exit 4;; *) exit 0;; esac\n' \
+    >"$bin/sealgate-stdiod"
+  chmod +x "$bin/sealgate-stdiod"
+  HOME="$home" XDG_CONFIG_HOME="$home/.config" NO_COLOR=1 PATH="$bin:$PATH" \
+    bash "$SCRIPT" install --from-source --dry-run --sg-backend https://127.0.0.1:9 </dev/null 2>&1
+}
+out="$(src_home cargo .cargo/bin)"
+check "install --from-source rebuilds a cargo-built daemon that is already installed" \
+  grep -q 'would rebuild sealgate-stdiod 0.6.20 from this checkout' <<<"$out"
+out="$(src_home oneliner .local/bin)"
+check "install --from-source leaves the one-liner's daemon alone" \
+  grep -q 'oneliner install; --from-source only rebuilds a cargo-built daemon' <<<"$out"
+
 echo
 if [ "$FAILURES" -gt 0 ]; then echo "$FAILURES check(s) failed"; exit 1; fi
 echo "all checks passed"

@@ -130,13 +130,26 @@ async fn latest_tag(http: &reqwest::Client, repo: &str, beta: bool) -> Result<St
     pick_newest_beta(&rels).ok_or_else(|| anyhow!("no beta release found on {repo}"))
 }
 
+/// The newest beta release: a published prerelease tagged exactly
+/// `vX.Y.Z-beta.N`, in SemVer order. Other prereleases (`-rc.1`, `-alpha.1`,
+/// ...) are not the beta channel and are never picked.
 fn pick_newest_beta(rels: &[Release]) -> Option<String> {
     rels.iter()
         .filter(|r| !r.draft && r.prerelease)
         .map(|r| r.tag_name.as_str())
-        .filter(|t| t.starts_with('v') && t.contains('-'))
-        .max_by_key(|t| update::version_key(t))
+        .filter(|t| is_beta_tag(t))
+        .max_by(|a, b| update::compare_versions(a, b))
         .map(str::to_string)
+}
+
+/// `vX.Y.Z-beta.N`, every part numeric.
+fn is_beta_tag(tag: &str) -> bool {
+    let digits = |s: &str| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit());
+    let Some((core, n)) = tag.strip_prefix('v').and_then(|t| t.split_once("-beta.")) else {
+        return false;
+    };
+    let parts: Vec<&str> = core.split('.').collect();
+    parts.len() == 3 && parts.iter().all(|p| digits(p)) && digits(n)
 }
 
 /// The expected hash of `asset` from a `SHA256SUMS` listing
@@ -337,7 +350,16 @@ pub async fn run(args: UpdateArgs) -> Result<()> {
     refresh_receipt(&exe, &tag);
     eprintln!("replaced {} with {tag} (sha256 verified)", exe.display());
 
-    match platform::unit_definition().unwrap_or(None) {
+    // An unreadable unit is not "no unit": the old daemon may still be
+    // running, so say so (and fail) rather than report nothing to restart.
+    let unit = platform::unit_definition().with_context(|| {
+        format!(
+            "replaced {} with {tag}, but could not read the supervisor unit to restart \
+             the daemon onto it; restart it yourself: sealgate-stdiod restart",
+            exe.display()
+        )
+    })?;
+    match unit {
         None => eprintln!("no supervisor unit installed, so nothing to restart"),
         // The unit runs this path, so a restart picks up the new file without
         // re-registering anything.
@@ -512,6 +534,21 @@ mod tests {
         ];
         assert_eq!(pick_newest_beta(&rels).as_deref(), Some("v0.6.24-beta.10"));
         assert_eq!(pick_newest_beta(&[]), None);
+        // Only vX.Y.Z-beta.N is the beta channel, whatever the version.
+        let rels = vec![
+            rel("v0.6.24-beta.2", true, false),
+            rel("v0.7.0-rc.1", true, false),
+            rel("v0.7.0-alpha.1", true, false),
+            rel("v0.7.0-beta.1.hotfix", true, false),
+            rel("0.7.0-beta.1", true, false),
+        ];
+        assert_eq!(pick_newest_beta(&rels).as_deref(), Some("v0.6.24-beta.2"));
+        // SemVer order across versions, not just the beta number.
+        let rels = vec![
+            rel("v0.6.24-beta.30", true, false),
+            rel("v0.6.25-beta.1", true, false),
+        ];
+        assert_eq!(pick_newest_beta(&rels).as_deref(), Some("v0.6.25-beta.1"));
     }
 
     #[test]
