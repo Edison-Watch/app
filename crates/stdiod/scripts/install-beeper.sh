@@ -837,7 +837,8 @@ stdiod_update_hint() {
   esac
 }
 
-# Records how the daemon got here, next to its config. Read by later runs and
+# Records how the daemon got here, next to its config. The channel is the
+# tag's own (a pinned -beta tag is beta whatever the channel flags say). Read by later runs and
 # by the daemon itself (it reports the install source to the backend, so the
 # dashboard can tell an outdated device how to update).
 write_install_receipt() {
@@ -847,7 +848,7 @@ write_install_receipt() {
   mkdir -p "$dir" 2>/dev/null || return 0
   printf '{"source":"oneliner","tag":"%s","version":"%s","channel":"%s","repo":"%s","bin":"%s","script_url":"%s","installed_at":"%s"}\n' \
     "$(json_escape "$tag")" "$(json_escape "$(tag_version "$tag")")" \
-    "$([ "$STDIOD_PRERELEASE" = "1" ] && printf beta || printf stable)" \
+    "$(case "$tag" in *-beta.*) printf beta;; *) printf stable;; esac)" \
     "$(json_escape "$STDIOD_REPO")" "$(json_escape "$bin")" "$(json_escape "$SCRIPT_URL")" \
     "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >"$dir/install-receipt.json" 2>/dev/null || true
 }
