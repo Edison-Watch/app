@@ -1917,7 +1917,7 @@ cmd_update() {
     exit 10
   fi
   [ "$owner" = "oneliner" ] \
-    || die "this sealgate-stdiod was not installed by this script ($owner), so it is left alone" \
+    || die "this sealgate-stdiod is not one this script updates ($owner), so it is left alone" \
            "$(stdiod_update_hint "$owner")"
   confirm "update sealgate-stdiod ${installed:-?} -> $want and restart the daemon?" || die "aborted" ""
   if [ "$DRY_RUN" -eq 1 ]; then

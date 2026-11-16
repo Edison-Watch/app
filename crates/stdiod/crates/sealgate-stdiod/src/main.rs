@@ -81,8 +81,8 @@ enum Command {
     /// Print the daemon log. Pass `--follow` to tail in real time.
     Logs(cli::logs::LogsArgs),
     /// Update this binary to the newest release on its channel and restart
-    /// the daemon. Only for a binary the install scripts placed; the desktop
-    /// app's copy updates with the app. `--check` only reports (exit 10 when
+    /// the daemon. For a binary the install scripts or the Windows setup
+    /// program placed; the desktop app's copy updates with the app. `--check` only reports (exit 10 when
     /// an update is available).
     Update(cli::update::UpdateArgs),
     /// Register, list, or remove stdio_tunnel servers for this device.

@@ -154,7 +154,7 @@ check "a daemon the desktop app supervises is reported as the app's" grep -q '"o
 check "its hint is to update the desktop app" grep -q 'action: update the SealGate desktop app' <<<"$out"
 out="$(STUB_VERSION=0.6.20 upd 2>&1)"; rc=$?
 check "update refuses to replace the desktop app's daemon" test "$rc" -eq 1
-check "and says why" grep -q 'not installed by this script (desktop)' <<<"$out"
+check "and says why" grep -q 'not one this script updates (desktop)' <<<"$out"
 
 # The desktop app's daemon is never on PATH; update finds it through the unit.
 DESK_HOME="$TMP/desk-home"

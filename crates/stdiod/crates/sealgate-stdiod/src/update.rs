@@ -25,12 +25,13 @@ use crate::paths;
 /// How this binary got onto the machine, which decides who updates it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InstallSource {
-    /// `install-beeper.sh` / `.ps1`: updated by `sealgate-stdiod update` or
-    /// by re-running the script.
+    /// `install-beeper.sh` / `.ps1`, or a previous `sealgate-stdiod update`:
+    /// updated by `sealgate-stdiod update` or by re-running the script.
     Oneliner,
     /// The Windows setup program (its receipt says so; the folder is shared
-    /// with the PowerShell script). Updated only by running a newer setup
-    /// program, which installs the version it carries.
+    /// with the PowerShell script). A plain exe in that folder, so
+    /// `sealgate-stdiod update`, the script or a newer setup program can all
+    /// update it; the receipt then records who did.
     Installer,
     /// Inside the SealGate desktop app: updated by updating the app.
     Desktop,
@@ -50,9 +51,12 @@ impl InstallSource {
         }
     }
 
-    /// Whether `sealgate-stdiod update` may replace this binary.
+    /// Whether `sealgate-stdiod update` may replace this binary. Not the
+    /// desktop app's copy: it sits inside the signed app (macOS) or is copied
+    /// back from it on every app start (Linux), ships at the app's version,
+    /// and the app's own update replaces it. Not a cargo build either.
     pub fn self_updatable(self) -> bool {
-        matches!(self, Self::Oneliner | Self::Unknown)
+        matches!(self, Self::Oneliner | Self::Installer | Self::Unknown)
     }
 
     /// One line telling a person how to update a daemon from this source.
@@ -63,15 +67,18 @@ impl InstallSource {
             }
             Self::Source => "rebuild it from an up-to-date checkout (cargo install)",
             Self::Installer => {
-                "run a newer SealGate for Beeper setup program; it installs the version it carries"
+                "run: sealgate-stdiod update (or a newer SealGate for Beeper setup program)"
             }
             _ => "run: sealgate-stdiod update",
         }
     }
 }
 
-/// `install-receipt.json`, written next to `config.toml` by the install
-/// scripts. Only the fields read here; the scripts write more.
+/// `install-receipt.json`, written next to `config.toml` by whoever last put
+/// the binary there: `source` is "oneliner" (the install scripts),
+/// "windows-installer" (the Windows setup program) or "self-update"
+/// (`sealgate-stdiod update`). Only the fields read here; the scripts write
+/// more.
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct Receipt {
     #[serde(default)]
@@ -162,33 +169,40 @@ pub fn install_source() -> InstallSource {
     let Some(exe) = current_exe() else {
         return InstallSource::Unknown;
     };
-    if let Some(r) = read_receipt() {
-        let same = r.bin.as_deref().is_some_and(|b| {
-            let b = plain(Path::new(b));
-            if cfg!(windows) {
-                b.to_string_lossy()
-                    .eq_ignore_ascii_case(&exe.to_string_lossy())
-            } else {
-                b == exe
-            }
-        });
-        match r.source.as_deref() {
-            Some("oneliner") if same => return InstallSource::Oneliner,
-            Some("windows-installer") if same => return InstallSource::Installer,
-            _ => {}
-        }
+    if let Some(source) = read_receipt().and_then(|r| source_from_receipt(&r, &exe)) {
+        return source;
     }
     let home = dirs::home_dir().unwrap_or_default();
     let lad = std::env::var_os("LOCALAPPDATA").map(PathBuf::from);
     match classify_path(&exe, &home, lad.as_deref()) {
         // No receipt for this file (missing, unreadable, or from a setup
         // program that wrote none). The Windows setup program leaves its
-        // uninstaller next to the exe; that exe updates only by running a
-        // newer setup program, never by replacing it from here.
+        // uninstaller next to the exe, which says it put the exe there.
         InstallSource::Oneliner if cfg!(windows) && has_setup_uninstaller(&exe) => {
             InstallSource::Installer
         }
         source => source,
+    }
+}
+
+/// What a receipt says about `exe`, when it describes that exact file.
+fn source_from_receipt(r: &Receipt, exe: &Path) -> Option<InstallSource> {
+    let same = r.bin.as_deref().is_some_and(|b| {
+        let b = plain(Path::new(b));
+        if cfg!(windows) {
+            b.to_string_lossy()
+                .eq_ignore_ascii_case(&exe.to_string_lossy())
+        } else {
+            b == exe
+        }
+    });
+    if !same {
+        return None;
+    }
+    match r.source.as_deref() {
+        Some("oneliner" | "self-update") => Some(InstallSource::Oneliner),
+        Some("windows-installer") => Some(InstallSource::Installer),
+        _ => None,
     }
 }
 
@@ -455,11 +469,46 @@ mod tests {
     }
 
     #[test]
-    fn desktop_setup_program_and_source_refuse_self_update() {
+    fn only_desktop_and_source_refuse_self_update() {
         assert!(InstallSource::Oneliner.self_updatable());
-        assert!(!InstallSource::Installer.self_updatable());
+        assert!(InstallSource::Installer.self_updatable());
+        assert!(InstallSource::Unknown.self_updatable());
         assert!(!InstallSource::Desktop.self_updatable());
         assert!(!InstallSource::Source.self_updatable());
+    }
+
+    #[test]
+    fn receipt_names_who_last_put_this_exact_file() {
+        let dir = std::env::temp_dir().join(format!("sg-receipt-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let exe = dir.join("sealgate-stdiod");
+        std::fs::write(&exe, b"").unwrap();
+        let exe = plain(&exe);
+        let r = |source: &str, bin: &Path| Receipt {
+            source: Some(source.into()),
+            bin: Some(bin.to_string_lossy().into_owned()),
+            ..Receipt::default()
+        };
+        assert_eq!(
+            source_from_receipt(&r("oneliner", &exe), &exe),
+            Some(InstallSource::Oneliner)
+        );
+        assert_eq!(
+            source_from_receipt(&r("self-update", &exe), &exe),
+            Some(InstallSource::Oneliner)
+        );
+        assert_eq!(
+            source_from_receipt(&r("windows-installer", &exe), &exe),
+            Some(InstallSource::Installer)
+        );
+        assert_eq!(source_from_receipt(&r("something-else", &exe), &exe), None);
+        // A receipt for another file says nothing about this one.
+        let other = dir.join("other");
+        assert_eq!(
+            source_from_receipt(&r("windows-installer", &other), &exe),
+            None
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

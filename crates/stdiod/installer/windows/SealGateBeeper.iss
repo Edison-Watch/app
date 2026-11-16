@@ -12,9 +12,10 @@
 ; Updates: this setup installs only the daemon it carries (AppVersion), never
 ; one from the internet, and never over a NEWER daemon already installed - an
 ; older setup keeps the newer exe. It records itself as the daemon's source
-; (install-receipt.json, source "windows-installer"), so 'sealgate-stdiod
-; update' and install-beeper.ps1 leave that daemon alone: it is updated by
-; running a newer setup program.
+; (install-receipt.json, source "windows-installer"). The exe is a plain file
+; in the folder install-beeper.ps1 shares, so 'sealgate-stdiod update', the
+; script or a newer setup program can each update it; the receipt says who
+; did last.
 
 ; ExecAndCaptureOutput, which shows each step's output, arrived in 6.3.
 #if Ver < EncodeVer(6, 3, 0)
@@ -428,13 +429,12 @@ begin
 end;
 
 { Next to the daemon's config, as the install scripts do: who installed the
-  daemon, at which version. 'sealgate-stdiod update' and install-beeper.ps1
-  read it and leave a setup-installed daemon alone. }
+  daemon, at which version. }
 { S as the inside of a JSON string, in plain ASCII: backslash and quote
   escaped, anything outside ASCII as \uXXXX. SaveStringToFile writes the
   ANSI code page, so a profile folder with an accented or non-Latin name
   written as is would not be UTF-8, and the daemon and the PowerShell script could not
-  read the receipt (and would then treat this daemon as their own). }
+  read the receipt. }
 function JsonEscape(S: String): String;
 var
   I, Code: Integer;
@@ -451,12 +451,11 @@ begin
   end;
 end;
 
-{ Records that this setup program installed the daemon, so neither
-  'sealgate-stdiod update' nor install-beeper.ps1 replaces it (they share this
-  folder). The old receipt goes first: one from install-beeper.ps1 names the
-  same exe with source "oneliner" and would hand the exe to the script.
-  Without any receipt, the uninstaller next to the exe still marks it as this
-  program's. A failed write is logged and shown, not ignored. }
+{ Records that this setup program put the daemon there last. The old receipt
+  goes first, so a stale one (from install-beeper.ps1 or 'sealgate-stdiod
+  update') is not left naming the wrong source. Without any receipt, the
+  uninstaller next to the exe still marks it as this program's. The receipt
+  only records who; nothing is blocked by it, so a failed write is logged. }
 procedure WriteInstallReceipt();
 var
   Dir, Path, Bin, Channel: String;
@@ -476,17 +475,6 @@ begin
     GetDateTimeString('yyyy/mm/dd hh:nn:ss', '-', ':') + '"}' + #13#10, False) then
     exit;
   Log('Could not write the install receipt ' + Path);
-  if FileExists(Path) then
-    SuppressibleMsgBox('SealGate could not record that this setup program installed ' +
-      'sealgate-stdiod (' + Path + ' could not be written), and an older record ' +
-      'is still there. The install-beeper script or "sealgate-stdiod update" may ' +
-      'then replace this copy. Delete that file, then run this setup program again.',
-      mbError, MB_OK, IDOK)
-  else
-    SuppressibleMsgBox('SealGate could not record that this setup program installed ' +
-      'sealgate-stdiod (' + Path + ' could not be written). It still works and stays ' +
-      'managed by this setup program; to update it, run a newer setup program.',
-      mbInformation, MB_OK, IDOK);
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
