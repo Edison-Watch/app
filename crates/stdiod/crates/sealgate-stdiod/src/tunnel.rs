@@ -10,6 +10,7 @@
 //!   architecture doc's "reconcile on every reconnect" model.
 
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use anyhow::{anyhow, bail, Context, Result};
 use futures_util::{SinkExt, StreamExt};
@@ -34,6 +35,8 @@ pub enum ConnectError {
     AuthRejected { status: u16 },
     #[error("WebSocket upgrade rejected by backend (HTTP {status})")]
     UpgradeRejected { status: u16 },
+    #[error("WebSocket connect timed out after {}s", .after.as_secs())]
+    TimedOut { after: Duration },
     #[error(transparent)]
     Other(#[from] anyhow::Error),
 }
@@ -119,6 +122,16 @@ impl OutgoingHandle {
     }
 }
 
+/// Upper bound on one connect attempt: DNS, TCP, TLS and the HTTP upgrade.
+///
+/// `connect_async` has no deadline of its own, and the session heartbeat only
+/// starts once it returns, so a backend (or proxy) that accepts the TCP
+/// connection and then never answers left the daemon waiting forever - online
+/// to every process monitor, offline to the backend. Seen on a Railway-hosted
+/// device that sat in "connecting to backend" for 7 days. A healthy upgrade
+/// takes well under a second; this is generous enough for slow links.
+pub const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
+
 /// Connect to the backend's `/api/v1/stdio-tunnel/ws` endpoint.
 pub async fn connect(
     backend_url: &str,
@@ -128,8 +141,18 @@ pub async fn connect(
     let request = build_request(backend_url, credential, device_id)?;
     let ws_url = request.uri().to_string();
     info!(url = %ws_url, device_id = %device_id, "connecting to backend");
+    connect_request(request, CONNECT_TIMEOUT).await
+}
 
-    let (ws, response) = match tokio_tungstenite::connect_async(request).await {
+async fn connect_request(
+    request: tokio_tungstenite::tungstenite::http::Request<()>,
+    timeout: Duration,
+) -> std::result::Result<WsStream, ConnectError> {
+    let attempt = tokio::time::timeout(timeout, tokio_tungstenite::connect_async(request)).await;
+    let Ok(result) = attempt else {
+        return Err(ConnectError::TimedOut { after: timeout });
+    };
+    let (ws, response) = match result {
         Ok(ok) => ok,
         Err(tokio_tungstenite::tungstenite::Error::Http(resp)) => {
             let status = resp.status().as_u16();
@@ -336,6 +359,30 @@ mod tests {
         assert!(ConnectError::AuthRejected { status: 401 }.needs_reauth());
         assert!(ConnectError::AuthRejected { status: 403 }.needs_reauth());
         assert!(!ConnectError::UpgradeRejected { status: 500 }.needs_reauth());
+        assert!(!ConnectError::TimedOut {
+            after: CONNECT_TIMEOUT
+        }
+        .needs_reauth());
+    }
+
+    #[tokio::test]
+    async fn connect_gives_up_on_a_backend_that_accepts_but_never_answers() {
+        // Accepts the TCP connection and then says nothing, like the stuck
+        // backend that wedged a device in "connecting to backend" for days.
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let _server = tokio::spawn(async move {
+            let (socket, _) = listener.accept().await.unwrap();
+            std::future::pending::<()>().await;
+            drop(socket);
+        });
+
+        let request = build_request(&format!("http://{addr}"), "token", "device-1").unwrap();
+        match connect_request(request, Duration::from_millis(200)).await {
+            Err(ConnectError::TimedOut { .. }) => {}
+            Err(error) => panic!("expected a timeout, got {error}"),
+            Ok(_) => panic!("connect must not succeed"),
+        }
     }
 
     #[test]
