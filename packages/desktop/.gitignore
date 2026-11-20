@@ -47,3 +47,4 @@ dev-app-update.yml
 
 # Local-only build helper (kept out of git)
 /build-linux.yml
+installer-telemetry.config.nsh
