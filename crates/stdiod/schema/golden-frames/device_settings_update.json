@@ -1,0 +1,4 @@
+{
+  "type": "device_settings_update",
+  "device_settings": { "keep_awake": true }
+}

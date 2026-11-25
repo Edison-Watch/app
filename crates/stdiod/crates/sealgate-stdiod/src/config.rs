@@ -79,6 +79,27 @@ pub struct PersistedConfig {
     /// Human-readable label shown in the admin UI.
     #[serde(default)]
     pub device_label: Option<String>,
+    /// Local power preferences. Kept across login and logout.
+    #[serde(default, skip_serializing_if = "PowerConfig::is_default")]
+    pub power: PowerConfig,
+}
+
+/// `[power]` in `config.toml`.
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PowerConfig {
+    /// The local keep-awake choice. Absent means `auto`: follow the dashboard.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub keep_awake: Option<crate::power::LocalChoice>,
+}
+
+impl PowerConfig {
+    fn is_default(&self) -> bool {
+        self == &Self::default()
+    }
+
+    pub fn keep_awake(&self) -> crate::power::LocalChoice {
+        self.keep_awake.unwrap_or_default()
+    }
 }
 
 impl std::fmt::Debug for PersistedConfig {
@@ -97,6 +118,7 @@ impl std::fmt::Debug for PersistedConfig {
             .field("scopes", &self.scopes)
             .field("device_id", &self.device_id)
             .field("device_label", &self.device_label)
+            .field("power", &self.power)
             .finish()
     }
 }
@@ -642,10 +664,14 @@ device_id = "device-1"
             scopes: vec!["tunnel:connect".into()],
             device_id: Some("device-1".into()),
             device_label: Some("My Laptop".into()),
+            power: PowerConfig {
+                keep_awake: Some(crate::power::LocalChoice::On),
+            },
         };
         cfg.clear_authentication();
         assert_eq!(cfg.backend_url.as_deref(), Some("https://example.test"));
         assert_eq!(cfg.device_label.as_deref(), Some("My Laptop"));
+        assert_eq!(cfg.power.keep_awake(), crate::power::LocalChoice::On);
         assert!(cfg.usable_credential().is_none());
         assert!(cfg.device_id.is_none());
     }

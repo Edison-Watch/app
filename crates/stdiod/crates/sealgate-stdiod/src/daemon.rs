@@ -20,7 +20,8 @@ use std::time::{Duration, Instant, SystemTime};
 
 use anyhow::{bail, Result};
 use sealgate_tunnel_protocol::{
-    ClientHello, McpFrame, ServerHello, TunnelError, TunnelFrame, PROTOCOL_VERSION,
+    ClientHello, DeviceSettingsUpdate, McpFrame, ServerHello, TunnelError, TunnelFrame,
+    CAPABILITY_DEVICE_SETTINGS, PROTOCOL_VERSION,
 };
 use tokio::sync::{mpsc, watch, Mutex};
 use tokio::time::sleep;
@@ -33,6 +34,7 @@ use crate::daemon_auth::{
     ResolveRunError, ResolvedRun,
 };
 use crate::env_store::EnvStore;
+use crate::power::controller::{KeepAwake, ReportTarget};
 use crate::state::{ConnectionState, State, StateWriter};
 use crate::supervisor::Supervisor;
 use crate::tunnel::{self, OutgoingHandle};
@@ -58,6 +60,12 @@ pub async fn run(args: RunArgs) -> Result<()> {
     #[cfg(windows)]
     crate::platform::windows::kill_children_on_exit();
     let initial = ResolvedRun::from_args(&args);
+    // The last dashboard keep-awake value, from the previous run. It applies
+    // until the backend sends the current one.
+    let previous_desired = State::load()
+        .ok()
+        .and_then(|state| state.keep_awake)
+        .is_some_and(|status| status.desired);
     let writer = StateWriter::new(State {
         backend_url: initial.as_ref().ok().map(|value| value.backend.clone()),
         device_id: initial.as_ref().ok().map(|value| value.device_id.clone()),
@@ -65,6 +73,7 @@ pub async fn run(args: RunArgs) -> Result<()> {
         ..State::default()
     });
     writer.update(|_| {}).await;
+    let keep_awake = KeepAwake::start(previous_desired, writer.clone());
     let mut resolved = match initial {
         Ok(resolved) => resolved,
         Err(ResolveRunError::AwaitingLogin) => {
@@ -118,7 +127,7 @@ pub async fn run(args: RunArgs) -> Result<()> {
     tokio::pin!(shutdown_signal);
     loop {
         let result = tokio::select! {
-            result = run_one_session(&resolved, &args, supervisor.clone(), &outgoing, &writer) => result,
+            result = run_one_session(&resolved, &args, supervisor.clone(), &outgoing, &writer, &keep_awake) => result,
             _ = &mut shutdown_signal => {
                 outgoing.clear();
                 supervisor.lock().await.shutdown_children().await;
@@ -126,6 +135,7 @@ pub async fn run(args: RunArgs) -> Result<()> {
             }
         };
         outgoing.clear();
+        keep_awake.session_ended();
         let needs_reauth = result.as_ref().err().is_some_and(is_auth_rejection);
         let needs_upgrade = result.as_ref().err().is_some_and(is_protocol_rejection);
         let wait_limit = if needs_reauth || needs_upgrade {
@@ -294,6 +304,7 @@ async fn run_one_session(
     supervisor: Arc<Mutex<Supervisor>>,
     outgoing: &OutgoingHandle,
     writer: &StateWriter,
+    keep_awake: &KeepAwake,
 ) -> Result<()> {
     let ws = tunnel::connect(&args.backend, &args.credential, &args.device_id).await?;
     // The WS upgrade means auth + the org feature flag passed, but the state
@@ -320,6 +331,7 @@ async fn run_one_session(
         .filter(|(_, child)| !child.has_exited())
         .map(|(id, _)| id.clone())
         .collect::<Vec<_>>();
+    let keep_awake_sent = keep_awake.status();
     outgoing
         .send(TunnelFrame::ClientHello(ClientHello {
             protocol_version: PROTOCOL_VERSION,
@@ -329,6 +341,10 @@ async fn run_one_session(
             os: config::current_os(),
             client_version: crate::DAEMON_VERSION.to_string(),
             currently_running,
+            capabilities: vec![CAPABILITY_DEVICE_SETTINGS.to_string()],
+            keep_awake_local: Some(keep_awake_sent.local.as_str().to_string()),
+            keep_awake_effective: Some(keep_awake_sent.effective.as_str().to_string()),
+            last_gap_was_sleep: keep_awake.slept_since_last_session(),
         }))
         .await;
 
@@ -338,7 +354,7 @@ async fn run_one_session(
     let mut hb_task = {
         let outgoing = outgoing.clone();
         let last_pong = last_pong.clone();
-        tokio::spawn(heartbeat(outgoing, last_pong))
+        tokio::spawn(heartbeat(outgoing, last_pong, keep_awake.clone()))
     };
 
     // Children that exit on their own are started again, with backoff
@@ -364,9 +380,18 @@ async fn run_one_session(
         })
     };
 
+    let session = SessionContext {
+        keep_awake,
+        target: ReportTarget {
+            backend: args.backend.clone(),
+            credential: args.credential.clone(),
+            device_id: args.device_id.clone(),
+        },
+        sent: keep_awake_sent,
+    };
     let result = tokio::select! {
         biased;
-        r = drain_incoming(supervisor.clone(), &mut incoming_rx, last_pong, writer, &hello_tx) => match r {
+        r = drain_incoming(supervisor.clone(), &mut incoming_rx, last_pong, writer, &hello_tx, &session) => match r {
             Ok(()) => websocket_task_result(&mut ws_task).await,
             Err(error) => Err(error),
         },
@@ -397,12 +422,21 @@ async fn websocket_task_result(task: &mut tokio::task::JoinHandle<Result<()>>) -
     }
 }
 
+/// What `drain_incoming` needs to hand keep-awake data to the controller.
+struct SessionContext<'a> {
+    keep_awake: &'a KeepAwake,
+    target: ReportTarget,
+    /// The keep-awake status that this session's `client_hello` carried.
+    sent: crate::power::KeepAwakeStatus,
+}
+
 async fn drain_incoming(
     supervisor: Arc<Mutex<Supervisor>>,
     incoming_rx: &mut mpsc::Receiver<TunnelFrame>,
     last_pong: Arc<Mutex<Instant>>,
     writer: &StateWriter,
     hello: &watch::Sender<bool>,
+    session: &SessionContext<'_>,
 ) -> Result<()> {
     while let Some(frame) = incoming_rx.recv().await {
         // Any inbound traffic counts as liveness, not just pongs.
@@ -414,6 +448,7 @@ async fn drain_incoming(
                 protocol_version,
                 servers,
                 update,
+                device_settings,
             }) => {
                 info!(
                     protocol_version,
@@ -455,10 +490,27 @@ async fn drain_incoming(
                         s.update = update;
                     })
                     .await;
+                // A backend without device settings has no dashboard value,
+                // which means off.
+                session
+                    .keep_awake
+                    .set_desired(device_settings.is_some_and(|settings| settings.keep_awake));
+                // The backend has the sleep flag from client_hello now.
+                session.keep_awake.clear_resume();
+                session
+                    .keep_awake
+                    .session_started(session.target.clone(), session.sent);
                 sup.apply_snapshot(servers).await;
                 hello.send_replace(true);
             }
             TunnelFrame::DesiredStateUpdate(update) => sup.apply_delta(update).await,
+            TunnelFrame::DeviceSettingsUpdate(DeviceSettingsUpdate { device_settings }) => {
+                info!(
+                    keep_awake = device_settings.keep_awake,
+                    "received device_settings_update"
+                );
+                session.keep_awake.set_desired(device_settings.keep_awake);
+            }
             TunnelFrame::McpFrame(McpFrame { server_id, frame }) => {
                 let mut restart_unresponsive = false;
                 let terminal_error = if let Some(child) = sup.children.get_mut(&server_id) {
@@ -552,7 +604,11 @@ async fn drain_incoming(
     Ok(())
 }
 
-async fn heartbeat(outgoing: OutgoingHandle, last_pong: Arc<Mutex<Instant>>) {
+async fn heartbeat(
+    outgoing: OutgoingHandle,
+    last_pong: Arc<Mutex<Instant>>,
+    keep_awake: KeepAwake,
+) {
     let mut tick = tokio::time::interval(HEARTBEAT_INTERVAL);
     // ``MissedTickBehavior::Delay`` so we don't burst pings after a pause.
     tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
@@ -571,6 +627,9 @@ async fn heartbeat(outgoing: OutgoingHandle, last_pong: Arc<Mutex<Instant>>) {
                 ?wall_gap,
                 "heartbeat: large wall-clock gap (system resumed?), reconnecting"
             );
+            // The next client_hello tells the backend that this disconnect
+            // was a sleep, so it can tell "asleep" apart from "offline".
+            keep_awake.note_resume();
             outgoing.clear();
             return;
         }

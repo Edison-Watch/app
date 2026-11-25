@@ -559,6 +559,63 @@ swallowed, never allowed to stall the reconnect loop.
 
 ---
 
+## 10. Device settings and keep-awake
+
+The backend owns per-device settings that the dashboard edits. The only one
+today is `keep_awake`: block idle system sleep while the machine is on AC
+power. The person at the machine has a local choice (`auto`, `on`, `off`) that
+wins over the dashboard value; `auto` follows it.
+
+**T-75** A client that handles `device_settings_update` MUST list
+`device_settings` in `client_hello.capabilities`. The backend MUST NOT send
+`device_settings_update` to a client that did not list it, because a client
+without the capability rejects the unknown frame type. This gating replaces a
+protocol version bump. A client MAY omit `capabilities` when the list is empty.
+*Source: `lib.rs::CAPABILITY_DEVICE_SETTINGS`; `daemon.rs::run_one_session`.*
+
+**T-76** `server_hello.device_settings` carries the dashboard values for the
+device row of the connected credential. A backend that predates the field omits
+it, and a client MUST then treat `keep_awake` as false.
+`device_settings_update` carries the full settings object after a dashboard
+change, not a delta.
+*Source: `lib.rs::ServerHello`, `lib.rs::DeviceSettingsUpdate`;
+`daemon.rs::drain_incoming`.*
+
+**T-77** `client_hello.keep_awake_local` and `client_hello.keep_awake_effective`
+report the local choice and what the client holds now. The effective value is
+`inactive` when the result is off, `active` when the result is on and the
+machine is on AC power with the block held, `on_battery` when the result is on
+and the machine is on battery (no block held), and `unsupported` when the OS
+refused the block. Both fields are free-form strings on the wire, so a newer
+value never fails the handshake.
+*Source: `power/mod.rs::Effective`; `power/controller.rs::Worker::run`.*
+
+**T-78** While a session is up, a client MUST report a change of either value
+with `PUT /api/v1/client/device-state`, authenticated like the tunnel WS
+(`Authorization: Bearer` plus `X-SealGate-Device-Id`). The body holds
+`keep_awake_local` and `keep_awake_effective`. The 200 response carries
+`device_settings`, which the client applies like `device_settings_update`. A
+404 means that the backend has no device row (or no endpoint) yet; the client
+does not retry, because the next `client_hello` carries the same values. Other
+failures are retried after 60 s.
+*Source: `power/controller.rs::report`.*
+
+**T-79** `client_hello.last_gap_was_sleep` MUST be true only when the
+disconnect just before this connect happened because the machine slept. The
+reference client detects a resume from a wall-clock gap larger than 45 s,
+either in the heartbeat (T-57) or in the keep-awake thread, and clears the
+flag once a `server_hello` arrives. The backend uses its own disconnect time as
+the start of the sleep, not a client timestamp.
+*Source: `daemon.rs::heartbeat`; `power/controller.rs`.*
+
+**T-80** `state.json` MAY carry `keep_awake` with `local`, `desired`, and
+`effective`. The client keeps the last dashboard value there, so a restart
+without a backend connection keeps the same behavior until the next
+`server_hello`.
+*Source: `state.rs::State::keep_awake`; `daemon.rs::run`.*
+
+---
+
 ## Known deltas from ARCHITECTURE.md
 
 `ARCHITECTURE.md` is the narrative design document and runs ahead of the code in

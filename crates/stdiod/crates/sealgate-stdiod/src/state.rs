@@ -84,6 +84,10 @@ pub struct State {
     /// `status`, the install scripts' `doctor` and the desktop app.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub update: Option<sealgate_tunnel_protocol::UpdateHint>,
+    /// Keep-awake status, read by `status`, `keep-awake status`, the tray and
+    /// the desktop settings. Absent until the keep-awake controller starts.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub keep_awake: Option<crate::power::KeepAwakeStatus>,
     /// Bumped on every write so readers polling the file can cheaply
     /// detect "nothing changed since I last looked."
     pub generation: u64,
@@ -100,6 +104,7 @@ impl Default for State {
             last_error: None,
             servers: Vec::new(),
             update: None,
+            keep_awake: None,
             generation: 0,
         }
     }
@@ -207,6 +212,7 @@ mod tests {
                 pid: Some(12345),
             }],
             update: None,
+            keep_awake: None,
             generation: 7,
         };
         let json = serde_json::to_string(&s).unwrap();

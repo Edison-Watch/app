@@ -1,7 +1,13 @@
 import type { ElectronAPI } from '@electron-toolkit/preload'
 
 import type { DetectordHealth } from '../main/detectord/health'
-import type { StdiodLoginInput, StdiodResult, StdiodStatus } from '../main/stdiod/types'
+import type {
+  KeepAwakeLocal,
+  KeepAwakeReport,
+  StdiodLoginInput,
+  StdiodResult,
+  StdiodStatus
+} from '../main/stdiod/types'
 import type { UpdateState } from '../main/infra/updateManager'
 import type { UpdateSettings } from '../main/infra/updateSettings'
 
@@ -206,6 +212,7 @@ interface SealGateAPI {
     uninstall: (opts?: { purge?: boolean }) => Promise<StdiodResult>
     reset: (input: StdiodLoginInput) => Promise<StdiodResult>
     getLogPath: () => Promise<string | null>
+    setKeepAwake: (choice: KeepAwakeLocal) => Promise<StdiodResult<KeepAwakeReport>>
     onResetting: (callback: () => void) => () => void
     onChanged: (callback: () => void) => () => void
   }

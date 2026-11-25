@@ -29,7 +29,30 @@ export interface StdiodLiveState {
   last_connected_at: string | null
   last_error: string | null
   servers: StdiodServerEntry[]
+  // Absent from daemons that predate keep-awake.
+  keep_awake?: StdiodKeepAwake
   generation: number
+}
+
+// The local keep-awake choice in the daemon's config.toml. 'auto' follows
+// the dashboard value.
+export type KeepAwakeLocal = 'auto' | 'on' | 'off'
+
+// What the daemon holds now (see PROTOCOL.md T-77).
+export type KeepAwakeEffective = 'active' | 'on_battery' | 'inactive' | 'unsupported'
+
+// The keep_awake member of state.json (see state.rs).
+export interface StdiodKeepAwake {
+  local: KeepAwakeLocal
+  desired: boolean
+  effective: KeepAwakeEffective
+}
+
+// Output of `sealgate-stdiod keep-awake <choice> --json`.
+export interface KeepAwakeReport {
+  local: KeepAwakeLocal
+  desired: boolean | null
+  effective: KeepAwakeEffective | null
 }
 
 // What the renderer ultimately consumes. Combines the always-cheap

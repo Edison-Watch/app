@@ -2,7 +2,13 @@ import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 
 import type { DetectordHealth } from '../main/detectord/health'
-import type { StdiodLoginInput, StdiodResult, StdiodStatus } from '../main/stdiod/types'
+import type {
+  KeepAwakeLocal,
+  KeepAwakeReport,
+  StdiodLoginInput,
+  StdiodResult,
+  StdiodStatus
+} from '../main/stdiod/types'
 import type { UpdateState } from '../main/infra/updateManager'
 import type { UpdateSettings } from '../main/infra/updateSettings'
 
@@ -262,6 +268,8 @@ const api = {
     reset: (input: StdiodLoginInput): Promise<StdiodResult> =>
       ipcRenderer.invoke('stdiod:reset', input),
     getLogPath: (): Promise<string | null> => ipcRenderer.invoke('stdiod:getLogPath'),
+    setKeepAwake: (choice: KeepAwakeLocal): Promise<StdiodResult<KeepAwakeReport>> =>
+      ipcRenderer.invoke('stdiod:setKeepAwake', choice),
     // Fired by the main process when a tray/menu-initiated reset starts, so
     // an open config card can show a "Resetting…" state instead of relying
     // on its 3s status poll (which misses the fast off→on transition).

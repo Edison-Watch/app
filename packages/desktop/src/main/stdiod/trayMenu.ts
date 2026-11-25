@@ -4,8 +4,41 @@
 import { clipboard, Notification, shell } from 'electron'
 import type { MenuItemConstructorOptions } from 'electron'
 
+import { setKeepAwake } from './keepAwake'
 import { getStdiodLogDir } from './stdiodLog'
-import { getCachedStdiodStatus } from './trayCache'
+import { getCachedStdiodStatus, refreshStdiodStatusCache } from './trayCache'
+import type { KeepAwakeEffective, KeepAwakeLocal, StdiodKeepAwake } from './types'
+
+const KEEP_AWAKE_NOW: Record<KeepAwakeEffective, string> = {
+  active: 'Now: keeping this computer awake',
+  on_battery: 'Now: paused on battery',
+  inactive: 'Now: off',
+  unsupported: 'Now: not supported by this system'
+}
+
+// "Keep Awake When Plugged In" submenu. The daemon holds the sleep block;
+// this only writes the local choice. See keepAwake.ts.
+function buildKeepAwakeItem(keepAwake: StdiodKeepAwake): MenuItemConstructorOptions {
+  const choose = (choice: KeepAwakeLocal) => (): void => {
+    void setKeepAwake(choice).then(() => refreshStdiodStatusCache())
+  }
+  const dashboard = keepAwake.desired ? 'on' : 'off'
+  return {
+    label: 'Keep Awake When Plugged In',
+    submenu: [
+      {
+        label: `Follow dashboard (${dashboard})`,
+        type: 'radio',
+        checked: keepAwake.local === 'auto',
+        click: choose('auto')
+      },
+      { label: 'On', type: 'radio', checked: keepAwake.local === 'on', click: choose('on') },
+      { label: 'Off', type: 'radio', checked: keepAwake.local === 'off', click: choose('off') },
+      { type: 'separator' },
+      { label: KEEP_AWAKE_NOW[keepAwake.effective] ?? keepAwake.effective, enabled: false }
+    ]
+  }
+}
 
 const CONNECTION_LABELS: Record<string, string> = {
   starting: 'starting',
@@ -106,6 +139,11 @@ export function buildStdiodMenuItems(
 
   if (!compact && status.state?.last_error) {
     items.push({ label: `Last error: ${status.state.last_error}`, enabled: false })
+  }
+
+  // Kept in the compact (Linux) menu too: it is a control, not a status row.
+  if (status.state?.keep_awake) {
+    items.push(buildKeepAwakeItem(status.state.keep_awake))
   }
 
   items.push(...buildActions())

@@ -210,6 +210,9 @@ var
   RowRegister, RowAllow, RowRestart: Integer;
   RowApproveServer: Integer;
   RowSummary: Integer;
+  { Opt-in on the finished page: keep this PC awake while plugged in. }
+  KeepAwakeBox: TNewCheckBox;
+  KeepAwakeHint: TNewStaticText;
   LaidOut: Boolean;
 #ifdef DebugUi
   DebugButton: TNewButton;
@@ -1324,6 +1327,10 @@ begin
   Top := LayoutRows(RowSummary, RowSummary + 3, Top);
   WizardForm.FinishedLabel.Top := Top + ScaleY(10);
   WizardForm.FinishedLabel.AdjustHeight();
+  KeepAwakeBox.Top := WizardForm.FinishedLabel.Top + WizardForm.FinishedLabel.Height +
+    ScaleY(16);
+  KeepAwakeHint.Top := KeepAwakeBox.Top + KeepAwakeBox.Height + ScaleY(2);
+  KeepAwakeHint.AdjustHeight();
 end;
 
 #ifdef DebugUi
@@ -1423,6 +1430,25 @@ begin
   AddRow(WizardForm.FinishedPage, Left, W, 'Beeper is approved in SealGate', GLYPH_DONE, False);
   for W := 0 to RowCount - 1 do
     SetRow(W, RS_PENDING, '');
+
+  { Clear by default: SealGate changes no power behavior unless the person
+    asks. The dashboard owner can also turn it on later. }
+  KeepAwakeBox := TNewCheckBox.Create(WizardForm.FinishedPage);
+  KeepAwakeBox.Parent := WizardForm.FinishedPage;
+  KeepAwakeBox.Caption := 'Keep this PC awake when plugged in';
+  KeepAwakeBox.Left := WizardForm.FinishedLabel.Left;
+  KeepAwakeBox.Width := WizardForm.FinishedLabel.Width;
+  KeepAwakeBox.Height := ScaleY(17);
+  KeepAwakeBox.Checked := False;
+  KeepAwakeHint := TNewStaticText.Create(WizardForm.FinishedPage);
+  KeepAwakeHint.Parent := WizardForm.FinishedPage;
+  KeepAwakeHint.Left := KeepAwakeBox.Left + ScaleX(18);
+  KeepAwakeHint.Width := KeepAwakeBox.Width - ScaleX(18);
+  KeepAwakeHint.AutoSize := False;
+  KeepAwakeHint.WordWrap := True;
+  KeepAwakeHint.Caption := 'Your AI assistant can then reach Beeper while you are away. ' +
+    'The screen can still turn off. You can change this later with ' +
+    '"sealgate-stdiod keep-awake".';
 
 #ifdef DebugUi
   DebugButton := TNewButton.Create(SignInPage);
@@ -1532,8 +1558,18 @@ end;
 { On the step pages the bottom-right button is Skip, or Stop while a step
   runs; the pages move on by themselves when a step succeeds. }
 function NextButtonClick(CurPageID: Integer): Boolean;
+var
+  Output: String;
 begin
   Result := True;
+  { Finish: apply the opt-in. A clear box changes nothing, so running setup
+    again never turns off a choice made earlier. }
+  if (CurPageID = wpFinished) and KeepAwakeBox.Checked then
+  begin
+    if Stdiod('keep-awake on', Output) <> EXIT_OK then
+      Log('keep-awake on failed: ' + Output);
+    exit;
+  end;
   if not IsStepPage(CurPageID) or Advancing then
     exit;
   if StepKind <> STEP_NONE then

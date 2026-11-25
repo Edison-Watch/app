@@ -174,6 +174,14 @@ fn print_state(s: &State, running: bool) {
         ),
         None => println!("Version:         {}", crate::DAEMON_VERSION),
     }
+    if let Some(keep_awake) = &s.keep_awake {
+        println!(
+            "Keep awake:      {} (local {}, dashboard {})",
+            keep_awake.effective.as_str(),
+            keep_awake.local.as_str(),
+            if keep_awake.desired { "on" } else { "off" }
+        );
+    }
     if s.servers.is_empty() {
         println!("Servers:         (none)");
     } else {

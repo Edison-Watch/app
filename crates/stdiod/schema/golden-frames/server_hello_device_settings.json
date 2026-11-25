@@ -1,0 +1,6 @@
+{
+  "type": "server_hello",
+  "protocol_version": 2,
+  "servers": [],
+  "device_settings": { "keep_awake": true }
+}
