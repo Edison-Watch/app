@@ -61,12 +61,65 @@ enum Event {
     ReportFailed,
 }
 
+/// Resume detection shared by the controller thread, the heartbeat and the
+/// code that builds `client_hello`.
+pub(crate) struct Resume {
+    /// Set when a resume was seen since the last `server_hello`.
+    slept: AtomicBool,
+    /// Wall-clock time of the controller thread's last tick.
+    last_tick: Mutex<SystemTime>,
+}
+
+impl Resume {
+    fn new() -> Self {
+        Self {
+            slept: AtomicBool::new(false),
+            last_tick: Mutex::new(SystemTime::now()),
+        }
+    }
+
+    /// Record a tick. Returns true when the gap since the previous tick
+    /// means the machine slept.
+    fn tick(&self) -> bool {
+        let now = SystemTime::now();
+        let mut last = self.last_tick.lock().expect("resume lock");
+        let gap = now.duration_since(*last).unwrap_or_default();
+        *last = now;
+        if gap > RESUME_GAP {
+            info!(?gap, "keep-awake: the machine resumed from sleep");
+            self.slept.store(true, Ordering::SeqCst);
+        }
+        gap > RESUME_GAP
+    }
+
+    /// True when a resume was seen, or when the thread has not ticked for
+    /// longer than [`RESUME_GAP`] by the wall clock. The second check
+    /// covers a reconnect that happens right after a resume, before the
+    /// thread's next tick.
+    fn slept(&self) -> bool {
+        if self.slept.load(Ordering::SeqCst) {
+            return true;
+        }
+        let last = *self.last_tick.lock().expect("resume lock");
+        SystemTime::now()
+            .duration_since(last)
+            .is_ok_and(|gap| gap > RESUME_GAP)
+    }
+
+    /// The backend has the flag. Restart the gap from now, so the gap that
+    /// was just reported is not reported again by the next tick.
+    fn clear(&self) {
+        *self.last_tick.lock().expect("resume lock") = SystemTime::now();
+        self.slept.store(false, Ordering::SeqCst);
+    }
+}
+
 /// Handle to the controller thread. Cheap to clone.
 #[derive(Clone)]
 pub struct KeepAwake {
     events: mpsc::Sender<Event>,
     status: Arc<Mutex<KeepAwakeStatus>>,
-    slept: Arc<AtomicBool>,
+    resume: Arc<Resume>,
 }
 
 impl KeepAwake {
@@ -98,7 +151,7 @@ impl KeepAwake {
         let handle = Self {
             events,
             status: status.clone(),
-            slept: Arc::new(AtomicBool::new(false)),
+            resume: Arc::new(Resume::new()),
         };
         let (ready_tx, ready_rx) = mpsc::channel();
         let worker = Worker {
@@ -107,7 +160,7 @@ impl KeepAwake {
             rx,
             events: handle.events.clone(),
             status,
-            slept: handle.slept.clone(),
+            resume: handle.resume.clone(),
             writer,
             runtime: tokio::runtime::Handle::try_current().ok(),
             desired: initial_desired,
@@ -145,17 +198,17 @@ impl KeepAwake {
 
     /// Record that the machine just resumed from sleep.
     pub fn note_resume(&self) {
-        self.slept.store(true, Ordering::SeqCst);
+        self.resume.slept.store(true, Ordering::SeqCst);
     }
 
     /// True when the machine slept since the last `server_hello`.
     pub fn slept_since_last_session(&self) -> bool {
-        self.slept.load(Ordering::SeqCst)
+        self.resume.slept()
     }
 
     /// The backend received the sleep flag (it sent `server_hello`).
     pub fn clear_resume(&self) {
-        self.slept.store(false, Ordering::SeqCst);
+        self.resume.clear();
     }
 }
 
@@ -173,7 +226,7 @@ struct Worker {
     rx: mpsc::Receiver<Event>,
     events: mpsc::Sender<Event>,
     status: Arc<Mutex<KeepAwakeStatus>>,
-    slept: Arc<AtomicBool>,
+    resume: Arc<Resume>,
     writer: StateWriter,
     runtime: Option<tokio::runtime::Handle>,
     desired: bool,
@@ -186,7 +239,6 @@ impl Worker {
         let mut on_battery = self.platform.on_battery();
         let mut last_config = Instant::now();
         let mut last_power = Instant::now();
-        let mut last_wall = SystemTime::now();
         let mut unsupported_until: Option<Instant> = None;
         let mut published: Option<KeepAwakeStatus> = None;
         loop {
@@ -259,14 +311,7 @@ impl Worker {
                 }
             }
 
-            let now_wall = SystemTime::now();
-            let gap = now_wall.duration_since(last_wall).unwrap_or_default();
-            last_wall = now_wall;
-            let resumed = gap > RESUME_GAP;
-            if resumed {
-                info!(?gap, "keep-awake: the machine resumed from sleep");
-                self.slept.store(true, Ordering::SeqCst);
-            }
+            let resumed = self.resume.tick();
             if last_config.elapsed() >= CONFIG_POLL {
                 local = (self.read_local)();
                 last_config = Instant::now();
@@ -488,5 +533,27 @@ mod tests {
         assert!(keep_awake.slept_since_last_session());
         keep_awake.clear_resume();
         assert!(!keep_awake.slept_since_last_session());
+    }
+
+    #[test]
+    fn a_wall_clock_gap_counts_before_the_next_tick() {
+        let resume = Resume::new();
+        assert!(!resume.slept());
+        // The machine slept: the last tick lies far in the past by the wall
+        // clock, and the thread has not ticked since the resume.
+        *resume.last_tick.lock().unwrap() = SystemTime::now() - Duration::from_secs(120);
+        assert!(resume.slept());
+        // After server_hello, the same gap is not reported again.
+        resume.clear();
+        assert!(!resume.slept());
+        assert!(!resume.tick());
+    }
+
+    #[test]
+    fn a_tick_after_a_gap_sets_the_flag() {
+        let resume = Resume::new();
+        *resume.last_tick.lock().unwrap() = SystemTime::now() - Duration::from_secs(120);
+        assert!(resume.tick());
+        assert!(resume.slept());
     }
 }

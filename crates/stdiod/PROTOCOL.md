@@ -604,7 +604,9 @@ failures are retried after 60 s.
 disconnect just before this connect happened because the machine slept. The
 reference client detects a resume from a wall-clock gap larger than 45 s,
 either in the heartbeat (T-57) or in the keep-awake thread, and clears the
-flag once a `server_hello` arrives. The backend uses its own disconnect time as
+flag once a `server_hello` arrives. When it builds `client_hello`, it also
+checks the gap since the keep-awake thread's last tick, because a reconnect
+right after a resume can come before that tick. The backend uses its own disconnect time as
 the start of the sleep, not a client timestamp.
 *Source: `daemon.rs::heartbeat`; `power/controller.rs`.*
 
