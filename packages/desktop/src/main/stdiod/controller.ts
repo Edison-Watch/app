@@ -21,6 +21,7 @@ import { writeInstallStamp } from './installStamp'
 import { configFileExists, readStateFile } from './state'
 import { getStdiodLogDir, stdiodLog } from './stdiodLog'
 import type { StdiodErrorCode, StdiodLoginInput, StdiodResult, StdiodStatus } from './types'
+import { isDaemonProcess } from './daemonProcess'
 
 // LaunchAgent label matches stdiod/crates/sealgate-stdiod/src/platform/macos.rs.
 // Hardcoded so we can ask launchctl directly without spawning the daemon
@@ -219,19 +220,8 @@ export async function getStatus(): Promise<StdiodStatus> {
   // can briefly disappear between sleep/wake cycles. Ask launchctl
   // directly - see isLaunchAgentLoaded() for cache details.
   const installed = await isLaunchAgentLoaded()
-  const daemonRunning = typeof state?.pid === 'number' ? processExists(state.pid) : null
+  const daemonRunning = typeof state?.pid === 'number' ? await isDaemonProcess(state.pid) : null
   return { binaryAvailable, installed, loggedIn, state, stateAgeMs: ageMs, daemonRunning }
-}
-
-// Signal 0 tests whether a process exists without touching it; it works on
-// Windows too. EPERM means it exists but belongs to another user.
-export function processExists(pid: number): boolean {
-  try {
-    process.kill(pid, 0)
-    return true
-  } catch (err) {
-    return (err as NodeJS.ErrnoException).code === 'EPERM'
-  }
 }
 
 export async function install(): Promise<StdiodResult> {

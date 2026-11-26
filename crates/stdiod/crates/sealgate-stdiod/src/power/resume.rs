@@ -68,6 +68,11 @@ impl Resume {
         resumed
     }
 
+    /// How many resumes were seen so far.
+    pub(crate) fn seq(&self) -> u64 {
+        self.state.lock().expect("resume lock").seq
+    }
+
     /// The flag for the next `client_hello`. It ticks first, so a resume
     /// that the thread has not ticked over yet (a reconnect right after
     /// waking) counts too.

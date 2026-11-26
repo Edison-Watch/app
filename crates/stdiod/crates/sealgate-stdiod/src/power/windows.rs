@@ -39,14 +39,17 @@ impl super::Platform for WindowsPower {
         Ok(())
     }
 
-    fn release(&mut self) {
-        if self.holding {
-            // SAFETY: as above; ES_CONTINUOUS alone clears the requirement.
-            // A failed call returns 0 and leaves the requirement in place, so
-            // `holding` stays true and the next tick tries again.
-            if unsafe { SetThreadExecutionState(ES_CONTINUOUS) } != 0 {
-                self.holding = false;
-            }
+    fn release(&mut self) -> Result<(), String> {
+        if !self.holding {
+            return Ok(());
         }
+        // SAFETY: as above; ES_CONTINUOUS alone clears the requirement.
+        // A failed call returns 0 and leaves the requirement in place, so
+        // `holding` stays true and the next tick tries again.
+        if unsafe { SetThreadExecutionState(ES_CONTINUOUS) } == 0 {
+            return Err("SetThreadExecutionState did not release the sleep block".into());
+        }
+        self.holding = false;
+        Ok(())
     }
 }

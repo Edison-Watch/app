@@ -8,6 +8,7 @@ use std::time::SystemTime;
 struct Fake {
     battery: Arc<AtomicBool>,
     refuse: Arc<AtomicBool>,
+    refuse_release: Arc<AtomicBool>,
     holding: Arc<AtomicBool>,
     holds: Arc<AtomicUsize>,
 }
@@ -25,8 +26,12 @@ impl Platform for Fake {
         }
         Ok(())
     }
-    fn release(&mut self) {
+    fn release(&mut self) -> Result<(), String> {
+        if self.refuse_release.load(Ordering::SeqCst) {
+            return Err("refused".into());
+        }
         self.holding.store(false, Ordering::SeqCst);
+        Ok(())
     }
 }
 
@@ -124,6 +129,30 @@ fn battery_releases_the_block() {
         writer(),
     );
     assert_eq!(keep_awake.status().unwrap().effective, Effective::OnBattery);
+    assert!(!fake.holding.load(Ordering::SeqCst));
+}
+
+#[test]
+fn a_failed_release_keeps_reporting_the_block_as_held() {
+    let fake = Fake::default();
+    let keep_awake = KeepAwake::start_with(
+        Some(Box::new(fake.clone())),
+        auto,
+        true,
+        LocalChoice::Auto,
+        writer(),
+    );
+    assert_eq!(keep_awake.status().unwrap().effective, Effective::Active);
+    // The dashboard turns it off, but Windows does not release the block.
+    fake.refuse_release.store(true, Ordering::SeqCst);
+    keep_awake.set_desired(false);
+    std::thread::sleep(Duration::from_millis(200));
+    assert_eq!(keep_awake.status().unwrap().effective, Effective::Active);
+    assert!(fake.holding.load(Ordering::SeqCst));
+    // The next attempt works.
+    fake.refuse_release.store(false, Ordering::SeqCst);
+    keep_awake.set_desired(false);
+    wait_for(&keep_awake, Effective::Inactive);
     assert!(!fake.holding.load(Ordering::SeqCst));
 }
 

@@ -151,6 +151,8 @@ pub async fn run(args: RunArgs) -> Result<()> {
                 warn!("backend rejected the tunnel protocol; waiting for an upgrade");
             } else {
                 warn!("backend rejected the credential; waiting for login");
+                // The dashboard value belonged to the rejected credential.
+                keep_awake.set_desired(false);
             }
             writer
                 .update(|state| {
@@ -193,7 +195,7 @@ pub async fn run(args: RunArgs) -> Result<()> {
             info!(?delay, "waiting before reconnect");
         }
         let next = tokio::select! {
-            next = wait_for_config(&resolved, &args, wait_limit, supervisor.clone(), &writer) => next,
+            next = wait_for_config(&resolved, &args, wait_limit, supervisor.clone(), &writer, &keep_awake) => next,
             _ = &mut shutdown_signal => {
                 outgoing.clear();
                 supervisor.lock().await.shutdown_children().await;
@@ -201,6 +203,11 @@ pub async fn run(args: RunArgs) -> Result<()> {
             }
         };
         let changed = !resolved.same_connection(&next);
+        // A dashboard value belongs to one backend and device. After a login
+        // to another one, it is off until that backend sends its own.
+        if !same_identity(&resolved, &next) {
+            keep_awake.set_desired(false);
+        }
         let reset_children = requires_child_reset(&resolved, &next);
         let current_env_namespace = resolved.env_namespace();
         let next_env_namespace = next.env_namespace();
@@ -226,6 +233,13 @@ pub async fn run(args: RunArgs) -> Result<()> {
             (backoff * 2).min(BACKOFF_MAX)
         };
     }
+}
+
+/// Whether two connections belong to the same backend and device, so that a
+/// dashboard value from one applies to the other.
+fn same_identity(left: &ResolvedRun, right: &ResolvedRun) -> bool {
+    left.device_id == right.device_id
+        && config::same_backend(Some(left.backend.as_str()), &right.backend)
 }
 
 /// The keep-awake status to start from, from the previous run's state. The
@@ -255,6 +269,7 @@ async fn wait_for_config(
     wait_limit: Option<Duration>,
     supervisor: Arc<Mutex<Supervisor>>,
     writer: &StateWriter,
+    keep_awake: &KeepAwake,
 ) -> ResolvedRun {
     let deadline = wait_limit.and_then(|delay| Instant::now().checked_add(delay));
     let mut saw_unusable_config = false;
@@ -265,6 +280,8 @@ async fn wait_for_config(
             Err(_) => {
                 if !saw_unusable_config {
                     supervisor.lock().await.shutdown_children().await;
+                    // Logged out: the dashboard value belonged to that login.
+                    keep_awake.set_desired(false);
                     writer
                         .update(|state| {
                             state.connection_state = ConnectionState::NeedsReauth;

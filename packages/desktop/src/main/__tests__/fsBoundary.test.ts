@@ -44,7 +44,9 @@ const FS_ALLOWLIST: Record<string, string> = {
 const SUBPROCESS_ALLOWLIST: Record<string, string> = {
   'main/infra/setupConfig.ts': "`claude mcp list` - asks Claude Code for its own runtime MCP status; reads nothing itself",
   'main/detectord/controller.ts': 'runs the sealgate-detectord binary (service install/status)',
-  'main/stdiod/controller.ts': 'runs the sealgate-stdiod binary + launchctl/schtasks/systemctl'
+  'main/stdiod/controller.ts': 'runs the sealgate-stdiod binary + launchctl/schtasks/systemctl',
+  'main/stdiod/daemonProcess.ts':
+    'tasklist (Windows) to confirm that the PID in the stdiod state file is sealgate-stdiod.exe'
 }
 
 const FS_IMPORT = /(?:from\s+['"](?:node:)?fs(?:\/promises)?['"]|require\(\s*['"](?:node:)?fs(?:\/promises)?['"]\s*\))/

@@ -50,3 +50,11 @@ fn the_dashboard_value_is_kept_for_the_same_device_only() {
     let logged_out = previous_keep_awake(saved("https://a.test", "dev-1"), None).unwrap();
     assert!(!logged_out.desired);
 }
+
+#[test]
+fn identity_compares_device_and_backend() {
+    let base = current("https://a.test", "dev-1");
+    assert!(same_identity(&base, &current("https://A.test/", "dev-1")));
+    assert!(!same_identity(&base, &current("https://b.test", "dev-1")));
+    assert!(!same_identity(&base, &current("https://a.test", "dev-2")));
+}

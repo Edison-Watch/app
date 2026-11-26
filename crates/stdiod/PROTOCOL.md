@@ -626,12 +626,16 @@ disconnect time as the start of the sleep, not a client timestamp.
 *Source: `daemon.rs::heartbeat`; `power/controller.rs`.*
 
 **T-80** `state.json` MAY carry `keep_awake` with `local`, `desired`, and
-`effective`, and `pid`, the process ID of the daemon that writes it. The file
+`effective`. The client keeps the last dashboard value there, so a restart
+without a backend connection keeps the same behavior until the next
+`server_hello` (for the same backend and device only). `state.json` MAY also
+carry a top-level `pid`, the process ID of the daemon that writes it. The file
 keeps its last content after the daemon exits, so a reader treats
-`keep_awake.effective` as current only while that process runs. The client
-keeps the last dashboard value there, so a restart without a backend connection
-keeps the same behavior until the next `server_hello`.
-*Source: `state.rs::State::keep_awake`; `daemon.rs::run`.*
+`keep_awake.effective` as current only while that process runs. On Windows,
+which reuses process IDs, the reference reader also checks that the process is
+`sealgate-stdiod.exe`.
+*Source: `state.rs::State::keep_awake`, `state.rs::State::pid`; `daemon.rs::run`;
+`packages/desktop/src/main/stdiod/daemonProcess.ts`.*
 
 ---
 

@@ -124,7 +124,9 @@ pub(crate) trait Platform: Send {
     /// back within one tick.
     fn hold(&mut self) -> Result<(), String>;
     /// Release the sleep block. Calling it while nothing is held is a no-op.
-    fn release(&mut self);
+    /// On failure the block is still held, and the controller tries again on
+    /// the next tick.
+    fn release(&mut self) -> Result<(), String>;
 }
 
 /// The sleep-block backend for this OS, or `None` where keep-awake is not
@@ -206,8 +208,9 @@ fn lock_with<T>(
         }
     }
     let result = f();
-    // Dropping the file releases the lock as well; unlock first so a
-    // failure to unlock is not silent in debug builds.
+    // Unlock now rather than at the end of the scope. The error is ignored
+    // on purpose: dropping `lock` closes the file, which releases the lock
+    // anyway.
     let _ = lock.unlock();
     result
 }

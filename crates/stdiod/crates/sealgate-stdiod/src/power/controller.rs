@@ -247,17 +247,22 @@ impl Worker {
         let mut last_power = Instant::now();
         let mut unsupported_until: Option<Instant> = None;
         let mut published: Option<KeepAwakeStatus> = None;
+        let mut last_resume_seq = self.resume.seq();
         loop {
             // Decide and apply.
             let local = self.local;
             let wants = local.wants_awake(self.desired);
-            let effective = if !wants {
-                self.platform().release();
-                unsupported_until = None;
-                Effective::Inactive
-            } else if on_battery {
-                self.platform().release();
-                Effective::OnBattery
+            let effective = if !wants || on_battery {
+                unsupported_until = unsupported_until.filter(|_| wants);
+                match self.platform().release() {
+                    Ok(()) if !wants => Effective::Inactive,
+                    Ok(()) => Effective::OnBattery,
+                    // The block is still held: say so until a retry works.
+                    Err(error) => {
+                        warn!(%error, "keep-awake: could not release the sleep block; retrying");
+                        Effective::Active
+                    }
+                }
             } else if unsupported_until.is_some_and(|until| Instant::now() < until) {
                 Effective::Unsupported
             } else {
@@ -299,12 +304,18 @@ impl Worker {
                 Ok(event) => self.handle(event),
                 Err(RecvTimeoutError::Timeout) => {}
                 Err(RecvTimeoutError::Disconnected) => {
-                    self.platform().release();
+                    // The process is ending, which releases the block anyway.
+                    let _ = self.platform().release();
                     return;
                 }
             }
 
-            let resumed = self.resume.tick();
+            // A resume counts whether this thread's tick saw the gap or a
+            // client_hello snapshot saw it first (the snapshot also ticks).
+            let ticked = self.resume.tick();
+            let seq = self.resume.seq();
+            let resumed = ticked || seq != last_resume_seq;
+            last_resume_seq = seq;
             if last_config.elapsed() >= CONFIG_POLL {
                 self.read_config();
                 last_config = Instant::now();
