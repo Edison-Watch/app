@@ -58,3 +58,51 @@ pub(super) async fn report(
     let body: ReportResponse = response.json().await?;
     Ok(Some(body.device_settings.keep_awake))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::auth::tests::mock_server;
+
+    fn target(backend: String) -> ReportTarget {
+        ReportTarget {
+            backend,
+            credential: "test-key".into(),
+            device_id: "dev-1".into(),
+        }
+    }
+
+    #[tokio::test]
+    async fn a_200_returns_the_dashboard_value_and_sends_both_fields() {
+        let (base, bodies, handle) =
+            mock_server(vec![(200, r#"{"device_settings":{"keep_awake":true}}"#)]).await;
+        let desired = report(&target(base), LocalChoice::Off, Effective::Inactive)
+            .await
+            .unwrap();
+        handle.await.unwrap();
+        assert_eq!(desired, Some(true));
+        let body: serde_json::Value = serde_json::from_str(&bodies.lock().unwrap()[0]).unwrap();
+        assert_eq!(
+            body,
+            serde_json::json!({"keep_awake_local": "off", "keep_awake_effective": "inactive"})
+        );
+    }
+
+    #[tokio::test]
+    async fn a_404_or_405_is_not_retried() {
+        for status in [404, 405] {
+            let (base, _, handle) = mock_server(vec![(status, "{}")]).await;
+            let result = report(&target(base), LocalChoice::Auto, Effective::Active).await;
+            handle.await.unwrap();
+            assert_eq!(result.unwrap(), None, "HTTP {status}");
+        }
+    }
+
+    #[tokio::test]
+    async fn other_failures_are_errors_to_retry() {
+        let (base, _, handle) = mock_server(vec![(500, "{}")]).await;
+        let result = report(&target(base), LocalChoice::Auto, Effective::Active).await;
+        handle.await.unwrap();
+        assert!(result.is_err());
+    }
+}

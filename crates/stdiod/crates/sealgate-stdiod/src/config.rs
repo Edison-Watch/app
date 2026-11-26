@@ -130,8 +130,10 @@ impl PersistedConfig {
     /// Atomically rewrite the config file with mode 0600 on Unix. Existing
     /// fields not present in `self` are dropped - callers that want a
     /// merge load + mutate first.
-    /// Writers of `config.toml` hold `power::with_power_lock` around their
-    /// load and save.
+    /// The commands that write `config.toml` hold `power::with_power_lock`
+    /// while they save (`keep-awake` and logout also while they load). Login
+    /// loads before its browser wait and keeps the `[power]` section on disk
+    /// when it saves, through `power::save_keeping_power`.
     pub fn save_to(&self, path: &Path) -> Result<()> {
         let body = toml::to_string_pretty(self).context("serialising config.toml")?;
         secure_file::write_private(path, body.as_bytes())

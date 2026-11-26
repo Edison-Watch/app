@@ -155,10 +155,18 @@ pub fn save_keeping_power(
     })
 }
 
-/// How long [`with_power_lock`] waits for another command's lock.
-const LOCK_WAIT: std::time::Duration = std::time::Duration::from_secs(5);
 /// A lock file older than this is left over from a killed process.
 const LOCK_STALE: std::time::Duration = std::time::Duration::from_secs(10);
+/// How long [`with_power_lock`] waits for another command's lock. Longer
+/// than [`LOCK_STALE`], so a lock left by a process that just died is taken
+/// over within one wait.
+const LOCK_WAIT: std::time::Duration = std::time::Duration::from_secs(15);
+
+/// [`with_power_lock`] could not get the lock in time. Callers can tell it
+/// apart from a failure of their own work.
+#[derive(Debug, thiserror::Error)]
+#[error("{0} is locked by another command")]
+pub struct LockBusy(pub std::path::PathBuf);
 
 /// Run `f` while holding `<config>.lock`, so the commands that write
 /// `config.toml` (`keep-awake`, the login save and logout) cannot interleave
@@ -168,11 +176,20 @@ pub fn with_power_lock<T>(
     path: &std::path::Path,
     f: impl FnOnce() -> anyhow::Result<T>,
 ) -> anyhow::Result<T> {
+    lock_with(path, LOCK_WAIT, LOCK_STALE, f)
+}
+
+fn lock_with<T>(
+    path: &std::path::Path,
+    wait: std::time::Duration,
+    stale_after: std::time::Duration,
+    f: impl FnOnce() -> anyhow::Result<T>,
+) -> anyhow::Result<T> {
     let lock = path.with_extension("toml.lock");
     if let Some(parent) = lock.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let deadline = std::time::Instant::now() + LOCK_WAIT;
+    let deadline = std::time::Instant::now() + wait;
     loop {
         match std::fs::OpenOptions::new()
             .write(true)
@@ -185,7 +202,7 @@ pub fn with_power_lock<T>(
                     .and_then(|meta| meta.modified())
                     .ok()
                     .and_then(|modified| modified.elapsed().ok())
-                    .is_some_and(|age| age > LOCK_STALE);
+                    .is_some_and(|age| age > stale_after);
                 // Retry at once only when the stale lock is really gone. A
                 // failed removal falls through to the normal wait and
                 // deadline, so the loop cannot spin.
@@ -193,7 +210,7 @@ pub fn with_power_lock<T>(
                     continue;
                 }
                 if std::time::Instant::now() >= deadline {
-                    anyhow::bail!("{} is locked by another command", path.display());
+                    return Err(LockBusy(path.to_path_buf()).into());
                 }
                 std::thread::sleep(std::time::Duration::from_millis(25));
             }
@@ -295,6 +312,32 @@ mod tests {
         drop(file);
         assert_eq!(with_power_lock(&path, || Ok(7)).unwrap(), 7);
         assert!(!lock.exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_stale_lock_that_cannot_be_removed_times_out() {
+        let dir =
+            std::env::temp_dir().join(format!("sealgate-power-dirlock-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("config.toml");
+        // A directory in place of the lock file: it is old, so it counts as
+        // stale, but remove_file fails on it.
+        let lock = path.with_extension("toml.lock");
+        std::fs::create_dir_all(&lock).unwrap();
+        let old = std::time::SystemTime::now() - std::time::Duration::from_secs(60);
+        std::fs::File::open(&lock)
+            .unwrap()
+            .set_modified(old)
+            .unwrap();
+        let error = lock_with(
+            &path,
+            std::time::Duration::from_millis(200),
+            LOCK_STALE,
+            || Ok(()),
+        )
+        .unwrap_err();
+        assert!(error.is::<LockBusy>(), "{error:#}");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

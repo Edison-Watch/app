@@ -15,14 +15,24 @@ pub async fn run(_args: LogoutArgs) -> Result<()> {
     // Publish local logout atomically before any network wait. The live daemon
     // can then stop authenticated children even if revocation times out. The
     // lock keeps a concurrent `keep-awake` change from being overwritten.
+    //
+    // If the lock stays busy, clear the credentials without it: leaving them
+    // on disk is worse than the rare lost keep-awake change.
     let path = crate::paths::config_file()?;
-    let revoke = crate::power::with_power_lock(&path, || {
+    let clear = || -> Result<Option<(String, String)>> {
         let mut cfg = PersistedConfig::load_from(&path)?;
         let revoke = capture_revocation(&cfg);
         clear_credentials_keeping_identity(&mut cfg);
         cfg.save_to(&path)?;
         Ok(revoke)
-    })?;
+    };
+    let revoke = match crate::power::with_power_lock(&path, clear) {
+        Err(error) if error.is::<crate::power::LockBusy>() => {
+            warn!(%error, "config.toml is locked; logging out without the lock");
+            clear()?
+        }
+        result => result?,
+    };
 
     if let Some((backend, token)) = revoke {
         match AuthClient::new(backend) {
