@@ -60,12 +60,10 @@ pub async fn run(args: RunArgs) -> Result<()> {
     #[cfg(windows)]
     crate::platform::windows::kill_children_on_exit();
     let initial = ResolvedRun::from_args(&args);
-    // The last dashboard keep-awake value, from the previous run. It applies
-    // until the backend sends the current one.
-    let previous_desired = State::load()
-        .ok()
-        .and_then(|state| state.keep_awake)
-        .is_some_and(|status| status.desired);
+    // The keep-awake status from the previous run: its dashboard value
+    // applies until the backend sends one, and its local choice applies
+    // while config.toml cannot be read.
+    let previous_keep_awake = State::load().ok().and_then(|state| state.keep_awake);
     let writer = StateWriter::new(State {
         backend_url: initial.as_ref().ok().map(|value| value.backend.clone()),
         device_id: initial.as_ref().ok().map(|value| value.device_id.clone()),
@@ -73,7 +71,7 @@ pub async fn run(args: RunArgs) -> Result<()> {
         ..State::default()
     });
     writer.update(|_| {}).await;
-    let keep_awake = KeepAwake::start(previous_desired, writer.clone());
+    let keep_awake = KeepAwake::start(previous_keep_awake, writer.clone());
     let mut resolved = match initial {
         Ok(resolved) => resolved,
         Err(ResolveRunError::AwaitingLogin) => {

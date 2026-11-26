@@ -141,30 +141,72 @@ pub(crate) fn platform() -> Option<Box<dyn Platform>> {
 /// Save `config` to `path`, but keep the `[power]` section that is on disk
 /// now. For commands that load the config, wait (a browser sign-in can take
 /// minutes) and then save: a keep-awake change made in the meantime would
-/// otherwise be lost.
+/// otherwise be lost. A file on disk that cannot be read is an error, so its
+/// choice is never replaced by a stale copy.
 pub fn save_keeping_power(
     config: &crate::config::PersistedConfig,
     path: &std::path::Path,
 ) -> anyhow::Result<()> {
-    let mut config = config.clone();
-    if let Ok(current) = crate::config::PersistedConfig::load_from(path) {
-        config.power = current.power;
+    with_power_lock(path, || {
+        let mut config = config.clone();
+        config.power = crate::config::PersistedConfig::load_from(path)?.power;
+        config.save_to(path)
+    })
+}
+
+/// Run `f` while holding `<config>.lock`, so the two writers of `[power]`
+/// (`keep-awake` and the login save) cannot interleave their read and write.
+/// A lock file older than [`LOCK_STALE`] is left over from a killed process
+/// and is taken over.
+pub fn with_power_lock<T>(
+    path: &std::path::Path,
+    f: impl FnOnce() -> anyhow::Result<T>,
+) -> anyhow::Result<T> {
+    const LOCK_WAIT: std::time::Duration = std::time::Duration::from_secs(5);
+    const LOCK_STALE: std::time::Duration = std::time::Duration::from_secs(10);
+    let lock = path.with_extension("toml.lock");
+    if let Some(parent) = lock.parent() {
+        std::fs::create_dir_all(parent)?;
     }
-    config.save_to(path)
+    let deadline = std::time::Instant::now() + LOCK_WAIT;
+    loop {
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&lock)
+        {
+            Ok(_) => break,
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                let stale = std::fs::metadata(&lock)
+                    .and_then(|meta| meta.modified())
+                    .ok()
+                    .and_then(|modified| modified.elapsed().ok())
+                    .is_some_and(|age| age > LOCK_STALE);
+                if stale {
+                    let _ = std::fs::remove_file(&lock);
+                    continue;
+                }
+                if std::time::Instant::now() >= deadline {
+                    anyhow::bail!("{} is locked by another command", path.display());
+                }
+                std::thread::sleep(std::time::Duration::from_millis(25));
+            }
+            Err(error) => return Err(error.into()),
+        }
+    }
+    let result = f();
+    let _ = std::fs::remove_file(&lock);
+    result
 }
 
 /// Read the local choice from `config.toml`. A missing file counts as
-/// `auto`. A file that cannot be read or parsed returns `None`, so that the
+/// `auto`. A file that cannot be read or parsed is an error, so that the
 /// controller keeps its last choice instead of switching an explicit `on`
 /// or `off` to `auto`.
-pub fn read_local_choice() -> Option<LocalChoice> {
-    match crate::config::PersistedConfig::load() {
-        Ok(config) => Some(config.power.keep_awake()),
-        Err(error) => {
-            tracing::warn!(%error, "keep-awake: cannot read config.toml; keeping the last choice");
-            None
-        }
-    }
+pub fn read_local_choice() -> Result<LocalChoice, String> {
+    crate::config::PersistedConfig::load()
+        .map(|config| config.power.keep_awake())
+        .map_err(|error| format!("{error:#}"))
 }
 
 #[cfg(test)]
@@ -215,6 +257,38 @@ mod tests {
         let saved = PersistedConfig::load_from(&path).unwrap();
         assert_eq!(saved.power.keep_awake(), LocalChoice::On);
         assert_eq!(saved.device_id.as_deref(), Some("device-1"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn save_keeping_power_refuses_to_replace_an_unreadable_file() {
+        use crate::config::PersistedConfig;
+        let dir = std::env::temp_dir().join(format!("sealgate-power-bad-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("config.toml");
+        std::fs::write(&path, "[power\nkeep_awake = ").unwrap();
+        assert!(save_keeping_power(&PersistedConfig::default(), &path).is_err());
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "[power\nkeep_awake = "
+        );
+        // The lock is released after the failure.
+        assert!(!path.with_extension("toml.lock").exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_stale_lock_is_taken_over() {
+        let dir = std::env::temp_dir().join(format!("sealgate-power-lock-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("config.toml");
+        let lock = path.with_extension("toml.lock");
+        let file = std::fs::File::create(&lock).unwrap();
+        file.set_modified(std::time::SystemTime::now() - std::time::Duration::from_secs(60))
+            .unwrap();
+        drop(file);
+        assert_eq!(with_power_lock(&path, || Ok(7)).unwrap(), 7);
+        assert!(!lock.exists());
         let _ = std::fs::remove_dir_all(&dir);
     }
 

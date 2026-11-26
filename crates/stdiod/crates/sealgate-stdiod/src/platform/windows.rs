@@ -657,6 +657,23 @@ pub fn is_running() -> Result<bool> {
     Ok(running_status()?.unwrap_or(false))
 }
 
+/// Whether the daemon runs, in a way that works on every Windows language.
+/// `schtasks` prints a translated status that [`running_status`] can only
+/// read in English. When it cannot read it, look for another
+/// `sealgate-stdiod.exe` process instead (this one is a CLI call).
+pub fn daemon_running() -> bool {
+    if let Ok(Some(running)) = running_status() {
+        return running;
+    }
+    let me = std::process::id();
+    running_processes().into_iter().any(|(pid, image)| {
+        pid != me
+            && image
+                .file_name()
+                .is_some_and(|name| name.eq_ignore_ascii_case("sealgate-stdiod.exe"))
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

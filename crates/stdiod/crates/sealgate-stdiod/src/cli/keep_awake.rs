@@ -36,12 +36,16 @@ pub fn run(args: KeepAwakeArgs) -> Result<()> {
     if !crate::power::SUPPORTED {
         anyhow::bail!("keep-awake is only available on Windows");
     }
-    let mut config = PersistedConfig::load()?;
-    if let Some(choice) = args.choice {
-        // `auto` is the default, so it is stored as an absent value.
-        config.power.keep_awake = (choice != LocalChoice::Auto).then_some(choice);
-        config.save()?;
-    }
+    let path = crate::paths::config_file()?;
+    let config = crate::power::with_power_lock(&path, || {
+        let mut config = PersistedConfig::load_from(&path)?;
+        if let Some(choice) = args.choice {
+            // `auto` is the default, so it is stored as an absent value.
+            config.power.keep_awake = (choice != LocalChoice::Auto).then_some(choice);
+            config.save_to(&path)?;
+        }
+        Ok(config)
+    })?;
     let local = config.power.keep_awake();
     let daemon = State::load().ok().and_then(|state| state.keep_awake);
     // state.json keeps the last value after the daemon stops, and right after
@@ -67,13 +71,16 @@ pub fn run(args: KeepAwakeArgs) -> Result<()> {
     Ok(())
 }
 
-/// The same check as `status`: the supervisor unit is installed, loaded and
-/// has a running process.
+/// Whether the daemon runs. Keep-awake is Windows-only, and this check works
+/// on every Windows language (see `platform::windows::daemon_running`).
+#[cfg(windows)]
 fn daemon_running() -> bool {
-    use crate::platform;
-    platform::is_installed().unwrap_or(false)
-        && platform::is_loaded().unwrap_or(false)
-        && platform::is_running().unwrap_or(false)
+    crate::platform::windows::daemon_running()
+}
+
+#[cfg(not(windows))]
+fn daemon_running() -> bool {
+    false
 }
 
 fn describe(report: &Report) -> String {

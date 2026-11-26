@@ -62,6 +62,9 @@ enum Event {
     /// session's dashboard value.
     Reported {
         generation: u64,
+        /// The dashboard-value version when the report was sent. A newer
+        /// `device_settings_update` makes the response's value outdated.
+        version: u64,
         result: ReportResult,
     },
 }
@@ -138,28 +141,31 @@ pub struct KeepAwake {
 }
 
 impl KeepAwake {
-    /// Start the controller thread. `initial_desired` is the dashboard value
-    /// from the previous run (from `state.json`), used until the backend
-    /// sends one. Returns after the first decision, so the first
-    /// `client_hello` already carries the real state.
-    pub fn start(initial_desired: bool, writer: StateWriter) -> Self {
+    /// Start the controller thread. `previous` is the keep-awake status from
+    /// the previous run (from `state.json`): its dashboard value applies until
+    /// the backend sends one, and its local choice applies while
+    /// `config.toml` cannot be read. Returns after the first decision, so the
+    /// first `client_hello` already carries the real state.
+    pub fn start(previous: Option<KeepAwakeStatus>, writer: StateWriter) -> Self {
         Self::start_with(
             super::platform(),
             super::read_local_choice,
-            initial_desired,
+            previous.is_some_and(|status| status.desired),
+            previous.map(|status| status.local).unwrap_or_default(),
             writer,
         )
     }
 
     pub(crate) fn start_with(
         platform: Option<Box<dyn Platform>>,
-        read_local: fn() -> Option<LocalChoice>,
+        read_local: fn() -> Result<LocalChoice, String>,
         initial_desired: bool,
+        initial_local: LocalChoice,
         writer: StateWriter,
     ) -> Self {
         let (events, rx) = mpsc::channel();
         let status = Arc::new(Mutex::new(KeepAwakeStatus {
-            local: LocalChoice::Auto,
+            local: initial_local,
             desired: initial_desired,
             effective: Effective::Inactive,
         }));
@@ -180,6 +186,9 @@ impl KeepAwake {
             writer,
             runtime: tokio::runtime::Handle::try_current().ok(),
             desired: initial_desired,
+            desired_version: 0,
+            local: initial_local,
+            config_unreadable: false,
             session: None,
             generation: 0,
         };
@@ -242,7 +251,7 @@ struct Session {
 
 struct Worker {
     platform: Option<Box<dyn Platform>>,
-    read_local: fn() -> Option<LocalChoice>,
+    read_local: fn() -> Result<LocalChoice, String>,
     rx: mpsc::Receiver<Event>,
     events: mpsc::Sender<Event>,
     status: Arc<Mutex<KeepAwakeStatus>>,
@@ -250,6 +259,13 @@ struct Worker {
     writer: StateWriter,
     runtime: Option<tokio::runtime::Handle>,
     desired: bool,
+    /// Bumped whenever `desired` changes, so a report response that was sent
+    /// before the change cannot restore the older value.
+    desired_version: u64,
+    /// The last local choice read from `config.toml`.
+    local: LocalChoice,
+    /// True while `config.toml` cannot be read, so the warning is logged once.
+    config_unreadable: bool,
     session: Option<Session>,
     /// Bumped on every session start and end.
     generation: u64,
@@ -282,7 +298,7 @@ impl Worker {
     }
 
     fn run_keep_awake(mut self, ready: mpsc::Sender<()>) {
-        let mut local = (self.read_local)().unwrap_or_default();
+        self.read_config();
         let mut on_battery = self.platform().on_battery();
         let mut last_config = Instant::now();
         let mut last_power = Instant::now();
@@ -290,6 +306,7 @@ impl Worker {
         let mut published: Option<KeepAwakeStatus> = None;
         loop {
             // Decide and apply.
+            let local = self.local;
             let wants = local.wants_awake(self.desired);
             let effective = if !wants {
                 self.platform().release();
@@ -346,10 +363,7 @@ impl Worker {
 
             let resumed = self.resume.tick();
             if last_config.elapsed() >= CONFIG_POLL {
-                // An unreadable file keeps the last choice.
-                if let Some(read) = (self.read_local)() {
-                    local = read;
-                }
+                self.read_config();
                 last_config = Instant::now();
             }
             if resumed || last_power.elapsed() >= POWER_POLL {
@@ -359,9 +373,34 @@ impl Worker {
         }
     }
 
+    /// Read the local choice. An unreadable file keeps the last choice, and
+    /// the warning is logged once per failure, not on every poll.
+    fn read_config(&mut self) {
+        match (self.read_local)() {
+            Ok(local) => {
+                if self.config_unreadable {
+                    info!("keep-awake: config.toml can be read again");
+                }
+                self.config_unreadable = false;
+                self.local = local;
+            }
+            Err(error) => {
+                if !self.config_unreadable {
+                    warn!(%error, "keep-awake: cannot read config.toml; keeping the last choice");
+                }
+                self.config_unreadable = true;
+            }
+        }
+    }
+
+    fn set_desired(&mut self, desired: bool) {
+        self.desired = desired;
+        self.desired_version += 1;
+    }
+
     fn handle(&mut self, event: Event) {
         match event {
-            Event::Desired(desired) => self.desired = desired,
+            Event::Desired(desired) => self.set_desired(desired),
             Event::Session(started) => {
                 self.generation += 1;
                 self.session = started.map(|(target, sent_local, sent_effective)| Session {
@@ -371,7 +410,11 @@ impl Worker {
                     generation: self.generation,
                 });
             }
-            Event::Reported { generation, result } => {
+            Event::Reported {
+                generation,
+                version,
+                result,
+            } => {
                 let Some(session) = self
                     .session
                     .as_mut()
@@ -381,7 +424,12 @@ impl Worker {
                     return;
                 };
                 match result {
-                    ReportResult::Desired(desired) => self.desired = desired,
+                    // A newer dashboard value, or a newer report response,
+                    // arrived after this report was sent.
+                    ReportResult::Desired(_) if version != self.desired_version => {
+                        debug!("keep-awake: dropping an outdated report response");
+                    }
+                    ReportResult::Desired(desired) => self.set_desired(desired),
                     ReportResult::Failed => {
                         session.known = None;
                         session.retry_after = Some(Instant::now() + REPORT_RETRY);
@@ -391,14 +439,13 @@ impl Worker {
         }
     }
 
+    /// Write `state.json` from this thread and wait for it, so that two
+    /// quick changes reach the file in order.
     fn publish_state(&self, status: KeepAwakeStatus) {
         let Some(runtime) = &self.runtime else {
             return;
         };
-        let writer = self.writer.clone();
-        runtime.spawn(async move {
-            writer.update(|state| state.keep_awake = Some(status)).await;
-        });
+        runtime.block_on(self.writer.update(|state| state.keep_awake = Some(status)));
     }
 
     fn report_if_needed(&mut self, local: LocalChoice, effective: Effective) {
@@ -421,6 +468,7 @@ impl Worker {
         session.retry_after = None;
         let target = session.target.clone();
         let generation = session.generation;
+        let version = self.desired_version;
         let events = self.events.clone();
         runtime.spawn(async move {
             let result = match report(&target, local, effective).await {
@@ -431,7 +479,11 @@ impl Worker {
                     ReportResult::Failed
                 }
             };
-            let _ = events.send(Event::Reported { generation, result });
+            let _ = events.send(Event::Reported {
+                generation,
+                version,
+                result,
+            });
         });
     }
 }

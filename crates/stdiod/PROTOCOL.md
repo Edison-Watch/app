@@ -602,24 +602,27 @@ with `PUT /api/v1/client/device-state`, authenticated like the tunnel WS
 (`Authorization: Bearer` plus `X-SealGate-Device-Id`). The body holds
 `keep_awake_local` and `keep_awake_effective`. The 200 response carries
 `device_settings`, which the client applies like `device_settings_update`. A
-404 means that the backend has no device row (or no endpoint) yet, and 405
-means an older backend that has no such route. The client does not retry
-either, because the next `client_hello` carries the same values. Other
+404 or 405 means that the backend keeps no device state for this device:
+it has no device row yet, or it is an older backend without the route. The
+client does not retry either, because the next `client_hello` carries the
+same values. Other
 failures are retried after 60 s.
 *Source: `power/controller.rs::report`.*
 
-**T-79** `client_hello.last_gap_was_sleep` SHOULD be true only when the
-disconnect just before this connect happened because the machine slept. The
-signal is best effort. The reference client detects a resume from a
-wall-clock gap larger than 45 s, either in the heartbeat (T-57) or in the
-keep-awake thread. A large forward clock correction or a process that was
-stopped for that long also looks like a sleep. The client clears the flag once
-a `server_hello` arrives, so it stays set across failed attempts: those never
-connect, so the disconnect before the next connect is still the sleep. When it
-builds `client_hello`, the client also checks the gap since the keep-awake
-thread's last tick, because a reconnect right after a resume can come before
-that tick. The backend uses its own disconnect time as the start of the sleep,
-not a client timestamp, and treats the flag as a hint for its records only.
+**T-79** `client_hello.last_gap_was_sleep` is true when the client saw the
+machine resume from sleep since the last `server_hello`. Usually that sleep
+ended the previous session. It can also have happened while the client was
+already disconnected, for example during a network outage, so the backend
+treats it as a hint for its records only. The signal is best effort. The
+reference client detects a resume from a wall-clock gap larger than 45 s,
+either in the heartbeat (T-57) or in the keep-awake thread. A large forward
+clock correction or a process that was stopped for that long also looks like a
+sleep. The client clears the flag once a `server_hello` arrives, so it stays
+set across failed attempts: those never connect, so the disconnect before the
+next connect is still the sleep. When it builds `client_hello`, the client also
+checks the gap since the keep-awake thread's last tick, because a reconnect
+right after a resume can come before that tick. The backend uses its own
+disconnect time as the start of the sleep, not a client timestamp.
 *Source: `daemon.rs::heartbeat`; `power/controller.rs`.*
 
 **T-80** `state.json` MAY carry `keep_awake` with `local`, `desired`, and
