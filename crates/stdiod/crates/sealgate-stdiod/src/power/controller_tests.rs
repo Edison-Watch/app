@@ -1,7 +1,8 @@
 //! Tests for the keep-awake controller (`controller.rs`).
 
 use super::*;
-use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::time::SystemTime;
 
 #[derive(Clone, Default)]
 struct Fake {
@@ -152,11 +153,26 @@ fn resume_flag_is_set_and_cleared() {
         LocalChoice::Auto,
         writer(),
     );
-    assert!(!keep_awake.slept_since_last_session());
+    assert!(!keep_awake.resume_snapshot().slept);
     keep_awake.note_resume();
-    assert!(keep_awake.slept_since_last_session());
-    keep_awake.clear_resume();
-    assert!(!keep_awake.slept_since_last_session());
+    let sent = keep_awake.resume_snapshot();
+    assert!(sent.slept);
+    keep_awake.clear_resume(sent);
+    assert!(!keep_awake.resume_snapshot().slept);
+}
+
+#[test]
+fn a_resume_after_the_hello_survives_the_clear() {
+    let resume = Resume::new();
+    resume.note();
+    // client_hello carries this sleep...
+    let sent = resume.snapshot();
+    assert!(sent.slept);
+    // ...the machine sleeps again before server_hello arrives...
+    resume.note();
+    // ...and clearing what the hello carried keeps the newer sleep.
+    resume.clear(sent);
+    assert!(resume.snapshot().slept);
 }
 
 #[test]
@@ -168,20 +184,21 @@ fn without_a_platform_only_resume_detection_runs() {
     assert!(keep_awake.status().is_none());
     // Sleep detection still works for the offline-failure tracking.
     keep_awake.note_resume();
-    assert!(keep_awake.slept_since_last_session());
+    assert!(keep_awake.resume_snapshot().slept);
 }
 
 #[test]
 fn a_wall_clock_gap_counts_before_the_next_tick() {
     let resume = Resume::new();
-    assert!(!resume.slept());
+    assert!(!resume.snapshot().slept);
     // The machine slept: the last tick lies far in the past by the wall
     // clock, and the thread has not ticked since the resume.
     *resume.last_tick.lock().unwrap() = SystemTime::now() - Duration::from_secs(120);
-    assert!(resume.slept());
+    let sent = resume.snapshot();
+    assert!(sent.slept);
     // After server_hello, the same gap is not reported again.
-    resume.clear();
-    assert!(!resume.slept());
+    resume.clear(sent);
+    assert!(!resume.snapshot().slept);
     assert!(!resume.tick());
 }
 
@@ -190,7 +207,7 @@ fn a_tick_after_a_gap_sets_the_flag() {
     let resume = Resume::new();
     *resume.last_tick.lock().unwrap() = SystemTime::now() - Duration::from_secs(120);
     assert!(resume.tick());
-    assert!(resume.slept());
+    assert!(resume.snapshot().slept);
 }
 
 fn target() -> ReportTarget {

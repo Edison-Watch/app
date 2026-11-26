@@ -114,6 +114,16 @@ describe('keep-awake tray submenu', () => {
     expect(JSON.stringify(notify.mock.calls[0]?.[0])).toContain('config.toml is read-only')
   })
 
+  it('does not show a stopped daemon as keeping the computer awake', () => {
+    status = {
+      ...installedStatus({ local: 'on', desired: false, effective: 'active' }),
+      daemonRunning: false
+    }
+    const submenu = keepAwakeItem(buildStdiodMenuItems('/icon.png'))
+      ?.submenu as MenuItemConstructorOptions[]
+    expect(submenu.at(-1)?.label).toBe('Now: off (local tunnel not running)')
+  })
+
   it('writes the clicked choice', () => {
     status = installedStatus({ local: 'auto', desired: false, effective: 'inactive' })
     const submenu = keepAwakeItem(buildStdiodMenuItems('/icon.png'))

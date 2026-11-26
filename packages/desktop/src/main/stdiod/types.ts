@@ -31,6 +31,8 @@ export interface StdiodLiveState {
   servers: StdiodServerEntry[]
   // Absent from daemons that predate keep-awake.
   keep_awake?: StdiodKeepAwake
+  // The PID of the daemon that wrote the file. Absent from older daemons.
+  pid?: number
   generation: number
 }
 
@@ -67,6 +69,10 @@ export interface StdiodStatus {
   // "running but unresponsive" daemon - i.e. the launchctl unit reports
   // a PID but state.json hasn't been touched in minutes.
   stateAgeMs: number | null
+  // Whether the process that wrote state.json still runs. null when the file
+  // has no PID (older daemons). state.json keeps its last content after the
+  // daemon exits, so its keep_awake state is current only while this is true.
+  daemonRunning?: boolean | null
 }
 
 export interface StdiodLoginInput {

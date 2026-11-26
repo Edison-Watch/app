@@ -88,6 +88,11 @@ pub struct State {
     /// the desktop settings. Absent until the keep-awake controller starts.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub keep_awake: Option<crate::power::KeepAwakeStatus>,
+    /// The process ID of the daemon that writes this file. Readers check it
+    /// to tell a running daemon from the last state of a stopped one: the
+    /// file keeps its last content after the daemon exits.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pid: Option<u32>,
     /// Bumped on every write so readers polling the file can cheaply
     /// detect "nothing changed since I last looked."
     pub generation: u64,
@@ -105,6 +110,7 @@ impl Default for State {
             servers: Vec::new(),
             update: None,
             keep_awake: None,
+            pid: None,
             generation: 0,
         }
     }
@@ -213,6 +219,7 @@ mod tests {
             }],
             update: None,
             keep_awake: None,
+            pid: Some(4242),
             generation: 7,
         };
         let json = serde_json::to_string(&s).unwrap();

@@ -60,14 +60,18 @@ pub async fn run(args: RunArgs) -> Result<()> {
     #[cfg(windows)]
     crate::platform::windows::kill_children_on_exit();
     let initial = ResolvedRun::from_args(&args);
-    // The keep-awake status from the previous run: its dashboard value
-    // applies until the backend sends one, and its local choice applies
-    // while config.toml cannot be read.
-    let previous_keep_awake = State::load().ok().and_then(|state| state.keep_awake);
+    // The keep-awake status from the previous run: its local choice applies
+    // while config.toml cannot be read. Its dashboard value applies until the
+    // backend sends one, but only for the same backend and device: after a
+    // login to another account or backend, it starts as off.
+    let previous_keep_awake = State::load()
+        .ok()
+        .and_then(|state| previous_keep_awake(state, initial.as_ref().ok()));
     let writer = StateWriter::new(State {
         backend_url: initial.as_ref().ok().map(|value| value.backend.clone()),
         device_id: initial.as_ref().ok().map(|value| value.device_id.clone()),
         device_label: initial.as_ref().ok().map(|value| value.label.clone()),
+        pid: Some(std::process::id()),
         ..State::default()
     });
     writer.update(|_| {}).await;
@@ -224,6 +228,24 @@ pub async fn run(args: RunArgs) -> Result<()> {
     }
 }
 
+/// The keep-awake status to start from, from the previous run's state. The
+/// dashboard value is kept only when the backend and device are the same as
+/// now; the local choice always is.
+fn previous_keep_awake(
+    state: State,
+    current: Option<&ResolvedRun>,
+) -> Option<crate::power::KeepAwakeStatus> {
+    let mut status = state.keep_awake?;
+    let same_identity = current.is_some_and(|current| {
+        state.device_id.as_deref() == Some(current.device_id.as_str())
+            && config::same_backend(state.backend_url.as_deref(), &current.backend)
+    });
+    if !same_identity {
+        status.desired = false;
+    }
+    Some(status)
+}
+
 /// Wait until the normal retry deadline or until a changed usable config is
 /// observed. If credentials disappear (logout), pause indefinitely until a
 /// subsequent login produces a usable selection.
@@ -330,6 +352,7 @@ async fn run_one_session(
         .map(|(id, _)| id.clone())
         .collect::<Vec<_>>();
     let keep_awake_sent = keep_awake.status();
+    let resume_sent = keep_awake.resume_snapshot();
     outgoing
         .send(TunnelFrame::ClientHello(ClientHello {
             protocol_version: PROTOCOL_VERSION,
@@ -346,7 +369,7 @@ async fn run_one_session(
                 .unwrap_or_default(),
             keep_awake_local: keep_awake_sent.map(|sent| sent.local.as_str().to_string()),
             keep_awake_effective: keep_awake_sent.map(|sent| sent.effective.as_str().to_string()),
-            last_gap_was_sleep: keep_awake.slept_since_last_session(),
+            last_gap_was_sleep: resume_sent.slept,
         }))
         .await;
 
@@ -390,6 +413,7 @@ async fn run_one_session(
             device_id: args.device_id.clone(),
         },
         sent: keep_awake_sent,
+        resume_sent,
     };
     let result = tokio::select! {
         biased;
@@ -431,6 +455,8 @@ struct SessionContext<'a> {
     /// The keep-awake status that this session's `client_hello` carried, or
     /// `None` where keep-awake is not offered.
     sent: Option<crate::power::KeepAwakeStatus>,
+    /// The sleep flag that this session's `client_hello` carried.
+    resume_sent: crate::power::controller::ResumeToken,
 }
 
 async fn drain_incoming(
@@ -499,7 +525,7 @@ async fn drain_incoming(
                     .keep_awake
                     .set_desired(device_settings.is_some_and(|settings| settings.keep_awake));
                 // The backend has the sleep flag from client_hello now.
-                session.keep_awake.clear_resume();
+                session.keep_awake.clear_resume(session.resume_sent);
                 if let Some(sent) = session.sent {
                     session
                         .keep_awake
@@ -678,3 +704,7 @@ fn jittered(base: Duration) -> Duration {
     let final_ms = (base_ms + delta_ms).max(0) as u64;
     Duration::from_millis(final_ms)
 }
+
+#[cfg(test)]
+#[path = "daemon_tests.rs"]
+mod tests;

@@ -626,9 +626,11 @@ disconnect time as the start of the sleep, not a client timestamp.
 *Source: `daemon.rs::heartbeat`; `power/controller.rs`.*
 
 **T-80** `state.json` MAY carry `keep_awake` with `local`, `desired`, and
-`effective`. The client keeps the last dashboard value there, so a restart
-without a backend connection keeps the same behavior until the next
-`server_hello`.
+`effective`, and `pid`, the process ID of the daemon that writes it. The file
+keeps its last content after the daemon exits, so a reader treats
+`keep_awake.effective` as current only while that process runs. The client
+keeps the last dashboard value there, so a restart without a backend connection
+keeps the same behavior until the next `server_hello`.
 *Source: `state.rs::State::keep_awake`; `daemon.rs::run`.*
 
 ---

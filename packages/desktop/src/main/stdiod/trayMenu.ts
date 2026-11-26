@@ -18,7 +18,10 @@ const KEEP_AWAKE_NOW: Record<KeepAwakeEffective, string> = {
 
 // "Keep Awake When Plugged In" submenu. The daemon holds the sleep block;
 // this only writes the local choice. See keepAwake.ts.
-function buildKeepAwakeItem(keepAwake: StdiodKeepAwake): MenuItemConstructorOptions {
+function buildKeepAwakeItem(
+  keepAwake: StdiodKeepAwake,
+  daemonRunning: boolean | null | undefined
+): MenuItemConstructorOptions {
   const choose = (choice: KeepAwakeLocal) => (): void => {
     void setKeepAwake(choice).then((result) => {
       if (!result.ok && Notification.isSupported()) {
@@ -44,7 +47,15 @@ function buildKeepAwakeItem(keepAwake: StdiodKeepAwake): MenuItemConstructorOpti
       { label: 'On', type: 'radio', checked: local === 'on', click: choose('on') },
       { label: 'Off', type: 'radio', checked: local === 'off', click: choose('off') },
       { type: 'separator' },
-      { label: KEEP_AWAKE_NOW[keepAwake.effective] ?? keepAwake.effective, enabled: false }
+      {
+        // state.json keeps its last value after the daemon stops, and the
+        // sleep block ends with the daemon.
+        label:
+          daemonRunning === false
+            ? 'Now: off (local tunnel not running)'
+            : (KEEP_AWAKE_NOW[keepAwake.effective] ?? keepAwake.effective),
+        enabled: false
+      }
     ]
   }
 }
@@ -153,7 +164,7 @@ export function buildStdiodMenuItems(
   // Keep-awake is Windows-only (the daemon writes keep_awake to state.json
   // only there). The check on the platform also hides a stale value.
   if (process.platform === 'win32' && status.state?.keep_awake) {
-    items.push(buildKeepAwakeItem(status.state.keep_awake))
+    items.push(buildKeepAwakeItem(status.state.keep_awake, status.daemonRunning))
   }
 
   items.push(...buildActions())

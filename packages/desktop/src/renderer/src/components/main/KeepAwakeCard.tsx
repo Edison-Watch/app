@@ -33,6 +33,9 @@ const NOW: Record<KeepAwakeEffective, string> = {
  */
 export default function KeepAwakeCard(): React.ReactNode {
   const [keepAwake, setKeepAwake] = useState<StdiodKeepAwake | null>(null);
+  // False when the daemon that wrote state.json has stopped: its last
+  // keep_awake value then no longer holds.
+  const [daemonRunning, setDaemonRunning] = useState<boolean | null>(null);
   // True while the CLI call runs. The buttons are locked only then.
   const [busy, setBusy] = useState(false);
   // The saved choice that the daemon has not applied yet.
@@ -48,6 +51,7 @@ export default function KeepAwakeCard(): React.ReactNode {
         .then((status) => {
           if (!mounted) return;
           setKeepAwake(status.installed ? (status.state?.keep_awake ?? null) : null);
+          setDaemonRunning(status.daemonRunning ?? null);
         })
         // A failed read keeps the last state; the next poll tries again.
         .catch(() => {});
@@ -96,7 +100,10 @@ export default function KeepAwakeCard(): React.ReactNode {
     }
   };
 
-  let statusText = NOW[keepAwake.effective];
+  let statusText =
+    daemonRunning === false
+      ? "The local tunnel is not running, so this computer can sleep as usual."
+      : NOW[keepAwake.effective];
   if (busy || (saved && !savedLate)) statusText = "Applying…";
   else if (saved) statusText = "Saved. It takes effect when the local tunnel is running.";
 

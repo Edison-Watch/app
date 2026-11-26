@@ -18,6 +18,7 @@ use serde::{Deserialize, Serialize};
 
 pub mod controller;
 mod report;
+mod resume;
 
 #[cfg(windows)]
 mod windows;
@@ -155,11 +156,7 @@ pub fn save_keeping_power(
     })
 }
 
-/// A lock file older than this is left over from a killed process.
-const LOCK_STALE: std::time::Duration = std::time::Duration::from_secs(10);
-/// How long [`with_power_lock`] waits for another command's lock. Longer
-/// than [`LOCK_STALE`], so a lock left by a process that just died is taken
-/// over within one wait.
+/// How long [`with_power_lock`] waits for another command's lock.
 const LOCK_WAIT: std::time::Duration = std::time::Duration::from_secs(15);
 
 /// [`with_power_lock`] could not get the lock in time. Callers can tell it
@@ -168,57 +165,50 @@ const LOCK_WAIT: std::time::Duration = std::time::Duration::from_secs(15);
 #[error("{0} is locked by another command")]
 pub struct LockBusy(pub std::path::PathBuf);
 
-/// Run `f` while holding `<config>.lock`, so the commands that write
-/// `config.toml` (`keep-awake`, the login save and logout) cannot interleave
-/// their read and write. A lock file older than [`LOCK_STALE`] is left over
-/// from a killed process and is taken over.
+/// Run `f` while holding an exclusive OS lock on `<config>.lock`, so the
+/// commands that write `config.toml` (`keep-awake`, the login save and
+/// logout) cannot interleave their read and write. The OS releases the lock
+/// when its holder exits or crashes, so there is no stale lock to guess
+/// about, and a holder that is only suspended (for example by sleep) keeps
+/// it. The lock file itself stays in place.
 pub fn with_power_lock<T>(
     path: &std::path::Path,
     f: impl FnOnce() -> anyhow::Result<T>,
 ) -> anyhow::Result<T> {
-    lock_with(path, LOCK_WAIT, LOCK_STALE, f)
+    lock_with(path, LOCK_WAIT, f)
 }
 
 fn lock_with<T>(
     path: &std::path::Path,
     wait: std::time::Duration,
-    stale_after: std::time::Duration,
     f: impl FnOnce() -> anyhow::Result<T>,
 ) -> anyhow::Result<T> {
-    let lock = path.with_extension("toml.lock");
-    if let Some(parent) = lock.parent() {
+    let lock_path = path.with_extension("toml.lock");
+    if let Some(parent) = lock_path.parent() {
         std::fs::create_dir_all(parent)?;
     }
+    let lock = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(&lock_path)?;
     let deadline = std::time::Instant::now() + wait;
     loop {
-        match std::fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&lock)
-        {
-            Ok(_) => break,
-            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
-                let stale = std::fs::metadata(&lock)
-                    .and_then(|meta| meta.modified())
-                    .ok()
-                    .and_then(|modified| modified.elapsed().ok())
-                    .is_some_and(|age| age > stale_after);
-                // Retry at once only when the stale lock is really gone. A
-                // failed removal falls through to the normal wait and
-                // deadline, so the loop cannot spin.
-                if stale && std::fs::remove_file(&lock).is_ok() {
-                    continue;
-                }
+        match lock.try_lock() {
+            Ok(()) => break,
+            Err(std::fs::TryLockError::WouldBlock) => {
                 if std::time::Instant::now() >= deadline {
                     return Err(LockBusy(path.to_path_buf()).into());
                 }
                 std::thread::sleep(std::time::Duration::from_millis(25));
             }
-            Err(error) => return Err(error.into()),
+            Err(std::fs::TryLockError::Error(error)) => return Err(error.into()),
         }
     }
     let result = f();
-    let _ = std::fs::remove_file(&lock);
+    // Dropping the file releases the lock as well; unlock first so a
+    // failure to unlock is not silent in debug builds.
+    let _ = lock.unlock();
     result
 }
 
@@ -296,45 +286,27 @@ mod tests {
             "[power\nkeep_awake = "
         );
         // The lock is released after the failure.
-        assert!(!path.with_extension("toml.lock").exists());
+        assert!(lock_with(&path, std::time::Duration::from_millis(100), || Ok(())).is_ok());
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
-    fn a_stale_lock_is_taken_over() {
+    fn a_held_lock_makes_others_wait_and_is_released_after() {
         let dir = std::env::temp_dir().join(format!("sealgate-power-lock-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("config.toml");
-        let lock = path.with_extension("toml.lock");
-        let file = std::fs::File::create(&lock).unwrap();
-        file.set_modified(std::time::SystemTime::now() - std::time::Duration::from_secs(60))
-            .unwrap();
-        drop(file);
-        assert_eq!(with_power_lock(&path, || Ok(7)).unwrap(), 7);
-        assert!(!lock.exists());
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn a_stale_lock_that_cannot_be_removed_times_out() {
-        let dir =
-            std::env::temp_dir().join(format!("sealgate-power-dirlock-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let path = dir.join("config.toml");
-        // A directory in place of the lock file: with a stale age of zero it
-        // counts as stale, but remove_file fails on it on every OS. No mtime
-        // change, because Windows cannot open a directory as a file.
-        let lock = path.with_extension("toml.lock");
-        std::fs::create_dir_all(&lock).unwrap();
-        std::thread::sleep(std::time::Duration::from_millis(20));
-        let error = lock_with(
-            &path,
-            std::time::Duration::from_millis(200),
-            std::time::Duration::ZERO,
-            || Ok(()),
-        )
-        .unwrap_err();
-        assert!(error.is::<LockBusy>(), "{error:#}");
+        let short = std::time::Duration::from_millis(100);
+        // While one writer holds the lock, a second one times out with
+        // LockBusy, even though the lock file is old.
+        let inner = lock_with(&path, short, || {
+            lock_with(&path, short, || Ok(())).map_err(|error| {
+                assert!(error.is::<LockBusy>(), "{error:#}");
+                error
+            })
+        });
+        assert!(inner.is_err());
+        // After the first writer finishes, the lock is free again.
+        assert_eq!(lock_with(&path, short, || Ok(7)).unwrap(), 7);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

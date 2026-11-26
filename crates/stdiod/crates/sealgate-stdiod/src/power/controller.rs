@@ -18,14 +18,14 @@
 //! The thread also notices a resume from sleep (a wall-clock jump), so the
 //! next `client_hello` can say that the last disconnect was a sleep.
 
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant, SystemTime};
+use std::time::{Duration, Instant};
 
 use tracing::{debug, info, warn};
 
 use super::report::report;
+pub(crate) use super::resume::{Resume, ResumeToken};
 use super::{Effective, KeepAwakeStatus, LocalChoice, Platform};
 use crate::state::StateWriter;
 
@@ -37,9 +37,6 @@ const POWER_POLL: Duration = Duration::from_secs(30);
 const UNSUPPORTED_RETRY: Duration = Duration::from_secs(600);
 /// After a failed report, try again this much later.
 const REPORT_RETRY: Duration = Duration::from_secs(60);
-/// A wall-clock gap between ticks larger than this means the machine slept.
-/// It matches the heartbeat's resume gap in `daemon.rs`.
-const RESUME_GAP: Duration = Duration::from_secs(45);
 
 /// Where to report state changes: the backend and credential of the tunnel
 /// session that is up now.
@@ -73,59 +70,6 @@ enum ReportResult {
     Desired(bool),
     /// A failure worth a retry.
     Failed,
-}
-
-/// Resume detection shared by the controller thread, the heartbeat and the
-/// code that builds `client_hello`.
-pub(crate) struct Resume {
-    /// Set when a resume was seen since the last `server_hello`.
-    slept: AtomicBool,
-    /// Wall-clock time of the controller thread's last tick.
-    last_tick: Mutex<SystemTime>,
-}
-
-impl Resume {
-    fn new() -> Self {
-        Self {
-            slept: AtomicBool::new(false),
-            last_tick: Mutex::new(SystemTime::now()),
-        }
-    }
-
-    /// Record a tick. Returns true when the gap since the previous tick
-    /// means the machine slept.
-    fn tick(&self) -> bool {
-        let now = SystemTime::now();
-        let mut last = self.last_tick.lock().expect("resume lock");
-        let gap = now.duration_since(*last).unwrap_or_default();
-        *last = now;
-        if gap > RESUME_GAP {
-            info!(?gap, "keep-awake: the machine resumed from sleep");
-            self.slept.store(true, Ordering::SeqCst);
-        }
-        gap > RESUME_GAP
-    }
-
-    /// True when a resume was seen, or when the thread has not ticked for
-    /// longer than [`RESUME_GAP`] by the wall clock. The second check
-    /// covers a reconnect that happens right after a resume, before the
-    /// thread's next tick.
-    fn slept(&self) -> bool {
-        if self.slept.load(Ordering::SeqCst) {
-            return true;
-        }
-        let last = *self.last_tick.lock().expect("resume lock");
-        SystemTime::now()
-            .duration_since(last)
-            .is_ok_and(|gap| gap > RESUME_GAP)
-    }
-
-    /// The backend has the flag. Restart the gap from now, so the gap that
-    /// was just reported is not reported again by the next tick.
-    fn clear(&self) {
-        *self.last_tick.lock().expect("resume lock") = SystemTime::now();
-        self.slept.store(false, Ordering::SeqCst);
-    }
 }
 
 /// Handle to the controller thread. Cheap to clone.
@@ -225,17 +169,17 @@ impl KeepAwake {
 
     /// Record that the machine just resumed from sleep.
     pub fn note_resume(&self) {
-        self.resume.slept.store(true, Ordering::SeqCst);
+        self.resume.note();
     }
 
-    /// True when the machine slept since the last `server_hello`.
-    pub fn slept_since_last_session(&self) -> bool {
-        self.resume.slept()
+    /// The sleep flag for the next `client_hello`.
+    pub fn resume_snapshot(&self) -> ResumeToken {
+        self.resume.snapshot()
     }
 
-    /// The backend received the sleep flag (it sent `server_hello`).
-    pub fn clear_resume(&self) {
-        self.resume.clear();
+    /// The backend received the flag in `token` (it sent `server_hello`).
+    pub fn clear_resume(&self, token: ResumeToken) {
+        self.resume.clear(token);
     }
 }
 
