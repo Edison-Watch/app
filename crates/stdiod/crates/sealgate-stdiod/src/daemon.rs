@@ -152,7 +152,7 @@ pub async fn run(args: RunArgs) -> Result<()> {
             } else {
                 warn!("backend rejected the credential; waiting for login");
                 // The dashboard value belonged to the rejected credential.
-                keep_awake.set_desired(false);
+                reset_dashboard_value(&keep_awake).await;
             }
             writer
                 .update(|state| {
@@ -206,7 +206,7 @@ pub async fn run(args: RunArgs) -> Result<()> {
         // A dashboard value belongs to one backend and device. After a login
         // to another one, it is off until that backend sends its own.
         if !same_identity(&resolved, &next) {
-            keep_awake.set_desired(false);
+            reset_dashboard_value(&keep_awake).await;
         }
         let reset_children = requires_child_reset(&resolved, &next);
         let current_env_namespace = resolved.env_namespace();
@@ -235,11 +235,25 @@ pub async fn run(args: RunArgs) -> Result<()> {
     }
 }
 
+/// Reset the keep-awake dashboard value to off and wait until the
+/// controller applied it, so the next `client_hello` carries the new state.
+/// The wait runs on the blocking pool, off the async workers.
+async fn reset_dashboard_value(keep_awake: &KeepAwake) {
+    let keep_awake = keep_awake.clone();
+    let _ = tokio::task::spawn_blocking(move || keep_awake.reset_desired()).await;
+}
+
 /// Whether two connections belong to the same backend and device, so that a
 /// dashboard value from one applies to the other.
 fn same_identity(left: &ResolvedRun, right: &ResolvedRun) -> bool {
-    left.device_id == right.device_id
-        && config::same_backend(Some(left.backend.as_str()), &right.backend)
+    identity_matches(Some(&left.device_id), Some(&left.backend), right)
+}
+
+/// The one identity rule, shared by the startup check (`previous_keep_awake`)
+/// and the runtime check (`same_identity`): the same device on the same
+/// backend.
+fn identity_matches(device_id: Option<&str>, backend: Option<&str>, current: &ResolvedRun) -> bool {
+    device_id == Some(current.device_id.as_str()) && config::same_backend(backend, &current.backend)
 }
 
 /// The keep-awake status to start from, from the previous run's state. The
@@ -250,11 +264,14 @@ fn previous_keep_awake(
     current: Option<&ResolvedRun>,
 ) -> Option<crate::power::KeepAwakeStatus> {
     let mut status = state.keep_awake?;
-    let same_identity = current.is_some_and(|current| {
-        state.device_id.as_deref() == Some(current.device_id.as_str())
-            && config::same_backend(state.backend_url.as_deref(), &current.backend)
+    let same = current.is_some_and(|current| {
+        identity_matches(
+            state.device_id.as_deref(),
+            state.backend_url.as_deref(),
+            current,
+        )
     });
-    if !same_identity {
+    if !same {
         status.desired = false;
     }
     Some(status)
@@ -281,7 +298,7 @@ async fn wait_for_config(
                 if !saw_unusable_config {
                     supervisor.lock().await.shutdown_children().await;
                     // Logged out: the dashboard value belonged to that login.
-                    keep_awake.set_desired(false);
+                    reset_dashboard_value(keep_awake).await;
                     writer
                         .update(|state| {
                             state.connection_state = ConnectionState::NeedsReauth;

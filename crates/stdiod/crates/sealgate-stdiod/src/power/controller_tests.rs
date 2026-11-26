@@ -27,6 +27,10 @@ impl Platform for Fake {
         Ok(())
     }
     fn release(&mut self) -> Result<(), String> {
+        // Like the Windows backend: releasing nothing always works.
+        if !self.holding.load(Ordering::SeqCst) {
+            return Ok(());
+        }
         if self.refuse_release.load(Ordering::SeqCst) {
             return Err("refused".into());
         }
@@ -129,6 +133,25 @@ fn battery_releases_the_block() {
         writer(),
     );
     assert_eq!(keep_awake.status().unwrap().effective, Effective::OnBattery);
+    assert!(!fake.holding.load(Ordering::SeqCst));
+}
+
+#[test]
+fn reset_desired_returns_after_the_off_state_is_applied() {
+    let fake = Fake::default();
+    let keep_awake = KeepAwake::start_with(
+        Some(Box::new(fake.clone())),
+        auto,
+        true,
+        LocalChoice::Auto,
+        writer(),
+    );
+    assert_eq!(keep_awake.status().unwrap().effective, Effective::Active);
+    keep_awake.reset_desired();
+    // No waiting: the reset is applied when the call returns.
+    let status = keep_awake.status().unwrap();
+    assert!(!status.desired);
+    assert_eq!(status.effective, Effective::Inactive);
     assert!(!fake.holding.load(Ordering::SeqCst));
 }
 
@@ -267,6 +290,7 @@ fn worker() -> Worker {
         local: LocalChoice::Auto,
         config_unreadable: false,
         session: None,
+        pending_acks: Vec::new(),
         generation: 0,
     }
 }

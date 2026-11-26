@@ -37,6 +37,8 @@ const POWER_POLL: Duration = Duration::from_secs(30);
 const UNSUPPORTED_RETRY: Duration = Duration::from_secs(600);
 /// After a failed report, try again this much later.
 const REPORT_RETRY: Duration = Duration::from_secs(60);
+/// The longest [`KeepAwake::reset_desired`] waits for the controller.
+const RESET_WAIT: Duration = Duration::from_secs(2);
 
 /// Where to report state changes: the backend and credential of the tunnel
 /// session that is up now.
@@ -50,6 +52,9 @@ pub struct ReportTarget {
 enum Event {
     /// The dashboard value.
     Desired(bool),
+    /// Reset the dashboard value to off (the connection identity changed),
+    /// and acknowledge once the controller applied and published it.
+    ResetDesired(mpsc::Sender<()>),
     /// A tunnel session came up (`Some`, with the values its `client_hello`
     /// sent) or went down (`None`).
     Session(Option<(ReportTarget, LocalChoice, Effective)>),
@@ -133,6 +138,7 @@ impl KeepAwake {
             local: initial_local,
             config_unreadable: false,
             session: None,
+            pending_acks: Vec::new(),
             generation: 0,
         };
         std::thread::Builder::new()
@@ -152,6 +158,17 @@ impl KeepAwake {
     /// The dashboard value from `server_hello` or `device_settings_update`.
     pub fn set_desired(&self, desired: bool) {
         let _ = self.events.send(Event::Desired(desired));
+    }
+
+    /// Reset the dashboard value to off because the connection identity
+    /// changed (logout, a rejected credential, another backend or device).
+    /// Waits, for at most [`RESET_WAIT`], until the controller applied and
+    /// published it, so the next `client_hello` carries the new state.
+    pub fn reset_desired(&self) {
+        let (ack, done) = mpsc::channel();
+        if self.events.send(Event::ResetDesired(ack)).is_ok() {
+            let _ = done.recv_timeout(RESET_WAIT);
+        }
     }
 
     /// A tunnel session is up (after `server_hello`). `sent` is the status
@@ -210,6 +227,8 @@ struct Worker {
     /// True while `config.toml` cannot be read, so the warning is logged once.
     config_unreadable: bool,
     session: Option<Session>,
+    /// Acknowledgements to send once the next decision is applied.
+    pending_acks: Vec<mpsc::Sender<()>>,
     /// Bumped on every session start and end.
     generation: u64,
 }
@@ -227,6 +246,10 @@ impl Worker {
         let _ = ready.send(());
         loop {
             match self.rx.recv_timeout(TICK) {
+                // Nothing to apply without keep-awake; acknowledge at once.
+                Ok(Event::ResetDesired(ack)) => {
+                    let _ = ack.send(());
+                }
                 Ok(_) | Err(RecvTimeoutError::Timeout) => {}
                 Err(RecvTimeoutError::Disconnected) => return,
             }
@@ -298,6 +321,10 @@ impl Worker {
                 published = Some(status);
             }
             self.report_if_needed(local, effective);
+            // The decision above includes every event handled so far.
+            for ack in self.pending_acks.drain(..) {
+                let _ = ack.send(());
+            }
 
             // Wait for an event or the next tick.
             match self.rx.recv_timeout(TICK) {
@@ -355,6 +382,10 @@ impl Worker {
     fn handle(&mut self, event: Event) {
         match event {
             Event::Desired(desired) => self.set_desired(desired),
+            Event::ResetDesired(ack) => {
+                self.set_desired(false);
+                self.pending_acks.push(ack);
+            }
             Event::Session(started) => {
                 self.generation += 1;
                 self.session = started.map(|(target, sent_local, sent_effective)| Session {
