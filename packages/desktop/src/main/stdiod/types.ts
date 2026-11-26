@@ -69,9 +69,10 @@ export interface StdiodStatus {
   // "running but unresponsive" daemon - i.e. the launchctl unit reports
   // a PID but state.json hasn't been touched in minutes.
   stateAgeMs: number | null
-  // Whether the process that wrote state.json still runs. null when the file
-  // has no PID (older daemons). state.json keeps its last content after the
-  // daemon exits, so its keep_awake state is current only while this is true.
+  // Whether the process that wrote state.json still runs. null when that
+  // cannot be told: the file has no PID (older daemons), or on Windows the
+  // tasklist check failed or timed out. state.json keeps its last content
+  // after the daemon exits, so only false means its keep_awake state is stale.
   daemonRunning?: boolean | null
 }
 
