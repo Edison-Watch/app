@@ -17,6 +17,9 @@ export function registerStdiodHandlers(): void {
   ipcMain.handle('stdiod:reset', (_event, input: StdiodLoginInput) => resetStdiod(input))
   ipcMain.handle('stdiod:getLogPath', () => getLogPath())
   ipcMain.handle('stdiod:setKeepAwake', async (_event, choice: KeepAwakeLocal) => {
+    if (process.platform !== 'win32') {
+      return { ok: false, errorCode: 'unknown', errorMessage: 'keep-awake is only available on Windows' }
+    }
     const result = await setKeepAwake(choice)
     // The tray rebuilds from this cache when the daemon's state.json changes.
     void refreshStdiodStatusCache()

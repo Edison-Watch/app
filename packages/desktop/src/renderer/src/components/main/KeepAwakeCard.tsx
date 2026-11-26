@@ -23,9 +23,10 @@ const NOW: Record<KeepAwakeEffective, string> = {
 
 /**
  * Settings card (Config tab) for the local keep-awake choice. Shown only
- * when the local tunnel daemon is installed, because the daemon holds the
- * sleep block. "Follow dashboard" uses the value the machine owner sets on
- * the dashboard; "On" and "Off" override it on this computer.
+ * when the local tunnel daemon is installed and reports keep-awake state,
+ * which only the Windows daemon does: keep-awake is Windows-only.
+ * "Follow dashboard" uses the value the machine owner sets on the
+ * dashboard; "On" and "Off" override it on this computer.
  */
 export default function KeepAwakeCard(): React.ReactNode {
   const [keepAwake, setKeepAwake] = useState<StdiodKeepAwake | null>(null);

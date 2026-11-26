@@ -566,6 +566,12 @@ today is `keep_awake`: block idle system sleep while the machine is on AC
 power. The person at the machine has a local choice (`auto`, `on`, `off`) that
 wins over the dashboard value; `auto` follows it.
 
+Keep-awake is Windows-only. On other systems the reference client sends no
+`capabilities` and no keep-awake fields, so the backend never sends it
+`device_settings_update` and shows no keep-awake control for it.
+`last_gap_was_sleep` (T-79) is not part of keep-awake and is sent on every
+system.
+
 **T-75** A client that handles `device_settings_update` MUST list
 `device_settings` in `client_hello.capabilities`. The backend MUST NOT send
 `device_settings_update` to a client that did not list it, because a client
@@ -582,7 +588,8 @@ change, not a delta.
 `daemon.rs::drain_incoming`.*
 
 **T-77** `client_hello.keep_awake_local` and `client_hello.keep_awake_effective`
-report the local choice and what the client holds now. The effective value is
+report the local choice and what the client holds now. A client that does not
+offer keep-awake omits both. The effective value is
 `inactive` when the result is off, `active` when the result is on and the
 machine is on AC power with the block held, `on_battery` when the result is on
 and the machine is on battery (no block held), and `unsupported` when the OS

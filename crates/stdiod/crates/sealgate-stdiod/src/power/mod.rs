@@ -1,4 +1,7 @@
 //! Keep-awake: block idle system sleep while the machine is on AC power.
+//! Windows only. On other systems the daemon does not offer it: it sends no
+//! keep-awake fields and no `device_settings` capability, so the backend
+//! never sends it settings.
 //!
 //! The dashboard owns a per-device value (`device_settings.keep_awake`, the
 //! "desired" value). The person at the machine owns a local choice in
@@ -15,14 +18,11 @@ use serde::{Deserialize, Serialize};
 
 pub mod controller;
 
-#[cfg(target_os = "linux")]
-mod linux;
-#[cfg(target_os = "macos")]
-mod macos;
-#[cfg(unix)]
-mod unix_hold;
 #[cfg(windows)]
 mod windows;
+
+/// Whether this build offers keep-awake.
+pub const SUPPORTED: bool = cfg!(windows);
 
 /// The local keep-awake choice stored in `config.toml`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, clap::ValueEnum)]
@@ -107,38 +107,17 @@ pub(crate) trait Platform: Send {
     fn release(&mut self);
 }
 
-/// The sleep-block backend for this OS.
-pub(crate) fn platform() -> Box<dyn Platform> {
+/// The sleep-block backend for this OS, or `None` where keep-awake is not
+/// offered.
+pub(crate) fn platform() -> Option<Box<dyn Platform>> {
     #[cfg(windows)]
     {
-        Box::new(windows::WindowsPower::default())
+        Some(Box::new(windows::WindowsPower::default()))
     }
-    #[cfg(target_os = "macos")]
+    #[cfg(not(windows))]
     {
-        Box::new(macos::MacPower::default())
+        None
     }
-    #[cfg(target_os = "linux")]
-    {
-        Box::new(linux::LinuxPower::default())
-    }
-    #[cfg(not(any(windows, target_os = "macos", target_os = "linux")))]
-    {
-        Box::new(Unsupported)
-    }
-}
-
-#[cfg(not(any(windows, target_os = "macos", target_os = "linux")))]
-struct Unsupported;
-
-#[cfg(not(any(windows, target_os = "macos", target_os = "linux")))]
-impl Platform for Unsupported {
-    fn on_battery(&mut self) -> bool {
-        false
-    }
-    fn hold(&mut self) -> Result<(), String> {
-        Err("keep-awake is not supported on this OS".into())
-    }
-    fn release(&mut self) {}
 }
 
 /// Read the local choice from `config.toml`. A missing or unreadable file

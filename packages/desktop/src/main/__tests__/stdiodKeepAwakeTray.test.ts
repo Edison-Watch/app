@@ -2,7 +2,7 @@
 // keep-awake choice. It must appear only when the daemon reports keep-awake
 // state, mark the current local choice, and write the clicked choice.
 
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MenuItemConstructorOptions } from 'electron'
 
 import type { StdiodKeepAwake, StdiodStatus } from '../stdiod/types'
@@ -46,9 +46,28 @@ function keepAwakeItem(items: MenuItemConstructorOptions[]): MenuItemConstructor
   return items.find((item) => item.label === 'Keep Awake When Plugged In')
 }
 
+const realPlatform = process.platform
+
+function setPlatform(platform: string): void {
+  Object.defineProperty(process, 'platform', { value: platform })
+}
+
 describe('keep-awake tray submenu', () => {
   beforeEach(() => {
     setKeepAwake.mockClear()
+    setPlatform('win32')
+  })
+
+  afterEach(() => {
+    setPlatform(realPlatform)
+  })
+
+  it('is absent on macOS and Linux, even with a stale state value', () => {
+    status = installedStatus({ local: 'on', desired: true, effective: 'active' })
+    for (const platform of ['darwin', 'linux']) {
+      setPlatform(platform)
+      expect(keepAwakeItem(buildStdiodMenuItems('/icon.png'))).toBeUndefined()
+    }
   })
 
   it('is absent when the daemon reports no keep-awake state', () => {
@@ -62,11 +81,6 @@ describe('keep-awake tray submenu', () => {
       ?.submenu as MenuItemConstructorOptions[]
     expect(submenu.find((item) => item.checked)?.label).toBe('Follow dashboard (on)')
     expect(submenu.at(-1)?.label).toBe('Now: keeping this computer awake')
-  })
-
-  it('is kept in the compact Linux menu', () => {
-    status = installedStatus({ local: 'off', desired: false, effective: 'inactive' })
-    expect(keepAwakeItem(buildStdiodMenuItems('/icon.png', undefined, true))).toBeDefined()
   })
 
   it('writes the clicked choice', () => {

@@ -141,8 +141,9 @@ export function buildStdiodMenuItems(
     items.push({ label: `Last error: ${status.state.last_error}`, enabled: false })
   }
 
-  // Kept in the compact (Linux) menu too: it is a control, not a status row.
-  if (status.state?.keep_awake) {
+  // Keep-awake is Windows-only (the daemon writes keep_awake to state.json
+  // only there). The check on the platform also hides a stale value.
+  if (process.platform === 'win32' && status.state?.keep_awake) {
     items.push(buildKeepAwakeItem(status.state.keep_awake))
   }
 

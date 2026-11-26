@@ -341,9 +341,13 @@ async fn run_one_session(
             os: config::current_os(),
             client_version: crate::DAEMON_VERSION.to_string(),
             currently_running,
-            capabilities: vec![CAPABILITY_DEVICE_SETTINGS.to_string()],
-            keep_awake_local: Some(keep_awake_sent.local.as_str().to_string()),
-            keep_awake_effective: Some(keep_awake_sent.effective.as_str().to_string()),
+            // Keep-awake is Windows-only. Elsewhere the daemon sends no
+            // capability, so the backend never sends it device settings.
+            capabilities: keep_awake_sent
+                .map(|_| vec![CAPABILITY_DEVICE_SETTINGS.to_string()])
+                .unwrap_or_default(),
+            keep_awake_local: keep_awake_sent.map(|sent| sent.local.as_str().to_string()),
+            keep_awake_effective: keep_awake_sent.map(|sent| sent.effective.as_str().to_string()),
             last_gap_was_sleep: keep_awake.slept_since_last_session(),
         }))
         .await;
@@ -426,8 +430,9 @@ async fn websocket_task_result(task: &mut tokio::task::JoinHandle<Result<()>>) -
 struct SessionContext<'a> {
     keep_awake: &'a KeepAwake,
     target: ReportTarget,
-    /// The keep-awake status that this session's `client_hello` carried.
-    sent: crate::power::KeepAwakeStatus,
+    /// The keep-awake status that this session's `client_hello` carried, or
+    /// `None` where keep-awake is not offered.
+    sent: Option<crate::power::KeepAwakeStatus>,
 }
 
 async fn drain_incoming(
@@ -497,9 +502,11 @@ async fn drain_incoming(
                     .set_desired(device_settings.is_some_and(|settings| settings.keep_awake));
                 // The backend has the sleep flag from client_hello now.
                 session.keep_awake.clear_resume();
-                session
-                    .keep_awake
-                    .session_started(session.target.clone(), session.sent);
+                if let Some(sent) = session.sent {
+                    session
+                        .keep_awake
+                        .session_started(session.target.clone(), sent);
+                }
                 sup.apply_snapshot(servers).await;
                 hello.send_replace(true);
             }

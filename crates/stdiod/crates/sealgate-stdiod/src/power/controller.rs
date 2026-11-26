@@ -120,6 +120,9 @@ pub struct KeepAwake {
     events: mpsc::Sender<Event>,
     status: Arc<Mutex<KeepAwakeStatus>>,
     resume: Arc<Resume>,
+    /// False where keep-awake is not offered (every OS except Windows). The
+    /// thread then only detects resumes from sleep.
+    enabled: bool,
 }
 
 impl KeepAwake {
@@ -137,7 +140,7 @@ impl KeepAwake {
     }
 
     pub(crate) fn start_with(
-        platform: Box<dyn Platform>,
+        platform: Option<Box<dyn Platform>>,
         read_local: fn() -> LocalChoice,
         initial_desired: bool,
         writer: StateWriter,
@@ -152,6 +155,7 @@ impl KeepAwake {
             events,
             status: status.clone(),
             resume: Arc::new(Resume::new()),
+            enabled: platform.is_some(),
         };
         let (ready_tx, ready_rx) = mpsc::channel();
         let worker = Worker {
@@ -174,8 +178,10 @@ impl KeepAwake {
         handle
     }
 
-    pub fn status(&self) -> KeepAwakeStatus {
-        *self.status.lock().expect("keep-awake status lock")
+    /// The current status, or `None` where keep-awake is not offered.
+    pub fn status(&self) -> Option<KeepAwakeStatus> {
+        self.enabled
+            .then(|| *self.status.lock().expect("keep-awake status lock"))
     }
 
     /// The dashboard value from `server_hello` or `device_settings_update`.
@@ -221,7 +227,7 @@ struct Session {
 }
 
 struct Worker {
-    platform: Box<dyn Platform>,
+    platform: Option<Box<dyn Platform>>,
     read_local: fn() -> LocalChoice,
     rx: mpsc::Receiver<Event>,
     events: mpsc::Sender<Event>,
@@ -234,9 +240,34 @@ struct Worker {
 }
 
 impl Worker {
-    fn run(mut self, ready: mpsc::Sender<()>) {
+    fn run(self, ready: mpsc::Sender<()>) {
+        match self.platform {
+            Some(_) => self.run_keep_awake(ready),
+            None => self.run_resume_only(ready),
+        }
+    }
+
+    /// Where keep-awake is not offered: only detect resumes from sleep.
+    fn run_resume_only(self, ready: mpsc::Sender<()>) {
+        let _ = ready.send(());
+        loop {
+            match self.rx.recv_timeout(TICK) {
+                Ok(_) | Err(RecvTimeoutError::Timeout) => {}
+                Err(RecvTimeoutError::Disconnected) => return,
+            }
+            self.resume.tick();
+        }
+    }
+
+    fn platform(&mut self) -> &mut dyn Platform {
+        self.platform
+            .as_deref_mut()
+            .expect("keep-awake runs only with a platform")
+    }
+
+    fn run_keep_awake(mut self, ready: mpsc::Sender<()>) {
         let mut local = (self.read_local)();
-        let mut on_battery = self.platform.on_battery();
+        let mut on_battery = self.platform().on_battery();
         let mut last_config = Instant::now();
         let mut last_power = Instant::now();
         let mut unsupported_until: Option<Instant> = None;
@@ -245,16 +276,16 @@ impl Worker {
             // Decide and apply.
             let wants = local.wants_awake(self.desired);
             let effective = if !wants {
-                self.platform.release();
+                self.platform().release();
                 unsupported_until = None;
                 Effective::Inactive
             } else if on_battery {
-                self.platform.release();
+                self.platform().release();
                 Effective::OnBattery
             } else if unsupported_until.is_some_and(|until| Instant::now() < until) {
                 Effective::Unsupported
             } else {
-                match self.platform.hold() {
+                match self.platform().hold() {
                     Ok(()) => {
                         unsupported_until = None;
                         Effective::Active
@@ -306,7 +337,7 @@ impl Worker {
                 }
                 Err(RecvTimeoutError::Timeout) => {}
                 Err(RecvTimeoutError::Disconnected) => {
-                    self.platform.release();
+                    self.platform().release();
                     return;
                 }
             }
@@ -317,7 +348,7 @@ impl Worker {
                 last_config = Instant::now();
             }
             if resumed || last_power.elapsed() >= POWER_POLL {
-                on_battery = self.platform.on_battery();
+                on_battery = self.platform().on_battery();
                 last_power = Instant::now();
             }
         }
@@ -458,7 +489,7 @@ mod tests {
 
     fn wait_for(keep_awake: &KeepAwake, effective: Effective) {
         let deadline = Instant::now() + Duration::from_secs(3);
-        while keep_awake.status().effective != effective {
+        while keep_awake.status().unwrap().effective != effective {
             assert!(
                 Instant::now() < deadline,
                 "timed out waiting for {effective:?}"
@@ -480,8 +511,8 @@ mod tests {
     #[test]
     fn follows_the_dashboard_in_auto() {
         let fake = Fake::default();
-        let keep_awake = KeepAwake::start_with(Box::new(fake.clone()), auto, false, writer());
-        assert_eq!(keep_awake.status().effective, Effective::Inactive);
+        let keep_awake = KeepAwake::start_with(Some(Box::new(fake.clone())), auto, false, writer());
+        assert_eq!(keep_awake.status().unwrap().effective, Effective::Inactive);
         assert!(!fake.holding.load(Ordering::SeqCst));
         keep_awake.set_desired(true);
         wait_for(&keep_awake, Effective::Active);
@@ -494,17 +525,17 @@ mod tests {
     #[test]
     fn local_off_wins_over_the_dashboard() {
         let fake = Fake::default();
-        let keep_awake = KeepAwake::start_with(Box::new(fake.clone()), off, true, writer());
-        assert_eq!(keep_awake.status().effective, Effective::Inactive);
-        assert_eq!(keep_awake.status().local, LocalChoice::Off);
+        let keep_awake = KeepAwake::start_with(Some(Box::new(fake.clone())), off, true, writer());
+        assert_eq!(keep_awake.status().unwrap().effective, Effective::Inactive);
+        assert_eq!(keep_awake.status().unwrap().local, LocalChoice::Off);
         assert!(!fake.holding.load(Ordering::SeqCst));
     }
 
     #[test]
     fn local_on_wins_over_the_dashboard() {
         let fake = Fake::default();
-        let keep_awake = KeepAwake::start_with(Box::new(fake.clone()), on, false, writer());
-        assert_eq!(keep_awake.status().effective, Effective::Active);
+        let keep_awake = KeepAwake::start_with(Some(Box::new(fake.clone())), on, false, writer());
+        assert_eq!(keep_awake.status().unwrap().effective, Effective::Active);
         assert!(fake.holding.load(Ordering::SeqCst));
     }
 
@@ -512,8 +543,8 @@ mod tests {
     fn battery_releases_the_block() {
         let fake = Fake::default();
         fake.battery.store(true, Ordering::SeqCst);
-        let keep_awake = KeepAwake::start_with(Box::new(fake.clone()), on, false, writer());
-        assert_eq!(keep_awake.status().effective, Effective::OnBattery);
+        let keep_awake = KeepAwake::start_with(Some(Box::new(fake.clone())), on, false, writer());
+        assert_eq!(keep_awake.status().unwrap().effective, Effective::OnBattery);
         assert!(!fake.holding.load(Ordering::SeqCst));
     }
 
@@ -521,18 +552,34 @@ mod tests {
     fn refused_block_reports_unsupported() {
         let fake = Fake::default();
         fake.refuse.store(true, Ordering::SeqCst);
-        let keep_awake = KeepAwake::start_with(Box::new(fake.clone()), on, false, writer());
-        assert_eq!(keep_awake.status().effective, Effective::Unsupported);
+        let keep_awake = KeepAwake::start_with(Some(Box::new(fake.clone())), on, false, writer());
+        assert_eq!(
+            keep_awake.status().unwrap().effective,
+            Effective::Unsupported
+        );
     }
 
     #[test]
     fn resume_flag_is_set_and_cleared() {
-        let keep_awake = KeepAwake::start_with(Box::new(Fake::default()), auto, false, writer());
+        let keep_awake =
+            KeepAwake::start_with(Some(Box::new(Fake::default())), auto, false, writer());
         assert!(!keep_awake.slept_since_last_session());
         keep_awake.note_resume();
         assert!(keep_awake.slept_since_last_session());
         keep_awake.clear_resume();
         assert!(!keep_awake.slept_since_last_session());
+    }
+
+    #[test]
+    fn without_a_platform_only_resume_detection_runs() {
+        let keep_awake = KeepAwake::start_with(None, on, true, writer());
+        // No keep-awake status, so client_hello sends no keep-awake fields.
+        assert!(keep_awake.status().is_none());
+        keep_awake.set_desired(true);
+        assert!(keep_awake.status().is_none());
+        // Sleep detection still works for the offline-failure tracking.
+        keep_awake.note_resume();
+        assert!(keep_awake.slept_since_last_session());
     }
 
     #[test]

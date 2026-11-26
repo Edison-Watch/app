@@ -33,6 +33,9 @@ struct Report {
 }
 
 pub fn run(args: KeepAwakeArgs) -> Result<()> {
+    if !crate::power::SUPPORTED {
+        anyhow::bail!("keep-awake is only available on Windows");
+    }
     let mut config = PersistedConfig::load()?;
     if let Some(choice) = args.choice {
         // `auto` is the default, so it is stored as an absent value.
