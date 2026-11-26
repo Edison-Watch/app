@@ -88,9 +88,11 @@ export default function KeepAwakeCard(): React.ReactNode {
             aria-checked={selected === choice.value}
             disabled={pending !== null}
             onClick={() => void choose(choice.value)}
-            className={`flex-1 rounded-md px-2 py-1 text-xs transition-colors disabled:opacity-60 ${
+            className={`${
+              choice.value === "auto" ? "flex-[1.8]" : "flex-1"
+            } whitespace-nowrap rounded-md px-2 py-1 text-xs transition-colors disabled:opacity-60 ${
               selected === choice.value
-                ? "bg-[var(--accent)] text-white"
+                ? "bg-[var(--accent)] font-medium text-[var(--bg-base)]"
                 : "bg-[var(--bg-input)] text-[var(--text-primary)]"
             }`}
           >
