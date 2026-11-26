@@ -12,13 +12,17 @@ use crate::config::{CredentialKind, PersistedConfig};
 pub struct LogoutArgs {}
 
 pub async fn run(_args: LogoutArgs) -> Result<()> {
-    let mut cfg = PersistedConfig::load()?;
-    let revoke = capture_revocation(&cfg);
-
     // Publish local logout atomically before any network wait. The live daemon
-    // can then stop authenticated children even if revocation times out.
-    clear_credentials_keeping_identity(&mut cfg);
-    cfg.save()?;
+    // can then stop authenticated children even if revocation times out. The
+    // lock keeps a concurrent `keep-awake` change from being overwritten.
+    let path = crate::paths::config_file()?;
+    let revoke = crate::power::with_power_lock(&path, || {
+        let mut cfg = PersistedConfig::load_from(&path)?;
+        let revoke = capture_revocation(&cfg);
+        clear_credentials_keeping_identity(&mut cfg);
+        cfg.save_to(&path)?;
+        Ok(revoke)
+    })?;
 
     if let Some((backend, token)) = revoke {
         match AuthClient::new(backend) {

@@ -17,6 +17,7 @@
 use serde::{Deserialize, Serialize};
 
 pub mod controller;
+mod report;
 
 #[cfg(windows)]
 mod windows;
@@ -154,16 +155,19 @@ pub fn save_keeping_power(
     })
 }
 
-/// Run `f` while holding `<config>.lock`, so the two writers of `[power]`
-/// (`keep-awake` and the login save) cannot interleave their read and write.
-/// A lock file older than [`LOCK_STALE`] is left over from a killed process
-/// and is taken over.
+/// How long [`with_power_lock`] waits for another command's lock.
+const LOCK_WAIT: std::time::Duration = std::time::Duration::from_secs(5);
+/// A lock file older than this is left over from a killed process.
+const LOCK_STALE: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// Run `f` while holding `<config>.lock`, so the commands that write
+/// `config.toml` (`keep-awake`, the login save and logout) cannot interleave
+/// their read and write. A lock file older than [`LOCK_STALE`] is left over
+/// from a killed process and is taken over.
 pub fn with_power_lock<T>(
     path: &std::path::Path,
     f: impl FnOnce() -> anyhow::Result<T>,
 ) -> anyhow::Result<T> {
-    const LOCK_WAIT: std::time::Duration = std::time::Duration::from_secs(5);
-    const LOCK_STALE: std::time::Duration = std::time::Duration::from_secs(10);
     let lock = path.with_extension("toml.lock");
     if let Some(parent) = lock.parent() {
         std::fs::create_dir_all(parent)?;
@@ -182,8 +186,10 @@ pub fn with_power_lock<T>(
                     .ok()
                     .and_then(|modified| modified.elapsed().ok())
                     .is_some_and(|age| age > LOCK_STALE);
-                if stale {
-                    let _ = std::fs::remove_file(&lock);
+                // Retry at once only when the stale lock is really gone. A
+                // failed removal falls through to the normal wait and
+                // deadline, so the loop cannot spin.
+                if stale && std::fs::remove_file(&lock).is_ok() {
                     continue;
                 }
                 if std::time::Instant::now() >= deadline {

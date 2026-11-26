@@ -23,9 +23,9 @@ use std::sync::mpsc::{self, RecvTimeoutError};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime};
 
-use serde::{Deserialize, Serialize};
 use tracing::{debug, info, warn};
 
+use super::report::report;
 use super::{Effective, KeepAwakeStatus, LocalChoice, Platform};
 use crate::state::StateWriter;
 
@@ -40,7 +40,6 @@ const REPORT_RETRY: Duration = Duration::from_secs(60);
 /// A wall-clock gap between ticks larger than this means the machine slept.
 /// It matches the heartbeat's resume gap in `daemon.rs`.
 const RESUME_GAP: Duration = Duration::from_secs(45);
-const REPORT_PATH: &str = "/api/v1/client/device-state";
 
 /// Where to report state changes: the backend and credential of the tunnel
 /// session that is up now.
@@ -486,54 +485,6 @@ impl Worker {
             });
         });
     }
-}
-
-#[derive(Serialize)]
-struct ReportBody {
-    keep_awake_local: LocalChoice,
-    keep_awake_effective: Effective,
-}
-
-#[derive(Deserialize)]
-struct ReportResponse {
-    device_settings: sealgate_tunnel_protocol::DeviceSettings,
-}
-
-/// `PUT /api/v1/client/device-state`. Returns the dashboard value from the
-/// response, `Ok(None)` when the backend does not know the endpoint or the
-/// device (older backend, or no device row yet), and `Err` for failures
-/// worth a retry.
-async fn report(
-    target: &ReportTarget,
-    local: LocalChoice,
-    effective: Effective,
-) -> anyhow::Result<Option<bool>> {
-    let base = crate::config::normalize_backend_url(&target.backend)?;
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(20))
-        .user_agent(crate::update::user_agent())
-        .build()?;
-    let response = client
-        .put(format!("{base}{REPORT_PATH}"))
-        .bearer_auth(&target.credential)
-        .header("X-SealGate-Device-Id", &target.device_id)
-        .json(&ReportBody {
-            keep_awake_local: local,
-            keep_awake_effective: effective,
-        })
-        .send()
-        .await?;
-    let status = response.status();
-    if status == reqwest::StatusCode::NOT_FOUND || status == reqwest::StatusCode::METHOD_NOT_ALLOWED
-    {
-        debug!(%status, "keep-awake: the backend has no device state for this device");
-        return Ok(None);
-    }
-    if !status.is_success() {
-        anyhow::bail!("PUT {REPORT_PATH} returned HTTP {status}");
-    }
-    let body: ReportResponse = response.json().await?;
-    Ok(Some(body.device_settings.keep_awake))
 }
 
 #[cfg(test)]

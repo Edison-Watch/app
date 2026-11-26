@@ -659,19 +659,29 @@ pub fn is_running() -> Result<bool> {
 
 /// Whether the daemon runs, in a way that works on every Windows language.
 /// `schtasks` prints a translated status that [`running_status`] can only
-/// read in English. When it cannot read it, look for another
-/// `sealgate-stdiod.exe` process instead (this one is a CLI call).
+/// read in English. When it cannot read it, look for another process started
+/// from this same exe: the scheduled task runs the exe that installed it,
+/// and the CLI is that same exe. A copy from another installation does not
+/// count. Another CLI call from this exe at the same moment would, which only
+/// happens for the second or so that such a call runs.
 pub fn daemon_running() -> bool {
     if let Ok(Some(running)) = running_status() {
         return running;
     }
+    let Ok(me_exe) = std::env::current_exe() else {
+        return false;
+    };
     let me = std::process::id();
-    running_processes().into_iter().any(|(pid, image)| {
-        pid != me
-            && image
-                .file_name()
-                .is_some_and(|name| name.eq_ignore_ascii_case("sealgate-stdiod.exe"))
-    })
+    running_processes()
+        .into_iter()
+        .any(|(pid, image)| pid != me && same_path(&image, &me_exe))
+}
+
+/// Windows paths compare without regard to case.
+fn same_path(left: &std::path::Path, right: &std::path::Path) -> bool {
+    left.as_os_str()
+        .to_string_lossy()
+        .eq_ignore_ascii_case(&right.as_os_str().to_string_lossy())
 }
 
 #[cfg(test)]
