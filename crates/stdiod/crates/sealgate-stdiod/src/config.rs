@@ -80,26 +80,8 @@ pub struct PersistedConfig {
     #[serde(default)]
     pub device_label: Option<String>,
     /// Local power preferences. Kept across login and logout.
-    #[serde(default, skip_serializing_if = "PowerConfig::is_default")]
-    pub power: PowerConfig,
-}
-
-/// `[power]` in `config.toml`.
-#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PowerConfig {
-    /// The local keep-awake choice. Absent means `auto`: follow the dashboard.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub keep_awake: Option<crate::power::LocalChoice>,
-}
-
-impl PowerConfig {
-    fn is_default(&self) -> bool {
-        self == &Self::default()
-    }
-
-    pub fn keep_awake(&self) -> crate::power::LocalChoice {
-        self.keep_awake.unwrap_or_default()
-    }
+    #[serde(default, skip_serializing_if = "crate::power::PowerConfig::is_default")]
+    pub power: crate::power::PowerConfig,
 }
 
 impl std::fmt::Debug for PersistedConfig {
@@ -664,7 +646,7 @@ device_id = "device-1"
             scopes: vec!["tunnel:connect".into()],
             device_id: Some("device-1".into()),
             device_label: Some("My Laptop".into()),
-            power: PowerConfig {
+            power: crate::power::PowerConfig {
                 keep_awake: Some(crate::power::LocalChoice::On),
             },
         };

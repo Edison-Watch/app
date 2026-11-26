@@ -56,6 +56,24 @@ impl LocalChoice {
     }
 }
 
+/// `[power]` in `config.toml`. Kept across login and logout.
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PowerConfig {
+    /// The local keep-awake choice. Absent means `auto`: follow the dashboard.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub keep_awake: Option<LocalChoice>,
+}
+
+impl PowerConfig {
+    pub(crate) fn is_default(&self) -> bool {
+        self == &Self::default()
+    }
+
+    pub fn keep_awake(&self) -> LocalChoice {
+        self.keep_awake.unwrap_or_default()
+    }
+}
+
 /// What the daemon holds now. Reported to the backend and shown on the
 /// dashboard.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
