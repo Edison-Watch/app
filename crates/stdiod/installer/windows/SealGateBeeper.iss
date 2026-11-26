@@ -213,6 +213,7 @@ var
   { Opt-in on the finished page: keep this PC awake while plugged in. }
   KeepAwakeBox: TNewCheckBox;
   KeepAwakeHint: TNewStaticText;
+  KeepAwakeApplied: Boolean;
   LaidOut: Boolean;
 #ifdef DebugUi
   DebugButton: TNewButton;
@@ -1503,8 +1504,38 @@ end;
 
 { The window's close button. Inno ignores it once the files are installed,
   so on the setup pages it does what Cancel does; elsewhere Inno handles it. }
+{ Apply the keep-awake opt-in once, from Finish or from the window's close
+  button. A clear box changes nothing, so running setup again never turns off
+  a choice made earlier. On failure, say so and return False, so the page
+  stays open: Finish tries again, and clearing the box finishes without it. }
+function ApplyKeepAwake(): Boolean;
+var
+  Output, Gap: String;
+begin
+  Result := True;
+  if KeepAwakeApplied or not KeepAwakeBox.Checked then
+    exit;
+  if Stdiod('keep-awake on', Output) = EXIT_OK then
+  begin
+    KeepAwakeApplied := True;
+    exit;
+  end;
+  Log('keep-awake on failed: ' + Output);
+  { No line may start with #: the preprocessor reads that as a directive. }
+  Gap := #13#10#13#10;
+  MsgBox('SealGate could not turn on "Keep this PC awake when plugged in":' + Gap +
+    Trim(Output) + Gap + 'Click Finish to try again, or clear the box to ' +
+    'finish without it.', mbError, MB_OK);
+  Result := False;
+end;
+
 procedure WizardCloseQuery(Sender: TObject; var CanClose: Boolean);
 begin
+  if WizardForm.CurPageID = wpFinished then
+  begin
+    CanClose := ApplyKeepAwake();
+    exit;
+  end;
   if not IsStepPage(WizardForm.CurPageID) then
     exit;
   CanClose := False;
@@ -1558,16 +1589,11 @@ end;
 { On the step pages the bottom-right button is Skip, or Stop while a step
   runs; the pages move on by themselves when a step succeeds. }
 function NextButtonClick(CurPageID: Integer): Boolean;
-var
-  Output: String;
 begin
   Result := True;
-  { Finish: apply the opt-in. A clear box changes nothing, so running setup
-    again never turns off a choice made earlier. }
-  if (CurPageID = wpFinished) and KeepAwakeBox.Checked then
+  if CurPageID = wpFinished then
   begin
-    if Stdiod('keep-awake on', Output) <> EXIT_OK then
-      Log('keep-awake on failed: ' + Output);
+    Result := ApplyKeepAwake();
     exit;
   end;
   if not IsStepPage(CurPageID) or Advancing then

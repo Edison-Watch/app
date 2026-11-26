@@ -57,8 +57,20 @@ enum Event {
     /// A tunnel session came up (`Some`, with the values its `client_hello`
     /// sent) or went down (`None`).
     Session(Option<(ReportTarget, LocalChoice, Effective)>),
-    /// A report failed for a reason worth a retry.
-    ReportFailed,
+    /// A report finished. `generation` is the session that sent it, so a
+    /// late result from an earlier session cannot overwrite the current
+    /// session's dashboard value.
+    Reported {
+        generation: u64,
+        result: ReportResult,
+    },
+}
+
+enum ReportResult {
+    /// The dashboard value from the response.
+    Desired(bool),
+    /// A failure worth a retry.
+    Failed,
 }
 
 /// Resume detection shared by the controller thread, the heartbeat and the
@@ -141,7 +153,7 @@ impl KeepAwake {
 
     pub(crate) fn start_with(
         platform: Option<Box<dyn Platform>>,
-        read_local: fn() -> LocalChoice,
+        read_local: fn() -> Option<LocalChoice>,
         initial_desired: bool,
         writer: StateWriter,
     ) -> Self {
@@ -169,6 +181,7 @@ impl KeepAwake {
             runtime: tokio::runtime::Handle::try_current().ok(),
             desired: initial_desired,
             session: None,
+            generation: 0,
         };
         std::thread::Builder::new()
             .name("keep-awake".into())
@@ -224,11 +237,12 @@ struct Session {
     /// report.
     known: Option<(LocalChoice, Effective)>,
     retry_after: Option<Instant>,
+    generation: u64,
 }
 
 struct Worker {
     platform: Option<Box<dyn Platform>>,
-    read_local: fn() -> LocalChoice,
+    read_local: fn() -> Option<LocalChoice>,
     rx: mpsc::Receiver<Event>,
     events: mpsc::Sender<Event>,
     status: Arc<Mutex<KeepAwakeStatus>>,
@@ -237,6 +251,8 @@ struct Worker {
     runtime: Option<tokio::runtime::Handle>,
     desired: bool,
     session: Option<Session>,
+    /// Bumped on every session start and end.
+    generation: u64,
 }
 
 impl Worker {
@@ -266,7 +282,7 @@ impl Worker {
     }
 
     fn run_keep_awake(mut self, ready: mpsc::Sender<()>) {
-        let mut local = (self.read_local)();
+        let mut local = (self.read_local)().unwrap_or_default();
         let mut on_battery = self.platform().on_battery();
         let mut last_config = Instant::now();
         let mut last_power = Instant::now();
@@ -320,21 +336,7 @@ impl Worker {
 
             // Wait for an event or the next tick.
             match self.rx.recv_timeout(TICK) {
-                Ok(Event::Desired(desired)) => self.desired = desired,
-                Ok(Event::Session(Some((target, sent_local, sent_effective)))) => {
-                    self.session = Some(Session {
-                        target,
-                        known: Some((sent_local, sent_effective)),
-                        retry_after: None,
-                    });
-                }
-                Ok(Event::Session(None)) => self.session = None,
-                Ok(Event::ReportFailed) => {
-                    if let Some(session) = self.session.as_mut() {
-                        session.known = None;
-                        session.retry_after = Some(Instant::now() + REPORT_RETRY);
-                    }
-                }
+                Ok(event) => self.handle(event),
                 Err(RecvTimeoutError::Timeout) => {}
                 Err(RecvTimeoutError::Disconnected) => {
                     self.platform().release();
@@ -344,12 +346,47 @@ impl Worker {
 
             let resumed = self.resume.tick();
             if last_config.elapsed() >= CONFIG_POLL {
-                local = (self.read_local)();
+                // An unreadable file keeps the last choice.
+                if let Some(read) = (self.read_local)() {
+                    local = read;
+                }
                 last_config = Instant::now();
             }
             if resumed || last_power.elapsed() >= POWER_POLL {
                 on_battery = self.platform().on_battery();
                 last_power = Instant::now();
+            }
+        }
+    }
+
+    fn handle(&mut self, event: Event) {
+        match event {
+            Event::Desired(desired) => self.desired = desired,
+            Event::Session(started) => {
+                self.generation += 1;
+                self.session = started.map(|(target, sent_local, sent_effective)| Session {
+                    target,
+                    known: Some((sent_local, sent_effective)),
+                    retry_after: None,
+                    generation: self.generation,
+                });
+            }
+            Event::Reported { generation, result } => {
+                let Some(session) = self
+                    .session
+                    .as_mut()
+                    .filter(|session| session.generation == generation)
+                else {
+                    debug!("keep-awake: dropping a report result from an earlier session");
+                    return;
+                };
+                match result {
+                    ReportResult::Desired(desired) => self.desired = desired,
+                    ReportResult::Failed => {
+                        session.known = None;
+                        session.retry_after = Some(Instant::now() + REPORT_RETRY);
+                    }
+                }
             }
         }
     }
@@ -383,18 +420,18 @@ impl Worker {
         session.known = Some((local, effective));
         session.retry_after = None;
         let target = session.target.clone();
+        let generation = session.generation;
         let events = self.events.clone();
         runtime.spawn(async move {
-            match report(&target, local, effective).await {
-                Ok(Some(desired)) => {
-                    let _ = events.send(Event::Desired(desired));
-                }
-                Ok(None) => {}
+            let result = match report(&target, local, effective).await {
+                Ok(Some(desired)) => ReportResult::Desired(desired),
+                Ok(None) => return,
                 Err(error) => {
                     warn!(%error, "keep-awake: could not report the state to the backend");
-                    let _ = events.send(Event::ReportFailed);
+                    ReportResult::Failed
                 }
-            }
+            };
+            let _ = events.send(Event::Reported { generation, result });
         });
     }
 }

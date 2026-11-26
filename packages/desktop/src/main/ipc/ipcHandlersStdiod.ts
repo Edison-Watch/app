@@ -6,7 +6,6 @@ import { ipcMain } from 'electron'
 
 import { getLogPath, getStatus, install, login, resetStdiod, uninstall } from '../stdiod/controller'
 import { setKeepAwake } from '../stdiod/keepAwake'
-import { refreshStdiodStatusCache } from '../stdiod/trayCache'
 import type { KeepAwakeLocal, StdiodLoginInput } from '../stdiod/types'
 
 export function registerStdiodHandlers(): void {
@@ -20,9 +19,7 @@ export function registerStdiodHandlers(): void {
     if (process.platform !== 'win32') {
       return { ok: false, errorCode: 'unknown', errorMessage: 'keep-awake is only available on Windows' }
     }
-    const result = await setKeepAwake(choice)
-    // The tray rebuilds from this cache when the daemon's state.json changes.
-    void refreshStdiodStatusCache()
-    return result
+    // The tray picks up the daemon's change on its own refresh timer.
+    return setKeepAwake(choice)
   })
 }

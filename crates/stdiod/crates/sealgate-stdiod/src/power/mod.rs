@@ -138,12 +138,33 @@ pub(crate) fn platform() -> Option<Box<dyn Platform>> {
     }
 }
 
-/// Read the local choice from `config.toml`. A missing or unreadable file
-/// counts as `auto`.
-pub fn read_local_choice() -> LocalChoice {
-    crate::config::PersistedConfig::load()
-        .map(|config| config.power.keep_awake())
-        .unwrap_or_default()
+/// Save `config` to `path`, but keep the `[power]` section that is on disk
+/// now. For commands that load the config, wait (a browser sign-in can take
+/// minutes) and then save: a keep-awake change made in the meantime would
+/// otherwise be lost.
+pub fn save_keeping_power(
+    config: &crate::config::PersistedConfig,
+    path: &std::path::Path,
+) -> anyhow::Result<()> {
+    let mut config = config.clone();
+    if let Ok(current) = crate::config::PersistedConfig::load_from(path) {
+        config.power = current.power;
+    }
+    config.save_to(path)
+}
+
+/// Read the local choice from `config.toml`. A missing file counts as
+/// `auto`. A file that cannot be read or parsed returns `None`, so that the
+/// controller keeps its last choice instead of switching an explicit `on`
+/// or `off` to `auto`.
+pub fn read_local_choice() -> Option<LocalChoice> {
+    match crate::config::PersistedConfig::load() {
+        Ok(config) => Some(config.power.keep_awake()),
+        Err(error) => {
+            tracing::warn!(%error, "keep-awake: cannot read config.toml; keeping the last choice");
+            None
+        }
+    }
 }
 
 #[cfg(test)]
@@ -176,10 +197,35 @@ mod tests {
     }
 
     #[test]
+    fn save_keeping_power_keeps_a_change_made_while_waiting() {
+        use crate::config::PersistedConfig;
+        let dir = std::env::temp_dir().join(format!("sealgate-power-save-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("config.toml");
+        PersistedConfig::default().save_to(&path).unwrap();
+        // A login loads the file, then waits for the browser...
+        let mut login = PersistedConfig::load_from(&path).unwrap();
+        // ...while the person turns keep-awake on.
+        let mut changed = PersistedConfig::load_from(&path).unwrap();
+        changed.power.keep_awake = Some(LocalChoice::On);
+        changed.save_to(&path).unwrap();
+        // The login then saves its own fields.
+        login.device_id = Some("device-1".into());
+        save_keeping_power(&login, &path).unwrap();
+        let saved = PersistedConfig::load_from(&path).unwrap();
+        assert_eq!(saved.power.keep_awake(), LocalChoice::On);
+        assert_eq!(saved.device_id.as_deref(), Some("device-1"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn power_config_round_trips_and_defaults_to_auto() {
         let config: crate::config::PersistedConfig =
             toml::from_str("[power]\nkeep_awake = \"off\"\n").unwrap();
         assert_eq!(config.power.keep_awake(), LocalChoice::Off);
+        let written = toml::to_string(&config).unwrap();
+        let reread: crate::config::PersistedConfig = toml::from_str(&written).unwrap();
+        assert_eq!(reread.power.keep_awake(), LocalChoice::Off);
         let empty: crate::config::PersistedConfig = toml::from_str("").unwrap();
         assert_eq!(empty.power.keep_awake(), LocalChoice::Auto);
         // The default stays out of the file.

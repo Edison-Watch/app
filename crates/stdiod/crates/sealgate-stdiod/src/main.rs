@@ -86,8 +86,9 @@ enum Command {
     /// program placed; the desktop app's copy updates with the app. `--check` only reports (exit 10 when
     /// an update is available).
     Update(cli::update::UpdateArgs),
-    /// Keep this computer awake while plugged in: `on`, `off`, or `auto`
-    /// (follow the dashboard). Without a value, print the current state.
+    /// Keep this computer awake while plugged in (Windows only): `on`, `off`,
+    /// or `auto` (follow the dashboard). Without a value, print the current
+    /// state.
     KeepAwake(cli::keep_awake::KeepAwakeArgs),
     /// Register, list, or remove stdio_tunnel servers for this device.
     #[command(subcommand)]

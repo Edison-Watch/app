@@ -49,14 +49,14 @@ fn wait_for(keep_awake: &KeepAwake, effective: Effective) {
     }
 }
 
-fn auto() -> LocalChoice {
-    LocalChoice::Auto
+fn auto() -> Option<LocalChoice> {
+    Some(LocalChoice::Auto)
 }
-fn on() -> LocalChoice {
-    LocalChoice::On
+fn on() -> Option<LocalChoice> {
+    Some(LocalChoice::On)
 }
-fn off() -> LocalChoice {
-    LocalChoice::Off
+fn off() -> Option<LocalChoice> {
+    Some(LocalChoice::Off)
 }
 
 #[test]
@@ -152,4 +152,64 @@ fn a_tick_after_a_gap_sets_the_flag() {
     *resume.last_tick.lock().unwrap() = SystemTime::now() - Duration::from_secs(120);
     assert!(resume.tick());
     assert!(resume.slept());
+}
+
+fn target() -> ReportTarget {
+    ReportTarget {
+        backend: "http://localhost:3001".into(),
+        credential: "test".into(),
+        device_id: "dev".into(),
+    }
+}
+
+fn worker() -> Worker {
+    let (events, rx) = mpsc::channel();
+    Worker {
+        platform: Some(Box::new(Fake::default())),
+        read_local: auto,
+        rx,
+        events,
+        status: Arc::new(Mutex::new(KeepAwakeStatus {
+            local: LocalChoice::Auto,
+            desired: false,
+            effective: Effective::Inactive,
+        })),
+        resume: Arc::new(Resume::new()),
+        writer: writer(),
+        runtime: None,
+        desired: false,
+        session: None,
+        generation: 0,
+    }
+}
+
+#[test]
+fn a_late_report_from_an_earlier_session_is_dropped() {
+    let mut worker = worker();
+    worker.handle(Event::Session(Some((
+        target(),
+        LocalChoice::Auto,
+        Effective::Inactive,
+    ))));
+    let first = worker.generation;
+    // The first session ends and a new one starts with keep_awake = false.
+    worker.handle(Event::Session(None));
+    worker.handle(Event::Session(Some((
+        target(),
+        LocalChoice::Auto,
+        Effective::Inactive,
+    ))));
+    worker.handle(Event::Desired(false));
+    // The first session's report finishes late with keep_awake = true.
+    worker.handle(Event::Reported {
+        generation: first,
+        result: ReportResult::Desired(true),
+    });
+    assert!(!worker.desired);
+    // A result from the current session is applied.
+    worker.handle(Event::Reported {
+        generation: worker.generation,
+        result: ReportResult::Desired(true),
+    });
+    assert!(worker.desired);
 }

@@ -44,10 +44,11 @@ pub fn run(args: KeepAwakeArgs) -> Result<()> {
     }
     let local = config.power.keep_awake();
     let daemon = State::load().ok().and_then(|state| state.keep_awake);
-    // Right after a change, state.json can still hold the previous local
-    // choice. Its effective value then belongs to that choice, so leave it out.
+    // state.json keeps the last value after the daemon stops, and right after
+    // a change it can still hold the previous local choice. In both cases its
+    // effective value is not what holds now, so leave it out.
     let effective = daemon
-        .filter(|status| status.local == local)
+        .filter(|status| status.local == local && daemon_running())
         .map(|status| status.effective);
     let report = Report {
         local,
@@ -64,6 +65,15 @@ pub fn run(args: KeepAwakeArgs) -> Result<()> {
     }
     println!("{}", describe(&report));
     Ok(())
+}
+
+/// The same check as `status`: the supervisor unit is installed, loaded and
+/// has a running process.
+fn daemon_running() -> bool {
+    use crate::platform;
+    platform::is_installed().unwrap_or(false)
+        && platform::is_loaded().unwrap_or(false)
+        && platform::is_running().unwrap_or(false)
 }
 
 fn describe(report: &Report) -> String {

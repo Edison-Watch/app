@@ -60,7 +60,7 @@ const INSTALLED_CACHE_TTL_MS = 5_000
 // every subprocess call so test runs don't actually touch launchctl or
 // write config.toml on the host. Status reads still go through (they
 // return null gracefully if no state.json exists).
-function dryRun(): boolean {
+export function dryRun(): boolean {
   return process.env.SEALGATE_DRY_RUN === '1'
 }
 
@@ -109,7 +109,7 @@ function fdDiagnostics(): string | null {
 // to diagnose later: the errno code (e.g. EBADF), the failing syscall, and
 // the fd snapshot. Also writes the same detail to client.log so there's a
 // durable trace even though the renderer only shows a short hint.
-function describeSpawnError(op: string, err: unknown): StdiodResult {
+export function describeSpawnError(op: string, err: unknown): StdiodResult {
   const e = err as NodeJS.ErrnoException
   const parts: string[] = []
   if (e?.code) parts.push(e.code)
@@ -187,7 +187,7 @@ function invalidateInstalledCache(): void {
   cachedInstalled = null
 }
 
-async function ensureBinary(): Promise<StdiodResult | null> {
+export async function ensureBinary(): Promise<StdiodResult | null> {
   if (!stdiodBinaryExists()) {
     const path = getStdiodBinaryPath()
     stdiodLog(`binary missing at ${path}`)

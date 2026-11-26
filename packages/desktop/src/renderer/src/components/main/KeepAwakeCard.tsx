@@ -7,6 +7,9 @@ import type {
 } from "../../../../main/stdiod/types";
 
 const POLL_MS = 3000;
+// The daemon reads a new choice within about 5 s. After this long, stop
+// saying "Applying…": the daemon is probably not running.
+const APPLY_WAIT_MS = 10000;
 
 const CHOICES: { value: KeepAwakeLocal; label: string }[] = [
   { value: "auto", label: "Follow dashboard" },
@@ -30,16 +33,24 @@ const NOW: Record<KeepAwakeEffective, string> = {
  */
 export default function KeepAwakeCard(): React.ReactNode {
   const [keepAwake, setKeepAwake] = useState<StdiodKeepAwake | null>(null);
-  const [pending, setPending] = useState<KeepAwakeLocal | null>(null);
+  // True while the CLI call runs. The buttons are locked only then.
+  const [busy, setBusy] = useState(false);
+  // The saved choice that the daemon has not applied yet.
+  const [saved, setSaved] = useState<KeepAwakeLocal | null>(null);
+  const [savedLate, setSavedLate] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
     const load = (): void => {
-      window.api.stdiod.status().then((status) => {
-        if (!mounted) return;
-        setKeepAwake(status.installed ? (status.state?.keep_awake ?? null) : null);
-      });
+      window.api.stdiod
+        .status()
+        .then((status) => {
+          if (!mounted) return;
+          setKeepAwake(status.installed ? (status.state?.keep_awake ?? null) : null);
+        })
+        // A failed read keeps the last state; the next poll tries again.
+        .catch(() => {});
     };
     load();
     const timer = setInterval(load, POLL_MS);
@@ -51,25 +62,43 @@ export default function KeepAwakeCard(): React.ReactNode {
     };
   }, []);
 
-  // The daemon reads a new choice within a few seconds. Until state.json
-  // shows it, keep showing the choice the person just made.
+  // Until state.json shows the saved choice, keep showing it as selected.
   useEffect(() => {
-    if (pending && keepAwake?.local === pending) setPending(null);
-  }, [keepAwake, pending]);
+    if (saved && keepAwake?.local === saved) {
+      setSaved(null);
+      setSavedLate(false);
+    }
+  }, [keepAwake, saved]);
+
+  useEffect(() => {
+    if (!saved) return;
+    const timer = setTimeout(() => setSavedLate(true), APPLY_WAIT_MS);
+    return () => clearTimeout(timer);
+  }, [saved]);
 
   if (!keepAwake) return null;
 
-  const selected = pending ?? keepAwake.local;
+  const selected = saved ?? keepAwake.local;
   const choose = async (choice: KeepAwakeLocal): Promise<void> => {
     if (choice === selected) return;
     setError(null);
-    setPending(choice);
-    const result = await window.api.stdiod.setKeepAwake(choice);
-    if (!result.ok) {
-      setPending(null);
-      setError(result.errorMessage ?? "Could not change the setting.");
+    setBusy(true);
+    try {
+      const result = await window.api.stdiod.setKeepAwake(choice);
+      if (result.ok) {
+        setSavedLate(false);
+        setSaved(choice === keepAwake.local ? null : choice);
+      } else {
+        setError(result.errorMessage ?? "Could not change the setting.");
+      }
+    } finally {
+      setBusy(false);
     }
   };
+
+  let statusText = NOW[keepAwake.effective];
+  if (busy || (saved && !savedLate)) statusText = "Applying…";
+  else if (saved) statusText = "Saved. It takes effect when the local tunnel is running.";
 
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-[var(--border)] bg-[var(--bg-raised)] px-4 py-3">
@@ -80,18 +109,46 @@ export default function KeepAwakeCard(): React.ReactNode {
         Lets AI apps reach your local tools while you are away. The screen can still turn off,
         and closing a laptop lid still puts it to sleep.
       </span>
-      <div className="flex gap-1" role="radiogroup" aria-label="Keep awake">
+      <div
+        className="flex gap-1"
+        role="radiogroup"
+        aria-label="Keep awake"
+        aria-busy={busy}
+        onKeyDown={(event) => {
+          // Radio-group keys: arrows move to the next or previous choice.
+          const step =
+            event.key === "ArrowRight" || event.key === "ArrowDown"
+              ? 1
+              : event.key === "ArrowLeft" || event.key === "ArrowUp"
+                ? -1
+                : 0;
+          if (step === 0 || busy) return;
+          event.preventDefault();
+          const index = CHOICES.findIndex((choice) => choice.value === selected);
+          const next = CHOICES[(index + step + CHOICES.length) % CHOICES.length];
+          if (!next) return;
+          const buttons = event.currentTarget.querySelectorAll("button");
+          buttons[CHOICES.indexOf(next)]?.focus();
+          void choose(next.value);
+        }}
+      >
         {CHOICES.map((choice) => (
           <button
             key={choice.value}
             type="button"
             role="radio"
             aria-checked={selected === choice.value}
-            disabled={pending !== null}
-            onClick={() => void choose(choice.value)}
+            // Roving focus: only the selected choice is in the tab order.
+            tabIndex={selected === choice.value ? 0 : -1}
+            // aria-disabled instead of disabled, so the focused button keeps
+            // focus while a change is applied.
+            aria-disabled={busy}
+            onClick={() => {
+              if (!busy) void choose(choice.value);
+            }}
             className={`${
               choice.value === "auto" ? "flex-[1.8]" : "flex-1"
-            } whitespace-nowrap rounded-md px-2 py-1 text-xs transition-colors disabled:opacity-60 ${
+            } whitespace-nowrap rounded-md px-2 py-1 text-xs transition-colors aria-disabled:opacity-60 ${
               selected === choice.value
                 ? "bg-[var(--accent)] font-medium text-[var(--bg-base)]"
                 : "bg-[var(--bg-input)] text-[var(--text-primary)]"
@@ -104,7 +161,7 @@ export default function KeepAwakeCard(): React.ReactNode {
         ))}
       </div>
       <span className="text-[11px] text-[var(--text-muted)]">
-        {pending ? "Applying…" : NOW[keepAwake.effective]}
+        {statusText}
       </span>
       {error && <span className="text-[11px] text-[var(--danger,#e5484d)]">{error}</span>}
     </div>

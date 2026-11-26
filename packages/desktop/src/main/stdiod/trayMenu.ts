@@ -4,9 +4,9 @@
 import { clipboard, Notification, shell } from 'electron'
 import type { MenuItemConstructorOptions } from 'electron'
 
-import { setKeepAwake } from './keepAwake'
+import { pendingKeepAwake, setKeepAwake } from './keepAwake'
 import { getStdiodLogDir } from './stdiodLog'
-import { getCachedStdiodStatus, refreshStdiodStatusCache } from './trayCache'
+import { getCachedStdiodStatus } from './trayCache'
 import type { KeepAwakeEffective, KeepAwakeLocal, StdiodKeepAwake } from './types'
 
 const KEEP_AWAKE_NOW: Record<KeepAwakeEffective, string> = {
@@ -20,8 +20,17 @@ const KEEP_AWAKE_NOW: Record<KeepAwakeEffective, string> = {
 // this only writes the local choice. See keepAwake.ts.
 function buildKeepAwakeItem(keepAwake: StdiodKeepAwake): MenuItemConstructorOptions {
   const choose = (choice: KeepAwakeLocal) => (): void => {
-    void setKeepAwake(choice).then(() => refreshStdiodStatusCache())
+    void setKeepAwake(choice).then((result) => {
+      if (!result.ok && Notification.isSupported()) {
+        new Notification({
+          title: 'SealGate',
+          body: `Could not change Keep Awake: ${result.errorMessage ?? 'unknown error'}`
+        }).show()
+      }
+    })
   }
+  // Until the daemon applies a new choice, show the one just made.
+  const local = pendingKeepAwake(keepAwake.local) ?? keepAwake.local
   const dashboard = keepAwake.desired ? 'on' : 'off'
   return {
     label: 'Keep Awake When Plugged In',
@@ -29,11 +38,11 @@ function buildKeepAwakeItem(keepAwake: StdiodKeepAwake): MenuItemConstructorOpti
       {
         label: `Follow dashboard (${dashboard})`,
         type: 'radio',
-        checked: keepAwake.local === 'auto',
+        checked: local === 'auto',
         click: choose('auto')
       },
-      { label: 'On', type: 'radio', checked: keepAwake.local === 'on', click: choose('on') },
-      { label: 'Off', type: 'radio', checked: keepAwake.local === 'off', click: choose('off') },
+      { label: 'On', type: 'radio', checked: local === 'on', click: choose('on') },
+      { label: 'Off', type: 'radio', checked: local === 'off', click: choose('off') },
       { type: 'separator' },
       { label: KEEP_AWAKE_NOW[keepAwake.effective] ?? keepAwake.effective, enabled: false }
     ]
