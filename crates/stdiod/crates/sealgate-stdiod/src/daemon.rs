@@ -246,7 +246,11 @@ async fn reset_dashboard_value(keep_awake: &KeepAwake) {
 /// Whether two connections belong to the same backend and device, so that a
 /// dashboard value from one applies to the other.
 fn same_identity(left: &ResolvedRun, right: &ResolvedRun) -> bool {
-    identity_matches(Some(&left.device_id), Some(&left.backend), right)
+    // A new legacy API key on the same backend and device can belong to
+    // another account, as `requires_child_reset` also assumes.
+    let same_legacy_key = !(left.credential_kind == config::CredentialKind::LegacyApiKey
+        && (right.credential_kind != left.credential_kind || right.credential != left.credential));
+    same_legacy_key && identity_matches(Some(&left.device_id), Some(&left.backend), right)
 }
 
 /// The one identity rule, shared by the startup check (`previous_keep_awake`)

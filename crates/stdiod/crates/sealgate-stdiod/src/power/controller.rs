@@ -63,6 +63,8 @@ enum Event {
     /// session's dashboard value.
     Reported {
         generation: u64,
+        /// The (local, effective) pair that was sent.
+        sent: (LocalChoice, Effective),
         /// The dashboard-value version when the report was sent. A newer
         /// `device_settings_update` makes the response's value outdated.
         version: u64,
@@ -205,7 +207,9 @@ struct Session {
     /// The (local, effective) pair the backend has, or `None` after a failed
     /// report.
     known: Option<(LocalChoice, Effective)>,
-    retry_after: Option<Instant>,
+    /// After a failed report: when to send that same pair again. A
+    /// different pair is sent at once.
+    retry: Option<(Instant, (LocalChoice, Effective))>,
     generation: u64,
 }
 
@@ -391,12 +395,13 @@ impl Worker {
                 self.session = started.map(|(target, sent_local, sent_effective)| Session {
                     target,
                     known: Some((sent_local, sent_effective)),
-                    retry_after: None,
+                    retry: None,
                     generation: self.generation,
                 });
             }
             Event::Reported {
                 generation,
+                sent,
                 version,
                 result,
             } => {
@@ -417,7 +422,7 @@ impl Worker {
                     ReportResult::Desired(desired) => self.set_desired(desired),
                     ReportResult::Failed => {
                         session.known = None;
-                        session.retry_after = Some(Instant::now() + REPORT_RETRY);
+                        session.retry = Some((Instant::now() + REPORT_RETRY, sent));
                     }
                 }
             }
@@ -443,14 +448,15 @@ impl Worker {
         if session.known == Some((local, effective)) {
             return;
         }
+        // Back off only for the pair that failed; a new change goes out now.
         if session
-            .retry_after
-            .is_some_and(|after| Instant::now() < after)
+            .retry
+            .is_some_and(|(after, failed)| failed == (local, effective) && Instant::now() < after)
         {
             return;
         }
         session.known = Some((local, effective));
-        session.retry_after = None;
+        session.retry = None;
         let target = session.target.clone();
         let generation = session.generation;
         let version = self.desired_version;
@@ -466,6 +472,7 @@ impl Worker {
             };
             let _ = events.send(Event::Reported {
                 generation,
+                sent: (local, effective),
                 version,
                 result,
             });

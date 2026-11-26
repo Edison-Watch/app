@@ -57,4 +57,8 @@ fn identity_compares_device_and_backend() {
     assert!(same_identity(&base, &current("https://A.test/", "dev-1")));
     assert!(!same_identity(&base, &current("https://b.test", "dev-1")));
     assert!(!same_identity(&base, &current("https://a.test", "dev-2")));
+    // A new legacy key on the same backend and device may be another account.
+    let mut new_key = current("https://a.test", "dev-1");
+    new_key.credential = "another-key".into();
+    assert!(!same_identity(&base, &new_key));
 }

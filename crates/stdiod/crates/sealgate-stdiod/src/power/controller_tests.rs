@@ -315,6 +315,7 @@ fn a_late_report_from_an_earlier_session_is_dropped() {
     // The first session's report finishes late with keep_awake = true.
     worker.handle(Event::Reported {
         generation: first,
+        sent: (LocalChoice::Auto, Effective::Inactive),
         version: worker.desired_version,
         result: ReportResult::Desired(true),
     });
@@ -322,6 +323,7 @@ fn a_late_report_from_an_earlier_session_is_dropped() {
     // A result from the current session is applied.
     worker.handle(Event::Reported {
         generation: worker.generation,
+        sent: (LocalChoice::Auto, Effective::Inactive),
         version: worker.desired_version,
         result: ReportResult::Desired(true),
     });
@@ -342,6 +344,7 @@ fn a_report_response_older_than_a_dashboard_change_is_dropped() {
     worker.handle(Event::Desired(false));
     worker.handle(Event::Reported {
         generation: worker.generation,
+        sent: (LocalChoice::Auto, Effective::Inactive),
         version: sent_at,
         result: ReportResult::Desired(true),
     });
@@ -361,4 +364,31 @@ fn an_unreadable_config_keeps_the_choice_from_the_last_run() {
     let status = keep_awake.status().unwrap();
     assert_eq!(status.local, LocalChoice::On);
     assert_eq!(status.effective, Effective::Active);
+}
+
+#[test]
+fn a_failed_report_delays_only_the_pair_that_failed() {
+    let mut worker = worker();
+    worker.handle(Event::Session(Some((
+        target(),
+        LocalChoice::Auto,
+        Effective::Inactive,
+    ))));
+    worker.handle(Event::Reported {
+        generation: worker.generation,
+        sent: (LocalChoice::Auto, Effective::Active),
+        version: worker.desired_version,
+        result: ReportResult::Failed,
+    });
+    let session = worker.session.as_ref().unwrap();
+    let (_, failed) = session.retry.unwrap();
+    assert_eq!(failed, (LocalChoice::Auto, Effective::Active));
+    // The same pair waits; a different pair (the person chose off) does not.
+    let blocked = |pair: (LocalChoice, Effective)| {
+        session
+            .retry
+            .is_some_and(|(after, failed)| failed == pair && Instant::now() < after)
+    };
+    assert!(blocked((LocalChoice::Auto, Effective::Active)));
+    assert!(!blocked((LocalChoice::Off, Effective::Inactive)));
 }
