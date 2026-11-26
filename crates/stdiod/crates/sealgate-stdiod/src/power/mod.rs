@@ -212,12 +212,16 @@ fn lock_with<T>(
     result
 }
 
-/// Read the local choice from `config.toml`. A missing file counts as
-/// `auto`. A file that cannot be read or parsed is an error, so that the
-/// controller keeps its last choice instead of switching an explicit `on`
-/// or `off` to `auto`.
+/// Read the local choice from `config.toml`. A file that is missing, or
+/// cannot be read or parsed, is an error, so that the controller keeps its
+/// last choice instead of switching an explicit `on` or `off` to `auto`.
+/// On Windows, saving the file leaves a moment in which it is missing.
 pub fn read_local_choice() -> Result<LocalChoice, String> {
-    crate::config::PersistedConfig::load()
+    let path = crate::paths::config_file().map_err(|error| format!("{error:#}"))?;
+    if !path.exists() {
+        return Err(format!("{} is missing", path.display()));
+    }
+    crate::config::PersistedConfig::load_from(&path)
         .map(|config| config.power.keep_awake())
         .map_err(|error| format!("{error:#}"))
 }

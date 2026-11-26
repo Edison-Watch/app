@@ -47,12 +47,14 @@ pub fn run(args: KeepAwakeArgs) -> Result<()> {
         Ok(config)
     })?;
     let local = config.power.keep_awake();
-    let daemon = State::load().ok().and_then(|state| state.keep_awake);
+    let state = State::load().ok();
+    let daemon_pid = state.as_ref().and_then(|state| state.pid);
+    let daemon = state.and_then(|state| state.keep_awake);
     // state.json keeps the last value after the daemon stops, and right after
     // a change it can still hold the previous local choice. In both cases its
     // effective value is not what holds now, so leave it out.
     let effective = daemon
-        .filter(|status| status.local == local && daemon_running())
+        .filter(|status| status.local == local && daemon_running(daemon_pid))
         .map(|status| status.effective);
     let report = Report {
         local,
@@ -71,15 +73,15 @@ pub fn run(args: KeepAwakeArgs) -> Result<()> {
     Ok(())
 }
 
-/// Whether the daemon runs. Keep-awake is Windows-only, and this check works
-/// on every Windows language (see `platform::windows::daemon_running`).
+/// Whether the daemon that wrote `state.json` (process `pid`) still runs.
+/// Keep-awake is Windows-only (see `platform::windows::daemon_running`).
 #[cfg(windows)]
-fn daemon_running() -> bool {
-    crate::platform::windows::daemon_running()
+fn daemon_running(pid: Option<u32>) -> bool {
+    crate::platform::windows::daemon_running(pid)
 }
 
 #[cfg(not(windows))]
-fn daemon_running() -> bool {
+fn daemon_running(_pid: Option<u32>) -> bool {
     false
 }
 
