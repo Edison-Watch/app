@@ -4,8 +4,61 @@
 import { clipboard, Notification, shell } from 'electron'
 import type { MenuItemConstructorOptions } from 'electron'
 
+import { pendingKeepAwake, setKeepAwake } from './keepAwake'
 import { getStdiodLogDir } from './stdiodLog'
 import { getCachedStdiodStatus } from './trayCache'
+import type { KeepAwakeEffective, KeepAwakeLocal, StdiodKeepAwake } from './types'
+
+const KEEP_AWAKE_NOW: Record<KeepAwakeEffective, string> = {
+  active: 'Now: keeping this computer awake',
+  on_battery: 'Now: paused on battery',
+  inactive: 'Now: off',
+  unsupported: 'Now: not supported by this system'
+}
+
+// "Keep Awake When Plugged In" submenu. The daemon holds the sleep block;
+// this only writes the local choice. See keepAwake.ts.
+function buildKeepAwakeItem(
+  keepAwake: StdiodKeepAwake,
+  daemonRunning: boolean | null | undefined
+): MenuItemConstructorOptions {
+  const choose = (choice: KeepAwakeLocal) => (): void => {
+    void setKeepAwake(choice).then((result) => {
+      if (!result.ok && Notification.isSupported()) {
+        new Notification({
+          title: 'SealGate',
+          body: `Could not change Keep Awake: ${result.errorMessage ?? 'unknown error'}`
+        }).show()
+      }
+    })
+  }
+  // Until the daemon applies a new choice, show the one just made.
+  const local = pendingKeepAwake(keepAwake.local) ?? keepAwake.local
+  const dashboard = keepAwake.desired ? 'on' : 'off'
+  return {
+    label: 'Keep Awake When Plugged In',
+    submenu: [
+      {
+        label: `Follow dashboard (${dashboard})`,
+        type: 'radio',
+        checked: local === 'auto',
+        click: choose('auto')
+      },
+      { label: 'On', type: 'radio', checked: local === 'on', click: choose('on') },
+      { label: 'Off', type: 'radio', checked: local === 'off', click: choose('off') },
+      { type: 'separator' },
+      {
+        // state.json keeps its last value after the daemon stops, and the
+        // sleep block ends with the daemon.
+        label:
+          daemonRunning === false
+            ? 'Now: off (local tunnel not running)'
+            : (KEEP_AWAKE_NOW[keepAwake.effective] ?? keepAwake.effective),
+        enabled: false
+      }
+    ]
+  }
+}
 
 const CONNECTION_LABELS: Record<string, string> = {
   starting: 'starting',
@@ -106,6 +159,12 @@ export function buildStdiodMenuItems(
 
   if (!compact && status.state?.last_error) {
     items.push({ label: `Last error: ${status.state.last_error}`, enabled: false })
+  }
+
+  // Keep-awake is Windows-only (the daemon writes keep_awake to state.json
+  // only there). The check on the platform also hides a stale value.
+  if (process.platform === 'win32' && status.state?.keep_awake) {
+    items.push(buildKeepAwakeItem(status.state.keep_awake, status.daemonRunning))
   }
 
   items.push(...buildActions())

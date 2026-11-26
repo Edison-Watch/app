@@ -16,6 +16,23 @@
         "currently_running": {
           "type": "array",
           "items": { "type": "string" }
+        },
+        "capabilities": {
+          "description": "Optional features the daemon understands. \"device_settings\" means it handles device_settings_update. Omitted by older daemons.",
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "keep_awake_local": {
+          "description": "The local keep-awake choice: auto, on or off. Free-form so a newer value never fails the handshake.",
+          "type": ["string", "null"]
+        },
+        "keep_awake_effective": {
+          "description": "What the daemon holds now: active, on_battery, inactive or unsupported. Free-form, like keep_awake_local.",
+          "type": ["string", "null"]
+        },
+        "last_gap_was_sleep": {
+          "description": "True when the disconnect just before this connect was the machine sleeping.",
+          "type": "boolean"
         }
       },
       "required": [
@@ -42,6 +59,10 @@
         "update": {
           "description": "Optional advisory update hint for the daemon, omitted when it is up to date or its version is unknown. Never enforced.",
           "oneOf": [{ "$ref": "#/definitions/UpdateHint" }, { "type": "null" }]
+        },
+        "device_settings": {
+          "description": "Optional per-device settings the backend owns. Daemons that predate it ignore it.",
+          "oneOf": [{ "$ref": "#/definitions/DeviceSettings" }, { "type": "null" }]
         }
       },
       "required": ["type", "protocol_version", "servers"],
@@ -71,6 +92,24 @@
         "enabled": { "type": "boolean" }
       },
       "required": ["server_id", "name", "command", "args", "env", "enabled"],
+      "additionalProperties": false
+    },
+    "DeviceSettings": {
+      "type": "object",
+      "properties": {
+        "keep_awake": { "type": "boolean" }
+      },
+      "required": ["keep_awake"],
+      "additionalProperties": false
+    },
+    "DeviceSettingsUpdate": {
+      "description": "backend → daemon: the full device settings after a dashboard change. Sent only to daemons whose client_hello.capabilities lists device_settings.",
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["device_settings_update"] },
+        "device_settings": { "$ref": "#/definitions/DeviceSettings" }
+      },
+      "required": ["type", "device_settings"],
       "additionalProperties": false
     },
     "DesiredStateUpdate": {
@@ -175,6 +214,7 @@
     { "$ref": "#/definitions/ClientHello" },
     { "$ref": "#/definitions/ServerHello" },
     { "$ref": "#/definitions/DesiredStateUpdate" },
+    { "$ref": "#/definitions/DeviceSettingsUpdate" },
     { "$ref": "#/definitions/McpFrame" },
     { "$ref": "#/definitions/TunnelError" },
     { "$ref": "#/definitions/ServerEnvUpdate" },

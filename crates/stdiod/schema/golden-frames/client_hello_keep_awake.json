@@ -1,0 +1,14 @@
+{
+  "type": "client_hello",
+  "protocol_version": 2,
+  "device_id": "ewd_0123456789abcdefghij",
+  "hostname": "win11-dev",
+  "label": "WIN11-DEV",
+  "os": "windows",
+  "client_version": "0.7.0",
+  "currently_running": [],
+  "capabilities": ["device_settings"],
+  "keep_awake_local": "auto",
+  "keep_awake_effective": "active",
+  "last_gap_was_sleep": true
+}

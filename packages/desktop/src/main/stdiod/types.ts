@@ -29,7 +29,32 @@ export interface StdiodLiveState {
   last_connected_at: string | null
   last_error: string | null
   servers: StdiodServerEntry[]
+  // Absent from daemons that predate keep-awake.
+  keep_awake?: StdiodKeepAwake
+  // The PID of the daemon that wrote the file. Absent from older daemons.
+  pid?: number
   generation: number
+}
+
+// The local keep-awake choice in the daemon's config.toml. 'auto' follows
+// the dashboard value.
+export type KeepAwakeLocal = 'auto' | 'on' | 'off'
+
+// What the daemon holds now (see PROTOCOL.md T-77).
+export type KeepAwakeEffective = 'active' | 'on_battery' | 'inactive' | 'unsupported'
+
+// The keep_awake member of state.json (see state.rs).
+export interface StdiodKeepAwake {
+  local: KeepAwakeLocal
+  desired: boolean
+  effective: KeepAwakeEffective
+}
+
+// Output of `sealgate-stdiod keep-awake <choice> --json`.
+export interface KeepAwakeReport {
+  local: KeepAwakeLocal
+  desired: boolean | null
+  effective: KeepAwakeEffective | null
 }
 
 // What the renderer ultimately consumes. Combines the always-cheap
@@ -44,6 +69,11 @@ export interface StdiodStatus {
   // "running but unresponsive" daemon - i.e. the launchctl unit reports
   // a PID but state.json hasn't been touched in minutes.
   stateAgeMs: number | null
+  // Whether the process that wrote state.json still runs. null when that
+  // cannot be told: the file has no PID (older daemons), or on Windows the
+  // tasklist check failed or timed out. state.json keeps its last content
+  // after the daemon exits, so only false means its keep_awake state is stale.
+  daemonRunning?: boolean | null
 }
 
 export interface StdiodLoginInput {

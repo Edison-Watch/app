@@ -58,6 +58,9 @@ fails the coverage assertion.
 | `server_spawn_result_err.json` | `server_spawn_result` | Failure with a reason string |
 | `ping.json` | `ping` | Bare tag |
 | `pong.json` | `pong` | Bare tag |
+| `client_hello_keep_awake.json` | `client_hello` | The optional keep-awake fields: `capabilities`, `keep_awake_local`, `keep_awake_effective`, `last_gap_was_sleep` |
+| `server_hello_device_settings.json` | `server_hello` | `device_settings` with `keep_awake` on |
+| `device_settings_update.json` | `device_settings_update` | Dashboard change: the full settings object, keep-awake on |
 
 `announce_server` is defined in the JSON Schema but implemented in no client, so
 it has no fixture. Add one when it ships.

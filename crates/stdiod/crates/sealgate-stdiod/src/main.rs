@@ -21,6 +21,7 @@ mod http;
 mod machine_id;
 mod paths;
 mod platform;
+mod power;
 mod proc;
 mod process_shutdown;
 mod secure_file;
@@ -85,6 +86,10 @@ enum Command {
     /// program placed; the desktop app's copy updates with the app. `--check` only reports (exit 10 when
     /// an update is available).
     Update(cli::update::UpdateArgs),
+    /// Keep this computer awake while plugged in (Windows only): `on`, `off`,
+    /// or `auto` (follow the dashboard). Without a value, print the current
+    /// state.
+    KeepAwake(cli::keep_awake::KeepAwakeArgs),
     /// Register, list, or remove stdio_tunnel servers for this device.
     #[command(subcommand)]
     Server(cli::server::ServerCommand),
@@ -175,6 +180,7 @@ async fn main() -> anyhow::Result<()> {
         Command::Status(args) => cli::status::run(args),
         Command::Logs(args) => cli::logs::run(args),
         Command::Update(args) => cli::update::run(args).await,
+        Command::KeepAwake(args) => cli::keep_awake::run(args),
         Command::Server(args) => cli::server::run(cli::server::ServerArgs { command: args }).await,
         Command::Setup(command) => setup::stepio::exit(setup::run(command).await),
     };

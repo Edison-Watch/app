@@ -6,6 +6,7 @@
 //! doesn't accumulate unrelated entry-point glue.
 
 pub mod install;
+pub mod keep_awake;
 pub mod login;
 pub mod logout;
 pub mod logs;

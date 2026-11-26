@@ -657,6 +657,24 @@ pub fn is_running() -> Result<bool> {
     Ok(running_status()?.unwrap_or(false))
 }
 
+/// Whether the daemon runs, in a way that works on every Windows language.
+/// `pid` is the daemon's process ID from `state.json`: the daemon runs if
+/// that process exists and is a `sealgate-stdiod.exe`, which other CLI calls
+/// (`logs --follow`, a login waiting for the browser) cannot fake. Without a
+/// PID (an older daemon), fall back to the `schtasks` status, which can only
+/// be read in English.
+pub fn daemon_running(pid: Option<u32>) -> bool {
+    match pid {
+        Some(pid) => running_processes().into_iter().any(|(found, image)| {
+            found == pid
+                && image
+                    .file_name()
+                    .is_some_and(|name| name.eq_ignore_ascii_case("sealgate-stdiod.exe"))
+        }),
+        None => running_status().ok().flatten().unwrap_or(false),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

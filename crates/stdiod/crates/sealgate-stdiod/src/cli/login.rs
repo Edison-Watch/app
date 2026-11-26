@@ -236,8 +236,10 @@ fn configure_legacy_login(
 }
 
 fn save_login(cfg: &PersistedConfig) -> Result<()> {
-    cfg.save()?;
     let path = paths::config_file()?;
+    // The browser sign-in can take minutes after `cfg` was loaded. Keep a
+    // keep-awake choice made in the meantime.
+    crate::power::save_keeping_power(cfg, &path)?;
     info!(path = %path.display(), "wrote config.toml");
     println!("Saved {}", path.display());
     println!("Next: `sealgate-stdiod install` to register the supervisor service.");

@@ -210,6 +210,10 @@ var
   RowRegister, RowAllow, RowRestart: Integer;
   RowApproveServer: Integer;
   RowSummary: Integer;
+  { Opt-in on the finished page: keep this PC awake while plugged in. }
+  KeepAwakeBox: TNewCheckBox;
+  KeepAwakeHint: TNewStaticText;
+  KeepAwakeApplied: Boolean;
   LaidOut: Boolean;
 #ifdef DebugUi
   DebugButton: TNewButton;
@@ -1324,6 +1328,10 @@ begin
   Top := LayoutRows(RowSummary, RowSummary + 3, Top);
   WizardForm.FinishedLabel.Top := Top + ScaleY(10);
   WizardForm.FinishedLabel.AdjustHeight();
+  KeepAwakeBox.Top := WizardForm.FinishedLabel.Top + WizardForm.FinishedLabel.Height +
+    ScaleY(16);
+  KeepAwakeHint.Top := KeepAwakeBox.Top + KeepAwakeBox.Height + ScaleY(2);
+  KeepAwakeHint.AdjustHeight();
 end;
 
 #ifdef DebugUi
@@ -1424,6 +1432,25 @@ begin
   for W := 0 to RowCount - 1 do
     SetRow(W, RS_PENDING, '');
 
+  { Clear by default: SealGate changes no power behavior unless the person
+    asks. The dashboard owner can also turn it on later. }
+  KeepAwakeBox := TNewCheckBox.Create(WizardForm.FinishedPage);
+  KeepAwakeBox.Parent := WizardForm.FinishedPage;
+  KeepAwakeBox.Caption := 'Keep this PC awake when plugged in';
+  KeepAwakeBox.Left := WizardForm.FinishedLabel.Left;
+  KeepAwakeBox.Width := WizardForm.FinishedLabel.Width;
+  KeepAwakeBox.Height := ScaleY(17);
+  KeepAwakeBox.Checked := False;
+  KeepAwakeHint := TNewStaticText.Create(WizardForm.FinishedPage);
+  KeepAwakeHint.Parent := WizardForm.FinishedPage;
+  KeepAwakeHint.Left := KeepAwakeBox.Left + ScaleX(18);
+  KeepAwakeHint.Width := KeepAwakeBox.Width - ScaleX(18);
+  KeepAwakeHint.AutoSize := False;
+  KeepAwakeHint.WordWrap := True;
+  KeepAwakeHint.Caption := 'Your AI assistant can then reach Beeper while you are away. ' +
+    'The screen can still turn off. You can change this later with ' +
+    '"sealgate-stdiod keep-awake".';
+
 #ifdef DebugUi
   DebugButton := TNewButton.Create(SignInPage);
   DebugButton.Parent := SignInPage.Surface;
@@ -1477,8 +1504,38 @@ end;
 
 { The window's close button. Inno ignores it once the files are installed,
   so on the setup pages it does what Cancel does; elsewhere Inno handles it. }
+{ Apply the keep-awake opt-in once, from Finish or from the window's close
+  button. A clear box changes nothing, so running setup again never turns off
+  a choice made earlier. On failure, say so and return False, so the page
+  stays open: Finish tries again, and clearing the box finishes without it. }
+function ApplyKeepAwake(): Boolean;
+var
+  Output, Gap: String;
+begin
+  Result := True;
+  if KeepAwakeApplied or not KeepAwakeBox.Checked then
+    exit;
+  if Stdiod('keep-awake on', Output) = EXIT_OK then
+  begin
+    KeepAwakeApplied := True;
+    exit;
+  end;
+  Log('keep-awake on failed: ' + Output);
+  { No line may start with #: the preprocessor reads that as a directive. }
+  Gap := #13#10#13#10;
+  MsgBox('SealGate could not turn on "Keep this PC awake when plugged in":' + Gap +
+    Trim(Output) + Gap + 'Click Finish to try again, or clear the box to ' +
+    'finish without it.', mbError, MB_OK);
+  Result := False;
+end;
+
 procedure WizardCloseQuery(Sender: TObject; var CanClose: Boolean);
 begin
+  if WizardForm.CurPageID = wpFinished then
+  begin
+    CanClose := ApplyKeepAwake();
+    exit;
+  end;
   if not IsStepPage(WizardForm.CurPageID) then
     exit;
   CanClose := False;
@@ -1534,6 +1591,11 @@ end;
 function NextButtonClick(CurPageID: Integer): Boolean;
 begin
   Result := True;
+  if CurPageID = wpFinished then
+  begin
+    Result := ApplyKeepAwake();
+    exit;
+  end;
   if not IsStepPage(CurPageID) or Advancing then
     exit;
   if StepKind <> STEP_NONE then

@@ -21,6 +21,7 @@ import { writeInstallStamp } from './installStamp'
 import { configFileExists, readStateFile } from './state'
 import { getStdiodLogDir, stdiodLog } from './stdiodLog'
 import type { StdiodErrorCode, StdiodLoginInput, StdiodResult, StdiodStatus } from './types'
+import { isDaemonProcess } from './daemonProcess'
 
 // LaunchAgent label matches stdiod/crates/sealgate-stdiod/src/platform/macos.rs.
 // Hardcoded so we can ask launchctl directly without spawning the daemon
@@ -60,7 +61,7 @@ const INSTALLED_CACHE_TTL_MS = 5_000
 // every subprocess call so test runs don't actually touch launchctl or
 // write config.toml on the host. Status reads still go through (they
 // return null gracefully if no state.json exists).
-function dryRun(): boolean {
+export function dryRun(): boolean {
   return process.env.SEALGATE_DRY_RUN === '1'
 }
 
@@ -70,7 +71,7 @@ interface SpawnResult {
   stderr: string
 }
 
-async function runStdiod(args: string[]): Promise<SpawnResult> {
+export async function runStdiod(args: string[]): Promise<SpawnResult> {
   const binary = getStdiodBinaryPath()
   return new Promise<SpawnResult>((resolve, reject) => {
     const child = spawn(binary, args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true })
@@ -109,7 +110,7 @@ function fdDiagnostics(): string | null {
 // to diagnose later: the errno code (e.g. EBADF), the failing syscall, and
 // the fd snapshot. Also writes the same detail to client.log so there's a
 // durable trace even though the renderer only shows a short hint.
-function describeSpawnError(op: string, err: unknown): StdiodResult {
+export function describeSpawnError(op: string, err: unknown): StdiodResult {
   const e = err as NodeJS.ErrnoException
   const parts: string[] = []
   if (e?.code) parts.push(e.code)
@@ -187,7 +188,7 @@ function invalidateInstalledCache(): void {
   cachedInstalled = null
 }
 
-async function ensureBinary(): Promise<StdiodResult | null> {
+export async function ensureBinary(): Promise<StdiodResult | null> {
   if (!stdiodBinaryExists()) {
     const path = getStdiodBinaryPath()
     stdiodLog(`binary missing at ${path}`)
@@ -219,7 +220,8 @@ export async function getStatus(): Promise<StdiodStatus> {
   // can briefly disappear between sleep/wake cycles. Ask launchctl
   // directly - see isLaunchAgentLoaded() for cache details.
   const installed = await isLaunchAgentLoaded()
-  return { binaryAvailable, installed, loggedIn, state, stateAgeMs: ageMs }
+  const daemonRunning = typeof state?.pid === 'number' ? await isDaemonProcess(state.pid) : null
+  return { binaryAvailable, installed, loggedIn, state, stateAgeMs: ageMs, daemonRunning }
 }
 
 export async function install(): Promise<StdiodResult> {

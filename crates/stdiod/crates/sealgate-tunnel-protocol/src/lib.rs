@@ -42,6 +42,43 @@ pub struct ClientHello {
     pub os: Os,
     pub client_version: String,
     pub currently_running: Vec<String>,
+    /// Optional features this daemon understands. `"device_settings"` means
+    /// it handles [`DeviceSettingsUpdate`]. Omitted when empty.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub capabilities: Vec<String>,
+    /// The local keep-awake choice (`auto`, `on`, `off`). Free-form on the
+    /// wire so that a newer value never fails the handshake.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub keep_awake_local: Option<String>,
+    /// What the daemon holds now (`active`, `on_battery`, `inactive`,
+    /// `unsupported`). Free-form, like `keep_awake_local`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub keep_awake_effective: Option<String>,
+    /// True when the disconnect just before this connect was the machine
+    /// sleeping. Omitted when false.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub last_gap_was_sleep: bool,
+}
+
+/// The capability tag for [`DeviceSettingsUpdate`] support.
+pub const CAPABILITY_DEVICE_SETTINGS: &str = "device_settings";
+
+fn is_false(value: &bool) -> bool {
+    !*value
+}
+
+/// Per-device settings that the backend owns (the dashboard values).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct DeviceSettings {
+    pub keep_awake: bool,
+}
+
+/// backend → daemon: the full device settings after a dashboard change. The
+/// backend sends it only to daemons that list
+/// [`CAPABILITY_DEVICE_SETTINGS`] in `client_hello.capabilities`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeviceSettingsUpdate {
+    pub device_settings: DeviceSettings,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -66,6 +103,9 @@ pub struct ServerHello {
     /// it is current or its version is unknown. Never enforced by the backend.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub update: Option<UpdateHint>,
+    /// Per-device settings. Absent from backends that predate them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub device_settings: Option<DeviceSettings>,
 }
 
 /// See `UpdateHint` in `schema/tunnel-protocol.json`.
@@ -184,6 +224,7 @@ pub enum TunnelFrame {
     ServerEnvUpdate(ServerEnvUpdate),
     ServerSpecUpdate(ServerSpecUpdate),
     ServerSpawnResult(ServerSpawnResult),
+    DeviceSettingsUpdate(DeviceSettingsUpdate),
     Ping(Ping),
     Pong(Pong),
 }
@@ -226,10 +267,51 @@ mod tests {
             os: Os::Macos,
             client_version: "0.0.1".into(),
             currently_running: vec![],
+            capabilities: vec![],
+            keep_awake_local: None,
+            keep_awake_effective: None,
+            last_gap_was_sleep: false,
         });
         let json = frame.to_json();
         assert_eq!(json["type"], "client_hello");
         assert_eq!(json["os"], "macos");
+        // Defaults stay off the wire, so older backends see the old frame.
+        for key in [
+            "capabilities",
+            "keep_awake_local",
+            "keep_awake_effective",
+            "last_gap_was_sleep",
+        ] {
+            assert!(json.get(key).is_none(), "{key} must be omitted at default");
+        }
+    }
+
+    #[test]
+    fn server_hello_without_device_settings_parses() {
+        let raw = serde_json::json!({
+            "type": "server_hello",
+            "protocol_version": 2,
+            "servers": [],
+        });
+        match TunnelFrame::from_json(raw).unwrap() {
+            TunnelFrame::ServerHello(h) => assert!(h.device_settings.is_none()),
+            _ => panic!("expected server_hello"),
+        }
+    }
+
+    #[test]
+    fn device_settings_update_roundtrip() {
+        let raw = serde_json::json!({
+            "type": "device_settings_update",
+            "device_settings": { "keep_awake": true },
+        });
+        match TunnelFrame::from_json(raw.clone()).unwrap() {
+            TunnelFrame::DeviceSettingsUpdate(u) => {
+                assert!(u.device_settings.keep_awake);
+                assert_eq!(TunnelFrame::DeviceSettingsUpdate(u).to_json(), raw);
+            }
+            _ => panic!("expected device_settings_update"),
+        }
     }
 
     #[test]

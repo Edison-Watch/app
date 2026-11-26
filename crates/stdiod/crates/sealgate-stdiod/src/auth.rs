@@ -380,7 +380,7 @@ pub fn validate_http_url(raw: &str) -> Result<(), AuthError> {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use std::sync::{Arc, Mutex};
 
     use sha2::{Digest, Sha256};
@@ -655,9 +655,12 @@ mod tests {
         }
     }
 
-    type MockBodies = Arc<Mutex<Vec<String>>>;
+    pub(crate) type MockBodies = Arc<Mutex<Vec<String>>>;
 
-    async fn mock_server(
+    /// A loopback HTTP server that answers each request with the next
+    /// `(status, body)` and records the request bodies. Also used by the
+    /// keep-awake report tests.
+    pub(crate) async fn mock_server(
         responses: Vec<(u16, &'static str)>,
     ) -> (String, MockBodies, tokio::task::JoinHandle<()>) {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();

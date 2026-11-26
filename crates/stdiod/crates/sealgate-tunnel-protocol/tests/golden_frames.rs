@@ -31,6 +31,7 @@ const EXPECTED_VARIANTS: &[&str] = &[
     "server_env_update",
     "server_spec_update",
     "server_spawn_result",
+    "device_settings_update",
     "ping",
     "pong",
 ];

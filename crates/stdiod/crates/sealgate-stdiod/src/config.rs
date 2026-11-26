@@ -79,6 +79,9 @@ pub struct PersistedConfig {
     /// Human-readable label shown in the admin UI.
     #[serde(default)]
     pub device_label: Option<String>,
+    /// Local power preferences. Kept across login and logout.
+    #[serde(default, skip_serializing_if = "crate::power::PowerConfig::is_default")]
+    pub power: crate::power::PowerConfig,
 }
 
 impl std::fmt::Debug for PersistedConfig {
@@ -97,6 +100,7 @@ impl std::fmt::Debug for PersistedConfig {
             .field("scopes", &self.scopes)
             .field("device_id", &self.device_id)
             .field("device_label", &self.device_label)
+            .field("power", &self.power)
             .finish()
     }
 }
@@ -126,11 +130,10 @@ impl PersistedConfig {
     /// Atomically rewrite the config file with mode 0600 on Unix. Existing
     /// fields not present in `self` are dropped - callers that want a
     /// merge load + mutate first.
-    pub fn save(&self) -> Result<()> {
-        let path = paths::config_file()?;
-        self.save_to(&path)
-    }
-
+    /// The commands that write `config.toml` hold `power::with_power_lock`
+    /// while they save (`keep-awake` and logout also while they load). Login
+    /// loads before its browser wait and keeps the `[power]` section on disk
+    /// when it saves, through `power::save_keeping_power`.
     pub fn save_to(&self, path: &Path) -> Result<()> {
         let body = toml::to_string_pretty(self).context("serialising config.toml")?;
         secure_file::write_private(path, body.as_bytes())
@@ -642,10 +645,14 @@ device_id = "device-1"
             scopes: vec!["tunnel:connect".into()],
             device_id: Some("device-1".into()),
             device_label: Some("My Laptop".into()),
+            power: crate::power::PowerConfig {
+                keep_awake: Some(crate::power::LocalChoice::On),
+            },
         };
         cfg.clear_authentication();
         assert_eq!(cfg.backend_url.as_deref(), Some("https://example.test"));
         assert_eq!(cfg.device_label.as_deref(), Some("My Laptop"));
+        assert_eq!(cfg.power.keep_awake(), crate::power::LocalChoice::On);
         assert!(cfg.usable_credential().is_none());
         assert!(cfg.device_id.is_none());
     }

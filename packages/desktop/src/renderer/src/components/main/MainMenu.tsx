@@ -8,6 +8,7 @@ import MyMcpsView from "./MyMcpsView";
 import StdiodEnableCard from "../StdiodEnableCard";
 import UpdateBanner from "../UpdateBanner";
 import DaemonWarningBanner from "../DaemonWarningBanner";
+import KeepAwakeCard from "./KeepAwakeCard";
 import UpdateSettingsCard from "./UpdateSettingsCard";
 
 /** Effective API origin: main-process override first, env default as fallback. */
@@ -364,6 +365,10 @@ export default function MainMenu(): React.ReactNode {
           {setupData.apiBaseUrl && setupData.apiKey && (
             <StdiodEnableCard apiBaseUrl={setupData.apiBaseUrl} apiKey={setupData.apiKey} />
           )}
+
+          {/* Keep-awake choice for the local tunnel daemon. Renders nothing
+              unless the daemon is installed and reports keep-awake state. */}
+          <KeepAwakeCard />
 
           {/* Auto-update preferences */}
           <UpdateSettingsCard />
