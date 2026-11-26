@@ -321,19 +321,16 @@ mod tests {
             std::env::temp_dir().join(format!("sealgate-power-dirlock-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("config.toml");
-        // A directory in place of the lock file: it is old, so it counts as
-        // stale, but remove_file fails on it.
+        // A directory in place of the lock file: with a stale age of zero it
+        // counts as stale, but remove_file fails on it on every OS. No mtime
+        // change, because Windows cannot open a directory as a file.
         let lock = path.with_extension("toml.lock");
         std::fs::create_dir_all(&lock).unwrap();
-        let old = std::time::SystemTime::now() - std::time::Duration::from_secs(60);
-        std::fs::File::open(&lock)
-            .unwrap()
-            .set_modified(old)
-            .unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(20));
         let error = lock_with(
             &path,
             std::time::Duration::from_millis(200),
-            LOCK_STALE,
+            std::time::Duration::ZERO,
             || Ok(()),
         )
         .unwrap_err();
